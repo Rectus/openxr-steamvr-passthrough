@@ -59,7 +59,7 @@ The SteamVR settings UI will misconfigure the original HTC Vive camera if the fr
 ### Usage ###
 Starting an OpenXR application will automatically start the API layer. If the application natively supports passthrough, it may now enable it. While an application is running, the SteamVR dashbaord will have an additional button in the bottom left, pressing it wil open the settings overlay.
 
-![Settings menu](https://github.com/Rectus/openxr-steamvr-passthrough/blob/master/settings_menu.png?raw=true)
+![Settings menu](https://github.com/Rectus/openxr-steamvr-passthrough/blob/release/settings_menu.png?raw=true)
 
 The options under the OpenXR Core allow setting what passthrough modes are available for the application to use, as well as what mode it should prefer. Some applications may automatically switch to the perferred mode even though they don't support passthrough.
 
