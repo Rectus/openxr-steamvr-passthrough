@@ -1,0 +1,23 @@
+[submodule "external/OpenXR-SDK-Source"]
+	path = external/OpenXR-SDK-Source
+	url = https://github.com/KhronosGroup/OpenXR-SDK-Source.git
+	
+[submodule "external/OpenXR-SDK"]
+	path = external/OpenXR-SDK
+	url = https://github.com/KhronosGroup/OpenXR-SDK.git
+	
+[submodule "external/openvr"]
+	path = external/openvr
+	url = https://github.com/ValveSoftware/openvr.git
+	
+[submodule "external/simpleini"]
+	path = external/simpleini
+	url = https://github.com/brofield/simpleini.git
+	
+[submodule "external/imgui"]
+	path = external/imgui
+	url = https://github.com/ocornut/imgui.git
+	
+[submodule "external/lodepng"]
+	path = external/lodepng
+	url = https://github.com/lvandeve/lodepng.git
