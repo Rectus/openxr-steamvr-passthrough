@@ -19,6 +19,8 @@ Project("{2150E333-8FDC-42A3-9474-1A3956D46DE8}") = "Scripts", "Scripts", "{BA77
 		scripts\Uninstall-Layer.ps1 = scripts\Uninstall-Layer.ps1
 	EndProjectSection
 EndProject
+Project("{8BC9CEB8-8B4A-11D0-8D11-00A0C91BC942}") = "passthrough-setup", "passthrough-setup\passthrough-setup.vcxproj", "{22AEAC56-2B71-421B-95B6-8C54D9CBCD42}"
+EndProject
 Global
 	GlobalSection(SolutionConfigurationPlatforms) = preSolution
 		Debug|x64 = Debug|x64
@@ -29,6 +31,10 @@ Global
 		{93D573D0-634F-4BA0-8FE0-FB63D7D00A05}.Debug|x64.Build.0 = Debug|x64
 		{93D573D0-634F-4BA0-8FE0-FB63D7D00A05}.Release|x64.ActiveCfg = Release|x64
 		{93D573D0-634F-4BA0-8FE0-FB63D7D00A05}.Release|x64.Build.0 = Release|x64
+		{22AEAC56-2B71-421B-95B6-8C54D9CBCD42}.Debug|x64.ActiveCfg = Debug|x64
+		{22AEAC56-2B71-421B-95B6-8C54D9CBCD42}.Debug|x64.Build.0 = Debug|x64
+		{22AEAC56-2B71-421B-95B6-8C54D9CBCD42}.Release|x64.ActiveCfg = Release|x64
+		{22AEAC56-2B71-421B-95B6-8C54D9CBCD42}.Release|x64.Build.0 = Release|x64
 	EndGlobalSection
 	GlobalSection(SolutionProperties) = preSolution
 		HideSolutionNode = FALSE

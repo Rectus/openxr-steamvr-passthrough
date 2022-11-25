@@ -51,9 +51,9 @@ The SteamVR settings UI will misconfigure the original HTC Vive camera if the fr
 ### Installation ###
 
 1. Download and install the [Visual Studio C++ Redistributable (64 bit) ](https://aka.ms/vs/17/release/vc_redist.x64.exe)
-2. Download the API layer release from the GitHub Releases page, and extract it.
-3. Right click the `Install-Layer.ps1` file and select *Run With Powershell* to install the API layer.
-4. If you want to move or delete the files, run the `Uninstall-Layer.ps1`script first to uninstall the API layer.
+2. Download the API layer release from the GitHub Releases page, and extract the files to the location you want to keep them in.
+3. Run the `passthrough-setup.exe` utility, and select the Install option to install the API layer. Note that if you want to move the files, you will need to run the utility again.
+4. If you want to disable or uninstall the API layer, run the `passthrough-setup.exe` utility and select the Uninstall option.
 
 
 ### Usage ###
@@ -85,7 +85,6 @@ The following are required:
 
 ### Todo ###
 
-- Create registry installer application
 - Add curved projection distance to match the SteamVR 2D room view
 - Add partial support for the `XR_FB_passthrough` extension
 - Add Vulkan and OpenGL support

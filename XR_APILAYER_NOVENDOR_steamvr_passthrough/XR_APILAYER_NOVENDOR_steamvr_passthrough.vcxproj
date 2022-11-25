@@ -87,8 +87,6 @@
       <Command>copy $(ProjectDir)\$(ProjectName).json $(OutDir)
 copy $(ProjectDir)\testpattern.png $(OutDir)
 copy $(ProjectDir)\passthrough_icon.png $(OutDir)
-copy $(SolutionDir)\scripts\Install-Layer.ps1 $(OutDir)
-copy $(SolutionDir)\scripts\Uninstall-Layer.ps1 $(OutDir)
 </Command>
     </PostBuildEvent>
     <PostBuildEvent>
@@ -143,8 +141,8 @@ copy $(SolutionDir)\scripts\Uninstall-Layer.ps1 $(OutDir)
       <Command>copy $(ProjectDir)\$(ProjectName).json $(OutDir)
 copy $(ProjectDir)\testpattern.png $(OutDir)
 copy $(ProjectDir)\passthrough_icon.png $(OutDir)
-copy $(SolutionDir)\scripts\Install-Layer.ps1 $(OutDir)
-copy $(SolutionDir)\scripts\Uninstall-Layer.ps1 $(OutDir)
+copy $(SolutionDir)\readme.md $(OutDir)
+copy $(SolutionDir)\external\openvr\bin\win64\openvr_api.dll $(OutDir)
 </Command>
     </PostBuildEvent>
     <PostBuildEvent>
