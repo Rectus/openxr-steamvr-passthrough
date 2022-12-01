@@ -10,6 +10,8 @@
 #include <shlwapi.h>
 #include <pathcch.h>
 #include <winreg.h>
+#include <string>
+#include <format>
 
 #include "resource.h"
 
@@ -80,6 +82,8 @@ int APIENTRY wWinMain(_In_ HINSTANCE hInstance, _In_opt_ HINSTANCE hPrevInstance
     bool bMultipleKeysFound = false;
     bool bInvalidKeyFound = false;
 
+    std::string registryErrorMessage = "";
+
     WCHAR currentDir[MAX_PATH] = { 0 };
     WCHAR openVRDLLPath[MAX_PATH] = { 0 };
     WCHAR apiLayerDLLPath[MAX_PATH] = { 0 };
@@ -126,12 +130,13 @@ int APIENTRY wWinMain(_In_ HINSTANCE hInstance, _In_opt_ HINSTANCE hPrevInstance
         if (bInstallButtonPressed)
         {
             HKEY key;
-
-            if (RegOpenKeyExW(HKEY_LOCAL_MACHINE, OPENXR_API_LAYER_REG_KEY, 0, KEY_READ | KEY_WRITE, &key) == ERROR_SUCCESS)
+            LSTATUS ret;
+            ret = RegCreateKeyExW(HKEY_LOCAL_MACHINE, OPENXR_API_LAYER_REG_KEY, 0, NULL, REG_OPTION_NON_VOLATILE, KEY_READ | KEY_WRITE, NULL, &key, NULL);
+            if (ret == ERROR_SUCCESS)
             { 
                 DWORD keyIndex = 0;
                 int numValues = 0;
-                LSTATUS ret;
+                
                 while (true)
                 {
                     WCHAR keyName[255] = { 0 };
@@ -144,6 +149,7 @@ int APIENTRY wWinMain(_In_ HINSTANCE hInstance, _In_opt_ HINSTANCE hPrevInstance
                     }
                     else if (ret != ERROR_SUCCESS)
                     {
+                        registryErrorMessage = std::format("Failed to enumerate keys, {0}", ret);
                         bRegistryAccessError = true;
                         break;
                     }
@@ -154,8 +160,10 @@ int APIENTRY wWinMain(_In_ HINSTANCE hInstance, _In_opt_ HINSTANCE hPrevInstance
 
                         if (numValues > 1)
                         {
-                            if (RegDeleteValueW(key, keyName) != ERROR_SUCCESS)
+                            ret = RegDeleteValueW(key, keyName);
+                            if (ret != ERROR_SUCCESS)
                             {
+                                registryErrorMessage = std::format("Failed to delete key, {0}", ret);
                                 bRegistryAccessError = true;
                                 break;
                             }
@@ -170,8 +178,10 @@ int APIENTRY wWinMain(_In_ HINSTANCE hInstance, _In_opt_ HINSTANCE hPrevInstance
                         int offset = keySize - lstrlenW(API_LAYER_JSON_NAME);
                         if (offset >= 0 && StrCmpNIW(API_LAYER_JSON_NAME, &keyName[offset], offset) == 0)
                         {
-                            if (RegDeleteValueW(key, keyName) != ERROR_SUCCESS)
+                            ret = RegDeleteValueW(key, keyName);
+                            if (ret != ERROR_SUCCESS)
                             {
+                                registryErrorMessage = std::format("Failed to delete key, {0}", ret);
                                 bRegistryAccessError = true;
                                 break;
                             }
@@ -186,8 +196,10 @@ int APIENTRY wWinMain(_In_ HINSTANCE hInstance, _In_opt_ HINSTANCE hPrevInstance
                 if (!bKeyFound)
                 {
                     const BYTE val[4] = { 0 };
-                    if (RegSetValueExW(key, apiLayerJSONPath, NULL, REG_DWORD, val, sizeof(val)) != ERROR_SUCCESS)
+                    ret = RegSetValueExW(key, apiLayerJSONPath, NULL, REG_DWORD, val, sizeof(val));
+                    if (ret != ERROR_SUCCESS)
                     {
+                        registryErrorMessage = std::format("Failed to set key, {0}", ret);
                         bRegistryAccessError = true;
                     }
                 }
@@ -196,6 +208,7 @@ int APIENTRY wWinMain(_In_ HINSTANCE hInstance, _In_opt_ HINSTANCE hPrevInstance
             }
             else
             {
+                registryErrorMessage = std::format("Failed to open key, {0}", ret);
                 bRegistryAccessError = true;
             }
 
@@ -204,23 +217,25 @@ int APIENTRY wWinMain(_In_ HINSTANCE hInstance, _In_opt_ HINSTANCE hPrevInstance
         else if (bUninstallButtonPressed)
         {
             HKEY key;
-
-            if (RegOpenKeyExW(HKEY_LOCAL_MACHINE, OPENXR_API_LAYER_REG_KEY, 0, KEY_READ | KEY_WRITE, &key) == ERROR_SUCCESS)
+            LSTATUS ret;
+            ret = RegOpenKeyExW(HKEY_LOCAL_MACHINE, OPENXR_API_LAYER_REG_KEY, 0, KEY_READ | KEY_WRITE, &key);
+            if (ret == ERROR_SUCCESS)
             {
                 DWORD keyIndex = 0;
-                LSTATUS ret;
+                
                 while (true)
                 {
                     WCHAR keyName[255] = { 0 };
                     DWORD keySize = 255;
-                    ret = RegEnumValueW(key, keyIndex++, keyName, &keySize, NULL, NULL, NULL, NULL);
 
+                    ret = RegEnumValueW(key, keyIndex++, keyName, &keySize, NULL, NULL, NULL, NULL);
                     if (ret == ERROR_NO_MORE_ITEMS)
                     {
                         break;
                     }
                     else if (ret != ERROR_SUCCESS)
                     {
+                        registryErrorMessage = std::format("Failed to enumerate keys, {0}", ret);
                         bRegistryAccessError = true;
                         break;
                     }
@@ -230,8 +245,10 @@ int APIENTRY wWinMain(_In_ HINSTANCE hInstance, _In_opt_ HINSTANCE hPrevInstance
                         int offset = keySize - lstrlenW(API_LAYER_JSON_NAME);
                         if (offset >= 0 && StrCmpNIW(API_LAYER_JSON_NAME, &keyName[offset], offset) == 0)
                         {
-                            if (RegDeleteValueW(key, keyName) != ERROR_SUCCESS)
+                            ret = RegDeleteValueW(key, keyName);
+                            if (ret != ERROR_SUCCESS)
                             {
+                                registryErrorMessage = std::format("Failed to delete key, {0}", ret);
                                 bRegistryAccessError = true;
                                 break;
                             }
@@ -246,6 +263,7 @@ int APIENTRY wWinMain(_In_ HINSTANCE hInstance, _In_opt_ HINSTANCE hPrevInstance
             }
             else
             {
+                registryErrorMessage = std::format("Failed to open key, {0}", ret);
                 bRegistryAccessError = true;
             }
 
@@ -260,25 +278,27 @@ int APIENTRY wWinMain(_In_ HINSTANCE hInstance, _In_opt_ HINSTANCE hPrevInstance
             bFoundAPILayerJSON = PathFileExistsW(apiLayerJSONPath);
             
             HKEY key;
+            LSTATUS ret;
 
-            if (RegOpenKeyExW(HKEY_LOCAL_MACHINE, OPENXR_API_LAYER_REG_KEY, 0, KEY_READ, &key) == ERROR_SUCCESS)
+            ret = RegOpenKeyExW(HKEY_LOCAL_MACHINE, OPENXR_API_LAYER_REG_KEY, 0, KEY_READ, &key);
+            if (ret == ERROR_SUCCESS)
             { 
                 DWORD keyIndex = 0;
                 int numValues = 0;
-                LSTATUS ret;
+                
                 while(true)
                 {
                     WCHAR keyName[255] = { 0 };
                     DWORD keySize = 255;
 
                     ret = RegEnumValueW(key, keyIndex++, keyName, &keySize, NULL, NULL, NULL, NULL);
-
                     if (ret == ERROR_NO_MORE_ITEMS)
                     {
                         break;
                     }
                     else if (ret != ERROR_SUCCESS)
                     {
+                        registryErrorMessage = std::format("Failed to enumerate keys, {0}", ret);
                         bRegistryAccessError = true;
                         break;
                     }
@@ -315,8 +335,13 @@ int APIENTRY wWinMain(_In_ HINSTANCE hInstance, _In_opt_ HINSTANCE hPrevInstance
 
                 RegCloseKey(key);
             }
-            else
+            else if((ret == ERROR_FILE_NOT_FOUND) || (ret == ERROR_PATH_NOT_FOUND))
             {
+                bEnableInstallButton = true;
+            }
+            else
+            {         
+                registryErrorMessage = std::format("Failed to open key, {0}", ret);
                 bRegistryAccessError = true;
             }
 
@@ -387,7 +412,7 @@ int APIENTRY wWinMain(_In_ HINSTANCE hInstance, _In_opt_ HINSTANCE hPrevInstance
         }
         if (bRegistryAccessError)
         {
-            ImGui::Text("Failed to access the Windows Registry!");
+            ImGui::Text("Error accesing the Windows Registry: %s", registryErrorMessage.c_str());
             ImGui::Text("Please make sure the application is run with administator permissions.");
         }
 
