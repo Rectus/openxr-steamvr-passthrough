@@ -205,9 +205,15 @@ namespace
 				{
 					const XrGraphicsBindingD3D11KHR* dx11bindings = reinterpret_cast<const XrGraphicsBindingD3D11KHR*>(entry);
 					m_Renderer = std::make_shared<PassthroughRendererDX11>(dx11bindings->device, g_dllModule, m_configManager);
-					m_cameraManager = std::make_unique<CameraManager>(m_Renderer, m_configManager);
-					m_cameraManager->InitRuntime();
-					m_cameraManager->InitCamera();
+
+					if (!m_cameraManager.get())
+					{
+						m_cameraManager = std::make_unique<CameraManager>(m_Renderer, m_configManager);
+					}
+					if (!m_cameraManager->InitRuntime() || !m_cameraManager->InitCamera())
+					{
+						return false;
+					}
 
 					m_cameraManager->GetFrameSize(cameraTextureWidth, cameraTextureHeight, cameraFrameBufferSize);
 					m_Renderer->SetFrameSize(cameraTextureWidth, cameraTextureHeight, cameraFrameBufferSize);
@@ -226,9 +232,15 @@ namespace
 				{
 					const XrGraphicsBindingD3D12KHR* dx12bindings = reinterpret_cast<const XrGraphicsBindingD3D12KHR*>(entry);
 					m_Renderer = std::make_unique<PassthroughRendererDX12>(dx12bindings->device, dx12bindings->queue, g_dllModule, m_configManager);
-					m_cameraManager = std::make_unique<CameraManager>(m_Renderer, m_configManager);
-					m_cameraManager->InitRuntime();
-					m_cameraManager->InitCamera();
+
+					if (!m_cameraManager.get())
+					{
+						m_cameraManager = std::make_unique<CameraManager>(m_Renderer, m_configManager);
+					}
+					if (!m_cameraManager->InitRuntime() || !m_cameraManager->InitCamera())
+					{
+						return false;
+					}
 
 					m_cameraManager->GetFrameSize(cameraTextureWidth, cameraTextureHeight, cameraFrameBufferSize);
 					m_Renderer->SetFrameSize(cameraTextureWidth, cameraTextureHeight, cameraFrameBufferSize);
@@ -304,7 +316,11 @@ namespace
 				Log("Passthrough session ending...\n");
 				m_dashboardMenu.reset();
 				m_Renderer.reset();
-				m_cameraManager.reset();
+
+				if (m_cameraManager.get())
+				{
+					m_cameraManager->DeinitCamera();
+				}
 				m_currentSession = XR_NULL_HANDLE;
 			}
 

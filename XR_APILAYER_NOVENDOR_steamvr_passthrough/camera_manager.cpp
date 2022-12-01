@@ -77,11 +77,19 @@ CameraManager::CameraManager(std::shared_ptr<IPassthroughRenderer> renderer, std
 
 CameraManager::~CameraManager()
 {
-    DeinitCamera();
+    DeinitRuntime();
+
+    if (m_serveThread.joinable())
+    {
+        m_bRunThread = false;
+        m_serveThread.join();
+    }
 }
 
 bool CameraManager::InitRuntime()
 {
+    if (m_bRuntimeInitialized) { return true; }
+
     if (!vr::VR_IsRuntimeInstalled())
     {
         ErrorLog("SteamVR installation not detected!\n");
@@ -127,13 +135,10 @@ bool CameraManager::InitRuntime()
 void CameraManager::DeinitRuntime()
 {
     if (!m_bRuntimeInitialized) { return; }
-
-    if (m_bCameraInitialized)
-    {
-        DeinitCamera();
-    }
-
+  
+    DeinitCamera();
     vr::VR_Shutdown();
+    m_bRuntimeInitialized = false;
 }
 
 bool CameraManager::InitCamera()
@@ -172,8 +177,12 @@ bool CameraManager::InitCamera()
     }
 
     m_bCameraInitialized = true;
+    m_bRunThread = true;
 
-    m_serveThread = std::thread(&CameraManager::ServeFrames, this);
+    if (!m_serveThread.joinable())
+    {
+        m_serveThread = std::thread(&CameraManager::ServeFrames, this);
+    }
 
     return true;
 }
@@ -182,12 +191,7 @@ void CameraManager::DeinitCamera()
 {
     if (!m_bCameraInitialized) { return; }
     m_bCameraInitialized = false;
-    
-    if (m_serveThread.joinable())
-    {
-        m_bRunThread = false;
-        m_serveThread.join();
-    }
+    m_bRunThread = false;
 
     vr::IVRTrackedCamera* vrCamera = vr::VRTrackedCamera();
 
@@ -199,6 +203,11 @@ void CameraManager::DeinitCamera()
         {
             Log("ReleaseVideoStreamingService error %i\n", (int)error);
         }
+    }
+
+    if (m_serveThread.joinable())
+    {
+        m_serveThread.join();
     }
 }
 
@@ -248,7 +257,6 @@ void CameraManager::GetTrackedCameraEyePoses(XrMatrix4x4f& LeftPose, XrMatrix4x4
     {
         LeftPose = ToXRMatrix4x4(Buffer[0]);
         RightPose = ToXRMatrix4x4(Buffer[0]);
-        //XrMatrix4x4f_CreateIdentity(&RightPose);
     }
 }
 
@@ -350,6 +358,9 @@ void CameraManager::ServeFrames()
     while (m_bRunThread)
     {
         std::this_thread::sleep_for(POSTFRAME_SLEEP_INTERVAL);
+
+        if (!m_bRunThread) { return; }
+
         while (true)
         {
             vr::EVRTrackedCameraError error = m_trackedCamera->GetVideoStreamFrameBuffer(m_cameraHandle, m_frameType, nullptr, 0, &frameHeader, sizeof(vr::CameraVideoStreamFrameHeader_t));
@@ -367,11 +378,17 @@ void CameraManager::ServeFrames()
             }
             else if (error != vr::VRTrackedCameraError_NoFrameAvailable)
             {
-                ErrorLog("GetVideoStreamFrameBuffer error %i\n", error);
+                ErrorLog("GetVideoStreamFrameBuffer-header error %i\n", error);
             }
 
+            if (!m_bRunThread) { return; }
+
             std::this_thread::sleep_for(FRAME_POLL_INTERVAL);
+
+            if (!m_bRunThread) { return; }
         }
+
+        if (!m_bRunThread) { return; }
 
         bool bFoundframeRes = false;
         std::shared_ptr<std::vector<uint8_t>> frameBuffer;
