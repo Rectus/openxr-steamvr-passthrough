@@ -37,7 +37,7 @@ float4 main(VS_OUTPUT input) : SV_TARGET
 {
 	float4 color = g_Texture.Sample(g_SamplerState, float3((input.uvCoords * g_uvPrepassFactor + g_uvPrepassOffset).xy, float(g_arrayIndex)));
 
-	float3 distSqr = pow(RGBtoLAB_D65(color.xyz) - RGBtoLAB_D65(g_maskedKey), 2);
+	float3 distSqr = pow(LinearRGBtoLAB_D65(color.xyz) - LinearRGBtoLAB_D65(g_maskedKey), 2);
 
 	float maskedSqr = pow(g_maskedFrac * 100.0, 2);
 	float smoothSqr = pow(g_maskedSmooth * 100.0, 2);

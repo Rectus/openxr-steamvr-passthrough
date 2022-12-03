@@ -56,7 +56,7 @@ DashboardMenu::DashboardMenu(HMODULE dllModule, std::shared_ptr<ConfigManager> c
 
 	IMGUI_CHECKVERSION();
 	ImGui::CreateContext();
-	ImGuiIO& io = ImGui::GetIO(); //(void)io;
+	ImGuiIO& io = ImGui::GetIO();
 	io.DisplaySize = ImVec2(OVERLAY_RES_WIDTH, OVERLAY_RES_HEIGHT);
 	io.IniFilename = nullptr;
 	io.LogFilename = nullptr;
@@ -196,8 +196,8 @@ void DashboardMenu::TickMenu()
 
 		ScrollableSlider("Opacity", &mainConfig.PassthroughOpacity, 0.0f, 1.0f, "%.1f", 0.1f);
 		ImGui::Separator();
-		ScrollableSlider("Brightness", &mainConfig.Brightness, -10.0f, 10.0f, "%.2f", 0.1f);
-		ScrollableSlider("Contrast", &mainConfig.Contrast, 0.9f, 1.1f, "%.3f", 0.001f);
+		ScrollableSlider("Brightness", &mainConfig.Brightness, -100.0f, 100.0f, "%.2f", 0.1f);
+		ScrollableSlider("Contrast", &mainConfig.Contrast, 0.1f, 2.0f, "%.3f", 0.001f);
 		ScrollableSlider("Saturation", &mainConfig.Saturation, 0.0f, 2.0f, "%.1f", 0.1f);
 		ImGui::EndGroup();
 		

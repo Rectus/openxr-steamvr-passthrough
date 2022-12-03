@@ -51,14 +51,14 @@ float4 main(VS_OUTPUT input) : SV_TARGET
 	float4 sceneColor = g_SceneTexture.Sample(g_SamplerState, input.originalUVCoords.xy);
 
 	// Using CIELAB D65 to match the EXT_FB_passthrough adjustments.
-	float3 labColor = RGBtoLAB_D65(cameraColor.xyz);
+	float3 labColor = LinearRGBtoLAB_D65(cameraColor.xyz);
 	float LPrime = clamp((labColor.x - 50.0) * g_contrast + 50.0, 0.0, 100.0);
 	float LBis = clamp(LPrime + g_brightness, 0.0, 100.0);
 	float2 ab = labColor.yz * g_saturation;
 
-	cameraColor = float4(LABtoRGB_D65(float3(LBis, ab.xy)).xyz, cameraColor.a);
+	cameraColor = float4(LABtoLinearRGB_D65(float3(LBis, ab.xy)).xyz, cameraColor.a);
 
-	float alpha =  saturate((1 - g_opacity) + sceneColor.a);
+	float alpha = saturate((1 - g_opacity) + sceneColor.a);
 
 	return float4(cameraColor.xyz * (1 - alpha) + sceneColor.xyz * alpha, 1.0);
 }

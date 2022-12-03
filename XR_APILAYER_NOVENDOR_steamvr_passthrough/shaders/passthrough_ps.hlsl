@@ -39,13 +39,15 @@ float4 main(VS_OUTPUT input) : SV_TARGET
 	// Clamp to half of the frame texture and add the right eye offset.
 	outUvs = clamp(outUvs, float2(0.0, 0.0), float2(0.5, 1.0)) + g_uvOffset;
 
-	float4 vColor = g_Texture.Sample(g_SamplerState, outUvs.xy);
+	float4 rgbColor = g_Texture.Sample(g_SamplerState, outUvs.xy);
 
 	// Using CIELAB D65 to match the EXT_FB_passthrough adjustments.
-	float3 labColor = RGBtoLAB_D65(vColor.xyz);
+	float3 labColor = LinearRGBtoLAB_D65(rgbColor.xyz);
 	float LPrime = clamp((labColor.x - 50.0) * g_contrast + 50.0, 0.0, 100.0);
 	float LBis = clamp(LPrime + g_brightness, 0.0, 100.0);
 	float2 ab = labColor.yz * g_saturation;
 
-	return float4(LABtoRGB_D65(float3(LBis, ab.xy)).xyz, vColor.a * g_opacity);
+	rgbColor.xyz = LABtoLinearRGB_D65(float3(LBis, ab.xy)).xyz;
+
+	return float4(rgbColor.xyz, rgbColor.a * g_opacity);
 }
