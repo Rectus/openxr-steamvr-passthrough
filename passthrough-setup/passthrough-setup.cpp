@@ -36,7 +36,6 @@ static ComPtr<ID3D11RenderTargetView> g_mainRenderTargetView = NULL;
 bool CreateDeviceD3D(HWND hWnd);
 void CleanupDeviceD3D();
 void CreateRenderTarget();
-void CleanupRenderTarget();
 LRESULT WINAPI WndProc(HWND hWnd, UINT msg, WPARAM wParam, LPARAM lParam);
 
 
@@ -500,10 +499,10 @@ bool CreateDeviceD3D(HWND hWnd)
 
 void CleanupDeviceD3D()
 {
-    CleanupRenderTarget();
-    if (g_pSwapChain.Get()) { g_pSwapChain.Reset(); }
-    if (g_pd3dDeviceContext.Get()) { g_pd3dDeviceContext.Reset(); }
-    if (g_pd3dDevice.Get()) { g_pd3dDevice.Reset(); }
+    g_mainRenderTargetView.Reset();
+    g_pSwapChain.Reset();
+    g_pd3dDeviceContext.Reset();
+    g_pd3dDevice.Reset();
 }
 
 void CreateRenderTarget()
@@ -515,12 +514,6 @@ void CreateRenderTarget()
     }
     pBackBuffer->Release();
 }
-
-void CleanupRenderTarget()
-{
-    if (g_mainRenderTargetView.Get()) { g_mainRenderTargetView->Release(); g_mainRenderTargetView.Reset(); }
-}
-
 
 extern IMGUI_IMPL_API LRESULT ImGui_ImplWin32_WndProcHandler(HWND hWnd, UINT msg, WPARAM wParam, LPARAM lParam);
 
@@ -536,7 +529,7 @@ LRESULT WINAPI WndProc(HWND hWnd, UINT msg, WPARAM wParam, LPARAM lParam)
     case WM_SIZE:
         if (g_pd3dDevice != NULL && wParam != SIZE_MINIMIZED)
         {
-            CleanupRenderTarget();
+            g_mainRenderTargetView.Reset();
             g_pSwapChain->ResizeBuffers(0, (UINT)LOWORD(lParam), (UINT)HIWORD(lParam), DXGI_FORMAT_UNKNOWN, 0);
             CreateRenderTarget();
         }
