@@ -80,6 +80,7 @@ struct PSPassConstantBuffer
 	float brightness;
 	float contrast;
 	float saturation;
+	bool bDoColorAdjustment;
 };
 
 struct PSViewConstantBuffer
@@ -93,8 +94,10 @@ struct PSViewConstantBuffer
 struct PSMaskedConstantBuffer
 {
 	float maskedKey[3];
-	float maskedFrac;
+	float maskedFracChroma;
+	float maskedFracLuma;
 	float maskedSmooth;
+	bool bMaskedUseCamera;
 };
 
 
@@ -569,7 +572,7 @@ void PassthroughRendererDX12::SetupIntermediateRenderTarget(uint32_t index, uint
 {
 	D3D12_RESOURCE_DESC textureDesc = {};
 	textureDesc.MipLevels = 1;
-	textureDesc.Format = DXGI_FORMAT_R8G8B8A8_UNORM_SRGB;
+	textureDesc.Format = DXGI_FORMAT_R8_UNORM;
 	textureDesc.Width = width;
 	textureDesc.Height = height;
 	textureDesc.Flags = D3D12_RESOURCE_FLAG_ALLOW_RENDER_TARGET;
@@ -616,6 +619,10 @@ bool PassthroughRendererDX12::InitPipeline(DXGI_FORMAT rtFormat)
 
 	D3D12_BLEND_DESC blendStateAlphaPremultiplied = blendStateBase;
 	blendStateAlphaPremultiplied.RenderTarget[0].DestBlend = D3D12_BLEND_ONE;
+
+	D3D12_BLEND_DESC blendStateSrcAlpha = blendStateBase;
+	blendStateSrcAlpha.RenderTarget[0].SrcBlend = D3D12_BLEND_SRC_ALPHA;
+	blendStateSrcAlpha.RenderTarget[0].DestBlend = D3D12_BLEND_INV_SRC_ALPHA;
 
 	D3D12_BLEND_DESC blendStatePrepassUseAppAlpha = blendStateBase;
 	blendStatePrepassUseAppAlpha.RenderTarget[0].RenderTargetWriteMask = D3D12_COLOR_WRITE_ENABLE_ALPHA;
@@ -680,7 +687,7 @@ bool PassthroughRendererDX12::InitPipeline(DXGI_FORMAT rtFormat)
 		return false;
 	}
 
-	psoDesc.VS = quadShaderVS;
+	psoDesc.VS = passthroughShaderVS;
 	psoDesc.PS = alphaPrepassMaskedShaderPS;
 	psoDesc.BlendState = blendStateDisabled;
 	if (FAILED(m_d3dDevice->CreateGraphicsPipelineState(&psoDesc, IID_PPV_ARGS(&m_psoMaskedPrepass))))
@@ -691,7 +698,7 @@ bool PassthroughRendererDX12::InitPipeline(DXGI_FORMAT rtFormat)
 
 	psoDesc.VS = passthroughShaderVS;
 	psoDesc.PS = passthroughMaskedShaderPS;
-	psoDesc.BlendState = blendStateDisabled;
+	psoDesc.BlendState = blendStateSrcAlpha;
 	if (FAILED(m_d3dDevice->CreateGraphicsPipelineState(&psoDesc, IID_PPV_ARGS(&m_psoMaskedRender))))
 	{
 		ErrorLog("Error creating PSO.\n");
@@ -798,6 +805,7 @@ void PassthroughRendererDX12::RenderPassthroughFrame(const XrCompositionLayerPro
 	pspBuffer->brightness = mainConf.Brightness;
 	pspBuffer->contrast = mainConf.Contrast;
 	pspBuffer->saturation = mainConf.Saturation;
+	pspBuffer->bDoColorAdjustment = fabsf(mainConf.Brightness) > 0.01f || fabsf(mainConf.Contrast - 1.0f) > 0.01f || fabsf(mainConf.Saturation - 1.0f) > 0.01f;
 
 
 	D3D12_GPU_DESCRIPTOR_HANDLE passCBVHandle = m_CBVSRVHeap->GetGPUDescriptorHandleForHeapStart();
@@ -811,8 +819,10 @@ void PassthroughRendererDX12::RenderPassthroughFrame(const XrCompositionLayerPro
 		maskedBuffer->maskedKey[0] = powf(coreConf.CoreForceMaskedKeyColor[0], 2.2f);
 		maskedBuffer->maskedKey[1] = powf(coreConf.CoreForceMaskedKeyColor[1], 2.2f);
 		maskedBuffer->maskedKey[2] = powf(coreConf.CoreForceMaskedKeyColor[2], 2.2f);
-		maskedBuffer->maskedFrac = coreConf.CoreForceMaskedFraction;
-		maskedBuffer->maskedSmooth = coreConf.CoreForceMaskedSmoothing;
+		maskedBuffer->maskedFracChroma = coreConf.CoreForceMaskedFractionChroma * 100.0f;
+		maskedBuffer->maskedFracLuma = coreConf.CoreForceMaskedFractionLuma * 100.0f;
+		maskedBuffer->maskedSmooth = coreConf.CoreForceMaskedSmoothing * 100.0f;
+		maskedBuffer->bMaskedUseCamera = coreConf.CoreForceMaskedUseCameraImage;
 
 		D3D12_GPU_DESCRIPTOR_HANDLE maskedCBVHandle = m_CBVSRVHeap->GetGPUDescriptorHandleForHeapStart();
 		maskedCBVHandle.ptr += (INDEX_CBV_PS_MASKED_0 + m_frameIndex) * m_CBVSRVHeapDescSize;
@@ -960,10 +970,27 @@ void PassthroughRendererDX12::RenderPassthroughViewMasked(const ERenderEye eye, 
 	cbvPSHandle.ptr += (INDEX_CBV_PS_VIEW_0 + bufferIndex) * m_CBVSRVHeapDescSize;
 	m_commandList->SetGraphicsRootDescriptorTable(1, cbvPSHandle);
 
+	D3D12_GPU_DESCRIPTOR_HANDLE cameraFrameSRVHandle = m_CBVSRVHeap->GetGPUDescriptorHandleForHeapStart();
 
-	D3D12_GPU_DESCRIPTOR_HANDLE frameSRVHandle = m_CBVSRVHeap->GetGPUDescriptorHandleForHeapStart();
-	frameSRVHandle.ptr += (INDEX_SRV_RT_0 + bufferIndex) * m_CBVSRVHeapDescSize;
-	m_commandList->SetGraphicsRootDescriptorTable(3, frameSRVHandle);
+	if (m_configManager->GetConfig_Main().ShowTestImage)
+	{
+		cameraFrameSRVHandle.ptr += INDEX_SRV_TESTIMAGE * m_CBVSRVHeapDescSize;
+	}
+	else
+	{
+		cameraFrameSRVHandle.ptr += (INDEX_SRV_CAMERAFRAME_0 + m_frameIndex) * m_CBVSRVHeapDescSize;
+	}
+
+	if (m_configManager->GetConfig_Core().CoreForceMaskedUseCameraImage)
+	{
+		m_commandList->SetGraphicsRootDescriptorTable(3, cameraFrameSRVHandle);
+	}
+	else
+	{
+		D3D12_GPU_DESCRIPTOR_HANDLE inputRTSRVHandle = m_CBVSRVHeap->GetGPUDescriptorHandleForHeapStart();
+		inputRTSRVHandle.ptr += (INDEX_SRV_RT_0 + bufferIndex) * m_CBVSRVHeapDescSize;
+		m_commandList->SetGraphicsRootDescriptorTable(3, inputRTSRVHandle);
+	}
 
 	D3D12_CPU_DESCRIPTOR_HANDLE rtvHandle = m_intermediateRTVHeap->GetCPUDescriptorHandleForHeapStart();
 	rtvHandle.ptr += bufferIndex * m_RTVHeapDescSize;
@@ -986,19 +1013,7 @@ void PassthroughRendererDX12::RenderPassthroughViewMasked(const ERenderEye eye, 
 
 	TransitionResource(m_commandList.Get(), m_intermediateRenderTargets[bufferIndex].Get(), D3D12_RESOURCE_STATE_RENDER_TARGET, D3D12_RESOURCE_STATE_PIXEL_SHADER_RESOURCE);
 
-
-	if (m_configManager->GetConfig_Main().ShowTestImage)
-	{
-		D3D12_GPU_DESCRIPTOR_HANDLE testImageSRVHandle = m_CBVSRVHeap->GetGPUDescriptorHandleForHeapStart();
-		testImageSRVHandle.ptr += INDEX_SRV_TESTIMAGE * m_CBVSRVHeapDescSize;
-		m_commandList->SetGraphicsRootDescriptorTable(3, testImageSRVHandle);
-	}
-	else
-	{
-		D3D12_GPU_DESCRIPTOR_HANDLE frameSRVHandle = m_CBVSRVHeap->GetGPUDescriptorHandleForHeapStart();
-		frameSRVHandle.ptr += (INDEX_SRV_CAMERAFRAME_0 + m_frameIndex) * m_CBVSRVHeapDescSize;
-		m_commandList->SetGraphicsRootDescriptorTable(3, frameSRVHandle);
-	}
+	m_commandList->SetGraphicsRootDescriptorTable(3, cameraFrameSRVHandle);
 
 	D3D12_GPU_DESCRIPTOR_HANDLE srvHandle = m_CBVSRVHeap->GetGPUDescriptorHandleForHeapStart();
 	srvHandle.ptr += (INDEX_SRV_MASKED_INTERMEDIATE_0 + bufferIndex) * m_CBVSRVHeapDescSize;

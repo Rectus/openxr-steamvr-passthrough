@@ -196,8 +196,8 @@ void DashboardMenu::TickMenu()
 
 		ScrollableSlider("Opacity", &mainConfig.PassthroughOpacity, 0.0f, 1.0f, "%.1f", 0.1f);
 		ImGui::Separator();
-		ScrollableSlider("Brightness", &mainConfig.Brightness, -100.0f, 100.0f, "%.2f", 0.1f);
-		ScrollableSlider("Contrast", &mainConfig.Contrast, 0.1f, 2.0f, "%.3f", 0.001f);
+		ScrollableSlider("Brightness", &mainConfig.Brightness, -50.0f, 50.0f, "%.0f", 1.0f);
+		ScrollableSlider("Contrast", &mainConfig.Contrast, 0.0f, 2.0f, "%.1f", 0.1f);
 		ScrollableSlider("Saturation", &mainConfig.Saturation, 0.0f, 2.0f, "%.1f", 0.1f);
 		ImGui::EndGroup();
 		
@@ -214,7 +214,7 @@ void DashboardMenu::TickMenu()
 	ImGui::EndChild();
 	ImGui::SameLine();
 
-	ImGui::BeginChild("Core Pane", ImVec2(OVERLAY_RES_WIDTH * 0.28f, ImGui::GetContentRegionAvail().y));
+	ImGui::BeginChild("Core Pane", ImVec2(OVERLAY_RES_WIDTH * 0.25f, ImGui::GetContentRegionAvail().y));
 	if (ImGui::CollapsingHeader("OpenXR Core"), ImGuiTreeNodeFlags_DefaultOpen)
 	{
 		if (m_displayValues.bCorePassthroughActive)
@@ -271,6 +271,7 @@ void DashboardMenu::TickMenu()
 		ImGui::BeginGroup();
 		ImGui::Checkbox("Force Passthough Mode", &coreConfig.CoreForcePassthrough);
 
+		ImGui::BeginGroup();
 		if (ImGui::RadioButton("Alpha Blend###CoreForce3", coreConfig.CoreForceMode == 3))
 		{
 			coreConfig.CoreForceMode = 3;
@@ -287,11 +288,26 @@ void DashboardMenu::TickMenu()
 		{
 			coreConfig.CoreForceMode = 0;
 		}
+		ImGui::EndGroup();
 		ImGui::Separator();
 		ImGui::Text("Masked Croma Key Settings");
-		ScrollableSlider("Range", &coreConfig.CoreForceMaskedFraction, 0.0f, 1.0f, "%.2f", 0.01f);
+		ScrollableSlider("Chroma Range", &coreConfig.CoreForceMaskedFractionChroma, 0.0f, 1.0f, "%.2f", 0.01f);
+		ScrollableSlider("Luma Range", &coreConfig.CoreForceMaskedFractionLuma, 0.0f, 1.0f, "%.2f", 0.01f);
 		ScrollableSlider("Smoothing", &coreConfig.CoreForceMaskedSmoothing, 0.01f, 0.2f, "%.3f", 0.005f);
 		ImGui::ColorEdit3("Key", coreConfig.CoreForceMaskedKeyColor);
+
+		ImGui::BeginGroup();
+		ImGui::Text("Chroma Key Source");
+		if (ImGui::RadioButton("Application", !coreConfig.CoreForceMaskedUseCameraImage))
+		{
+			coreConfig.CoreForceMaskedUseCameraImage = false;
+		}
+		if (ImGui::RadioButton("Passthrough Camera", coreConfig.CoreForceMaskedUseCameraImage))
+		{
+			coreConfig.CoreForceMaskedUseCameraImage = true;
+		}
+		ImGui::EndGroup();
+
 
 		ImGui::EndGroup();
 	}

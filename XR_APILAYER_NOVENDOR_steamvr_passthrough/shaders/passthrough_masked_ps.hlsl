@@ -14,6 +14,7 @@ cbuffer psPassConstantBuffer : register(b0)
 	float g_brightness;
 	float g_contrast;
 	float g_saturation;
+	bool g_bDoColorAdjustment;
 };
 
 cbuffer psViewConstantBuffer : register(b1)
@@ -27,13 +28,15 @@ cbuffer psViewConstantBuffer : register(b1)
 cbuffer psMaskedConstantBuffer : register(b2)
 {
 	float3 g_maskedKey;
-	float g_maskedFrac;
+	float g_maskedFracChroma;
+	float g_maskedFracLuma;
 	float g_maskedSmooth;
+	bool g_bMaskedUseCamera;
 };
 
 SamplerState g_SamplerState : register(s0);
 Texture2D g_CameraTexture : register(t0);
-Texture2D g_SceneTexture : register(t1);
+Texture2D g_BlendMask : register(t1);
 
 
 float4 main(VS_OUTPUT input) : SV_TARGET
@@ -48,17 +51,20 @@ float4 main(VS_OUTPUT input) : SV_TARGET
 	outUvs = clamp(outUvs, float2(0.0, 0.0), float2(0.5, 1.0)) + g_uvOffset;
 
 	float4 cameraColor = g_CameraTexture.Sample(g_SamplerState, outUvs.xy);
-	float4 sceneColor = g_SceneTexture.Sample(g_SamplerState, input.originalUVCoords.xy);
 
-	// Using CIELAB D65 to match the EXT_FB_passthrough adjustments.
-	float3 labColor = LinearRGBtoLAB_D65(cameraColor.xyz);
-	float LPrime = clamp((labColor.x - 50.0) * g_contrast + 50.0, 0.0, 100.0);
-	float LBis = clamp(LPrime + g_brightness, 0.0, 100.0);
-	float2 ab = labColor.yz * g_saturation;
+	float alpha = g_BlendMask.Sample(g_SamplerState, input.originalUVCoords.xy).x;
+	alpha = saturate((1.0 - alpha) * g_opacity);
 
-	cameraColor = float4(LABtoLinearRGB_D65(float3(LBis, ab.xy)).xyz, cameraColor.a);
+	if (g_bDoColorAdjustment)
+	{
+		// Using CIELAB D65 to match the EXT_FB_passthrough adjustments.
+		float3 labColor = LinearRGBtoLAB_D65(cameraColor.xyz);
+		float LPrime = clamp((labColor.x - 50.0) * g_contrast + 50.0, 0.0, 100.0);
+		float LBis = clamp(LPrime + g_brightness, 0.0, 100.0);
+		float2 ab = labColor.yz * g_saturation;
 
-	float alpha = saturate((1 - g_opacity) + sceneColor.a);
+		cameraColor = float4(LABtoLinearRGB_D65(float3(LBis, ab.xy)).xyz, cameraColor.a);
+	}
 
-	return float4(cameraColor.xyz * (1 - alpha) + sceneColor.xyz * alpha, 1.0);
+	return float4(cameraColor.xyz, alpha);
 }

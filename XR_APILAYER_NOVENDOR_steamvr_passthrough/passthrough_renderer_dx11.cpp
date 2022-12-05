@@ -32,6 +32,7 @@ struct PSPassConstantBuffer
 	float brightness;
 	float contrast;
 	float saturation;
+	bool bDoColorAdjustment;
 };
 
 struct PSViewConstantBuffer
@@ -45,8 +46,10 @@ struct PSViewConstantBuffer
 struct PSMaskedConstantBuffer
 {
 	float maskedKey[3];
-	float maskedFrac;
+	float maskedFracChroma;
+	float maskedFracLuma;
 	float maskedSmooth;
+	bool bMaskedUseCamera;
 };
 
 
@@ -107,7 +110,7 @@ bool PassthroughRendererDX11::InitRenderer()
 		}
 	}
 
-	bufferDesc.ByteWidth = 16;
+	bufferDesc.ByteWidth = 32;
 	if (FAILED(m_d3dDevice->CreateBuffer(&bufferDesc, nullptr, &m_psPassConstantBuffer)))
 	{
 		return false;
@@ -155,6 +158,14 @@ bool PassthroughRendererDX11::InitRenderer()
 	blendState.RenderTarget[0].DestBlend = D3D11_BLEND_ONE;
 
 	if (FAILED(m_d3dDevice->CreateBlendState(&blendState, m_blendStateAlphaPremultiplied.GetAddressOf())))
+	{
+		return false;
+	}
+
+	blendState.RenderTarget[0].SrcBlend = D3D11_BLEND_SRC_ALPHA;
+	blendState.RenderTarget[0].DestBlend = D3D11_BLEND_INV_SRC_ALPHA;
+
+	if (FAILED(m_d3dDevice->CreateBlendState(&blendState, m_blendStateSrcAlpha.GetAddressOf())))
 	{
 		return false;
 	}
@@ -302,7 +313,7 @@ void PassthroughRendererDX11::SetupTemporaryRenderTarget(ID3D11Texture2D** textu
 
 	D3D11_TEXTURE2D_DESC textureDesc = {};
 	textureDesc.MipLevels = 1;
-	textureDesc.Format = DXGI_FORMAT_R8G8B8A8_UNORM_SRGB;
+	textureDesc.Format = DXGI_FORMAT_R8_UNORM;
 	textureDesc.Width = width;
 	textureDesc.Height = height;
 	textureDesc.ArraySize = 1;
@@ -444,6 +455,7 @@ void PassthroughRendererDX11::RenderPassthroughFrame(const XrCompositionLayerPro
 	buffer.brightness = mainConf.Brightness;
 	buffer.contrast = mainConf.Contrast;
 	buffer.saturation = mainConf.Saturation;
+	buffer.bDoColorAdjustment = fabsf(mainConf.Brightness) > 0.01f || fabsf(mainConf.Contrast - 1.0f) > 0.01f || fabsf(mainConf.Saturation - 1.0f) > 0.01f;
 
 	m_renderContext->UpdateSubresource(m_psPassConstantBuffer.Get(), 0, nullptr, &buffer, 0, 0);
 
@@ -453,8 +465,10 @@ void PassthroughRendererDX11::RenderPassthroughFrame(const XrCompositionLayerPro
 		maskedBuffer.maskedKey[0] = powf(coreConf.CoreForceMaskedKeyColor[0], 2.2f);
 		maskedBuffer.maskedKey[1] = powf(coreConf.CoreForceMaskedKeyColor[1], 2.2f);
 		maskedBuffer.maskedKey[2] = powf(coreConf.CoreForceMaskedKeyColor[2], 2.2f);
-		maskedBuffer.maskedFrac = coreConf.CoreForceMaskedFraction;
-		maskedBuffer.maskedSmooth = coreConf.CoreForceMaskedSmoothing;
+		maskedBuffer.maskedFracChroma = coreConf.CoreForceMaskedFractionChroma * 100.0f;
+		maskedBuffer.maskedFracLuma = coreConf.CoreForceMaskedFractionLuma * 100.0f;
+		maskedBuffer.maskedSmooth = coreConf.CoreForceMaskedSmoothing * 100.0f;
+		maskedBuffer.bMaskedUseCamera = coreConf.CoreForceMaskedUseCameraImage;
 
 		m_renderContext->UpdateSubresource(m_psMaskedConstantBuffer.Get(), 0, nullptr, &maskedBuffer, 0, 0);
 
@@ -576,7 +590,7 @@ void PassthroughRendererDX11::RenderPassthroughViewMasked(const ERenderEye eye, 
 
 	m_renderContext->VSSetConstantBuffers(0, 1, m_vsConstantBuffer[bufferIndex].GetAddressOf());
 
-	m_renderContext->VSSetShader(m_quadShader.Get(), nullptr, 0);
+	m_renderContext->VSSetShader(m_vertexShader.Get(), nullptr, 0);
 
 	{
 		PSViewConstantBuffer viewBuffer = {};
@@ -604,8 +618,33 @@ void PassthroughRendererDX11::RenderPassthroughViewMasked(const ERenderEye eye, 
 	SetupTemporaryRenderTarget(&tempTexture, &tempSRV, &tempRTV, (uint32_t)rect.extent.width, (uint32_t)rect.extent.height);
 
 	m_renderContext->OMSetRenderTargets(1, tempRTV.GetAddressOf(), nullptr);
-	m_renderContext->PSSetShaderResources(0, 1, m_renderTargetSRVs[bufferIndex].GetAddressOf());
 	m_renderContext->OMSetBlendState(nullptr, nullptr, UINT_MAX);
+
+
+	ID3D11ShaderResourceView* cameraFrameSRV;
+
+	if (m_configManager->GetConfig_Main().ShowTestImage)
+	{
+		cameraFrameSRV = m_testPatternSRV.Get();
+	}
+	else if (frame->frameTextureResource != nullptr)
+	{
+		cameraFrameSRV = (ID3D11ShaderResourceView*)frame->frameTextureResource;
+	}
+	else
+	{
+		cameraFrameSRV = m_cameraFrameSRV[m_frameIndex].Get();
+	}
+
+
+	if (m_configManager->GetConfig_Core().CoreForceMaskedUseCameraImage)
+	{
+		m_renderContext->PSSetShaderResources(0, 1, &cameraFrameSRV);
+	}
+	else
+	{
+		m_renderContext->PSSetShaderResources(0, 1, m_renderTargetSRVs[bufferIndex].GetAddressOf());
+	}
 
 	ID3D11Buffer* psBuffers[3] = { m_psPassConstantBuffer.Get(), m_psViewConstantBuffer.Get(), m_psMaskedConstantBuffer.Get() };
 	m_renderContext->PSSetConstantBuffers(0, 3, psBuffers);
@@ -613,6 +652,7 @@ void PassthroughRendererDX11::RenderPassthroughViewMasked(const ERenderEye eye, 
 	m_renderContext->PSSetShader(m_maskedPrepassShader.Get(), nullptr, 0);
 
 	m_renderContext->Draw(3, 0);
+
 
 	{
 		D3D11_VIEWPORT viewport = { (float)rect.offset.x, (float)rect.offset.y, (float)rect.extent.width, (float)rect.extent.height, 0.0f, 1.0f };
@@ -626,24 +666,10 @@ void PassthroughRendererDX11::RenderPassthroughViewMasked(const ERenderEye eye, 
 	ID3D11RenderTargetView* nullRTV = nullptr;
 	m_renderContext->OMSetRenderTargets(1, &nullRTV, nullptr);
 
-	ID3D11ShaderResourceView* views[2];
-	views[1] = tempSRV.Get();
-
-	if (m_configManager->GetConfig_Main().ShowTestImage)
-	{
-		views[0] = m_testPatternSRV.Get();
-	}
-	else if (frame->frameTextureResource != nullptr)
-	{
-		views[0] = (ID3D11ShaderResourceView*)frame->frameTextureResource;
-	}
-	else
-	{
-		views[0] = m_cameraFrameSRV[m_frameIndex].Get();
-	}
+	ID3D11ShaderResourceView* views[2] = { cameraFrameSRV, tempSRV.Get() };
 	m_renderContext->PSSetShaderResources(0, 2, views);
 	m_renderContext->OMSetRenderTargets(1, &rendertarget, nullptr);
-	m_renderContext->VSSetShader(m_vertexShader.Get(), nullptr, 0);
+	m_renderContext->OMSetBlendState(m_blendStateSrcAlpha.Get(), nullptr, UINT_MAX);	
 	m_renderContext->PSSetShader(m_maskedPixelShader.Get(), nullptr, 0);
 
 	m_renderContext->Draw(3, 0);

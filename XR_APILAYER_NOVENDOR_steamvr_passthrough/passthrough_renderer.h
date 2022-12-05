@@ -164,6 +164,7 @@ private:
 
 	ComPtr<ID3D11BlendState> m_blendStateBase;
 	ComPtr<ID3D11BlendState> m_blendStateAlphaPremultiplied;
+	ComPtr<ID3D11BlendState> m_blendStateSrcAlpha;
 	ComPtr<ID3D11BlendState> m_blendStatePrepassUseAppAlpha;
 	ComPtr<ID3D11BlendState> m_blendStatePrepassIgnoreAppAlpha;
 

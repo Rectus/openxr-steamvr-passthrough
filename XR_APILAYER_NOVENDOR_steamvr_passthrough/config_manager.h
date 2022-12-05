@@ -25,9 +25,11 @@ struct Config_Core
 	int CorePreferredMode = 3;
 	bool CoreForcePassthrough = false;
 	int CoreForceMode = 1;
-	float CoreForceMaskedFraction = 0.1f;
+	float CoreForceMaskedFractionChroma = 0.2f;
+	float CoreForceMaskedFractionLuma = 0.4f;
 	float CoreForceMaskedSmoothing = 0.01f;
 	float CoreForceMaskedKeyColor[3] = { 0 ,0 ,0 };
+	bool CoreForceMaskedUseCameraImage = false;
 };
 
 

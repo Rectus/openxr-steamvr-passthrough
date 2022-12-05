@@ -14,6 +14,7 @@ cbuffer psPassConstantBuffer : register(b0)
 	float g_brightness;
 	float g_contrast;
 	float g_saturation;
+	bool g_bDoColorAdjustment;
 };
 
 cbuffer psViewConstantBuffer : register(b1)
@@ -41,13 +42,16 @@ float4 main(VS_OUTPUT input) : SV_TARGET
 
 	float4 rgbColor = g_Texture.Sample(g_SamplerState, outUvs.xy);
 
-	// Using CIELAB D65 to match the EXT_FB_passthrough adjustments.
-	float3 labColor = LinearRGBtoLAB_D65(rgbColor.xyz);
-	float LPrime = clamp((labColor.x - 50.0) * g_contrast + 50.0, 0.0, 100.0);
-	float LBis = clamp(LPrime + g_brightness, 0.0, 100.0);
-	float2 ab = labColor.yz * g_saturation;
+	if (g_bDoColorAdjustment)
+	{
+		// Using CIELAB D65 to match the EXT_FB_passthrough adjustments.
+		float3 labColor = LinearRGBtoLAB_D65(rgbColor.xyz);
+		float LPrime = clamp((labColor.x - 50.0) * g_contrast + 50.0, 0.0, 100.0);
+		float LBis = clamp(LPrime + g_brightness, 0.0, 100.0);
+		float2 ab = labColor.yz * g_saturation;
 
-	rgbColor.xyz = LABtoLinearRGB_D65(float3(LBis, ab.xy)).xyz;
+		rgbColor.xyz = LABtoLinearRGB_D65(float3(LBis, ab.xy)).xyz;
+	}
 
 	return float4(rgbColor.xyz, rgbColor.a * g_opacity);
 }

@@ -92,12 +92,15 @@ void ConfigManager::ParseConfig_Core()
 
 	m_configCore.CoreForcePassthrough = m_iniData.GetBoolValue("Core", "CoreForcePassthrough", m_configCore.CoreForcePassthrough);
 	m_configCore.CoreForceMode = (int)m_iniData.GetLongValue("Core", "CoreForceMode", m_configCore.CoreForceMode);
-	m_configCore.CoreForceMaskedFraction = (float)m_iniData.GetDoubleValue("Core", "CoreForceMaskedFraction", m_configCore.CoreForceMaskedFraction);
+	m_configCore.CoreForceMaskedFractionChroma = (float)m_iniData.GetDoubleValue("Core", "CoreForceMaskedFractionChroma", m_configCore.CoreForceMaskedFractionChroma);
+	m_configCore.CoreForceMaskedFractionLuma = (float)m_iniData.GetDoubleValue("Core", "CoreForceMaskedFractionLuma", m_configCore.CoreForceMaskedFractionLuma);
 	m_configCore.CoreForceMaskedSmoothing = (float)m_iniData.GetDoubleValue("Core", "CoreForceMaskedSmoothing", m_configCore.CoreForceMaskedSmoothing);
 
 	m_configCore.CoreForceMaskedKeyColor[0] = (float)m_iniData.GetDoubleValue("Core", "CoreForceMaskedKeyColorR", m_configCore.CoreForceMaskedKeyColor[0]);
 	m_configCore.CoreForceMaskedKeyColor[1] = (float)m_iniData.GetDoubleValue("Core", "CoreForceMaskedKeyColorG", m_configCore.CoreForceMaskedKeyColor[1]);
 	m_configCore.CoreForceMaskedKeyColor[2] = (float)m_iniData.GetDoubleValue("Core", "CoreForceMaskedKeyColorB", m_configCore.CoreForceMaskedKeyColor[2]);
+
+	m_configCore.CoreForceMaskedUseCameraImage = m_iniData.GetBoolValue("Core", "CoreForceMaskedUseCameraImage", m_configCore.CoreForceMaskedUseCameraImage);
 }
 
 void ConfigManager::UpdateConfig_Main()
@@ -124,10 +127,13 @@ void ConfigManager::UpdateConfig_Core()
 
 	m_iniData.SetBoolValue("Core", "CoreForcePassthrough", m_configCore.CoreForcePassthrough);
 	m_iniData.SetLongValue("Core", "CoreForceMode", m_configCore.CoreForceMode);
-	m_iniData.SetDoubleValue("Core", "CoreForceMaskedFraction", m_configCore.CoreForceMaskedFraction);
+	m_iniData.SetDoubleValue("Core", "CoreForceMaskedFractionChroma", m_configCore.CoreForceMaskedFractionChroma);
+	m_iniData.SetDoubleValue("Core", "CoreForceMaskedFractionLuma", m_configCore.CoreForceMaskedFractionLuma);
 	m_iniData.SetDoubleValue("Core", "CoreForceMaskedSmoothing", m_configCore.CoreForceMaskedSmoothing);
 
 	m_iniData.SetDoubleValue("Core", "CoreForceMaskedKeyColorR", m_configCore.CoreForceMaskedKeyColor[0]);
 	m_iniData.SetDoubleValue("Core", "CoreForceMaskedKeyColorG", m_configCore.CoreForceMaskedKeyColor[1]);
 	m_iniData.SetDoubleValue("Core", "CoreForceMaskedKeyColorB", m_configCore.CoreForceMaskedKeyColor[2]);
+
+	m_iniData.SetBoolValue("Core", "CoreForceMaskedUseCameraImage", m_configCore.CoreForceMaskedUseCameraImage);
 }
