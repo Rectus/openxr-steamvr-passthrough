@@ -61,7 +61,7 @@ Starting an OpenXR application will automatically start the API layer. If the ap
 
 ![Settings menu](https://github.com/Rectus/openxr-steamvr-passthrough/blob/release/settings_menu.png?raw=true)
 
-The options under the OpenXR Core allow setting what passthrough modes are available for the application to use, as well as what mode it should prefer. Some applications may automatically switch to the perferred mode even though they don't support passthrough.
+The options under the OpenXR Core allow setting what passthrough modes are available for the application to use, as well as what mode it should prefer. Some applications may automatically switch to the preferred mode even though they don't support passthrough.
 
 The options under Overrides allow forcing the passthrough mode regardless of whether the application supports it. Note that the Alpha Blend mode will show nothing unless the application submits alpha channels to the compositor.
 
