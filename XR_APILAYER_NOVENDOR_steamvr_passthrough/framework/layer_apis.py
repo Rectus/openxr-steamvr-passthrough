@@ -32,8 +32,11 @@ requested_functions = [
     "xrWaitSwapchainImage",
     "xrReleaseSwapchainImage",
     "xrBeginFrame",
-    "xrEndFrame"
+    "xrEndFrame",
+    "xrConvertTimeToWin32PerformanceCounterKHR"
 ]
 
 # The list of OpenXR extensions our layer will either override or use.
-extensions = []
+extensions = [
+    "XR_KHR_win32_convert_performance_counter_time"
+]

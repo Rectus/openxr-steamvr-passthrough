@@ -40,6 +40,9 @@ HMODULE g_dllModule = NULL;
 #define CONFIG_FILE_DIR L"\\OpenXR SteamVR Passthrough\\"
 #define CONFIG_FILE_NAME L"config.ini"
 
+#define PERF_TIME_AVERAGE_VALUES 10
+
+
 namespace
 {
     using namespace steamvr_passthrough;
@@ -290,6 +293,7 @@ namespace
 				}
 				else if (isSystemHandled(createInfo->systemId) && !isCurrentSession(*session))
 				{
+					m_currentInstance = instance;
 					m_currentSession = *session;
 					if (SetupRenderer(instance, createInfo, session))
 					{
@@ -322,6 +326,7 @@ namespace
 					m_cameraManager->DeinitCamera();
 				}
 				m_currentSession = XR_NULL_HANDLE;
+				m_currentInstance = XR_NULL_HANDLE;
 			}
 
 			return OpenXrApi::xrDestroySession(session);
@@ -609,6 +614,25 @@ namespace
 		}
 
 
+		float UpdateAveragePerfTime(std::deque<float>& times, float newTime)
+		{
+			if (times.size() >= PERF_TIME_AVERAGE_VALUES)
+			{
+				times.pop_front();
+			}
+
+			times.push_back(newTime);
+
+			float average = 0;
+
+			for (const float& val : times)
+			{
+				average += val;
+			}
+			return average / times.size();
+		}
+
+
 		void RenderPassthroughOnAppLayer(const XrFrameEndInfo* frameEndInfo, uint32_t layerNum)
 		{
 			const XrCompositionLayerProjection* layer = (const XrCompositionLayerProjection*)frameEndInfo->layers[layerNum];
@@ -620,6 +644,28 @@ namespace
 
 			if (m_cameraManager->GetCameraFrame(frame))
 			{
+				LARGE_INTEGER perfFrequency;
+				LARGE_INTEGER preRenderTime;
+
+				QueryPerformanceFrequency(&perfFrequency);
+				QueryPerformanceCounter(&preRenderTime);
+
+				double frameToRenderTime = preRenderTime.QuadPart - frame->header.ulFrameExposureTime;
+				frameToRenderTime *= 1000.0f;
+				frameToRenderTime /= perfFrequency.QuadPart;
+				m_dashboardMenu->GetDisplayValues().frameToRenderLatencyMS = UpdateAveragePerfTime(m_frameToRenderTimes, (float)frameToRenderTime);
+
+				LARGE_INTEGER displayTime;
+
+				OpenXrApi::xrConvertTimeToWin32PerformanceCounterKHR(m_currentInstance, frameEndInfo->displayTime, &displayTime);
+
+				float frameToPhotonsTime = displayTime.QuadPart - frame->header.ulFrameExposureTime;
+				frameToPhotonsTime *= 1000.0f;
+				frameToPhotonsTime /= perfFrequency.QuadPart;
+				m_dashboardMenu->GetDisplayValues().frameToPhotonsLatencyMS = UpdateAveragePerfTime(m_frameToPhotonTimes, frameToPhotonsTime);
+
+
+
 				m_cameraManager->CalculateFrameProjection(frame, *layer, frameEndInfo->displayTime, m_refSpaces[layer->space]);
 
 				int leftIndex = UpdateSwapchains(LEFT_EYE, layer);
@@ -638,6 +684,15 @@ namespace
 				}
 
 				m_Renderer->RenderPassthroughFrame(layer, frame.get(), blendMode, leftIndex, rightIndex);
+
+
+				LARGE_INTEGER postRenderTime;
+				QueryPerformanceCounter(&postRenderTime);
+
+				float renderTime = postRenderTime.QuadPart - preRenderTime.QuadPart;
+				renderTime *= 1000.0f;
+				renderTime /= perfFrequency.QuadPart;
+				m_dashboardMenu->GetDisplayValues().renderTimeMS = UpdateAveragePerfTime(m_passthroughRenderTimes, renderTime);
 			}
 		}
 
@@ -649,7 +704,7 @@ namespace
 				return OpenXrApi::xrEndFrame(session, frameEndInfo);
 			}
 
-			m_dashboardMenu->TickMenu();;
+			m_dashboardMenu->TickMenu();
 
 
 			XrResult result;
@@ -695,6 +750,7 @@ namespace
 		bool isSystemHandled(XrSystemId systemId) const { return systemId == m_systemId; }
 		bool isCurrentSession(XrSession session) const { return session == m_currentSession; }
 
+		XrInstance m_currentInstance{XR_NULL_HANDLE};
 		XrSystemId m_systemId{XR_NULL_SYSTEM_ID};
 		XrSession m_currentSession{XR_NULL_HANDLE};
 		std::shared_ptr<IPassthroughRenderer> m_Renderer;
@@ -713,6 +769,10 @@ namespace
 		std::map<XrSwapchain, XrSwapchainCreateInfo> m_swapchainProperties{};
 		std::map<XrSwapchain, uint32_t> m_acquiredSwapchains{};
 		std::map<XrSwapchain, uint32_t> m_heldSwapchains{};
+
+		std::deque<float> m_frameToRenderTimes;
+		std::deque<float> m_frameToPhotonTimes;
+		std::deque<float> m_passthroughRenderTimes;
 
     };
 

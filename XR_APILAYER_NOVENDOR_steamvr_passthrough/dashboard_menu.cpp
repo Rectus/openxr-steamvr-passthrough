@@ -180,9 +180,15 @@ void DashboardMenu::TickMenu()
 		{
 			ImGui::Text("Flags: No alpha");
 		}
+
+		ImGui::Text("Buffer format: %li", m_displayValues.frameBufferFormat);
+
+		ImGui::Text("Exposure to render latency: %.1fms", m_displayValues.frameToRenderLatencyMS);
+		ImGui::Text("Exposure to photons latency: %.1fms", m_displayValues.frameToPhotonsLatencyMS);
+		ImGui::Text("Passthrough CPU render duration: %.2fms", m_displayValues.renderTimeMS);
 	}
 
-	ImGui::Text("Buffer format: %li", m_displayValues.frameBufferFormat);
+	
 
 	if (ImGui::CollapsingHeader("Main Settings"), ImGuiTreeNodeFlags_DefaultOpen)
 	{

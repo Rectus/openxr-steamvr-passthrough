@@ -73,6 +73,17 @@ CameraManager::CameraManager(std::shared_ptr<IPassthroughRenderer> renderer, std
 {
     m_projectionDistanceFar = m_configManager->GetConfig_Main().ProjectionDistanceFar;
     m_projectionDistanceNear = m_configManager->GetConfig_Main().ProjectionDistanceNear;
+
+    m_renderFrame = std::make_shared<CameraFrame>();
+    m_servedFrame = std::make_shared<CameraFrame>();
+    m_underConstructionFrame = std::make_shared<CameraFrame>();
+
+    XrMatrix4x4f_CreateIdentity(&m_renderFrame->frameUVProjectionLeft);
+    XrMatrix4x4f_CreateIdentity(&m_renderFrame->frameUVProjectionRight);
+    XrMatrix4x4f_CreateIdentity(&m_servedFrame->frameUVProjectionLeft);
+    XrMatrix4x4f_CreateIdentity(&m_servedFrame->frameUVProjectionRight);
+    XrMatrix4x4f_CreateIdentity(&m_underConstructionFrame->frameUVProjectionLeft);
+    XrMatrix4x4f_CreateIdentity(&m_underConstructionFrame->frameUVProjectionRight);
 }
 
 CameraManager::~CameraManager()
@@ -326,9 +337,19 @@ bool CameraManager::GetCameraFrame(std::shared_ptr<CameraFrame>& frame)
 
     if (m_serveMutex.try_lock())
     {
-        if (m_servedFrame.get() != nullptr)
+        if (m_servedFrame->bIsValid)
         {
-            m_renderFrame = m_servedFrame;
+            m_renderFrame->bIsValid = false;
+
+            m_renderFrame.swap(m_servedFrame);
+
+            m_serveMutex.unlock();
+
+            frame = m_renderFrame;
+            return true;
+        }
+        else if(m_renderFrame->bIsValid)
+        {
             m_serveMutex.unlock();
 
             frame = m_renderFrame;
@@ -340,7 +361,7 @@ bool CameraManager::GetCameraFrame(std::shared_ptr<CameraFrame>& frame)
             return false;
         }
     }
-    else if (m_renderFrame.get() != nullptr)
+    else if (m_renderFrame->bIsValid)
     {
         frame = m_renderFrame;
         return true;
@@ -353,7 +374,6 @@ void CameraManager::ServeFrames()
 {
     bool bHasFrame = false;
     uint32_t lastFrameSequence = 0;
-    vr::CameraVideoStreamFrameHeader_t frameHeader;
 
     while (m_bRunThread)
     {
@@ -363,7 +383,7 @@ void CameraManager::ServeFrames()
 
         while (true)
         {
-            vr::EVRTrackedCameraError error = m_trackedCamera->GetVideoStreamFrameBuffer(m_cameraHandle, m_frameType, nullptr, 0, &frameHeader, sizeof(vr::CameraVideoStreamFrameHeader_t));
+            vr::EVRTrackedCameraError error = m_trackedCamera->GetVideoStreamFrameBuffer(m_cameraHandle, m_frameType, nullptr, 0, &m_underConstructionFrame->header, sizeof(vr::CameraVideoStreamFrameHeader_t));
 
             if (error == vr::VRTrackedCameraError_None)
             {
@@ -371,7 +391,7 @@ void CameraManager::ServeFrames()
                 {
                     break;
                 }
-                else if (frameHeader.nFrameSequence != lastFrameSequence)
+                else if (m_underConstructionFrame->header.nFrameSequence != lastFrameSequence)
                 {
                     break;
                 }
@@ -391,19 +411,20 @@ void CameraManager::ServeFrames()
         if (!m_bRunThread) { return; }
 
         bool bFoundframeRes = false;
-        std::shared_ptr<std::vector<uint8_t>> frameBuffer;
-        void* frameTexRes = nullptr;
         std::shared_ptr<IPassthroughRenderer> r = m_renderer.lock();
 
-        if (r && r->GetCameraFrameResource(&frameTexRes, m_cameraHandle, m_frameType))
+        if (r && r->GetCameraFrameResource(&m_underConstructionFrame->frameTextureResource, m_cameraHandle, m_frameType))
         {
             bFoundframeRes = true;
         }
         else
         {
-            frameBuffer = std::make_shared<std::vector<uint8_t>>(m_cameraFrameBufferSize);
+            if (m_underConstructionFrame->frameBuffer.get() == nullptr)
+            {
+                m_underConstructionFrame->frameBuffer = std::make_shared<std::vector<uint8_t>>(m_cameraFrameBufferSize);
+            }
 
-            vr::EVRTrackedCameraError error = m_trackedCamera->GetVideoStreamFrameBuffer(m_cameraHandle, m_frameType, frameBuffer->data(), (uint32_t)frameBuffer->size(), nullptr, 0);
+            vr::EVRTrackedCameraError error = m_trackedCamera->GetVideoStreamFrameBuffer(m_cameraHandle, m_frameType, m_underConstructionFrame->frameBuffer->data(), (uint32_t)m_underConstructionFrame->frameBuffer->size(), nullptr, 0);
             if (error != vr::VRTrackedCameraError_None)
             {
                 ErrorLog("GetVideoStreamFrameBuffer error %i\n", error);
@@ -412,24 +433,14 @@ void CameraManager::ServeFrames()
         }
 
         bHasFrame = true;
-        lastFrameSequence = frameHeader.nFrameSequence;
+        lastFrameSequence = m_underConstructionFrame->header.nFrameSequence;
+
+        m_underConstructionFrame->bIsValid = true;
+        m_underConstructionFrame->frameLayout = m_frameLayout;
 
         m_serveMutex.lock();
 
-        m_servedFrame = std::make_shared<CameraFrame>();
-        memcpy(&m_servedFrame->header, &frameHeader, sizeof(frameHeader));
-
-        if (bFoundframeRes)
-        {
-            m_servedFrame->frameTextureResource = frameTexRes;
-        }
-        else
-        {
-            m_servedFrame->frameBuffer = frameBuffer;
-        }
-        XrMatrix4x4f_CreateIdentity(&m_servedFrame->frameUVProjectionLeft);
-        XrMatrix4x4f_CreateIdentity(&m_servedFrame->frameUVProjectionRight);
-        m_servedFrame->frameLayout = m_frameLayout;
+        m_servedFrame.swap(m_underConstructionFrame);
 
         m_serveMutex.unlock();
     }

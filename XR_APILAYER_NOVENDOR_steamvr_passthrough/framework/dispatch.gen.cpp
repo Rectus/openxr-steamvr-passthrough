@@ -532,6 +532,7 @@ namespace LAYER_NAMESPACE
 		{
 			throw new std::runtime_error("Failed to resolve xrLocateViews");
 		}
+		m_xrGetInstanceProcAddr(m_instance, "xrConvertTimeToWin32PerformanceCounterKHR", reinterpret_cast<PFN_xrVoidFunction*>(&m_xrConvertTimeToWin32PerformanceCounterKHR));
 		m_applicationName = createInfo->applicationInfo.applicationName;
 		return XR_SUCCESS;
 	}

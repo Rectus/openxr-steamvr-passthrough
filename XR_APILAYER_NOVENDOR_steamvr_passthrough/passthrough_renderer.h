@@ -43,6 +43,7 @@ struct CameraFrame
 		, frameUVProjectionLeft()
 		, frameUVProjectionRight()
 		, frameLayout(Mono)
+		, bIsValid(false)
 	{
 	}
 
@@ -52,6 +53,7 @@ struct CameraFrame
 	XrMatrix4x4f frameUVProjectionLeft;
 	XrMatrix4x4f frameUVProjectionRight;
 	EStereoFrameLayout frameLayout;
+	bool bIsValid;
 };
 
 

@@ -70,7 +70,7 @@ namespace LAYER_NAMESPACE {
 
         // The list of extensions to remove or implicitly add.
         std::vector<std::string> blockedExtensions;
-        std::vector<std::string> implicitExtensions;
+        std::vector<std::string> implicitExtensions = { XR_KHR_WIN32_CONVERT_PERFORMANCE_COUNTER_TIME_EXTENSION_NAME };
 
         // Only request implicit extensions that are supported.
         //

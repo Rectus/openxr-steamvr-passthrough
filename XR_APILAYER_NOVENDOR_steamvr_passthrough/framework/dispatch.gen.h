@@ -246,6 +246,14 @@ namespace LAYER_NAMESPACE
 	private:
 		PFN_xrLocateViews m_xrLocateViews{ nullptr };
 
+	public:
+		virtual XrResult xrConvertTimeToWin32PerformanceCounterKHR(XrInstance instance, XrTime time, LARGE_INTEGER* performanceCounter)
+		{
+			return m_xrConvertTimeToWin32PerformanceCounterKHR(instance, time, performanceCounter);
+		}
+	private:
+		PFN_xrConvertTimeToWin32PerformanceCounterKHR m_xrConvertTimeToWin32PerformanceCounterKHR{ nullptr };
+
 
 
 	};

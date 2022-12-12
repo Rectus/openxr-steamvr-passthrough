@@ -60,6 +60,7 @@ private:
 
 	std::shared_ptr<CameraFrame> m_renderFrame;
 	std::shared_ptr<CameraFrame> m_servedFrame;
+	std::shared_ptr<CameraFrame> m_underConstructionFrame;
 
 	vr::IVRTrackedCamera* m_trackedCamera;
 	int m_hmdDeviceId = -1;
