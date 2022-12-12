@@ -72,6 +72,10 @@ private:
 	XrMatrix4x4f m_rawHMDViewLeft{};
 	XrMatrix4x4f m_rawHMDProjectionRight{};
 	XrMatrix4x4f m_rawHMDViewRight{};
+
+	XrMatrix4x4f m_cameraProjectionInvFarLeft{};
+	XrMatrix4x4f m_cameraProjectionInvFarRight{};
+
 	XrMatrix4x4f m_cameraLeftToHMDPose{};
 	XrMatrix4x4f m_cameraLeftToRightPose{};
 };

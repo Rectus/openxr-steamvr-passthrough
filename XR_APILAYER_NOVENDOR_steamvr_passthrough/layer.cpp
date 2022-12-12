@@ -650,7 +650,7 @@ namespace
 				QueryPerformanceFrequency(&perfFrequency);
 				QueryPerformanceCounter(&preRenderTime);
 
-				double frameToRenderTime = preRenderTime.QuadPart - frame->header.ulFrameExposureTime;
+				double frameToRenderTime = (float) (preRenderTime.QuadPart - frame->header.ulFrameExposureTime);
 				frameToRenderTime *= 1000.0f;
 				frameToRenderTime /= perfFrequency.QuadPart;
 				m_dashboardMenu->GetDisplayValues().frameToRenderLatencyMS = UpdateAveragePerfTime(m_frameToRenderTimes, (float)frameToRenderTime);
@@ -659,7 +659,7 @@ namespace
 
 				OpenXrApi::xrConvertTimeToWin32PerformanceCounterKHR(m_currentInstance, frameEndInfo->displayTime, &displayTime);
 
-				float frameToPhotonsTime = displayTime.QuadPart - frame->header.ulFrameExposureTime;
+				float frameToPhotonsTime = (float) (displayTime.QuadPart - frame->header.ulFrameExposureTime);
 				frameToPhotonsTime *= 1000.0f;
 				frameToPhotonsTime /= perfFrequency.QuadPart;
 				m_dashboardMenu->GetDisplayValues().frameToPhotonsLatencyMS = UpdateAveragePerfTime(m_frameToPhotonTimes, frameToPhotonsTime);
@@ -689,7 +689,7 @@ namespace
 				LARGE_INTEGER postRenderTime;
 				QueryPerformanceCounter(&postRenderTime);
 
-				float renderTime = postRenderTime.QuadPart - preRenderTime.QuadPart;
+				float renderTime = (float) (postRenderTime.QuadPart - preRenderTime.QuadPart);
 				renderTime *= 1000.0f;
 				renderTime /= perfFrequency.QuadPart;
 				m_dashboardMenu->GetDisplayValues().renderTimeMS = UpdateAveragePerfTime(m_passthroughRenderTimes, renderTime);

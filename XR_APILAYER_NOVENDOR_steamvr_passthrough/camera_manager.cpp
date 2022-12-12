@@ -71,8 +71,8 @@ CameraManager::CameraManager(std::shared_ptr<IPassthroughRenderer> renderer, std
     , m_frameType(vr::VRTrackedCameraFrameType_MaximumUndistorted)
     , m_frameLayout(EStereoFrameLayout::Mono)
 {
-    m_projectionDistanceFar = m_configManager->GetConfig_Main().ProjectionDistanceFar;
-    m_projectionDistanceNear = m_configManager->GetConfig_Main().ProjectionDistanceNear;
+    m_projectionDistanceFar = 0.0f;
+    m_projectionDistanceNear = 0.0f;
 
     m_renderFrame = std::make_shared<CameraFrame>();
     m_servedFrame = std::make_shared<CameraFrame>();
@@ -486,8 +486,37 @@ XrMatrix4x4f CameraManager::GetHMDMVPMatrix(const ERenderEye eye, const XrCompos
 
 void CameraManager::CalculateFrameProjection(std::shared_ptr<CameraFrame>& frame, const XrCompositionLayerProjection& layer, const XrTime& displayTime, const XrReferenceSpaceCreateInfo& refSpaceInfo)
 {
-    m_projectionDistanceFar = m_configManager->GetConfig_Main().ProjectionDistanceFar;
-    m_projectionDistanceNear = m_configManager->GetConfig_Main().ProjectionDistanceNear;
+    if (m_configManager->GetConfig_Main().ProjectionDistanceFar != m_projectionDistanceFar || 
+        m_configManager->GetConfig_Main().ProjectionDistanceNear != m_projectionDistanceNear)
+    {
+        m_projectionDistanceFar = m_configManager->GetConfig_Main().ProjectionDistanceFar;
+        m_projectionDistanceNear = m_configManager->GetConfig_Main().ProjectionDistanceNear;
+
+        vr::HmdMatrix44_t vrProjection;
+        vr::EVRTrackedCameraError error = m_trackedCamera->GetCameraProjection(m_hmdDeviceId, 0, m_frameType, m_projectionDistanceFar * 0.5f, m_projectionDistanceFar, &vrProjection);
+
+        if (error != vr::VRTrackedCameraError_None)
+        {
+            ErrorLog("CameraProjection error %i on device %i\n", error, m_hmdDeviceId);
+            return;
+        }
+
+        m_cameraProjectionInvFarLeft = ToXRMatrix4x4Inverted(vrProjection);
+
+        if (m_frameLayout != EStereoFrameLayout::Mono)
+        {
+            error = m_trackedCamera->GetCameraProjection(m_hmdDeviceId, 1, m_frameType, m_projectionDistanceFar * 0.5f, m_projectionDistanceFar, &vrProjection);
+
+            if (error != vr::VRTrackedCameraError_None)
+            {
+                ErrorLog("CameraProjection error %i on device %i\n", error, m_hmdDeviceId);
+                return;
+            }
+
+            m_cameraProjectionInvFarRight = ToXRMatrix4x4Inverted(vrProjection);
+        }
+    }
+    
 
     CalculateFrameProjectionForEye(LEFT_EYE, frame, layer, refSpaceInfo);
     CalculateFrameProjectionForEye(RIGHT_EYE, frame, layer, refSpaceInfo);
@@ -499,32 +528,21 @@ void CameraManager::CalculateFrameProjectionForEye(const ERenderEye eye, std::sh
     uint32_t CameraId = (eye == RIGHT_EYE && bIsStereo) ? 1 : 0;
 
     XrMatrix4x4f* frameUVMat = (eye == LEFT_EYE) ? &frame->frameUVProjectionLeft : &frame->frameUVProjectionRight;
-    vr::HmdMatrix44_t vrProjection;
-
-    vr::EVRTrackedCameraError error = m_trackedCamera->GetCameraProjection(m_hmdDeviceId, CameraId, m_frameType, m_projectionDistanceFar * 0.5f, m_projectionDistanceFar, &vrProjection);
-
-    if (error != vr::VRTrackedCameraError_None)
-    {
-        ErrorLog("CameraProjection error %i on device %i\n", error, m_hmdDeviceId);
-        XrMatrix4x4f_CreateIdentity(frameUVMat);
-        return;
-    }
 
     XrMatrix4x4f hmdMVPMatrix = GetHMDMVPMatrix(eye, layer, refSpaceInfo);
-    XrMatrix4x4f cameraProjectionInv = ToXRMatrix4x4Inverted(vrProjection);
     XrMatrix4x4f leftCameraToTrackingPose = ToXRMatrix4x4(frame->header.trackedDevicePose.mDeviceToAbsoluteTracking);
 
     XrMatrix4x4f tempMatrix, trackedCameraMatrix, transformToCamera;
 
     if (CameraId == 0)
     {
-        XrMatrix4x4f_Multiply(&trackedCameraMatrix, &leftCameraToTrackingPose, &cameraProjectionInv);
+        XrMatrix4x4f_Multiply(&trackedCameraMatrix, &leftCameraToTrackingPose, &m_cameraProjectionInvFarLeft);
         XrMatrix4x4f_Multiply(&transformToCamera, &hmdMVPMatrix, &trackedCameraMatrix);
     }
     else
     {
         XrMatrix4x4f_Multiply(&tempMatrix, &leftCameraToTrackingPose, &m_cameraLeftToRightPose);
-        XrMatrix4x4f_Multiply(&trackedCameraMatrix, &tempMatrix, &cameraProjectionInv);
+        XrMatrix4x4f_Multiply(&trackedCameraMatrix, &tempMatrix, &m_cameraProjectionInvFarRight);
         XrMatrix4x4f_Multiply(&transformToCamera, &hmdMVPMatrix, &trackedCameraMatrix);
     }
 
