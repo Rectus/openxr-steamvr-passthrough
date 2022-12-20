@@ -4,84 +4,59 @@
 #include "imgui.h"
 #include "imgui_internal.h"
 #include "imgui_impl_dx11.h"
-#include "imgui_impl_dx12.h"
 
 using namespace steamvr_passthrough;
 using namespace steamvr_passthrough::log;
 
 
-// DirectX 11 initialization
-DashboardMenu::DashboardMenu(HMODULE dllModule, std::shared_ptr<ConfigManager> configManager, ID3D11Device* d3dDevice)
+DashboardMenu::DashboardMenu(HMODULE dllModule, std::shared_ptr<ConfigManager> configManager)
 	: m_dllModule(dllModule)
 	, m_configManager(configManager)
 	, m_overlayHandle(vr::k_ulOverlayHandleInvalid)
 	, m_thumbnailHandle(vr::k_ulOverlayHandleInvalid)
-	, m_d3d11Device(d3dDevice)
-	, m_API(DirectX11)
 	, m_bMenuIsVisible(false)
 	, m_displayValues()
 {
-	m_displayValues.bSessionActive = true;
-	m_displayValues.renderAPI = DirectX11;
-	d3dDevice->GetImmediateContext(&m_d3d11DeviceContext);
-	IMGUI_CHECKVERSION();
-	ImGui::CreateContext();
-	ImGuiIO& io = ImGui::GetIO();
-	io.DisplaySize = ImVec2(OVERLAY_RES_WIDTH, OVERLAY_RES_HEIGHT);
-	io.IniFilename = nullptr;
-	io.LogFilename = nullptr;
-	ImGui::StyleColorsDark();
-	
-
-	ImGui_ImplDX11_Init(d3dDevice, m_d3d11DeviceContext.Get());
-
-	SetupDX11();
-	CreateOverlay();
-}
-
-
-// DirectX 12 initialization
-DashboardMenu::DashboardMenu(HMODULE dllModule, std::shared_ptr<ConfigManager> configManager, ID3D12Device* device, ID3D12CommandQueue* commandQueue)
-	: m_dllModule(dllModule)
-	, m_configManager(configManager)
-	, m_overlayHandle(vr::k_ulOverlayHandleInvalid)
-	, m_thumbnailHandle(vr::k_ulOverlayHandleInvalid)
-	, m_d3d12Device(device)
-	, m_d3d12CommandQueue(commandQueue)
-	, m_API(DirectX12)
-	, m_bMenuIsVisible(false)
-{
-	m_displayValues.bSessionActive = true;
-	m_displayValues.renderAPI = DirectX12;
-
-	IMGUI_CHECKVERSION();
-	ImGui::CreateContext();
-	ImGuiIO& io = ImGui::GetIO();
-	io.DisplaySize = ImVec2(OVERLAY_RES_WIDTH, OVERLAY_RES_HEIGHT);
-	io.IniFilename = nullptr;
-	io.LogFilename = nullptr;
-	ImGui::StyleColorsDark();
-
-	SetupDX12();
-	ImGui_ImplDX12_Init(device, 1, DXGI_FORMAT_R8G8B8A8_UNORM, m_d3d12SRVHeap.Get(), m_d3d12SRVHeap->GetCPUDescriptorHandleForHeapStart(), m_d3d12SRVHeap->GetGPUDescriptorHandleForHeapStart());
-
-	CreateOverlay();
+	m_bRunThread = true;
+	m_menuThread = std::thread(&DashboardMenu::RunThread, this);
 }
 
 
 DashboardMenu::~DashboardMenu()
 {
-	if (m_API == DirectX11)
+	m_bRunThread = false;
+	if (m_menuThread.joinable())
 	{
-		ImGui_ImplDX11_Shutdown();
-		ImGui::GetIO().BackendRendererUserData = NULL;
+		m_menuThread.join();
 	}
-	else if (m_API == DirectX12)
+}
+
+
+void DashboardMenu::RunThread()
+{
+	IMGUI_CHECKVERSION();
+	ImGui::CreateContext();
+	ImGuiIO& io = ImGui::GetIO();
+	io.DisplaySize = ImVec2(OVERLAY_RES_WIDTH, OVERLAY_RES_HEIGHT);
+	io.IniFilename = nullptr;
+	io.LogFilename = nullptr;
+	ImGui::StyleColorsDark();
+
+	SetupDX11();
+	ImGui_ImplDX11_Init(m_d3d11Device.Get(), m_d3d11DeviceContext.Get());
+	CreateOverlay();
+
+
+	while (m_bRunThread)
 	{
-		ImGui_ImplDX12_Shutdown();
-		ImGui::GetIO().BackendRendererUserData = NULL;
+		TickMenu();
+
+		vr::VROverlay()->WaitFrameSync(100);
 	}
 
+
+	ImGui_ImplDX11_Shutdown();
+	ImGui::GetIO().BackendRendererUserData = NULL;
 	ImGui::DestroyContext();
 
 	if (vr::VROverlay())
@@ -129,16 +104,8 @@ void DashboardMenu::TickMenu()
 
 	ImGuiIO& io = ImGui::GetIO();
 
+	ImGui_ImplDX11_NewFrame();
 
-	if (m_API == DirectX11)
-	{
-		ImGui_ImplDX11_NewFrame();
-	}
-	else if (m_API == DirectX12)
-	{
-		ImGui_ImplDX12_NewFrame();
-	}
-	
 	ImGui::NewFrame();
 
 	ImGui::SetNextWindowPos(ImVec2(0.0f, 0.0f));
@@ -330,60 +297,20 @@ void DashboardMenu::TickMenu()
 
 	ImGui::Render();
 
-	vr::D3D12TextureData_t textureData;
+	ID3D11RenderTargetView* rtv = m_d3d11RTV.Get();
+	m_d3d11DeviceContext->OMSetRenderTargets(1, &rtv, NULL);
+	const float clearColor[4] = { 0, 0, 0, 1 };
+	m_d3d11DeviceContext->ClearRenderTargetView(m_d3d11RTV.Get(), clearColor);
+	ImGui_ImplDX11_RenderDrawData(ImGui::GetDrawData());
+	m_d3d11DeviceContext->Flush();
+
 	vr::Texture_t texture;
 	texture.eColorSpace = vr::ColorSpace_Auto;
+	texture.eType = vr::TextureType_DXGISharedHandle;
 
-	if (m_API == DirectX11)
-	{
-		ID3D11RenderTargetView* rtv = m_d3d11RTV.Get();
-		m_d3d11DeviceContext->OMSetRenderTargets(1, &rtv, NULL);
-		const float clearColor[4] = { 0, 0, 0, 1 };
-		m_d3d11DeviceContext->ClearRenderTargetView(m_d3d11RTV.Get(), clearColor);
-		ImGui_ImplDX11_RenderDrawData(ImGui::GetDrawData());
-
-		ComPtr<IDXGIResource> DXGIResource;
-		m_d3d11Texture->QueryInterface(IID_PPV_ARGS(&DXGIResource));
-
-		texture.eType = vr::TextureType_DXGISharedHandle;
-		DXGIResource->GetSharedHandle(&texture.handle);
-	}
-	else if (m_API == DirectX12)
-	{
-		m_d3d12CommandAllocator->Reset();
-		m_d3d12CommandList->Reset(m_d3d12CommandAllocator.Get(), NULL);
-
-		D3D12_RESOURCE_BARRIER barrier = {};
-		barrier.Type = D3D12_RESOURCE_BARRIER_TYPE_TRANSITION;
-		barrier.Flags = D3D12_RESOURCE_BARRIER_FLAG_NONE;
-		barrier.Transition.pResource = m_d3d12Texture.Get();
-		barrier.Transition.Subresource = D3D12_RESOURCE_BARRIER_ALL_SUBRESOURCES;
-		barrier.Transition.StateBefore = D3D12_RESOURCE_STATE_PIXEL_SHADER_RESOURCE;
-		barrier.Transition.StateAfter = D3D12_RESOURCE_STATE_RENDER_TARGET;
-		m_d3d12CommandList->ResourceBarrier(1, &barrier);
-
-		const float clearColor[4] = { 0, 0, 0, 1 };
-		D3D12_CPU_DESCRIPTOR_HANDLE rtvHandle = m_d3d12RTVHeap->GetCPUDescriptorHandleForHeapStart();
-		m_d3d12CommandList->ClearRenderTargetView(rtvHandle, clearColor, 0, NULL);
-		m_d3d12CommandList->OMSetRenderTargets(1, &rtvHandle, FALSE, NULL);
-		m_d3d12CommandList->SetDescriptorHeaps(1, m_d3d12SRVHeap.GetAddressOf());
-
-		ImGui_ImplDX12_RenderDrawData(ImGui::GetDrawData(), m_d3d12CommandList.Get());
-
-		barrier.Transition.StateBefore = D3D12_RESOURCE_STATE_RENDER_TARGET;
-		barrier.Transition.StateAfter = D3D12_RESOURCE_STATE_PIXEL_SHADER_RESOURCE;
-		m_d3d12CommandList->ResourceBarrier(1, &barrier);
-		m_d3d12CommandList->Close();
-
-		m_d3d12CommandQueue->ExecuteCommandLists(1, (ID3D12CommandList* const*)m_d3d12CommandList.GetAddressOf());
-
-		textureData.m_pResource = m_d3d12Texture.Get();
-		textureData.m_pCommandQueue = m_d3d12CommandQueue.Get();
-		textureData.m_nNodeMask = 0;
-
-		texture.eType = vr::TextureType_DirectX12;
-		texture.handle = &textureData;
-	}
+	ComPtr<IDXGIResource> DXGIResource;
+	m_d3d11Texture->QueryInterface(IID_PPV_ARGS(&DXGIResource));
+	DXGIResource->GetSharedHandle(&texture.handle);
 
 	vr::EVROverlayError error = vr::VROverlay()->SetOverlayTexture(m_overlayHandle, &texture);
 	if (error != vr::VROverlayError_None)
@@ -567,6 +494,8 @@ void DashboardMenu::HandleEvents()
 
 void DashboardMenu::SetupDX11()
 {
+	D3D11CreateDevice(NULL, D3D_DRIVER_TYPE_HARDWARE, NULL, 0, NULL, 0, D3D11_SDK_VERSION, &m_d3d11Device, NULL, &m_d3d11DeviceContext);
+
 	D3D11_TEXTURE2D_DESC textureDesc = {};
 	textureDesc.MipLevels = 1;
 	textureDesc.Format = DXGI_FORMAT_R8G8B8A8_UNORM;
@@ -587,43 +516,4 @@ void DashboardMenu::SetupDX11()
 	renderTargetViewDesc.ViewDimension = D3D11_RTV_DIMENSION_TEXTURE2D;
 
 	m_d3d11Device->CreateRenderTargetView(m_d3d11Texture.Get(), &renderTargetViewDesc, &m_d3d11RTV);
-}
-
-
-void DashboardMenu::SetupDX12()
-{
-	m_d3d12Device->CreateCommandAllocator(D3D12_COMMAND_LIST_TYPE_DIRECT, IID_PPV_ARGS(&m_d3d12CommandAllocator));
-
-	m_d3d12Device->CreateCommandList(0, D3D12_COMMAND_LIST_TYPE_DIRECT, m_d3d12CommandAllocator.Get(), nullptr, IID_PPV_ARGS(&m_d3d12CommandList));
-
-	D3D12_DESCRIPTOR_HEAP_DESC rtvDesc = {};
-	rtvDesc.Type = D3D12_DESCRIPTOR_HEAP_TYPE_RTV;
-	rtvDesc.NumDescriptors = 1;
-	rtvDesc.Flags = D3D12_DESCRIPTOR_HEAP_FLAG_NONE;
-	rtvDesc.NodeMask = 0;
-	m_d3d12Device->CreateDescriptorHeap(&rtvDesc, IID_PPV_ARGS(&m_d3d12RTVHeap));
-
-	D3D12_RESOURCE_DESC textureDesc = {};
-	textureDesc.MipLevels = 1;
-	textureDesc.Format = DXGI_FORMAT_R8G8B8A8_UNORM;
-	textureDesc.Width = OVERLAY_RES_WIDTH;
-	textureDesc.Height = OVERLAY_RES_HEIGHT;
-	textureDesc.Flags = D3D12_RESOURCE_FLAG_ALLOW_RENDER_TARGET | D3D12_RESOURCE_FLAG_ALLOW_SIMULTANEOUS_ACCESS;
-	textureDesc.DepthOrArraySize = 1;
-	textureDesc.SampleDesc.Count = 1;
-	textureDesc.SampleDesc.Quality = 0;
-	textureDesc.Dimension = D3D12_RESOURCE_DIMENSION_TEXTURE2D;
-
-	D3D12_HEAP_PROPERTIES heapProp = {};
-	heapProp.Type = D3D12_HEAP_TYPE_DEFAULT;
-
-	m_d3d12Device->CreateCommittedResource(&heapProp, D3D12_HEAP_FLAG_SHARED, &textureDesc, D3D12_RESOURCE_STATE_PIXEL_SHADER_RESOURCE, nullptr, IID_PPV_ARGS(&m_d3d12Texture));
-
-	m_d3d12Device->CreateRenderTargetView(m_d3d12Texture.Get(), NULL, m_d3d12RTVHeap->GetCPUDescriptorHandleForHeapStart());
-
-	D3D12_DESCRIPTOR_HEAP_DESC srvDesc = {};
-	srvDesc.Type = D3D12_DESCRIPTOR_HEAP_TYPE_CBV_SRV_UAV;
-	srvDesc.NumDescriptors = 1;
-	srvDesc.Flags = D3D12_DESCRIPTOR_HEAP_FLAG_SHADER_VISIBLE;
-	m_d3d12Device->CreateDescriptorHeap(&srvDesc, IID_PPV_ARGS(&m_d3d12SRVHeap));
 }

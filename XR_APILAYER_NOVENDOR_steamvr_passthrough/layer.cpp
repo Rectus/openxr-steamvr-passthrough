@@ -40,7 +40,7 @@ HMODULE g_dllModule = NULL;
 #define CONFIG_FILE_DIR L"\\OpenXR SteamVR Passthrough\\"
 #define CONFIG_FILE_NAME L"config.ini"
 
-#define PERF_TIME_AVERAGE_VALUES 10
+#define PERF_TIME_AVERAGE_VALUES 20
 
 
 namespace
@@ -225,7 +225,12 @@ namespace
 						return false;
 					}
 
-					m_dashboardMenu = std::make_unique<DashboardMenu>(g_dllModule, m_configManager, dx11bindings->device);
+					if (!m_dashboardMenu.get())
+					{
+						m_dashboardMenu = std::make_unique<DashboardMenu>(g_dllModule, m_configManager);
+						m_dashboardMenu->GetDisplayValues().bSessionActive = true;
+						m_dashboardMenu->GetDisplayValues().renderAPI = DirectX11;
+					}
 
 					return true;
 				}
@@ -252,7 +257,12 @@ namespace
 						return false;
 					}
 
-					m_dashboardMenu = std::make_unique<DashboardMenu>(g_dllModule, m_configManager, dx12bindings->device, dx12bindings->queue);
+					if (!m_dashboardMenu.get())
+					{
+						m_dashboardMenu = std::make_unique<DashboardMenu>(g_dllModule, m_configManager);
+						m_dashboardMenu->GetDisplayValues().bSessionActive = true;
+						m_dashboardMenu->GetDisplayValues().renderAPI = DirectX12;
+					}
 
 					return true;
 				}
@@ -703,8 +713,6 @@ namespace
 			{
 				return OpenXrApi::xrEndFrame(session, frameEndInfo);
 			}
-
-			m_dashboardMenu->TickMenu();
 
 
 			XrResult result;

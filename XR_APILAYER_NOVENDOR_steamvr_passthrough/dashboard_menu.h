@@ -1,5 +1,8 @@
 #pragma once
 
+#include <thread>
+#include <condition_variable>
+
 #include "layer.h"
 #include "config_manager.h"
 
@@ -42,12 +45,10 @@ class DashboardMenu
 {
 public:
 
-	DashboardMenu(HMODULE dllModule, std::shared_ptr<ConfigManager> configManager, ID3D11Device* d3dDevice);
-	DashboardMenu(HMODULE dllModule, std::shared_ptr<ConfigManager> configManager, ID3D12Device* device, ID3D12CommandQueue* commandQueue);
+	DashboardMenu(HMODULE dllModule, std::shared_ptr<ConfigManager> configManager);
 
 	~DashboardMenu();
-
-	void TickMenu();
+	
 	MenuDisplayValues& GetDisplayValues() { return m_displayValues; }
 
 private:
@@ -56,10 +57,11 @@ private:
 	void DestroyOverlay();
 	void CreateThumbnail();
 
+	void RunThread();
 	void HandleEvents();
+	void TickMenu();
 
 	void SetupDX11();
-	void SetupDX12();
 
 	std::shared_ptr<ConfigManager> m_configManager;
 	HMODULE m_dllModule;
@@ -67,21 +69,14 @@ private:
 	vr::VROverlayHandle_t m_overlayHandle;
 	vr::VROverlayHandle_t m_thumbnailHandle;
 
+	std::thread m_menuThread;
+	bool m_bRunThread;
+
 	ComPtr<ID3D11Device> m_d3d11Device;
 	ComPtr<ID3D11DeviceContext> m_d3d11DeviceContext;
-	ComPtr<ID3D11DeviceContext> m_d3d11RenderContext;
 	ComPtr<ID3D11Texture2D> m_d3d11Texture;
 	ComPtr<ID3D11RenderTargetView> m_d3d11RTV;
 
-	ComPtr<ID3D12Device> m_d3d12Device;
-	ComPtr<ID3D12CommandQueue> m_d3d12CommandQueue;
-	ComPtr<ID3D12CommandAllocator> m_d3d12CommandAllocator;
-	ComPtr<ID3D12GraphicsCommandList> m_d3d12CommandList;
-	ComPtr<ID3D12Resource> m_d3d12Texture;
-	ComPtr<ID3D12DescriptorHeap> m_d3d12SRVHeap;
-	ComPtr<ID3D12DescriptorHeap> m_d3d12RTVHeap;
-
-	EDashboardAPI m_API;
 	bool m_bMenuIsVisible;
 	MenuDisplayValues m_displayValues;
 };
