@@ -228,9 +228,9 @@ namespace
 					if (!m_dashboardMenu.get())
 					{
 						m_dashboardMenu = std::make_unique<DashboardMenu>(g_dllModule, m_configManager);
-						m_dashboardMenu->GetDisplayValues().bSessionActive = true;
-						m_dashboardMenu->GetDisplayValues().renderAPI = DirectX11;
 					}
+					m_dashboardMenu->GetDisplayValues().bSessionActive = true;
+					m_dashboardMenu->GetDisplayValues().renderAPI = DirectX11;
 
 					return true;
 				}
@@ -260,9 +260,9 @@ namespace
 					if (!m_dashboardMenu.get())
 					{
 						m_dashboardMenu = std::make_unique<DashboardMenu>(g_dllModule, m_configManager);
-						m_dashboardMenu->GetDisplayValues().bSessionActive = true;
-						m_dashboardMenu->GetDisplayValues().renderAPI = DirectX12;
 					}
+					m_dashboardMenu->GetDisplayValues().bSessionActive = true;
+					m_dashboardMenu->GetDisplayValues().renderAPI = DirectX12;
 
 					return true;
 				}
@@ -717,8 +717,11 @@ namespace
 
 			XrResult result;
 
-			m_dashboardMenu->GetDisplayValues().CoreCurrentMode = frameEndInfo->environmentBlendMode;
-			m_dashboardMenu->GetDisplayValues().bCorePassthroughActive = false;
+			if (m_dashboardMenu.get())
+			{
+				m_dashboardMenu->GetDisplayValues().CoreCurrentMode = frameEndInfo->environmentBlendMode;
+				m_dashboardMenu->GetDisplayValues().bCorePassthroughActive = false;
+			}
 
 			if (m_bUsePassthrough)
 			{
@@ -745,6 +748,7 @@ namespace
 
 				m_heldSwapchains.clear();
 			}
+
 			XrFrameEndInfo modifiedFrameEndInfo = *frameEndInfo;
 			modifiedFrameEndInfo.environmentBlendMode = XR_ENVIRONMENT_BLEND_MODE_OPAQUE;
 
