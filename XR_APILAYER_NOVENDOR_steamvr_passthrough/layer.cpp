@@ -145,6 +145,9 @@ namespace
 				}
 			}
 
+			m_openVRManager = std::make_shared<OpenVRManager>();
+			m_dashboardMenu = std::make_unique<DashboardMenu>(g_dllModule, m_configManager, m_openVRManager);
+
 			m_bSuccessfullyLoaded = true;
 
 			return result;
@@ -205,16 +208,9 @@ namespace
 				switch (entry->type)
 				{
 				case XR_TYPE_GRAPHICS_BINDING_D3D11_KHR:
-
 				{
 					const XrGraphicsBindingD3D11KHR* dx11bindings = reinterpret_cast<const XrGraphicsBindingD3D11KHR*>(entry);
 					m_Renderer = std::make_shared<PassthroughRendererDX11>(dx11bindings->device, g_dllModule, m_configManager);
-
-					
-					if (!m_openVRManager.get())
-					{
-						m_openVRManager = std::make_shared<OpenVRManager>();
-					}
 
 					if (!m_cameraManager.get())
 					{
@@ -232,10 +228,6 @@ namespace
 						return false;
 					}
 
-					if (!m_dashboardMenu.get())
-					{
-						m_dashboardMenu = std::make_unique<DashboardMenu>(g_dllModule, m_configManager, m_openVRManager);
-					}
 					m_dashboardMenu->GetDisplayValues().bSessionActive = true;
 					m_dashboardMenu->GetDisplayValues().renderAPI = DirectX11;
 
@@ -243,15 +235,9 @@ namespace
 				}
 
 				case XR_TYPE_GRAPHICS_BINDING_D3D12_KHR:
-
 				{
 					const XrGraphicsBindingD3D12KHR* dx12bindings = reinterpret_cast<const XrGraphicsBindingD3D12KHR*>(entry);
 					m_Renderer = std::make_unique<PassthroughRendererDX12>(dx12bindings->device, dx12bindings->queue, g_dllModule, m_configManager);
-
-					if (!m_openVRManager.get())
-					{
-						m_openVRManager = std::make_shared<OpenVRManager>();
-					}
 
 					if (!m_cameraManager.get())
 					{
@@ -268,11 +254,7 @@ namespace
 					{
 						return false;
 					}
-
-					if (!m_dashboardMenu.get())
-					{
-						m_dashboardMenu = std::make_unique<DashboardMenu>(g_dllModule, m_configManager, m_openVRManager);
-					}
+					
 					m_dashboardMenu->GetDisplayValues().bSessionActive = true;
 					m_dashboardMenu->GetDisplayValues().renderAPI = DirectX12;
 
@@ -337,12 +319,9 @@ namespace
 
 		XrResult xrDestroySession(XrSession session)
 		{
-			
-
 			if (isCurrentSession(session))
 			{
 				Log("Passthrough session ending...\n");
-				m_dashboardMenu.reset();
 				m_Renderer.reset();
 
 				if (m_cameraManager.get())
@@ -350,9 +329,21 @@ namespace
 					m_cameraManager->DeinitCamera();
 				}
 				m_cameraManager.reset();
-				//m_openVRManager.reset();
 				m_currentSession = XR_NULL_HANDLE;
 				m_currentInstance = XR_NULL_HANDLE;
+
+				m_dashboardMenu->GetDisplayValues().bSessionActive = false;
+				m_dashboardMenu->GetDisplayValues().renderAPI = None;
+				m_dashboardMenu->GetDisplayValues().frameBufferFlags = 0;
+				m_dashboardMenu->GetDisplayValues().frameBufferFormat = 0;
+				m_dashboardMenu->GetDisplayValues().frameBufferWidth = 0;
+				m_dashboardMenu->GetDisplayValues().frameBufferHeight = 0;
+				m_dashboardMenu->GetDisplayValues().frameToPhotonsLatencyMS = 0;
+				m_dashboardMenu->GetDisplayValues().frameToRenderLatencyMS = 0;
+				m_dashboardMenu->GetDisplayValues().renderTimeMS = 0;
+
+				m_dashboardMenu->GetDisplayValues().bCorePassthroughActive = false;
+				m_dashboardMenu->GetDisplayValues().CoreCurrentMode = 0;
 			}
 
 			XrResult result = OpenXrApi::xrDestroySession(session);

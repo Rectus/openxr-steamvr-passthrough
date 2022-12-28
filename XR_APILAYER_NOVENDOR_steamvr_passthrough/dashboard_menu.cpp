@@ -132,6 +132,15 @@ void DashboardMenu::TickMenu()
 
 	if (ImGui::CollapsingHeader("Session"), ImGuiTreeNodeFlags_DefaultOpen)
 	{
+		if (m_displayValues.bSessionActive)
+		{
+			ImGui::Text("Session: Active");
+		}
+		else
+		{
+			ImGui::Text("Session: Inactive");
+		}
+
 		switch(m_displayValues.renderAPI)
 		{
 		case DirectX11:
@@ -343,7 +352,9 @@ void DashboardMenu::CreateOverlay()
 		return;
 	}
 
-	vr::EVROverlayError error = vrOverlay->FindOverlay(DASHBOARD_OVERLAY_KEY, &m_overlayHandle);
+	std::string overlayKey = std::format(DASHBOARD_OVERLAY_KEY, GetCurrentProcessId());
+
+	vr::EVROverlayError error = vrOverlay->FindOverlay(overlayKey.c_str(), &m_overlayHandle);
 	if (error != vr::EVROverlayError::VROverlayError_None && error != vr::EVROverlayError::VROverlayError_UnknownOverlay)
 	{
 		Log("Warning: SteamVR FindOverlay error (%d)\n", error);
@@ -351,7 +362,7 @@ void DashboardMenu::CreateOverlay()
 
 	if (m_overlayHandle == vr::k_ulOverlayHandleInvalid)
 	{
-		error = vrOverlay->CreateDashboardOverlay(DASHBOARD_OVERLAY_KEY, "OpenXR Passthrough", &m_overlayHandle, &m_thumbnailHandle);
+		error = vrOverlay->CreateDashboardOverlay(overlayKey.c_str(), "OpenXR Passthrough", &m_overlayHandle, &m_thumbnailHandle);
 		if (error != vr::EVROverlayError::VROverlayError_None)
 		{
 			ErrorLog("SteamVR overlay init error (%d)\n", error);
