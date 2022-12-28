@@ -3,7 +3,9 @@
 #include <mutex>
 #include <atomic>
 #include <xr_linear.h>
+#include "layer.h"
 #include "passthrough_renderer.h"
+#include "openvr_manager.h"
 
 
 enum ETrackedCameraFrameType
@@ -21,11 +23,8 @@ class CameraManager
 {
 public:
 
-	CameraManager(std::shared_ptr<IPassthroughRenderer> renderer, std::shared_ptr<ConfigManager> configManager);
+	CameraManager(std::shared_ptr<IPassthroughRenderer> renderer, ERenderAPI renderAPI, std::shared_ptr<ConfigManager> configManager, std::shared_ptr<OpenVRManager> openVRManager);
 	~CameraManager();
-
-	bool InitRuntime();
-	void DeinitRuntime();
 
 	bool InitCamera();
 	void DeinitCamera();
@@ -42,8 +41,8 @@ private:
 	void CalculateFrameProjectionForEye(const ERenderEye eye, std::shared_ptr<CameraFrame>& frame, const XrCompositionLayerProjection& layer, const XrReferenceSpaceCreateInfo& refSpaceInfo);
 
 	std::shared_ptr<ConfigManager> m_configManager;
+	std::shared_ptr<OpenVRManager> m_openVRManager;
 
-	bool m_bRuntimeInitialized = false;
 	bool m_bCameraInitialized = false;
 
 	uint32_t m_cameraTextureWidth;
@@ -54,6 +53,7 @@ private:
 	float m_projectionDistanceNear;
 
 	std::weak_ptr<IPassthroughRenderer> m_renderer;
+	ERenderAPI m_renderAPI;
 	std::thread m_serveThread;
 	std::atomic_bool m_bRunThread = true;
 	std::mutex m_serveMutex;
@@ -62,7 +62,6 @@ private:
 	std::shared_ptr<CameraFrame> m_servedFrame;
 	std::shared_ptr<CameraFrame> m_underConstructionFrame;
 
-	vr::IVRTrackedCamera* m_trackedCamera;
 	int m_hmdDeviceId = -1;
 	vr::EVRTrackedCameraFrameType m_frameType;
 	vr::TrackedCameraHandle_t m_cameraHandle;

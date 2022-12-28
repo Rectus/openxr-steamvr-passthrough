@@ -690,14 +690,7 @@ void PassthroughRendererDX11::RenderFrameFinish()
 }
 
 
-bool PassthroughRendererDX11::GetCameraFrameResource(void** resource, vr::TrackedCameraHandle_t cameraHandle, vr::EVRTrackedCameraFrameType frameType)
+void* PassthroughRendererDX11::GetRenderDevice()
 {
-	vr::EVRTrackedCameraError error = vr::VRTrackedCamera()->GetVideoStreamTextureD3D11(cameraHandle, frameType, m_d3dDevice.Get(), resource, nullptr, 0);
-	if (error != vr::VRTrackedCameraError_None)
-	{
-		ErrorLog("GetVideoStreamTextureD3D11 error %i\n", error);
-		return false;
-	}
-
-	return true;
+	return m_d3dDevice.Get();
 }

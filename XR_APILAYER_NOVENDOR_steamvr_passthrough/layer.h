@@ -37,3 +37,12 @@ namespace steamvr_passthrough
     void ResetInstance();
 
 } // namespace steamvr_passthrough
+
+enum ERenderAPI
+{
+    None,
+    DirectX11,
+    DirectX12,
+    Vulkan,
+    OpenGL
+};

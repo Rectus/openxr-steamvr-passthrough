@@ -107,8 +107,7 @@ public:
 	virtual void InitRenderTarget(const ERenderEye eye, void* rendertarget, const uint32_t imageIndex, const XrSwapchainCreateInfo& swapchainInfo) = 0;
 	virtual void SetFrameSize(const uint32_t width, const uint32_t height, const uint32_t bufferSize) = 0;
 	virtual void RenderPassthroughFrame(const XrCompositionLayerProjection* layer, CameraFrame* frame, EPassthroughBlendMode blendMode, int leftSwapchainIndex, int rightSwapchainIndex) = 0;
-
-	virtual bool GetCameraFrameResource(void** resource, vr::TrackedCameraHandle_t cameraHandle, vr::EVRTrackedCameraFrameType frameType) { return false; };
+	virtual void* GetRenderDevice() = 0;
 };
 
 
@@ -122,8 +121,7 @@ public:
 	void SetFrameSize(const uint32_t width, const uint32_t height, const uint32_t bufferSize);
 
 	void RenderPassthroughFrame(const XrCompositionLayerProjection* layer, CameraFrame* frame, EPassthroughBlendMode blendMode, int leftSwapchainIndex, int rightSwapchainIndex);
-	
-	bool GetCameraFrameResource(void** resource, vr::TrackedCameraHandle_t cameraHandle, vr::EVRTrackedCameraFrameType frameType);
+	void* GetRenderDevice();
 
 private:
 
@@ -192,6 +190,7 @@ public:
 	void InitRenderTarget(const ERenderEye eye, void* rendertarget, const uint32_t imageIndex, const XrSwapchainCreateInfo& swapchainInfo);
 	void SetFrameSize(const uint32_t width, const uint32_t height, const uint32_t bufferSize);
 	void RenderPassthroughFrame(const XrCompositionLayerProjection* layer, CameraFrame* frame, EPassthroughBlendMode blendMode, int leftSwapchainIndex, int rightSwapchainIndex);
+	void* GetRenderDevice();
 	
 private:
 

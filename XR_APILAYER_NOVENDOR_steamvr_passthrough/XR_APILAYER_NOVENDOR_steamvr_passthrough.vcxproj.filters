@@ -74,6 +74,9 @@
     <ClInclude Include="resource.h">
       <Filter>Header Files</Filter>
     </ClInclude>
+    <ClInclude Include="openvr_manager.h">
+      <Filter>Header Files</Filter>
+    </ClInclude>
   </ItemGroup>
   <ItemGroup>
     <ClCompile Include="pch.cpp">
@@ -129,6 +132,9 @@
     </ClCompile>
     <ClCompile Include="..\external\lodepng\lodepng.cpp">
       <Filter>Libraries</Filter>
+    </ClCompile>
+    <ClCompile Include="openvr_manager.cpp">
+      <Filter>Source Files</Filter>
     </ClCompile>
   </ItemGroup>
   <ItemGroup>

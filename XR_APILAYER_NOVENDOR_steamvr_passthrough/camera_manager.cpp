@@ -64,10 +64,11 @@ inline XrMatrix4x4f ToXRMatrix4x4Inverted(vr::HmdMatrix34_t& input)
 
 
 
-CameraManager::CameraManager(std::shared_ptr<IPassthroughRenderer> renderer, std::shared_ptr<ConfigManager> configManager)
+CameraManager::CameraManager(std::shared_ptr<IPassthroughRenderer> renderer, ERenderAPI renderAPI, std::shared_ptr<ConfigManager> configManager, std::shared_ptr<OpenVRManager> openVRManager)
     : m_renderer(renderer)
+    , m_renderAPI(renderAPI)
     , m_configManager(configManager)
-    , m_trackedCamera(nullptr)
+    , m_openVRManager(openVRManager)
     , m_frameType(vr::VRTrackedCameraFrameType_MaximumUndistorted)
     , m_frameLayout(EStereoFrameLayout::Mono)
 {
@@ -88,7 +89,7 @@ CameraManager::CameraManager(std::shared_ptr<IPassthroughRenderer> renderer, std
 
 CameraManager::~CameraManager()
 {
-    DeinitRuntime();
+    DeinitCamera();
 
     if (m_serveThread.joinable())
     {
@@ -97,75 +98,21 @@ CameraManager::~CameraManager()
     }
 }
 
-bool CameraManager::InitRuntime()
-{
-    if (m_bRuntimeInitialized) { return true; }
-
-    if (!vr::VR_IsRuntimeInstalled())
-    {
-        ErrorLog("SteamVR installation not detected!\n");
-        return false;
-    }
-
-    vr::EVRInitError error;
-    vr::VR_Init(&error, vr::EVRApplicationType::VRApplication_Background);
-
-    if (error != vr::EVRInitError::VRInitError_None)
-    {
-        ErrorLog("Failed to init SteamVR runtime as background app, error %i\n", error);
-        return false;
-    }
-
-    if (!vr::VRSystem() || !vr::VRCompositor())
-    {
-        ErrorLog("Invalid SteamVR interface handle!\n");
-        vr::VR_Shutdown();
-        return false;
-    }
-
-    for (int i = 0; i < vr::k_unMaxTrackedDeviceCount; i++)
-    {
-        if (vr::VRSystem()->GetTrackedDeviceClass(i) == vr::TrackedDeviceClass_HMD)
-        {
-            m_hmdDeviceId = i;
-            break;
-        }
-    }
-
-    if (m_hmdDeviceId < 0)
-    {
-        ErrorLog("HMD device ID not found!\n");
-        vr::VR_Shutdown();
-        return false;
-    }
-
-    m_bRuntimeInitialized = true;
-    return true;
-}
-
-void CameraManager::DeinitRuntime()
-{
-    if (!m_bRuntimeInitialized) { return; }
-  
-    DeinitCamera();
-    vr::VR_Shutdown();
-    m_bRuntimeInitialized = false;
-}
-
 bool CameraManager::InitCamera()
 {
     if (m_bCameraInitialized) { return true; }
 
-    m_trackedCamera = vr::VRTrackedCamera();
+    m_hmdDeviceId = m_openVRManager->GetHMDDeviceId();
+    vr::IVRTrackedCamera* trackedCamera = m_openVRManager->GetVRTrackedCamera();
 
-    if (!m_trackedCamera)
+    if (!trackedCamera) 
     {
         ErrorLog("SteamVR Tracked Camera interface error!\n");
-        return false;
+        return false; 
     }
 
     bool bHasCamera = false;
-    vr::EVRTrackedCameraError error = m_trackedCamera->HasCamera(m_hmdDeviceId, &bHasCamera);
+    vr::EVRTrackedCameraError error = trackedCamera->HasCamera(m_hmdDeviceId, &bHasCamera);
     if (error != vr::VRTrackedCameraError_None)
     {
         ErrorLog("Error %i checking camera on device %i\n", error, m_hmdDeviceId);
@@ -179,7 +126,7 @@ bool CameraManager::InitCamera()
 
     UpdateStaticCameraParameters();
 
-    vr::EVRTrackedCameraError cameraError = m_trackedCamera->AcquireVideoStreamingService(m_hmdDeviceId, &m_cameraHandle);
+    vr::EVRTrackedCameraError cameraError = trackedCamera->AcquireVideoStreamingService(m_hmdDeviceId, &m_cameraHandle);
 
     if (cameraError != vr::VRTrackedCameraError_None)
     {
@@ -204,11 +151,11 @@ void CameraManager::DeinitCamera()
     m_bCameraInitialized = false;
     m_bRunThread = false;
 
-    vr::IVRTrackedCamera* vrCamera = vr::VRTrackedCamera();
+    vr::IVRTrackedCamera* trackedCamera = m_openVRManager->GetVRTrackedCamera();
 
-    if (vrCamera)
+    if (trackedCamera)
     {
-        vr::EVRTrackedCameraError error = vrCamera->ReleaseVideoStreamingService(m_cameraHandle);
+        vr::EVRTrackedCameraError error = trackedCamera->ReleaseVideoStreamingService(m_cameraHandle);
 
         if (error != vr::VRTrackedCameraError_None)
         {
@@ -231,17 +178,14 @@ void CameraManager::GetFrameSize(uint32_t& width, uint32_t& height, uint32_t& bu
 
 void CameraManager::GetTrackedCameraEyePoses(XrMatrix4x4f& LeftPose, XrMatrix4x4f& RightPose)
 {
-    if (!vr::VRSystem())
-    {
-        return;
-    }
+    vr::IVRSystem* vrSystem = m_openVRManager->GetVRSystem();
 
     vr::HmdMatrix34_t Buffer[2];
     vr::TrackedPropertyError error;
     bool bGotLeftCamera = true;
     bool bGotRightCamera = true;
 
-    uint32_t numBytes = vr::VRSystem()->GetArrayTrackedDeviceProperty(m_hmdDeviceId, vr::Prop_CameraToHeadTransforms_Matrix34_Array, vr::k_unHmdMatrix34PropertyTag, &Buffer, sizeof(Buffer), &error);
+    uint32_t numBytes = vrSystem->GetArrayTrackedDeviceProperty(m_hmdDeviceId, vr::Prop_CameraToHeadTransforms_Matrix34_Array, vr::k_unHmdMatrix34PropertyTag, &Buffer, sizeof(Buffer), &error);
     if (error != vr::TrackedProp_Success || numBytes == 0)
     {
         ErrorLog("Failed to get tracked camera pose array, error [%i]\n",error);
@@ -273,7 +217,10 @@ void CameraManager::GetTrackedCameraEyePoses(XrMatrix4x4f& LeftPose, XrMatrix4x4
 
 void CameraManager::UpdateStaticCameraParameters()
 {
-    vr::EVRTrackedCameraError cameraError = m_trackedCamera->GetCameraFrameSize(m_hmdDeviceId, m_frameType, &m_cameraTextureWidth, &m_cameraTextureHeight, &m_cameraFrameBufferSize);
+    vr::IVRSystem* vrSystem = m_openVRManager->GetVRSystem();
+    vr::IVRTrackedCamera* trackedCamera = m_openVRManager->GetVRTrackedCamera();
+
+    vr::EVRTrackedCameraError cameraError = trackedCamera->GetCameraFrameSize(m_hmdDeviceId, m_frameType, &m_cameraTextureWidth, &m_cameraTextureHeight, &m_cameraFrameBufferSize);
     if (cameraError != vr::VRTrackedCameraError_None)
     {
         ErrorLog("CameraFrameSize error %i on device Id %i\n", cameraError, m_hmdDeviceId);
@@ -286,7 +233,7 @@ void CameraManager::UpdateStaticCameraParameters()
 
     vr::TrackedPropertyError propError;
 
-    int32_t layout = (vr::EVRTrackedCameraFrameLayout)vr::VRSystem()->GetInt32TrackedDeviceProperty(m_hmdDeviceId, vr::Prop_CameraFrameLayout_Int32, &propError);
+    int32_t layout = (vr::EVRTrackedCameraFrameLayout)vrSystem->GetInt32TrackedDeviceProperty(m_hmdDeviceId, vr::Prop_CameraFrameLayout_Int32, &propError);
 
     if (propError != vr::TrackedProp_Success)
     {
@@ -309,16 +256,16 @@ void CameraManager::UpdateStaticCameraParameters()
         m_frameLayout = EStereoFrameLayout::Mono;
     }
 
-    vr::HmdMatrix44_t vrHMDProjectionLeft = vr::VRSystem()->GetProjectionMatrix(vr::Hmd_Eye::Eye_Left, m_projectionDistanceFar * 0.1f, m_projectionDistanceFar * 2.0f);
+    vr::HmdMatrix44_t vrHMDProjectionLeft = vrSystem->GetProjectionMatrix(vr::Hmd_Eye::Eye_Left, m_projectionDistanceFar * 0.1f, m_projectionDistanceFar * 2.0f);
     m_rawHMDProjectionLeft = ToXRMatrix4x4(vrHMDProjectionLeft);
 
-    vr::HmdMatrix34_t vrHMDViewLeft = vr::VRSystem()->GetEyeToHeadTransform(vr::Hmd_Eye::Eye_Left);
+    vr::HmdMatrix34_t vrHMDViewLeft = vrSystem->GetEyeToHeadTransform(vr::Hmd_Eye::Eye_Left);
     m_rawHMDViewLeft = ToXRMatrix4x4Inverted(vrHMDViewLeft);
 
-    vr::HmdMatrix44_t vrHMDProjectionRight = vr::VRSystem()->GetProjectionMatrix(vr::Hmd_Eye::Eye_Right, m_projectionDistanceFar * 0.1f, m_projectionDistanceFar * 2.0f);
+    vr::HmdMatrix44_t vrHMDProjectionRight = vrSystem->GetProjectionMatrix(vr::Hmd_Eye::Eye_Right, m_projectionDistanceFar * 0.1f, m_projectionDistanceFar * 2.0f);
     m_rawHMDProjectionRight = ToXRMatrix4x4(vrHMDProjectionRight);
 
-    vr::HmdMatrix34_t vrHMDViewRight = vr::VRSystem()->GetEyeToHeadTransform(vr::Hmd_Eye::Eye_Right);
+    vr::HmdMatrix34_t vrHMDViewRight = vrSystem->GetEyeToHeadTransform(vr::Hmd_Eye::Eye_Right);
     m_rawHMDViewRight = ToXRMatrix4x4Inverted(vrHMDViewRight);
 
     XrMatrix4x4f LeftCameraPose, RightCameraPose;
@@ -335,31 +282,14 @@ bool CameraManager::GetCameraFrame(std::shared_ptr<CameraFrame>& frame)
 {
     if (!m_bCameraInitialized) { return false; }
 
-    if (m_serveMutex.try_lock())
+    std::unique_lock<std::mutex> lock(m_serveMutex, std::try_to_lock);
+    if (lock.owns_lock() && m_servedFrame->bIsValid)
     {
-        if (m_servedFrame->bIsValid)
-        {
-            m_renderFrame->bIsValid = false;
+        m_renderFrame->bIsValid = false;
+        m_renderFrame.swap(m_servedFrame);
 
-            m_renderFrame.swap(m_servedFrame);
-
-            m_serveMutex.unlock();
-
-            frame = m_renderFrame;
-            return true;
-        }
-        else if(m_renderFrame->bIsValid)
-        {
-            m_serveMutex.unlock();
-
-            frame = m_renderFrame;
-            return true;
-        }
-        else
-        {
-            m_serveMutex.unlock();
-            return false;
-        }
+        frame = m_renderFrame;
+        return true;
     }
     else if (m_renderFrame->bIsValid)
     {
@@ -372,6 +302,13 @@ bool CameraManager::GetCameraFrame(std::shared_ptr<CameraFrame>& frame)
 
 void CameraManager::ServeFrames()
 {
+    vr::IVRTrackedCamera* trackedCamera = m_openVRManager->GetVRTrackedCamera();
+
+    if (!trackedCamera)
+    {
+        return;
+    }
+
     bool bHasFrame = false;
     uint32_t lastFrameSequence = 0;
 
@@ -383,7 +320,7 @@ void CameraManager::ServeFrames()
 
         while (true)
         {
-            vr::EVRTrackedCameraError error = m_trackedCamera->GetVideoStreamFrameBuffer(m_cameraHandle, m_frameType, nullptr, 0, &m_underConstructionFrame->header, sizeof(vr::CameraVideoStreamFrameHeader_t));
+            vr::EVRTrackedCameraError error = trackedCamera->GetVideoStreamFrameBuffer(m_cameraHandle, m_frameType, nullptr, 0, &m_underConstructionFrame->header, sizeof(vr::CameraVideoStreamFrameHeader_t));
 
             if (error == vr::VRTrackedCameraError_None)
             {
@@ -410,12 +347,17 @@ void CameraManager::ServeFrames()
 
         if (!m_bRunThread) { return; }
 
-        bool bFoundframeRes = false;
-        std::shared_ptr<IPassthroughRenderer> r = m_renderer.lock();
 
-        if (r && r->GetCameraFrameResource(&m_underConstructionFrame->frameTextureResource, m_cameraHandle, m_frameType))
+        if (m_renderAPI == DirectX11)
         {
-            bFoundframeRes = true;
+            std::shared_ptr<IPassthroughRenderer> renderer = m_renderer.lock();
+
+            vr::EVRTrackedCameraError error = trackedCamera->GetVideoStreamTextureD3D11(m_cameraHandle, m_frameType, renderer->GetRenderDevice(), &m_underConstructionFrame->frameTextureResource, nullptr, 0);
+            if (error != vr::VRTrackedCameraError_None)
+            {
+                ErrorLog("GetVideoStreamTextureD3D11 error %i\n", error);
+                continue;
+            }
         }
         else
         {
@@ -424,7 +366,7 @@ void CameraManager::ServeFrames()
                 m_underConstructionFrame->frameBuffer = std::make_shared<std::vector<uint8_t>>(m_cameraFrameBufferSize);
             }
 
-            vr::EVRTrackedCameraError error = m_trackedCamera->GetVideoStreamFrameBuffer(m_cameraHandle, m_frameType, m_underConstructionFrame->frameBuffer->data(), (uint32_t)m_underConstructionFrame->frameBuffer->size(), nullptr, 0);
+            vr::EVRTrackedCameraError error = trackedCamera->GetVideoStreamFrameBuffer(m_cameraHandle, m_frameType, m_underConstructionFrame->frameBuffer->data(), (uint32_t)m_underConstructionFrame->frameBuffer->size(), nullptr, 0);
             if (error != vr::VRTrackedCameraError_None)
             {
                 ErrorLog("GetVideoStreamFrameBuffer error %i\n", error);
@@ -438,11 +380,11 @@ void CameraManager::ServeFrames()
         m_underConstructionFrame->bIsValid = true;
         m_underConstructionFrame->frameLayout = m_frameLayout;
 
-        m_serveMutex.lock();
+        {
+            std::lock_guard<std::mutex> lock(m_serveMutex);
 
-        m_servedFrame.swap(m_underConstructionFrame);
-
-        m_serveMutex.unlock();
+            m_servedFrame.swap(m_underConstructionFrame);
+        }
     }
 }
 
@@ -450,6 +392,8 @@ void CameraManager::ServeFrames()
 // Constructs a matrix from the roomscale origin to the HMD eye projection.
 XrMatrix4x4f CameraManager::GetHMDMVPMatrix(const ERenderEye eye, const XrCompositionLayerProjection& layer, const XrReferenceSpaceCreateInfo& refSpaceInfo)
 {
+    vr::IVRSystem* vrSystem = m_openVRManager->GetVRSystem();
+
     XrMatrix4x4f output, pose, viewToTracking, projection, viewToStage, trackingToStage, refSpacePose;
 
     int viewNum = eye == LEFT_EYE ? 0 : 1;
@@ -468,7 +412,7 @@ XrMatrix4x4f CameraManager::GetHMDMVPMatrix(const ERenderEye eye, const XrCompos
 
     if (refSpaceInfo.referenceSpaceType == XR_REFERENCE_SPACE_TYPE_LOCAL)
     {
-        vr::HmdMatrix34_t mat = vr::VRSystem()->GetSeatedZeroPoseToStandingAbsoluteTrackingPose();
+        vr::HmdMatrix34_t mat = vrSystem->GetSeatedZeroPoseToStandingAbsoluteTrackingPose();
         trackingToStage = ToXRMatrix4x4Inverted(mat);
 
         XrMatrix4x4f_Multiply(&pose, &viewToTracking, &trackingToStage);
@@ -486,6 +430,8 @@ XrMatrix4x4f CameraManager::GetHMDMVPMatrix(const ERenderEye eye, const XrCompos
 
 void CameraManager::CalculateFrameProjection(std::shared_ptr<CameraFrame>& frame, const XrCompositionLayerProjection& layer, const XrTime& displayTime, const XrReferenceSpaceCreateInfo& refSpaceInfo)
 {
+    vr::IVRTrackedCamera* trackedCamera = m_openVRManager->GetVRTrackedCamera();
+
     if (m_configManager->GetConfig_Main().ProjectionDistanceFar != m_projectionDistanceFar || 
         m_configManager->GetConfig_Main().ProjectionDistanceNear != m_projectionDistanceNear)
     {
@@ -493,7 +439,7 @@ void CameraManager::CalculateFrameProjection(std::shared_ptr<CameraFrame>& frame
         m_projectionDistanceNear = m_configManager->GetConfig_Main().ProjectionDistanceNear;
 
         vr::HmdMatrix44_t vrProjection;
-        vr::EVRTrackedCameraError error = m_trackedCamera->GetCameraProjection(m_hmdDeviceId, 0, m_frameType, m_projectionDistanceFar * 0.5f, m_projectionDistanceFar, &vrProjection);
+        vr::EVRTrackedCameraError error = trackedCamera->GetCameraProjection(m_hmdDeviceId, 0, m_frameType, m_projectionDistanceFar * 0.5f, m_projectionDistanceFar, &vrProjection);
 
         if (error != vr::VRTrackedCameraError_None)
         {
@@ -505,7 +451,7 @@ void CameraManager::CalculateFrameProjection(std::shared_ptr<CameraFrame>& frame
 
         if (m_frameLayout != EStereoFrameLayout::Mono)
         {
-            error = m_trackedCamera->GetCameraProjection(m_hmdDeviceId, 1, m_frameType, m_projectionDistanceFar * 0.5f, m_projectionDistanceFar, &vrProjection);
+            error = trackedCamera->GetCameraProjection(m_hmdDeviceId, 1, m_frameType, m_projectionDistanceFar * 0.5f, m_projectionDistanceFar, &vrProjection);
 
             if (error != vr::VRTrackedCameraError_None)
             {

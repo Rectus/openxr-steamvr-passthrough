@@ -1034,3 +1034,9 @@ void PassthroughRendererDX12::RenderFrameFinish()
 
 	m_frameIndex = (m_frameIndex + 1) % NUM_SWAPCHAINS;
 }
+
+
+void* PassthroughRendererDX12::GetRenderDevice()
+{
+	return m_d3dDevice.Get();
+}

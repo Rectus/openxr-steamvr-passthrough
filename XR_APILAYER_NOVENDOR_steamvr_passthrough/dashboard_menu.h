@@ -5,6 +5,7 @@
 
 #include "layer.h"
 #include "config_manager.h"
+#include "openvr_manager.h"
 
 
 using Microsoft::WRL::ComPtr;
@@ -15,17 +16,12 @@ using Microsoft::WRL::ComPtr;
 #define OVERLAY_RES_WIDTH 800
 #define OVERLAY_RES_HEIGHT 400
 
-enum EDashboardAPI
-{
-	None,
-	DirectX11,
-	DirectX12
-};
+
 
 struct MenuDisplayValues
 {
 	bool bSessionActive = false;
-	EDashboardAPI renderAPI = None;
+	ERenderAPI renderAPI = None;
 	std::string currentApplication;
 	int frameBufferWidth = 0;
 	int frameBufferHeight = 0;
@@ -45,7 +41,7 @@ class DashboardMenu
 {
 public:
 
-	DashboardMenu(HMODULE dllModule, std::shared_ptr<ConfigManager> configManager);
+	DashboardMenu(HMODULE dllModule, std::shared_ptr<ConfigManager> configManager, std::shared_ptr<OpenVRManager> openVRManager);
 
 	~DashboardMenu();
 	
@@ -64,6 +60,7 @@ private:
 	void SetupDX11();
 
 	std::shared_ptr<ConfigManager> m_configManager;
+	std::shared_ptr<OpenVRManager> m_openVRManager;
 	HMODULE m_dllModule;
 
 	vr::VROverlayHandle_t m_overlayHandle;

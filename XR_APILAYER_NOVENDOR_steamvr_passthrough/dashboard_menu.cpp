@@ -9,9 +9,10 @@ using namespace steamvr_passthrough;
 using namespace steamvr_passthrough::log;
 
 
-DashboardMenu::DashboardMenu(HMODULE dllModule, std::shared_ptr<ConfigManager> configManager)
+DashboardMenu::DashboardMenu(HMODULE dllModule, std::shared_ptr<ConfigManager> configManager, std::shared_ptr<OpenVRManager> openVRManager)
 	: m_dllModule(dllModule)
 	, m_configManager(configManager)
+	, m_openVRManager(openVRManager)
 	, m_overlayHandle(vr::k_ulOverlayHandleInvalid)
 	, m_thumbnailHandle(vr::k_ulOverlayHandleInvalid)
 	, m_bMenuIsVisible(false)
@@ -34,6 +35,19 @@ DashboardMenu::~DashboardMenu()
 
 void DashboardMenu::RunThread()
 {
+	vr::IVROverlay* vrOverlay = m_openVRManager->GetVROverlay();
+
+	while (!vrOverlay)
+	{
+		if (!m_bRunThread)
+		{
+			return;
+		}
+
+		std::this_thread::sleep_for(std::chrono::milliseconds(1));
+		vrOverlay = m_openVRManager->GetVROverlay();
+	}
+
 	IMGUI_CHECKVERSION();
 	ImGui::CreateContext();
 	ImGuiIO& io = ImGui::GetIO();
@@ -51,7 +65,7 @@ void DashboardMenu::RunThread()
 	{
 		TickMenu();
 
-		vr::VROverlay()->WaitFrameSync(100);
+		vrOverlay->WaitFrameSync(100);
 	}
 
 
@@ -59,9 +73,9 @@ void DashboardMenu::RunThread()
 	ImGui::GetIO().BackendRendererUserData = NULL;
 	ImGui::DestroyContext();
 
-	if (vr::VROverlay())
+	if (vrOverlay)
 	{
-		vr::VROverlay()->DestroyOverlay(m_overlayHandle);
+		vrOverlay->DestroyOverlay(m_overlayHandle);
 	}
 }
 
@@ -312,7 +326,7 @@ void DashboardMenu::TickMenu()
 	m_d3d11Texture->QueryInterface(IID_PPV_ARGS(&DXGIResource));
 	DXGIResource->GetSharedHandle(&texture.handle);
 
-	vr::EVROverlayError error = vr::VROverlay()->SetOverlayTexture(m_overlayHandle, &texture);
+	vr::EVROverlayError error = m_openVRManager->GetVROverlay()->SetOverlayTexture(m_overlayHandle, &texture);
 	if (error != vr::VROverlayError_None)
 	{
 		ErrorLog("SteamVR had an error on updating overlay (%d)\n", error);
@@ -322,14 +336,14 @@ void DashboardMenu::TickMenu()
 
 void DashboardMenu::CreateOverlay()
 {
-	vr::IVROverlay* VROverlay = vr::VROverlay();
+	vr::IVROverlay* vrOverlay = m_openVRManager->GetVROverlay();
 
-	if (VROverlay == nullptr)
+	if (!vrOverlay)
 	{
 		return;
 	}
 
-	vr::EVROverlayError error = VROverlay->FindOverlay(DASHBOARD_OVERLAY_KEY, &m_overlayHandle);
+	vr::EVROverlayError error = vrOverlay->FindOverlay(DASHBOARD_OVERLAY_KEY, &m_overlayHandle);
 	if (error != vr::EVROverlayError::VROverlayError_None && error != vr::EVROverlayError::VROverlayError_UnknownOverlay)
 	{
 		Log("Warning: SteamVR FindOverlay error (%d)\n", error);
@@ -337,23 +351,23 @@ void DashboardMenu::CreateOverlay()
 
 	if (m_overlayHandle == vr::k_ulOverlayHandleInvalid)
 	{
-		error = VROverlay->CreateDashboardOverlay(DASHBOARD_OVERLAY_KEY, "OpenXR Passthrough", &m_overlayHandle, &m_thumbnailHandle);
+		error = vrOverlay->CreateDashboardOverlay(DASHBOARD_OVERLAY_KEY, "OpenXR Passthrough", &m_overlayHandle, &m_thumbnailHandle);
 		if (error != vr::EVROverlayError::VROverlayError_None)
 		{
 			ErrorLog("SteamVR overlay init error (%d)\n", error);
 		}
 		else
 		{
-			VROverlay->SetOverlayInputMethod(m_overlayHandle, vr::VROverlayInputMethod_Mouse);
-			VROverlay->SetOverlayFlag(m_overlayHandle, vr::VROverlayFlags_IsPremultiplied, true);
-			VROverlay->SetOverlayFlag(m_overlayHandle, vr::VROverlayFlags_SendVRDiscreteScrollEvents, true);
+			vrOverlay->SetOverlayInputMethod(m_overlayHandle, vr::VROverlayInputMethod_Mouse);
+			vrOverlay->SetOverlayFlag(m_overlayHandle, vr::VROverlayFlags_IsPremultiplied, true);
+			vrOverlay->SetOverlayFlag(m_overlayHandle, vr::VROverlayFlags_SendVRDiscreteScrollEvents, true);
 
-			vr::VROverlay()->SetOverlayWidthInMeters(m_overlayHandle, 2.775f);
+			vrOverlay->SetOverlayWidthInMeters(m_overlayHandle, 2.775f);
 
 			vr::HmdVector2_t ScaleVec;
 			ScaleVec.v[0] = OVERLAY_RES_WIDTH;
 			ScaleVec.v[1] = OVERLAY_RES_HEIGHT;
-			vr::VROverlay()->SetOverlayMouseScale(m_overlayHandle, &ScaleVec);
+			vrOverlay->SetOverlayMouseScale(m_overlayHandle, &ScaleVec);
 
 			CreateThumbnail();
 		}
@@ -363,17 +377,21 @@ void DashboardMenu::CreateOverlay()
 
 void DashboardMenu::DestroyOverlay()
 {
-	if (vr::VROverlay() == nullptr || m_overlayHandle == vr::k_ulOverlayHandleInvalid)
+	vr::IVROverlay* vrOverlay = m_openVRManager->GetVROverlay();
+
+	if (!vrOverlay || m_overlayHandle == vr::k_ulOverlayHandleInvalid)
 	{
 		m_overlayHandle = vr::k_ulOverlayHandleInvalid;
 		return;
 	}
 
-	vr::EVROverlayError error = vr::VROverlay()->DestroyOverlay(m_overlayHandle);
+	vr::EVROverlayError error = vrOverlay->DestroyOverlay(m_overlayHandle);
 	if (error != vr::EVROverlayError::VROverlayError_None)
 	{
 		ErrorLog("SteamVR DestroyOverlay error (%d)\n", error);
 	}
+
+	m_overlayHandle = vr::k_ulOverlayHandleInvalid;
 }
 
 
@@ -389,14 +407,16 @@ void DashboardMenu::CreateThumbnail()
 
 	std::string pathStr = path;
 	std::string imgPath = pathStr.substr(0, pathStr.find_last_of("/\\")) + "\\passthrough_icon.png";
-
-	vr::VROverlay()->SetOverlayFromFile(m_thumbnailHandle, imgPath.c_str());
+	
+	m_openVRManager->GetVROverlay()->SetOverlayFromFile(m_thumbnailHandle, imgPath.c_str());
 }
 
 
 void DashboardMenu::HandleEvents()
 {
-	if (vr::VROverlay() == nullptr || m_overlayHandle == vr::k_ulOverlayHandleInvalid)
+	vr::IVROverlay* vrOverlay = m_openVRManager->GetVROverlay();
+
+	if (!vrOverlay || m_overlayHandle == vr::k_ulOverlayHandleInvalid)
 	{
 		return;
 	}
@@ -404,7 +424,7 @@ void DashboardMenu::HandleEvents()
 	ImGuiIO& io = ImGui::GetIO();
 
 	vr::VREvent_t event;
-	while (vr::VROverlay()->PollNextOverlayEvent(m_overlayHandle, &event, sizeof(event)))
+	while (vrOverlay->PollNextOverlayEvent(m_overlayHandle, &event, sizeof(event)))
 	{
 		vr::VREvent_Overlay_t& overlayData = (vr::VREvent_Overlay_t&)event.data;
 		vr::VREvent_Mouse_t& mouseData = (vr::VREvent_Mouse_t&)event.data;

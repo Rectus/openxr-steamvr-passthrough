@@ -28,6 +28,7 @@
 #include "camera_manager.h"
 #include "config_manager.h"
 #include "dashboard_menu.h"
+#include "openvr_manager.h"
 #include <log.h>
 #include <util.h>
 #include <map>
@@ -209,15 +210,21 @@ namespace
 					const XrGraphicsBindingD3D11KHR* dx11bindings = reinterpret_cast<const XrGraphicsBindingD3D11KHR*>(entry);
 					m_Renderer = std::make_shared<PassthroughRendererDX11>(dx11bindings->device, g_dllModule, m_configManager);
 
+					
+					if (!m_openVRManager.get())
+					{
+						m_openVRManager = std::make_shared<OpenVRManager>();
+					}
+
 					if (!m_cameraManager.get())
 					{
-						m_cameraManager = std::make_unique<CameraManager>(m_Renderer, m_configManager);
+						m_cameraManager = std::make_unique<CameraManager>(m_Renderer, DirectX11, m_configManager, m_openVRManager);
 					}
-					if (!m_cameraManager->InitRuntime() || !m_cameraManager->InitCamera())
+					if (!m_cameraManager->InitCamera())
 					{
 						return false;
 					}
-
+					
 					m_cameraManager->GetFrameSize(cameraTextureWidth, cameraTextureHeight, cameraFrameBufferSize);
 					m_Renderer->SetFrameSize(cameraTextureWidth, cameraTextureHeight, cameraFrameBufferSize);
 					if(!m_Renderer->InitRenderer())
@@ -227,7 +234,7 @@ namespace
 
 					if (!m_dashboardMenu.get())
 					{
-						m_dashboardMenu = std::make_unique<DashboardMenu>(g_dllModule, m_configManager);
+						m_dashboardMenu = std::make_unique<DashboardMenu>(g_dllModule, m_configManager, m_openVRManager);
 					}
 					m_dashboardMenu->GetDisplayValues().bSessionActive = true;
 					m_dashboardMenu->GetDisplayValues().renderAPI = DirectX11;
@@ -241,11 +248,16 @@ namespace
 					const XrGraphicsBindingD3D12KHR* dx12bindings = reinterpret_cast<const XrGraphicsBindingD3D12KHR*>(entry);
 					m_Renderer = std::make_unique<PassthroughRendererDX12>(dx12bindings->device, dx12bindings->queue, g_dllModule, m_configManager);
 
+					if (!m_openVRManager.get())
+					{
+						m_openVRManager = std::make_shared<OpenVRManager>();
+					}
+
 					if (!m_cameraManager.get())
 					{
-						m_cameraManager = std::make_unique<CameraManager>(m_Renderer, m_configManager);
+						m_cameraManager = std::make_unique<CameraManager>(m_Renderer, DirectX12, m_configManager, m_openVRManager);
 					}
-					if (!m_cameraManager->InitRuntime() || !m_cameraManager->InitCamera())
+					if (!m_cameraManager->InitCamera())
 					{
 						return false;
 					}
@@ -259,7 +271,7 @@ namespace
 
 					if (!m_dashboardMenu.get())
 					{
-						m_dashboardMenu = std::make_unique<DashboardMenu>(g_dllModule, m_configManager);
+						m_dashboardMenu = std::make_unique<DashboardMenu>(g_dllModule, m_configManager, m_openVRManager);
 					}
 					m_dashboardMenu->GetDisplayValues().bSessionActive = true;
 					m_dashboardMenu->GetDisplayValues().renderAPI = DirectX12;
@@ -325,6 +337,8 @@ namespace
 
 		XrResult xrDestroySession(XrSession session)
 		{
+			
+
 			if (isCurrentSession(session))
 			{
 				Log("Passthrough session ending...\n");
@@ -335,11 +349,15 @@ namespace
 				{
 					m_cameraManager->DeinitCamera();
 				}
+				m_cameraManager.reset();
+				//m_openVRManager.reset();
 				m_currentSession = XR_NULL_HANDLE;
 				m_currentInstance = XR_NULL_HANDLE;
 			}
 
-			return OpenXrApi::xrDestroySession(session);
+			XrResult result = OpenXrApi::xrDestroySession(session);
+
+			return result;
 		}
 
 
@@ -769,6 +787,7 @@ namespace
 		std::shared_ptr<ConfigManager> m_configManager;
 		std::unique_ptr<CameraManager> m_cameraManager;
 		std::unique_ptr<DashboardMenu> m_dashboardMenu;
+		std::shared_ptr<OpenVRManager> m_openVRManager;
 
 		bool m_bSuccessfullyLoaded = false;
 		bool m_bPassthroughAvailable = false;
