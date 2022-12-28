@@ -3,7 +3,7 @@ OpenXR SteamVR Passthrough API Layer
 
 This OpenXR API layer adds camera passthrough support to the SteamVR OpenXR runtime. It allows OpenXR applications that use the OpenXR passthrough feature to enable it when using the SteamVR runtime. 
 
-The SteamVR runtime itself does not currently support any OpenXR passthrough features, but provides access to the camera video feeds and projection data throug the propietary OpenVR interface. This layer acts as a compositor inbetween the applcation and  runtime, retrieves the passthrough data from OpenVR, and renders it on the frames submitted by the appliaction before passing them on to the runtime.
+The SteamVR runtime itself does not currently support any OpenXR passthrough features, but provides access to the camera video feeds and projection data through the proprietary OpenVR interface. This layer acts as a compositor inbetween the application and  runtime, retrieves the passthrough data from OpenVR, and renders it on the frames submitted by the application before passing them on to the runtime.
 
 Please report any issues! Any comments and suggestions are also appreciated.
 
@@ -18,7 +18,7 @@ This software is distributed as-is, without any warranties or conditions of any 
 - Supports both application selectable environment blend modes in the OpenXR core specification: Alpha Blended and Additive.
 - Configuration menu available in the SteamVR dashboard.
 - User adjustable color parameters and opacity.
-- Override mode for applying passthough to applications that do not support it. The passthough view can be blended using chroma keying.
+- Override mode for applying passthrough to applications that do not support it. The passthrough view can be blended using chroma keying.
 
 
 ### Limitations ###
@@ -26,12 +26,12 @@ This software is distributed as-is, without any warranties or conditions of any 
 - Only the SteamVR runtime is supported.
 - Only headsets that provide the passthrough camera feed to SteamVR are supported. If the SteamVR room view does not work, this will not work.
 - OpenVR applications are not supported.
-- Only applications that use the core specifcation passthough by submitting frames with `environmentBlendMode` set are supported.
+- Only applications that use the core specification passthrough by submitting frames with `environmentBlendMode` set are supported.
 - Applications using the Meta `XR_FB_passthrough` extension are not currently supported.
-- The passthough view only supports a fixed depth reconstruction. This is a slightly simpler version of the SteamVR 2D Room View mode.
+- The passthrough view only supports a fixed depth reconstruction. This is a slightly simpler version of the SteamVR 2D Room View mode.
 - The depth reconstruction from the 3D Room View is not supported. It is not currently accessible to developers.
 - The passthrough view has higher latency than the SteamVR compositor.
-- Vulkan and OpenGL applicaions are not currently supported.
+- Vulkan and OpenGL applications are not currently supported.
 - The DirectX12 renderer isn't using shared textures for the camera frames. This limits performance.
 
 
@@ -42,10 +42,11 @@ This software is distributed as-is, without any warranties or conditions of any 
 - HTC Vive Pro - Untested
 - HTC Vive Pro 2 - Untested
 - Other HTC headsets - Unknown
+- Varjo XR headsets - Unknown
 - Windows Mixed Reality headsets - Unsupported, no passthrough support in driver
 - Oculus/Meta headsets - Unsupported, no passthrough support in driver
 
-The SteamVR settings UI will misconfigure the original HTC Vive camera if the frame rate is not set the right way. To correctly set it, click the right end of the slider instead of dragging it. The USB drivers may need to be reset if the camera is incorrectly configurred.
+The SteamVR settings UI will misconfigure the original HTC Vive camera if the frame rate is not set the right way. To correctly set it, click the right end of the slider instead of dragging it. The USB drivers may need to be reset if the camera is incorrectly configured.
 
 
 ### Installation ###
@@ -57,15 +58,15 @@ The SteamVR settings UI will misconfigure the original HTC Vive camera if the fr
 
 
 ### Usage ###
-Starting an OpenXR application will automatically start the API layer. If the application natively supports passthrough, it may now enable it. While an application is running, the SteamVR dashbaord will have an additional button in the bottom left, pressing it wil open the settings overlay.
+Starting an OpenXR application will automatically start the API layer. If the application natively supports passthrough, it may now enable it. While an application is running, the SteamVR dashboard will have an additional button in the bottom left, pressing it will open the settings overlay.
 
-![Settings menu](https://github.com/Rectus/openxr-steamvr-passthrough/blob/release/settings_menu.png?raw=true)
+![Settings menu](https://github.com/Rectus/openxr-steamvr-passthrough/blob/main/settings_menu.png?raw=true)
 
-The options under the OpenXR Core allow setting what passthrough modes are available for the application to use, as well as what mode it should prefer. Some applications may automatically switch to the perferred mode even though they don't support passthrough.
+The options under the OpenXR Core allow setting what passthrough modes are available for the application to use, as well as what mode it should prefer. Some applications may automatically switch to the preferred mode even though they don't support passthrough.
 
 The options under Overrides allow forcing the passthrough mode regardless of whether the application supports it. Note that the Alpha Blend mode will show nothing unless the application submits alpha channels to the compositor.
 
-The Masked override mode allows setting a chroma key color that gets replaced with the passthrough view, as well as range for how similar colors get repaced, and a smoothness of the transition.
+The Masked override mode allows setting a chroma key color that gets replaced with the passthrough view, as well as range for how similar colors get replaced, and a smoothness of the transition.
 
 The settings can also be edited from `%APPDATA%\OpenXR SteamVR Passthrough\config.ini`
 
@@ -73,7 +74,7 @@ The settings can also be edited from `%APPDATA%\OpenXR SteamVR Passthrough\confi
 ### Building from source ###
 The following are required:
 - Visual Studio 2022 
-- The MSVC build tools, and the Windows 10 SDK (installed via the Viual Studio Installer as "Desktop developmnet with C++").
+- The MSVC build tools, and the Windows 10 SDK (installed via the Visual Studio Installer as "Desktop development with C++").
 - Python 3 interpreter (installed via the Visual Studio Installer or externally available in your PATH).
 - [OpenXR SDK Source](https://github.com/KhronosGroup/OpenXR-SDK-Source) (Included as Git submodule)
 - [OpenXR SDK](https://github.com/KhronosGroup/OpenXR-SDK) (Included as Git submodule)
@@ -89,15 +90,15 @@ The following are required:
 - Add partial support for the `XR_FB_passthrough` extension
 - Add Vulkan and OpenGL support
 - Add edge shader modes
-- Add shared camera textures to DirectX 12 if possible
+- Add shared camera textures to DirectX 12 if possible (may only be possible by rendering with DirectX11 with 11On12)
 
 
 ### Possible improvements ###
 
 - `XR_HTC_passthrough` extension support (no headsets or applications use this yet)
-- Linux support (does passthorugh work on Linux)
+- Linux support (does passthrough work on Linux?)
 - Motion vector depth reconstruction (very complex implementation)
-- Passthrough override support for OpenVR apps (possibly difficult, would require hooking)
+- Passthrough override support for OpenVR apps (better as independent application)
 
 
 ### Notes ###
