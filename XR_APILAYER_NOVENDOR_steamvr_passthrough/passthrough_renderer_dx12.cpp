@@ -7,7 +7,6 @@
 #include <xr_linear.h>
 #include "lodepng.h"
 
-#include "shaders\fullscreen_quad_vs.h"
 #include "shaders\passthrough_vs.h"
 
 #include "shaders\alpha_prepass_ps.h"
@@ -69,8 +68,11 @@ enum ECBV_SRVIndex
 
 struct VSConstantBuffer
 {
-	XrMatrix4x4f cameraUVProjectionFar;
-	XrMatrix4x4f cameraUVProjectionNear;
+	XrMatrix4x4f cameraProjectionToWorld;
+	XrMatrix4x4f hmdWorldToProjection;
+	XrVector3f hmdViewWorldPos;
+	float projectionDistance;
+	float floorHeightOffset;
 };
 
 
@@ -85,7 +87,7 @@ struct PSPassConstantBuffer
 
 struct PSViewConstantBuffer
 {
-	XrVector2f frameUVOffset;
+	XrVector4f frameUVBounds;
 	XrVector2f prepassUVFactor;
 	XrVector2f prepassUVOffset;
 	uint32_t rtArrayIndex;
@@ -237,95 +239,17 @@ bool PassthroughRendererDX12::InitRenderer()
 
 	m_CBVSRVHeapDescSize = m_d3dDevice->GetDescriptorHandleIncrementSize(D3D12_DESCRIPTOR_HEAP_TYPE_CBV_SRV_UAV);
 
-	uint32_t align = D3D12_CONSTANT_BUFFER_DATA_PLACEMENT_ALIGNMENT;
+	m_vsConstantBuffer = InitBuffer(m_vsConstantBufferCPUData, NUM_SWAPCHAINS * 2, 1, INDEX_CBV_VS_0);
+	m_psPassConstantBuffer = InitBuffer(m_psPassConstantBufferCPUData, NUM_SWAPCHAINS, 1, INDEX_CBV_PS_PASS_0);
+	m_psViewConstantBuffer = InitBuffer(m_psViewConstantBufferCPUData, NUM_SWAPCHAINS * 2, 1, INDEX_CBV_PS_VIEW_0);
+	m_psMaskedConstantBuffer = InitBuffer(m_psMaskedConstantBufferCPUData, NUM_SWAPCHAINS, 1, INDEX_CBV_PS_MASKED_0);
 
+	if (!m_vsConstantBuffer || !m_psPassConstantBuffer || !m_psViewConstantBuffer || !m_psMaskedConstantBuffer)
 	{
-		m_vsConstantBuffer = CreateBuffer(m_d3dDevice.Get(), align * NUM_SWAPCHAINS * 2, D3D12_HEAP_TYPE_UPLOAD);
-
-		UINT8* bufferPtr;
-		D3D12_RANGE readRange = { 0, 0 };
-		m_vsConstantBuffer->Map(0, &readRange, reinterpret_cast<void**>(&bufferPtr));
-		
-		for (int i = 0; i < NUM_SWAPCHAINS * 2; i++)
-		{
-			int bufferOffset = i * align;
-			m_vsConstantBufferCPUData[i] = bufferPtr + bufferOffset;
-
-			D3D12_CPU_DESCRIPTOR_HANDLE cbvHandle = m_CBVSRVHeap->GetCPUDescriptorHandleForHeapStart();
-			cbvHandle.ptr += (INDEX_CBV_VS_0 + i) * m_CBVSRVHeapDescSize;
-
-			D3D12_CONSTANT_BUFFER_VIEW_DESC cbvDesc = {};
-			cbvDesc.BufferLocation = m_vsConstantBuffer->GetGPUVirtualAddress() + bufferOffset;
-			cbvDesc.SizeInBytes = align;
-			m_d3dDevice->CreateConstantBufferView(&cbvDesc, cbvHandle);
-		}
+		ErrorLog("Failed to create D3D12 constant buffers.\n");
+		return false;
 	}
 
-	{
-		m_psPassConstantBuffer = CreateBuffer(m_d3dDevice.Get(), align * NUM_SWAPCHAINS, D3D12_HEAP_TYPE_UPLOAD);
-
-		UINT8* bufferPtr;
-		D3D12_RANGE readRange = { 0, 0 };
-		m_psPassConstantBuffer->Map(0, &readRange, reinterpret_cast<void**>(&bufferPtr));
-
-		for (int i = 0; i < NUM_SWAPCHAINS; i++)
-		{
-			int bufferOffset = i * align;
-			m_psPassConstantBufferCPUData[i] = bufferPtr + bufferOffset;
-
-			D3D12_CPU_DESCRIPTOR_HANDLE cbvHandle = m_CBVSRVHeap->GetCPUDescriptorHandleForHeapStart();
-			cbvHandle.ptr += (INDEX_CBV_PS_PASS_0 + i) * m_CBVSRVHeapDescSize;
-
-			D3D12_CONSTANT_BUFFER_VIEW_DESC cbvDesc = {};
-			cbvDesc.BufferLocation = m_psPassConstantBuffer->GetGPUVirtualAddress() + bufferOffset;
-			cbvDesc.SizeInBytes = align;
-			m_d3dDevice->CreateConstantBufferView(&cbvDesc, cbvHandle);
-		}
-	}
-
-	{
-		m_psViewConstantBuffer = CreateBuffer(m_d3dDevice.Get(), align * NUM_SWAPCHAINS * 2, D3D12_HEAP_TYPE_UPLOAD);
-
-		UINT8* bufferPtr;
-		D3D12_RANGE readRange = { 0, 0 };
-		m_psViewConstantBuffer->Map(0, &readRange, reinterpret_cast<void**>(&bufferPtr));
-
-		for (int i = 0; i < NUM_SWAPCHAINS * 2; i++)
-		{
-			int bufferOffset = i * align;
-			m_psViewConstantBufferCPUData[i] = bufferPtr + bufferOffset;
-
-			D3D12_CPU_DESCRIPTOR_HANDLE cbvHandle = m_CBVSRVHeap->GetCPUDescriptorHandleForHeapStart();
-			cbvHandle.ptr += (INDEX_CBV_PS_VIEW_0 + i) * m_CBVSRVHeapDescSize;
-
-			D3D12_CONSTANT_BUFFER_VIEW_DESC cbvDesc = {};
-			cbvDesc.BufferLocation = m_psViewConstantBuffer->GetGPUVirtualAddress() + bufferOffset;
-			cbvDesc.SizeInBytes = align;
-			m_d3dDevice->CreateConstantBufferView(&cbvDesc, cbvHandle);
-		}
-	}
-
-	{
-		m_psMaskedConstantBuffer = CreateBuffer(m_d3dDevice.Get(), align * NUM_SWAPCHAINS, D3D12_HEAP_TYPE_UPLOAD);
-
-		UINT8* bufferPtr;
-		D3D12_RANGE readRange = { 0, 0 };
-		m_psMaskedConstantBuffer->Map(0, &readRange, reinterpret_cast<void**>(&bufferPtr));
-
-		for (int i = 0; i < NUM_SWAPCHAINS; i++)
-		{
-			int bufferOffset = i * align;
-			m_psMaskedConstantBufferCPUData[i] = bufferPtr + bufferOffset;
-
-			D3D12_CPU_DESCRIPTOR_HANDLE cbvHandle = m_CBVSRVHeap->GetCPUDescriptorHandleForHeapStart();
-			cbvHandle.ptr += (INDEX_CBV_PS_MASKED_0 + i) * m_CBVSRVHeapDescSize;
-
-			D3D12_CONSTANT_BUFFER_VIEW_DESC cbvDesc = {};
-			cbvDesc.BufferLocation = m_psMaskedConstantBuffer->GetGPUVirtualAddress() + bufferOffset;
-			cbvDesc.SizeInBytes = align;
-			m_d3dDevice->CreateConstantBufferView(&cbvDesc, cbvHandle);
-		}
-	}
 
 	for (int i = 0; i < NUM_SWAPCHAINS * 2; i++)
 	{
@@ -342,6 +266,7 @@ bool PassthroughRendererDX12::InitRenderer()
 		return false;
 	}
 
+	GenerateMesh();
 	SetupTestImage();
 	SetupFrameResource();
 
@@ -350,6 +275,34 @@ bool PassthroughRendererDX12::InitRenderer()
 	m_d3dCommandQueue->ExecuteCommandLists(_countof(commandLists), commandLists);
 
 	return true;
+}
+
+
+ComPtr<ID3D12Resource> PassthroughRendererDX12::InitBuffer(UINT8** bufferCPUData, int numBuffers, int bufferSizePerAlign, int heapIndex)
+{
+	uint32_t align = D3D12_CONSTANT_BUFFER_DATA_PLACEMENT_ALIGNMENT;
+
+	ComPtr<ID3D12Resource> buffer = CreateBuffer(m_d3dDevice.Get(), align * numBuffers * bufferSizePerAlign, D3D12_HEAP_TYPE_UPLOAD);
+
+	UINT8* bufferPtr;
+	D3D12_RANGE readRange = { 0, 0 };
+	buffer->Map(0, &readRange, reinterpret_cast<void**>(&bufferPtr));
+
+	for (int i = 0; i < numBuffers; i++)
+	{
+		int bufferOffset = i * align * bufferSizePerAlign;
+		bufferCPUData[i] = bufferPtr + bufferOffset;
+
+		D3D12_CPU_DESCRIPTOR_HANDLE cbvHandle = m_CBVSRVHeap->GetCPUDescriptorHandleForHeapStart();
+		cbvHandle.ptr += (heapIndex + i) * m_CBVSRVHeapDescSize;
+
+		D3D12_CONSTANT_BUFFER_VIEW_DESC cbvDesc = {};
+		cbvDesc.BufferLocation = buffer->GetGPUVirtualAddress() + bufferOffset;
+		cbvDesc.SizeInBytes = align * bufferSizePerAlign;
+		m_d3dDevice->CreateConstantBufferView(&cbvDesc, cbvHandle);
+	}
+
+	return buffer;
 }
 
 
@@ -537,7 +490,7 @@ bool PassthroughRendererDX12::CreateRootSignature()
 	sampler.ShaderVisibility = D3D12_SHADER_VISIBILITY_ALL;
 
 	D3D12_ROOT_SIGNATURE_FLAGS rootSignatureFlags =
-		//D3D12_ROOT_SIGNATURE_FLAG_ALLOW_INPUT_ASSEMBLER_INPUT_LAYOUT |
+		D3D12_ROOT_SIGNATURE_FLAG_ALLOW_INPUT_ASSEMBLER_INPUT_LAYOUT |
 		D3D12_ROOT_SIGNATURE_FLAG_DENY_HULL_SHADER_ROOT_ACCESS |
 		D3D12_ROOT_SIGNATURE_FLAG_DENY_DOMAIN_SHADER_ROOT_ACCESS |
 		D3D12_ROOT_SIGNATURE_FLAG_DENY_GEOMETRY_SHADER_ROOT_ACCESS;
@@ -599,13 +552,13 @@ void PassthroughRendererDX12::SetupIntermediateRenderTarget(uint32_t index, uint
 
 bool PassthroughRendererDX12::InitPipeline(DXGI_FORMAT rtFormat)
 {
-	D3D12_SHADER_BYTECODE quadShaderVS = { g_FullscreenQuadShaderVS, sizeof(g_FullscreenQuadShaderVS) };
 	D3D12_SHADER_BYTECODE passthroughShaderVS = { g_PassthroughShaderVS, sizeof(g_PassthroughShaderVS) };
 
 	D3D12_SHADER_BYTECODE alphaPrepassShaderPS = { g_AlphaPrepassShaderPS, sizeof(g_AlphaPrepassShaderPS) };
 	D3D12_SHADER_BYTECODE alphaPrepassMaskedShaderPS = { g_AlphaPrepassMaskedShaderPS, sizeof(g_AlphaPrepassMaskedShaderPS) };
 	D3D12_SHADER_BYTECODE passthroughShaderPS = { g_PassthroughShaderPS, sizeof(g_PassthroughShaderPS) };
 	D3D12_SHADER_BYTECODE passthroughMaskedShaderPS = { g_PassthroughMaskedShaderPS, sizeof(g_PassthroughMaskedShaderPS) };
+
 
 	D3D12_BLEND_DESC blendStateBase = {};
 	blendStateBase.RenderTarget[0].BlendEnable = true;
@@ -638,13 +591,25 @@ bool PassthroughRendererDX12::InitPipeline(DXGI_FORMAT rtFormat)
 	blendStateDisabled.RenderTarget[0].BlendEnable = false;
 	blendStateDisabled.RenderTarget[0].RenderTargetWriteMask = D3D12_COLOR_WRITE_ENABLE_ALL;
 
+
+	D3D12_INPUT_ELEMENT_DESC vertexDesc{};
+	vertexDesc.SemanticName = "POSITION";
+	vertexDesc.SemanticIndex = 0;
+	vertexDesc.Format = DXGI_FORMAT_R32G32B32_FLOAT;
+	vertexDesc.InputSlot = 0;
+	vertexDesc.AlignedByteOffset = D3D12_APPEND_ALIGNED_ELEMENT;
+	vertexDesc.InputSlotClass = D3D12_INPUT_CLASSIFICATION_PER_VERTEX_DATA;
+	vertexDesc.InstanceDataStepRate = 0;
+
+
 	D3D12_GRAPHICS_PIPELINE_STATE_DESC psoDesc = {};
 	psoDesc.pRootSignature = m_rootSignature.Get();
-	psoDesc.InputLayout = { nullptr, 0 };
+	psoDesc.InputLayout.pInputElementDescs = &vertexDesc;
+	psoDesc.InputLayout.NumElements = 1;
 	psoDesc.VS = passthroughShaderVS;
 	psoDesc.PS = passthroughShaderPS;
 	psoDesc.RasterizerState.FrontCounterClockwise = TRUE;
-	psoDesc.RasterizerState.CullMode = D3D12_CULL_MODE_NONE;
+	psoDesc.RasterizerState.CullMode = D3D12_CULL_MODE_BACK;
 	psoDesc.RasterizerState.DepthClipEnable = FALSE;
 	psoDesc.RasterizerState.FillMode = D3D12_FILL_MODE_SOLID;
 	psoDesc.BlendState = blendStateBase;
@@ -764,6 +729,63 @@ void PassthroughRendererDX12::SetFrameSize(const uint32_t width, const uint32_t 
 }
 
 
+void PassthroughRendererDX12::GenerateMesh()
+{
+	m_vertices.reserve(NUM_MESH_BOUNDARY_VERTICES * 4 * 6);
+
+	// Grenerate a triangle strip cylinder with radius and height 1.
+
+	float radianStep = 2.0f * MATH_PI / (float)NUM_MESH_BOUNDARY_VERTICES;
+
+	for (int i = 0; i <= NUM_MESH_BOUNDARY_VERTICES; i++)
+	{
+		m_vertices.push_back(0.0f);
+		m_vertices.push_back(1.0f);
+		m_vertices.push_back(0.0f);
+
+		m_vertices.push_back(cosf(radianStep * i));
+		m_vertices.push_back(1.0f);
+		m_vertices.push_back(sinf(radianStep * i));
+	}
+
+	for (int i = 0; i <= NUM_MESH_BOUNDARY_VERTICES; i++)
+	{
+		m_vertices.push_back(cosf(radianStep * i));
+		m_vertices.push_back(1.0f);
+		m_vertices.push_back(sinf(radianStep * i));
+
+		m_vertices.push_back(cosf(radianStep * i));
+		m_vertices.push_back(0.0f);
+		m_vertices.push_back(sinf(radianStep * i));
+	}
+
+	for (int i = 0; i <= NUM_MESH_BOUNDARY_VERTICES; i++)
+	{
+		m_vertices.push_back(cosf(radianStep * i));
+		m_vertices.push_back(0.0f);
+		m_vertices.push_back(sinf(radianStep * i));
+
+		m_vertices.push_back(0.0f);
+		m_vertices.push_back(0.0f);
+		m_vertices.push_back(0.0f);
+	}
+
+	uint32_t bufferSize = (uint32_t) (m_vertices.size() * sizeof(float));
+
+	m_vertexBuffer = CreateBuffer(m_d3dDevice.Get(), bufferSize, D3D12_HEAP_TYPE_DEFAULT);
+
+	m_vertexBufferUpload = CreateBuffer(m_d3dDevice.Get(), bufferSize, D3D12_HEAP_TYPE_UPLOAD);
+
+	void* mappedData;
+	const D3D12_RANGE readRange{ 0, 0 };
+	
+	m_vertexBufferUpload->Map(0, &readRange, &mappedData);
+	memcpy(mappedData, m_vertices.data(), bufferSize);
+	m_vertexBufferUpload->Unmap(0, nullptr);
+
+	m_commandList->CopyBufferRegion(m_vertexBuffer.Get(), 0, m_vertexBufferUpload.Get(), 0, bufferSize);
+}
+
 
 
 void PassthroughRendererDX12::RenderPassthroughFrame(const XrCompositionLayerProjection* layer, CameraFrame* frame, EPassthroughBlendMode blendMode, int leftSwapchainIndex, int rightSwapchainIndex)
@@ -779,6 +801,13 @@ void PassthroughRendererDX12::RenderPassthroughFrame(const XrCompositionLayerPro
 	m_commandList->SetDescriptorHeaps(1, m_CBVSRVHeap.GetAddressOf());
 
 	m_commandList->IASetPrimitiveTopology(D3D11_PRIMITIVE_TOPOLOGY_TRIANGLESTRIP);
+
+	D3D12_VERTEX_BUFFER_VIEW vertexBufferView{};
+ 	vertexBufferView.BufferLocation = m_vertexBuffer->GetGPUVirtualAddress();
+	vertexBufferView.SizeInBytes = (UINT)m_vertices.size() * sizeof(float);
+	vertexBufferView.StrideInBytes = sizeof(float) * 3;
+	m_commandList->IASetVertexBuffers(0, 1, &vertexBufferView);
+
 	
 	if (m_configManager->GetConfig_Main().ShowTestImage)
 	{
@@ -862,8 +891,14 @@ void PassthroughRendererDX12::RenderPassthroughView(const ERenderEye eye, const 
 	rtvHandle.ptr += bufferIndex * m_RTVHeapDescSize;
 	m_commandList->OMSetRenderTargets(1, &rtvHandle, FALSE, nullptr);
 
+	Config_Main& mainConf = m_configManager->GetConfig_Main();
+
 	VSConstantBuffer* vsBuffer = (VSConstantBuffer*)m_vsConstantBufferCPUData[bufferIndex];
-	vsBuffer->cameraUVProjectionFar = (eye == LEFT_EYE) ? frame->frameUVProjectionLeft : frame->frameUVProjectionRight;
+	vsBuffer->cameraProjectionToWorld = (eye == LEFT_EYE) ? frame->cameraToWorldLeft : frame->cameraToWorldRight;
+	vsBuffer->hmdWorldToProjection = (eye == LEFT_EYE) ? frame->hmdWorldToProjectionLeft : frame->hmdWorldToProjectionRight;
+	vsBuffer->hmdViewWorldPos = (eye == LEFT_EYE) ? frame->hmdViewPosWorldLeft : frame->hmdViewPosWorldRight;
+	vsBuffer->projectionDistance = mainConf.ProjectionDistanceFar;
+	vsBuffer->floorHeightOffset = mainConf.FloorHeightOffset;
 
 	D3D12_GPU_DESCRIPTOR_HANDLE cbvVSHandle = m_CBVSRVHeap->GetGPUDescriptorHandleForHeapStart();
 	cbvVSHandle.ptr += (INDEX_CBV_VS_0 + bufferIndex) * m_CBVSRVHeapDescSize;
@@ -871,7 +906,7 @@ void PassthroughRendererDX12::RenderPassthroughView(const ERenderEye eye, const 
 
 
 	PSViewConstantBuffer* psvBuffer = (PSViewConstantBuffer*)m_psViewConstantBufferCPUData[bufferIndex];
-	psvBuffer->frameUVOffset = GetFrameUVOffset(eye, frame->frameLayout);
+	psvBuffer->frameUVBounds = GetFrameUVBounds(eye, frame->frameLayout);
 	psvBuffer->rtArrayIndex = m_frameIndex;
 
 	D3D12_GPU_DESCRIPTOR_HANDLE cbvPSHandle = m_CBVSRVHeap->GetGPUDescriptorHandleForHeapStart();
@@ -891,7 +926,7 @@ void PassthroughRendererDX12::RenderPassthroughView(const ERenderEye eye, const 
 			m_commandList->SetPipelineState(m_psoPrepassIgnoreAppAlpha.Get());
 		}
 
-		m_commandList->DrawInstanced(3, 1, 0, 0);
+		m_commandList->DrawInstanced((UINT)m_vertices.size() / 3, 1, 0, 0);
 	}
 
 
@@ -912,7 +947,7 @@ void PassthroughRendererDX12::RenderPassthroughView(const ERenderEye eye, const 
 		m_commandList->SetPipelineState(m_psoDefault.Get());
 	}
 
-	m_commandList->DrawInstanced(3, 1, 0, 0);
+	m_commandList->DrawInstanced((UINT)m_vertices.size() / 3, 1, 0, 0);
 }
 
 
@@ -943,8 +978,14 @@ void PassthroughRendererDX12::RenderPassthroughViewMasked(const ERenderEye eye, 
 		SetupIntermediateRenderTarget(bufferIndex, rect.extent.width, rect.extent.height);
 	}
 
+	Config_Main& mainConf = m_configManager->GetConfig_Main();
+
 	VSConstantBuffer* vsBuffer = (VSConstantBuffer*)m_vsConstantBufferCPUData[bufferIndex];
-	vsBuffer->cameraUVProjectionFar = (eye == LEFT_EYE) ? frame->frameUVProjectionLeft : frame->frameUVProjectionRight;
+	vsBuffer->cameraProjectionToWorld = (eye == LEFT_EYE) ? frame->cameraToWorldLeft : frame->cameraToWorldRight;
+	vsBuffer->hmdWorldToProjection = (eye == LEFT_EYE) ? frame->hmdWorldToProjectionLeft : frame->hmdWorldToProjectionRight;
+	vsBuffer->hmdViewWorldPos = (eye == LEFT_EYE) ? frame->hmdViewPosWorldLeft : frame->hmdViewPosWorldRight;
+	vsBuffer->projectionDistance = mainConf.ProjectionDistanceFar;
+	vsBuffer->floorHeightOffset = mainConf.FloorHeightOffset;
 
 	D3D12_GPU_DESCRIPTOR_HANDLE cbvVSHandle = m_CBVSRVHeap->GetGPUDescriptorHandleForHeapStart();
 	cbvVSHandle.ptr += (INDEX_CBV_VS_0 + bufferIndex) * m_CBVSRVHeapDescSize;
@@ -963,7 +1004,7 @@ void PassthroughRendererDX12::RenderPassthroughViewMasked(const ERenderEye eye, 
 		psvBuffer->prepassUVOffset = { 0.0f, 0.0f };
 		psvBuffer->prepassUVFactor = { 1.0f, 1.0f };
 	}
-	psvBuffer->frameUVOffset = GetFrameUVOffset(eye, frame->frameLayout);
+	psvBuffer->frameUVBounds = GetFrameUVBounds(eye, frame->frameLayout);
 	psvBuffer->rtArrayIndex = layer->views[viewIndex].subImage.imageArrayIndex;
 
 	D3D12_GPU_DESCRIPTOR_HANDLE cbvPSHandle = m_CBVSRVHeap->GetGPUDescriptorHandleForHeapStart();
@@ -997,7 +1038,7 @@ void PassthroughRendererDX12::RenderPassthroughViewMasked(const ERenderEye eye, 
 	m_commandList->OMSetRenderTargets(1, &rtvHandle, FALSE, nullptr);
 
 	m_commandList->SetPipelineState(m_psoMaskedPrepass.Get());
-	m_commandList->DrawInstanced(3, 1, 0, 0);
+	m_commandList->DrawInstanced((UINT)m_vertices.size() / 3, 1, 0, 0);
 
 
 
@@ -1020,7 +1061,7 @@ void PassthroughRendererDX12::RenderPassthroughViewMasked(const ERenderEye eye, 
 	m_commandList->SetGraphicsRootDescriptorTable(4, srvHandle);
 
 	m_commandList->SetPipelineState(m_psoMaskedRender.Get());
-	m_commandList->DrawInstanced(3, 1, 0, 0);
+	m_commandList->DrawInstanced((UINT)m_vertices.size() / 3, 1, 0, 0);
 
 
 	TransitionResource(m_commandList.Get(), m_intermediateRenderTargets[bufferIndex].Get(), D3D12_RESOURCE_STATE_PIXEL_SHADER_RESOURCE, D3D12_RESOURCE_STATE_RENDER_TARGET);

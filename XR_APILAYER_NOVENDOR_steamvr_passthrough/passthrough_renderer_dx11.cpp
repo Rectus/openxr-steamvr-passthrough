@@ -7,7 +7,6 @@
 #include <xr_linear.h>
 #include "lodepng.h"
 
-#include "shaders\fullscreen_quad_vs.h"
 #include "shaders\passthrough_vs.h"
 
 #include "shaders\alpha_prepass_ps.h"
@@ -21,8 +20,11 @@ using namespace steamvr_passthrough::log;
 
 struct VSConstantBuffer
 {
-	XrMatrix4x4f cameraUVProjectionFar;
-	XrMatrix4x4f cameraUVProjectionNear;
+	XrMatrix4x4f cameraProjectionToWorld;
+	XrMatrix4x4f hmdWorldToProjection;
+	XrVector3f hmdViewWorldPos;
+	float projectionDistance;
+	float floorHeightOffset;
 };
 
 
@@ -37,7 +39,7 @@ struct PSPassConstantBuffer
 
 struct PSViewConstantBuffer
 {
-	XrVector2f frameUVOffset;
+	XrVector4f frameUVBounds;
 	XrVector2f prepassUVFactor;
 	XrVector2f prepassUVOffset;
 	uint32_t rtArrayIndex;
@@ -69,10 +71,6 @@ bool PassthroughRendererDX11::InitRenderer()
 {
 	m_d3dDevice->GetImmediateContext(&m_deviceContext);
 
-	if (FAILED(m_d3dDevice->CreateVertexShader(g_FullscreenQuadShaderVS, sizeof(g_FullscreenQuadShaderVS), nullptr, &m_quadShader)))
-	{
-		return false;
-	}
 
 	if (FAILED(m_d3dDevice->CreateVertexShader(g_PassthroughShaderVS, sizeof(g_PassthroughShaderVS), nullptr, &m_vertexShader)))
 	{
@@ -100,7 +98,7 @@ bool PassthroughRendererDX11::InitRenderer()
 	}
 
 	D3D11_BUFFER_DESC bufferDesc = {};
-	bufferDesc.ByteWidth = sizeof(XrMatrix4x4f) * 2;
+	bufferDesc.ByteWidth = sizeof(XrMatrix4x4f) * 3;
 	bufferDesc.BindFlags = D3D11_BIND_CONSTANT_BUFFER;
 	for (int i = 0; i < NUM_SWAPCHAINS * 2; i++) 
 	{
@@ -190,7 +188,7 @@ bool PassthroughRendererDX11::InitRenderer()
 
 
 	D3D11_RASTERIZER_DESC rasterizerDesc = {};
-	rasterizerDesc.CullMode = D3D11_CULL_NONE;
+	rasterizerDesc.CullMode = D3D11_CULL_BACK;
 	rasterizerDesc.DepthClipEnable = false;
 	rasterizerDesc.FrontCounterClockwise = true;
 	rasterizerDesc.FillMode = D3D11_FILL_SOLID;
@@ -202,6 +200,7 @@ bool PassthroughRendererDX11::InitRenderer()
 
 	SetupTestImage();
 	SetupFrameResource();
+	GenerateMesh();
 
 	return true;
 }
@@ -384,22 +383,64 @@ void PassthroughRendererDX11::SetFrameSize(const uint32_t width, const uint32_t 
 }
 
 
-inline bool IsLinearFormat(DXGI_FORMAT format)
+void PassthroughRendererDX11::GenerateMesh()
 {
-	switch (format)
-	{
-	case DXGI_FORMAT_R8G8B8A8_UNORM_SRGB:
-	case DXGI_FORMAT_B8G8R8A8_UNORM_SRGB:
-	case DXGI_FORMAT_B8G8R8X8_UNORM_SRGB:
-	case DXGI_FORMAT_BC1_UNORM_SRGB:
-	case DXGI_FORMAT_BC2_UNORM_SRGB:
-	case DXGI_FORMAT_BC3_UNORM_SRGB:
-	case DXGI_FORMAT_BC7_UNORM_SRGB:
-		return false;
+	D3D11_INPUT_ELEMENT_DESC vertexDesc {};
+	vertexDesc.SemanticName = "POSITION";
+	vertexDesc.SemanticIndex = 0;
+	vertexDesc.Format = DXGI_FORMAT_R32G32B32_FLOAT;
+	vertexDesc.InputSlot = 0;
+	vertexDesc.AlignedByteOffset = D3D11_APPEND_ALIGNED_ELEMENT;
+	vertexDesc.InputSlotClass = D3D11_INPUT_PER_VERTEX_DATA;
+	vertexDesc.InstanceDataStepRate = 0;
 
-	default: 
-		return true;
+	m_d3dDevice->CreateInputLayout(&vertexDesc, 1, g_PassthroughShaderVS, sizeof(g_PassthroughShaderVS), &m_inputLayout);
+
+	m_vertices.reserve(NUM_MESH_BOUNDARY_VERTICES * 4 * 6);
+
+	// Grenerate a triangle strip cylinder with radius and height 1.
+
+	float radianStep = 2.0f * MATH_PI / (float)NUM_MESH_BOUNDARY_VERTICES;
+
+	for (int i = 0; i <= NUM_MESH_BOUNDARY_VERTICES; i++)
+	{
+		m_vertices.push_back(0.0f);
+		m_vertices.push_back(1.0f);
+		m_vertices.push_back(0.0f);
+
+		m_vertices.push_back(cosf(radianStep * i));
+		m_vertices.push_back(1.0f);
+		m_vertices.push_back(sinf(radianStep * i));
 	}
+
+	for (int i = 0; i <= NUM_MESH_BOUNDARY_VERTICES; i++)
+	{
+		m_vertices.push_back(cosf(radianStep * i));
+		m_vertices.push_back(1.0f);
+		m_vertices.push_back(sinf(radianStep * i));
+
+		m_vertices.push_back(cosf(radianStep * i));
+		m_vertices.push_back(0.0f);
+		m_vertices.push_back(sinf(radianStep * i));
+	}
+
+	for (int i = 0; i <= NUM_MESH_BOUNDARY_VERTICES; i++)
+	{
+		m_vertices.push_back(cosf(radianStep * i));
+		m_vertices.push_back(0.0f);
+		m_vertices.push_back(sinf(radianStep * i));
+
+		m_vertices.push_back(0.0f);
+		m_vertices.push_back(0.0f);
+		m_vertices.push_back(0.0f);
+	}
+
+	
+	D3D11_SUBRESOURCE_DATA vertexBufferData{};
+	vertexBufferData.pSysMem = m_vertices.data();
+
+	CD3D11_BUFFER_DESC vertexBufferDesc((UINT)m_vertices.size() * sizeof(float), D3D11_BIND_VERTEX_BUFFER);
+	m_d3dDevice->CreateBuffer(&vertexBufferDesc, &vertexBufferData, &m_vertexBuffer);
 }
 
 
@@ -441,8 +482,10 @@ void PassthroughRendererDX11::RenderPassthroughFrame(const XrCompositionLayerPro
 		m_renderContext->PSSetShaderResources(0, 1, m_cameraFrameSRV[m_frameIndex].GetAddressOf());
 	}
 
-	m_renderContext->IASetInputLayout(nullptr);
-	m_renderContext->IASetVertexBuffers(0, 0, nullptr, 0, 0);
+	m_renderContext->IASetInputLayout(m_inputLayout.Get());
+	const UINT strides[] = { sizeof(float) * 3 };
+	const UINT offsets[] = { 0 };
+	m_renderContext->IASetVertexBuffers(0, 1, m_vertexBuffer.GetAddressOf(), strides, offsets);
 	m_renderContext->IASetIndexBuffer(nullptr, DXGI_FORMAT_UNKNOWN, 0);
 	m_renderContext->IASetPrimitiveTopology(D3D11_PRIMITIVE_TOPOLOGY_TRIANGLESTRIP);
 
@@ -506,8 +549,14 @@ void PassthroughRendererDX11::RenderPassthroughView(const ERenderEye eye, const 
 	m_renderContext->RSSetViewports(1, &viewport);
 	m_renderContext->RSSetScissorRects(1, &scissor);
 
+	Config_Main& mainConf = m_configManager->GetConfig_Main();
+
 	VSConstantBuffer buffer = {};
-	buffer.cameraUVProjectionFar = (eye == LEFT_EYE) ? frame->frameUVProjectionLeft : frame->frameUVProjectionRight;
+	buffer.cameraProjectionToWorld = (eye == LEFT_EYE) ? frame->cameraToWorldLeft : frame->cameraToWorldRight;
+	buffer.hmdWorldToProjection = (eye == LEFT_EYE) ? frame->hmdWorldToProjectionLeft : frame->hmdWorldToProjectionRight;
+	buffer.hmdViewWorldPos = (eye == LEFT_EYE) ? frame->hmdViewPosWorldLeft : frame->hmdViewPosWorldRight;
+	buffer.projectionDistance = mainConf.ProjectionDistanceFar;
+	buffer.floorHeightOffset = mainConf.FloorHeightOffset;
 	
 	m_renderContext->UpdateSubresource(m_vsConstantBuffer[bufferIndex].Get(), 0, nullptr, &buffer, 0, 0);
 
@@ -515,7 +564,7 @@ void PassthroughRendererDX11::RenderPassthroughView(const ERenderEye eye, const 
 	m_renderContext->VSSetShader(m_vertexShader.Get(), nullptr, 0);
 	
 	PSViewConstantBuffer viewBuffer = {};
-	viewBuffer.frameUVOffset = GetFrameUVOffset(eye, frame->frameLayout);
+	viewBuffer.frameUVBounds = GetFrameUVBounds(eye, frame->frameLayout);
 	viewBuffer.rtArrayIndex = layer->views[viewIndex].subImage.imageArrayIndex;
 
 	m_renderContext->UpdateSubresource(m_psViewConstantBuffer.Get(), 0, nullptr, &viewBuffer, 0, 0);
@@ -537,7 +586,7 @@ void PassthroughRendererDX11::RenderPassthroughView(const ERenderEye eye, const 
 			m_renderContext->OMSetBlendState(m_blendStatePrepassIgnoreAppAlpha.Get(), nullptr, UINT_MAX);
 		}
 
-		m_renderContext->Draw(3, 0);
+		m_renderContext->Draw((UINT)m_vertices.size() / 3, 0);
 	}
 
 
@@ -560,7 +609,7 @@ void PassthroughRendererDX11::RenderPassthroughView(const ERenderEye eye, const 
 
 	m_renderContext->PSSetShader(m_pixelShader.Get(), nullptr, 0);
 	
-	m_renderContext->Draw(3, 0);
+	m_renderContext->Draw((UINT)m_vertices.size() / 3, 0);
 }
 
 
@@ -583,8 +632,14 @@ void PassthroughRendererDX11::RenderPassthroughViewMasked(const ERenderEye eye, 
 	m_renderContext->RSSetViewports(1, &viewport);
 	m_renderContext->RSSetScissorRects(1, &scissor);
 
+	Config_Main& mainConf = m_configManager->GetConfig_Main();
+
 	VSConstantBuffer buffer = {};
-	buffer.cameraUVProjectionFar = (eye == LEFT_EYE) ? frame->frameUVProjectionLeft : frame->frameUVProjectionRight;
+	buffer.cameraProjectionToWorld = (eye == LEFT_EYE) ? frame->cameraToWorldLeft : frame->cameraToWorldRight;
+	buffer.hmdWorldToProjection = (eye == LEFT_EYE) ? frame->hmdWorldToProjectionLeft : frame->hmdWorldToProjectionRight;
+	buffer.hmdViewWorldPos = (eye == LEFT_EYE) ? frame->hmdViewPosWorldLeft : frame->hmdViewPosWorldRight;
+	buffer.projectionDistance = mainConf.ProjectionDistanceFar;
+	buffer.floorHeightOffset = mainConf.FloorHeightOffset;
 
 	m_renderContext->UpdateSubresource(m_vsConstantBuffer[bufferIndex].Get(), 0, nullptr, &buffer, 0, 0);
 
@@ -605,7 +660,7 @@ void PassthroughRendererDX11::RenderPassthroughViewMasked(const ERenderEye eye, 
 			viewBuffer.prepassUVOffset = { 0.0f, 0.0f };
 			viewBuffer.prepassUVFactor = { 1.0f, 1.0f };
 		}
-		viewBuffer.frameUVOffset = GetFrameUVOffset(eye, frame->frameLayout);
+		viewBuffer.frameUVBounds = GetFrameUVBounds(eye, frame->frameLayout);
 		viewBuffer.rtArrayIndex = layer->views[viewIndex].subImage.imageArrayIndex;
 
 		m_renderContext->UpdateSubresource(m_psViewConstantBuffer.Get(), 0, nullptr, &viewBuffer, 0, 0);
@@ -623,7 +678,7 @@ void PassthroughRendererDX11::RenderPassthroughViewMasked(const ERenderEye eye, 
 
 	ID3D11ShaderResourceView* cameraFrameSRV;
 
-	if (m_configManager->GetConfig_Main().ShowTestImage)
+	if (mainConf.ShowTestImage)
 	{
 		cameraFrameSRV = m_testPatternSRV.Get();
 	}
@@ -651,7 +706,7 @@ void PassthroughRendererDX11::RenderPassthroughViewMasked(const ERenderEye eye, 
 
 	m_renderContext->PSSetShader(m_maskedPrepassShader.Get(), nullptr, 0);
 
-	m_renderContext->Draw(3, 0);
+	m_renderContext->Draw((UINT)m_vertices.size() / 3, 0);
 
 
 	{
@@ -672,7 +727,7 @@ void PassthroughRendererDX11::RenderPassthroughViewMasked(const ERenderEye eye, 
 	m_renderContext->OMSetBlendState(m_blendStateSrcAlpha.Get(), nullptr, UINT_MAX);	
 	m_renderContext->PSSetShader(m_maskedPixelShader.Get(), nullptr, 0);
 
-	m_renderContext->Draw(3, 0);
+	m_renderContext->Draw((UINT)m_vertices.size() / 3, 0);
 }
 
 

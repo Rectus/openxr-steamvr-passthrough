@@ -136,6 +136,9 @@
     <ClCompile Include="openvr_manager.cpp">
       <Filter>Source Files</Filter>
     </ClCompile>
+    <ClCompile Include="passthrough_renderer_vulkan.cpp">
+      <Filter>Source Files</Filter>
+    </ClCompile>
   </ItemGroup>
   <ItemGroup>
     <None Include="framework\dispatch_generator.py">
@@ -153,9 +156,6 @@
       <Filter>Shaders</Filter>
     </FxCompile>
     <FxCompile Include="shaders\alpha_prepass_ps.hlsl">
-      <Filter>Shaders</Filter>
-    </FxCompile>
-    <FxCompile Include="shaders\fullscreen_quad_vs.hlsl">
       <Filter>Shaders</Filter>
     </FxCompile>
     <FxCompile Include="shaders\passthrough_masked_ps.hlsl">

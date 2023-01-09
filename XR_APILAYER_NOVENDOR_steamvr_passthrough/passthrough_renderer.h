@@ -13,6 +13,8 @@ using Microsoft::WRL::ComPtr;
 
 #define NUM_SWAPCHAINS 3
 
+#define NUM_MESH_BOUNDARY_VERTICES 16
+
 enum ERenderEye
 {
 	LEFT_EYE,
@@ -40,8 +42,12 @@ struct CameraFrame
 	CameraFrame()
 		: header()
 		, frameTextureResource(nullptr)
-		, frameUVProjectionLeft()
-		, frameUVProjectionRight()
+		, cameraToWorldLeft()
+		, cameraToWorldRight()
+		, hmdWorldToProjectionLeft()
+		, hmdWorldToProjectionRight()
+		, hmdViewPosWorldLeft()
+		, hmdViewPosWorldRight()
 		, frameLayout(Mono)
 		, bIsValid(false)
 	{
@@ -50,30 +56,36 @@ struct CameraFrame
 	vr::CameraVideoStreamFrameHeader_t header;
 	void* frameTextureResource;
 	std::shared_ptr<std::vector<uint8_t>> frameBuffer;
-	XrMatrix4x4f frameUVProjectionLeft;
-	XrMatrix4x4f frameUVProjectionRight;
+	XrMatrix4x4f cameraToWorldLeft;
+	XrMatrix4x4f cameraToWorldRight;
+	XrMatrix4x4f hmdWorldToProjectionLeft;
+	XrMatrix4x4f hmdWorldToProjectionRight;
+	XrVector3f hmdViewPosWorldLeft;
+	XrVector3f hmdViewPosWorldRight;
 	EStereoFrameLayout frameLayout;
+
 	bool bIsValid;
 };
 
 
-inline XrVector2f GetFrameUVOffset(const ERenderEye eye, const EStereoFrameLayout layout)
+// Outputs Umin, Vmin, Umax, Vmax.
+inline XrVector4f GetFrameUVBounds(const ERenderEye eye, const EStereoFrameLayout layout)
 {
 	if (eye == LEFT_EYE)
 	{
 		switch (layout)
 		{
 		case StereoHorizontalLayout:
-			return XrVector2f(0, 0);
+			return XrVector4f(0, 0, 0.5, 1.0);
 			break;
 
 			// The vertical layout has left camera below the right
 		case StereoVerticalLayout:
-			return XrVector2f(0, 0.5);
+			return XrVector4f(0, 0.5, 1.0, 1.0);
 			break;
 
 		case Mono:
-			return XrVector2f(0, 0);
+			return XrVector4f(0, 0, 1.0, 1.0);
 			break;
 		}
 	}
@@ -82,20 +94,20 @@ inline XrVector2f GetFrameUVOffset(const ERenderEye eye, const EStereoFrameLayou
 		switch (layout)
 		{
 		case StereoHorizontalLayout:
-			return XrVector2f(0.5, 0);
+			return XrVector4f(0.5, 0, 1.0, 1.0);
 			break;
 
 		case StereoVerticalLayout:
-			return XrVector2f(0, 0);
+			return XrVector4f(0, 0, 1.0, 0.5);
 			break;
 
 		case Mono:
-			return XrVector2f(0, 0);
+			return XrVector4f(0, 0, 1.0, 1.0);
 			break;
 		}
 	}
 
-	return XrVector2f(0, 0);
+	return XrVector4f(0, 0, 1.0, 1.0);
 }
 
 
@@ -128,6 +140,7 @@ private:
 	void SetupTestImage();
 	void SetupFrameResource();
 	void SetupTemporaryRenderTarget(ID3D11Texture2D** texture, ID3D11ShaderResourceView** srv, ID3D11RenderTargetView** rtv, uint32_t width, uint32_t height);
+	void GenerateMesh();
 
 	void RenderPassthroughView(const ERenderEye eye, const int32_t imageIndex, const XrCompositionLayerProjection* layer, CameraFrame* frame, EPassthroughBlendMode blendMode);
 	void RenderPassthroughViewMasked(const ERenderEye eye, const int32_t imageIndex, const XrCompositionLayerProjection* layer, CameraFrame* frame);
@@ -148,7 +161,6 @@ private:
 	ComPtr<ID3D11RenderTargetView> m_renderTargetViews[NUM_SWAPCHAINS * 2];
 	ComPtr<ID3D11ShaderResourceView> m_renderTargetSRVs[NUM_SWAPCHAINS * 2];
 
-	ComPtr<ID3D11VertexShader> m_quadShader;
 	ComPtr<ID3D11VertexShader> m_vertexShader;
 	ComPtr<ID3D11PixelShader> m_pixelShader;
 	ComPtr<ID3D11PixelShader> m_prepassShader;
@@ -175,6 +187,10 @@ private:
 	ComPtr<ID3D11Texture2D> m_cameraFrameUploadTexture;
 	ComPtr<ID3D11ShaderResourceView> m_cameraFrameSRV[NUM_SWAPCHAINS];
 
+	ComPtr<ID3D11InputLayout> m_inputLayout;
+	ComPtr<ID3D11Buffer> m_vertexBuffer;
+	std::vector<float> m_vertices;
+
 	uint32_t m_cameraTextureWidth;
 	uint32_t m_cameraTextureHeight;
 	uint32_t m_cameraFrameBufferSize;
@@ -186,19 +202,20 @@ class PassthroughRendererDX12 : public IPassthroughRenderer
 public:
 	PassthroughRendererDX12(ID3D12Device* device, ID3D12CommandQueue* commandQueue, HMODULE dllModule, std::shared_ptr<ConfigManager> configManager);
 
-	bool InitRenderer();
+	bool InitRenderer();	
 	void InitRenderTarget(const ERenderEye eye, void* rendertarget, const uint32_t imageIndex, const XrSwapchainCreateInfo& swapchainInfo);
 	void SetFrameSize(const uint32_t width, const uint32_t height, const uint32_t bufferSize);
 	void RenderPassthroughFrame(const XrCompositionLayerProjection* layer, CameraFrame* frame, EPassthroughBlendMode blendMode, int leftSwapchainIndex, int rightSwapchainIndex);
 	void* GetRenderDevice();
 	
 private:
-
+	ComPtr<ID3D12Resource> InitBuffer(UINT8** bufferCPUData, int numBuffers, int bufferSizePerAlign, int heapIndex);
 	void SetupTestImage();
 	void SetupFrameResource();
 	bool CreateRootSignature();
 	bool InitPipeline(DXGI_FORMAT rtFormat);
 	void SetupIntermediateRenderTarget(uint32_t index, uint32_t width, uint32_t height);
+	void GenerateMesh();
 
 	void RenderPassthroughView(const ERenderEye eye, const int32_t imageIndex, const XrCompositionLayerProjection* layer, CameraFrame* frame, EPassthroughBlendMode blendMode);
 	void RenderPassthroughViewMasked(const ERenderEye eye, const int32_t imageIndex, const XrCompositionLayerProjection* layer, CameraFrame* frame);
@@ -250,6 +267,105 @@ private:
 
 	ComPtr<ID3D12Resource> m_intermediateRenderTargets[NUM_SWAPCHAINS * 2];
 	ComPtr<ID3D12DescriptorHeap> m_intermediateRTVHeap;
+
+	ComPtr<ID3D12Resource> m_vertexBufferUpload;
+	ComPtr<ID3D12Resource> m_vertexBuffer;
+	std::vector<float> m_vertices;
+
+	uint32_t m_cameraTextureWidth;
+	uint32_t m_cameraTextureHeight;
+	uint32_t m_cameraFrameBufferSize;
+};
+
+
+class PassthroughRendererVulkan : public IPassthroughRenderer
+{
+public:
+	PassthroughRendererVulkan(XrGraphicsBindingVulkanKHR& binding, HMODULE dllModule, std::shared_ptr<ConfigManager> configManager);
+
+	bool InitRenderer();
+	void InitRenderTarget(const ERenderEye eye, void* rendertarget, const uint32_t imageIndex, const XrSwapchainCreateInfo& swapchainInfo);
+	void SetFrameSize(const uint32_t width, const uint32_t height, const uint32_t bufferSize);
+	void RenderPassthroughFrame(const XrCompositionLayerProjection* layer, CameraFrame* frame, EPassthroughBlendMode blendMode, int leftSwapchainIndex, int rightSwapchainIndex);
+	void* GetRenderDevice();
+
+private:
+
+	bool SetupPipeline();
+	VkShaderModule CreateShaderModule(const uint32_t* bytecode, size_t codeSize);
+
+	void SetupTestImage();
+	void SetupFrameResource();
+	//void SetupIntermediateRenderTarget(uint32_t index, uint32_t width, uint32_t height);
+	//void GenerateMesh();
+
+	void RenderPassthroughView(const ERenderEye eye, const int32_t imageIndex, const XrCompositionLayerProjection* layer, CameraFrame* frame, EPassthroughBlendMode blendMode);
+	void RenderPassthroughViewMasked(const ERenderEye eye, const int32_t imageIndex, const XrCompositionLayerProjection* layer, CameraFrame* frame);
+	void RenderFrameFinish();
+
+	std::shared_ptr<ConfigManager> m_configManager;
+	HMODULE m_dllModule;
+
+	int m_frameIndex = 0;
+
+	VkInstance m_instance;
+	VkPhysicalDevice m_physDevice;
+	VkDevice m_device;
+	uint32_t m_queueFamilyIndex;
+	uint32_t m_queueIndex;
+	VkQueue m_queue;
+
+	VkShaderModule m_vertexShader;
+	VkShaderModule m_pixelShader;
+	VkShaderModule m_prepassShader;
+	VkShaderModule m_maskedPrepassShader;
+	VkShaderModule m_maskedPixelShader;
+
+	VkRenderPass m_renderpass;
+
+	VkPipelineLayout m_pipelineLayout;
+
+	VkPipeline m_pipelineDefault;
+	VkPipeline m_pipelineAlphaPremultiplied;
+	VkPipeline m_pipelinePrepassUseAppAlpha;
+	VkPipeline m_pipelinePrepassIgnoreAppAlpha;
+	VkPipeline m_pipelineMaskedPrepass;
+	VkPipeline m_pipelineMaskedRender;
+
+	/*ComPtr<ID3D12Device> m_d3dDevice;
+	ComPtr<ID3D12CommandQueue> m_d3dCommandQueue;
+
+	ComPtr <ID3D12Resource> m_renderTargets[NUM_SWAPCHAINS * 2];
+
+	ComPtr<ID3D12CommandAllocator> m_commandAllocators[NUM_SWAPCHAINS * 2];
+	ComPtr<ID3D12GraphicsCommandList> m_commandList;
+	ComPtr<ID3D12DescriptorHeap> m_RTVHeap;
+	ComPtr<ID3D12DescriptorHeap> m_CBVSRVHeap;
+	UINT m_RTVHeapDescSize = 0;
+	UINT m_CBVSRVHeapDescSize = 0;
+	ComPtr<ID3D12RootSignature> m_rootSignature;
+
+
+	ComPtr<ID3D12Resource> m_vsConstantBuffer;
+	UINT8* m_vsConstantBufferCPUData[NUM_SWAPCHAINS * 2];
+
+	ComPtr<ID3D12Resource> m_psPassConstantBuffer;
+	UINT8* m_psPassConstantBufferCPUData[NUM_SWAPCHAINS];
+
+	ComPtr<ID3D12Resource> m_psViewConstantBuffer;
+	UINT8* m_psViewConstantBufferCPUData[NUM_SWAPCHAINS * 2];
+
+	ComPtr<ID3D12Resource> m_psMaskedConstantBuffer;
+	UINT8* m_psMaskedConstantBufferCPUData[NUM_SWAPCHAINS];
+
+	ComPtr<ID3D12Resource> m_testPattern;
+	ComPtr<ID3D12Resource> m_testPatternUploadHeap;
+
+	ComPtr<ID3D12Resource> m_cameraFrameRes[NUM_SWAPCHAINS];
+	ComPtr<ID3D12Resource> m_frameResUploadHeap;
+
+	ComPtr<ID3D12Resource> m_intermediateRenderTargets[NUM_SWAPCHAINS * 2];
+	ComPtr<ID3D12DescriptorHeap> m_intermediateRTVHeap;*/
 
 	uint32_t m_cameraTextureWidth;
 	uint32_t m_cameraTextureHeight;

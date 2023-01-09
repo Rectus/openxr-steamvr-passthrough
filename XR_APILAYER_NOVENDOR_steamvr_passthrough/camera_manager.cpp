@@ -71,20 +71,11 @@ CameraManager::CameraManager(std::shared_ptr<IPassthroughRenderer> renderer, ERe
     , m_openVRManager(openVRManager)
     , m_frameType(vr::VRTrackedCameraFrameType_MaximumUndistorted)
     , m_frameLayout(EStereoFrameLayout::Mono)
+    , m_projectionDistanceFar(5.0f)
 {
-    m_projectionDistanceFar = 0.0f;
-    m_projectionDistanceNear = 0.0f;
-
     m_renderFrame = std::make_shared<CameraFrame>();
     m_servedFrame = std::make_shared<CameraFrame>();
     m_underConstructionFrame = std::make_shared<CameraFrame>();
-
-    XrMatrix4x4f_CreateIdentity(&m_renderFrame->frameUVProjectionLeft);
-    XrMatrix4x4f_CreateIdentity(&m_renderFrame->frameUVProjectionRight);
-    XrMatrix4x4f_CreateIdentity(&m_servedFrame->frameUVProjectionLeft);
-    XrMatrix4x4f_CreateIdentity(&m_servedFrame->frameUVProjectionRight);
-    XrMatrix4x4f_CreateIdentity(&m_underConstructionFrame->frameUVProjectionLeft);
-    XrMatrix4x4f_CreateIdentity(&m_underConstructionFrame->frameUVProjectionRight);
 }
 
 CameraManager::~CameraManager()
@@ -389,12 +380,12 @@ void CameraManager::ServeFrames()
 }
 
 
-// Constructs a matrix from the roomscale origin to the HMD eye projection.
-XrMatrix4x4f CameraManager::GetHMDMVPMatrix(const ERenderEye eye, const XrCompositionLayerProjection& layer, const XrReferenceSpaceCreateInfo& refSpaceInfo)
+// Constructs a matrix from the roomscale origin to the HMD eye pose.
+XrMatrix4x4f CameraManager::GetHMDWorldToViewMatrix(const ERenderEye eye, const XrCompositionLayerProjection& layer, const XrReferenceSpaceCreateInfo& refSpaceInfo)
 {
     vr::IVRSystem* vrSystem = m_openVRManager->GetVRSystem();
 
-    XrMatrix4x4f output, pose, viewToTracking, projection, viewToStage, trackingToStage, refSpacePose;
+    XrMatrix4x4f output, pose, viewToTracking, trackingToStage, refSpacePose;
 
     int viewNum = eye == LEFT_EYE ? 0 : 1;
 
@@ -408,22 +399,18 @@ XrMatrix4x4f CameraManager::GetHMDMVPMatrix(const ERenderEye eye, const XrCompos
     XrMatrix4x4f_CreateTranslationRotationScale(&pose, &refSpaceInfo.poseInReferenceSpace.position, &refSpaceInfo.poseInReferenceSpace.orientation, &scale);
     XrMatrix4x4f_Invert(&refSpacePose, &pose);
 
-    XrMatrix4x4f_CreateProjectionFov(&projection, GRAPHICS_D3D, layer.views[viewNum].fov, m_projectionDistanceFar * 0.5f, m_projectionDistanceFar);
-
     if (refSpaceInfo.referenceSpaceType == XR_REFERENCE_SPACE_TYPE_LOCAL)
     {
         vr::HmdMatrix34_t mat = vrSystem->GetSeatedZeroPoseToStandingAbsoluteTrackingPose();
         trackingToStage = ToXRMatrix4x4Inverted(mat);
 
         XrMatrix4x4f_Multiply(&pose, &viewToTracking, &trackingToStage);
-        XrMatrix4x4f_Multiply(&viewToStage, &pose, &refSpacePose);
+        XrMatrix4x4f_Multiply(&output, &pose, &refSpacePose);
     }
     else
     {
-        XrMatrix4x4f_Multiply(&viewToStage, &viewToTracking, &refSpacePose);
+        XrMatrix4x4f_Multiply(&output, &viewToTracking, &refSpacePose);
     }
-    
-    XrMatrix4x4f_Multiply(&output, &projection, &viewToStage);
 
     return output;
 }
@@ -432,14 +419,13 @@ void CameraManager::CalculateFrameProjection(std::shared_ptr<CameraFrame>& frame
 {
     vr::IVRTrackedCamera* trackedCamera = m_openVRManager->GetVRTrackedCamera();
 
-    if (m_configManager->GetConfig_Main().ProjectionDistanceFar != m_projectionDistanceFar || 
-        m_configManager->GetConfig_Main().ProjectionDistanceNear != m_projectionDistanceNear)
+    // Push back far plane by 1.2x to account for the flat projection place of the passthrough frame.
+    if (m_configManager->GetConfig_Main().ProjectionDistanceFar * 1.2f != m_projectionDistanceFar)
     {
-        m_projectionDistanceFar = m_configManager->GetConfig_Main().ProjectionDistanceFar;
-        m_projectionDistanceNear = m_configManager->GetConfig_Main().ProjectionDistanceNear;
+        m_projectionDistanceFar = m_configManager->GetConfig_Main().ProjectionDistanceFar * 1.2f;
 
         vr::HmdMatrix44_t vrProjection;
-        vr::EVRTrackedCameraError error = trackedCamera->GetCameraProjection(m_hmdDeviceId, 0, m_frameType, m_projectionDistanceFar * 0.5f, m_projectionDistanceFar, &vrProjection);
+        vr::EVRTrackedCameraError error= trackedCamera->GetCameraProjection(m_hmdDeviceId, 0, m_frameType, NEAR_PROJECTION_DISTANCE, m_projectionDistanceFar, &vrProjection);
 
         if (error != vr::VRTrackedCameraError_None)
         {
@@ -447,11 +433,23 @@ void CameraManager::CalculateFrameProjection(std::shared_ptr<CameraFrame>& frame
             return;
         }
 
+        // Hack to scale the projection to one half of the stereo frame.
+        if (m_frameLayout == EStereoFrameLayout::StereoHorizontalLayout)
+        {
+            vrProjection.m[0][0] *= 2.0f;
+            vrProjection.m[0][2] -= 0.5f;
+        }
+        else if (m_frameLayout == EStereoFrameLayout::StereoVerticalLayout)
+        {
+            vrProjection.m[1][1] *= 2.0f;
+            vrProjection.m[1][2] -= 0.5f;
+        }
+
         m_cameraProjectionInvFarLeft = ToXRMatrix4x4Inverted(vrProjection);
 
         if (m_frameLayout != EStereoFrameLayout::Mono)
         {
-            error = trackedCamera->GetCameraProjection(m_hmdDeviceId, 1, m_frameType, m_projectionDistanceFar * 0.5f, m_projectionDistanceFar, &vrProjection);
+            error = trackedCamera->GetCameraProjection(m_hmdDeviceId, 1, m_frameType, NEAR_PROJECTION_DISTANCE, m_projectionDistanceFar, &vrProjection);
 
             if (error != vr::VRTrackedCameraError_None)
             {
@@ -459,10 +457,21 @@ void CameraManager::CalculateFrameProjection(std::shared_ptr<CameraFrame>& frame
                 return;
             }
 
+            // Hack to scale the projection to one half of the stereo frame.
+            if (m_frameLayout == EStereoFrameLayout::StereoHorizontalLayout)
+            {
+                vrProjection.m[0][0] *= 2.0f;
+                vrProjection.m[0][2] -= 0.5f;
+            }
+            else if (m_frameLayout == EStereoFrameLayout::StereoVerticalLayout)
+            {
+                vrProjection.m[1][1] *= 2.0f;
+                vrProjection.m[1][2] -= 0.5f;
+            }
+
             m_cameraProjectionInvFarRight = ToXRMatrix4x4Inverted(vrProjection);
         }
     }
-    
 
     CalculateFrameProjectionForEye(LEFT_EYE, frame, layer, refSpaceInfo);
     CalculateFrameProjectionForEye(RIGHT_EYE, frame, layer, refSpaceInfo);
@@ -473,71 +482,34 @@ void CameraManager::CalculateFrameProjectionForEye(const ERenderEye eye, std::sh
     bool bIsStereo = m_frameLayout != EStereoFrameLayout::Mono;
     uint32_t CameraId = (eye == RIGHT_EYE && bIsStereo) ? 1 : 0;
 
-    XrMatrix4x4f* frameUVMat = (eye == LEFT_EYE) ? &frame->frameUVProjectionLeft : &frame->frameUVProjectionRight;
+    XrMatrix4x4f* worldToHMDMatrix = (eye == LEFT_EYE) ? &frame->hmdWorldToProjectionLeft : &frame->hmdWorldToProjectionRight;
+    XrMatrix4x4f* trackedCameraMatrix = (eye == LEFT_EYE) ? &frame->cameraToWorldLeft : &frame->cameraToWorldRight;
+    XrVector3f* hmdWorldPos = (eye == LEFT_EYE) ? &frame->hmdViewPosWorldLeft : &frame->hmdViewPosWorldRight;
+    
+    XrMatrix4x4f hmdWorldToView = GetHMDWorldToViewMatrix(eye, layer, refSpaceInfo);
 
-    XrMatrix4x4f hmdMVPMatrix = GetHMDMVPMatrix(eye, layer, refSpaceInfo);
+    XrMatrix4x4f hmdViewToWorld;
+    XrMatrix4x4f_Invert(&hmdViewToWorld, &hmdWorldToView);
+    XrVector3f inPos{ 0,0,0 };
+    XrMatrix4x4f_TransformVector3f(hmdWorldPos, &hmdViewToWorld, &inPos);
+
+    XrMatrix4x4f hmdProjection;
+    XrMatrix4x4f_CreateProjectionFov(&hmdProjection, GRAPHICS_D3D, layer.views[(eye == LEFT_EYE) ? 0 : 1].fov, NEAR_PROJECTION_DISTANCE, m_projectionDistanceFar);
+
     XrMatrix4x4f leftCameraToTrackingPose = ToXRMatrix4x4(frame->header.trackedDevicePose.mDeviceToAbsoluteTracking);
-
-    XrMatrix4x4f tempMatrix, trackedCameraMatrix, transformToCamera;
 
     if (CameraId == 0)
     {
-        XrMatrix4x4f_Multiply(&trackedCameraMatrix, &leftCameraToTrackingPose, &m_cameraProjectionInvFarLeft);
-        XrMatrix4x4f_Multiply(&transformToCamera, &hmdMVPMatrix, &trackedCameraMatrix);
+        XrMatrix4x4f_Multiply(trackedCameraMatrix, &leftCameraToTrackingPose, &m_cameraProjectionInvFarLeft);
+
+        XrMatrix4x4f_Multiply(worldToHMDMatrix, &hmdProjection, &hmdWorldToView);
     }
     else
     {
+        XrMatrix4x4f tempMatrix;
         XrMatrix4x4f_Multiply(&tempMatrix, &leftCameraToTrackingPose, &m_cameraLeftToRightPose);
-        XrMatrix4x4f_Multiply(&trackedCameraMatrix, &tempMatrix, &m_cameraProjectionInvFarRight);
-        XrMatrix4x4f_Multiply(&transformToCamera, &hmdMVPMatrix, &trackedCameraMatrix);
+        XrMatrix4x4f_Multiply(trackedCameraMatrix, &tempMatrix, &m_cameraProjectionInvFarRight);
+
+        XrMatrix4x4f_Multiply(worldToHMDMatrix, &hmdProjection, &hmdWorldToView);
     }
-
-    // Calculate matrix for transforming the clip space quad to the quad output by the camera transform
-    // as per: https://mrl.cs.nyu.edu/~dzorin/ug-graphics/lectures/lecture7/
-
-    XrVector4f P1 = { -1, -1, 1, 1 };
-    XrVector4f P2 = { 1, -1, 1, 1 };
-    XrVector4f P3 = { 1, 1, 1, 1 };
-    XrVector4f P4 = { -1, 1, 1, 1 };
-
-    XrVector4f Q1;
-    XrVector4f Q2;
-    XrVector4f Q3;
-    XrVector4f Q4;
-    XrMatrix4x4f_TransformVector4f(&Q1, &transformToCamera, &P1);
-    XrMatrix4x4f_TransformVector4f(&Q2, &transformToCamera, &P2);
-    XrMatrix4x4f_TransformVector4f(&Q3, &transformToCamera, &P3);
-    XrMatrix4x4f_TransformVector4f(&Q4, &transformToCamera, &P4);
-
-    XrVector3f R1 = { Q1.x, Q1.y, Q1.w };
-    XrVector3f R2 = { Q2.x, Q2.y, Q2.w };
-    XrVector3f R3 = { Q3.x, Q3.y, Q3.w };
-    XrVector3f R4 = { Q4.x, Q4.y, Q4.w };
-
-    XrVector3f tempv1, tempv2;
-
-    XrVector3f H1;
-    XrVector3f H2;
-    XrVector3f H3;
-
-    XrVector3f_Cross(&tempv1, &R2, &R1);
-    XrVector3f_Cross(&tempv2, &R3, &R4);
-    XrVector3f_Cross(&H1, &tempv1, &tempv2);
-
-    XrVector3f_Cross(&tempv1, &R1, &R4);
-    XrVector3f_Cross(&tempv2, &R2, &R3);
-    XrVector3f_Cross(&H2, &tempv1, &tempv2);
-
-    XrVector3f_Cross(&tempv1, &R1, &R3);
-    XrVector3f_Cross(&tempv2, &R2, &R4);
-    XrVector3f_Cross(&H3, &tempv1, &tempv2);
-
-    XrMatrix4x4f T = {
-        H1.x, H2.x, H3.x, 0,
-        H1.y, H2.y, H3.y, 0,
-        H1.z, H2.z, H3.z, 0,
-        0, 0, 0, 1};
-
-    XrMatrix4x4f_Invert(&tempMatrix, &T);
-    XrMatrix4x4f_Transpose(frameUVMat, &tempMatrix);
 }

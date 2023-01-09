@@ -188,7 +188,7 @@ void DashboardMenu::TickMenu()
 		ImGui::Separator();
 
 		ScrollableSlider("Projection Dist.", &mainConfig.ProjectionDistanceFar, 0.5f, 20.0f, "%.1f", 0.1f);
-		//ScrollableSlider("Near Projection Distance", &mainConfig.ProjectionDistanceNear, 0.5f, 10.0f, "%.1f", 0.1f);
+		ScrollableSlider("Floor Height Offset", &mainConfig.FloorHeightOffset, 0.0f, 2.0f, "%.2f", 0.01f);
 
 		ScrollableSlider("Opacity", &mainConfig.PassthroughOpacity, 0.0f, 1.0f, "%.1f", 0.1f);
 		ImGui::Separator();

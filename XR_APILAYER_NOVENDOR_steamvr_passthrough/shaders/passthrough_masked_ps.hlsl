@@ -4,8 +4,8 @@
 struct VS_OUTPUT
 {
 	float4 position : SV_POSITION;
-	float3 uvCoords : TEXCOORD0;
-	float2 originalUVCoords : TEXCOORD1;
+	float3 clipSpaceCoords : TEXCOORD0;
+	float3 screenCoords : TEXCOORD1;
 };
 
 cbuffer psPassConstantBuffer : register(b0)
@@ -19,7 +19,7 @@ cbuffer psPassConstantBuffer : register(b0)
 
 cbuffer psViewConstantBuffer : register(b1)
 {
-	float2 g_uvOffset;
+	float4 g_uvBounds;
 	float2 g_uvPrepassFactor;
 	float2 g_uvPrepassOffset;
 	uint g_arrayIndex;
@@ -42,17 +42,21 @@ Texture2D g_BlendMask : register(t1);
 float4 main(VS_OUTPUT input) : SV_TARGET
 {
 	// Divide to convert back from homogenous coordinates.
-	float2 outUvs = input.uvCoords.xy / input.uvCoords.z;
+	float2 outUvs = input.clipSpaceCoords.xy / input.clipSpaceCoords.z;
 
 	// Convert from clip space coordinates to 0-1.
-	outUvs = outUvs * float2(-0.5, -0.5) + float2(0.5, 0.5);
+	outUvs = outUvs * float2(0.5, -0.5) + float2(0.5, 0.5);
 
-	// Clamp to half of the frame texture and add the right eye offset.
-	outUvs = clamp(outUvs, float2(0.0, 0.0), float2(0.5, 1.0)) + g_uvOffset;
+	// Remap and clamp to frame UV bounds.
+	outUvs = outUvs * (g_uvBounds.zw - g_uvBounds.xy) + g_uvBounds.xy;
+	outUvs = clamp(outUvs, g_uvBounds.xy, g_uvBounds.zw);
 
 	float4 cameraColor = g_CameraTexture.Sample(g_SamplerState, outUvs.xy);
 
-	float alpha = g_BlendMask.Sample(g_SamplerState, input.originalUVCoords.xy).x;
+	float2 screenUvs = input.screenCoords.xy / input.screenCoords.z;
+	screenUvs = screenUvs * float2(0.5, -0.5) + float2(0.5, 0.5);
+
+	float alpha = g_BlendMask.Sample(g_SamplerState, screenUvs).x;
 	alpha = saturate((1.0 - alpha) * g_opacity);
 
 	if (g_bDoColorAdjustment)

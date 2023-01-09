@@ -74,7 +74,7 @@ void ConfigManager::ParseConfig_Main()
 	m_configMain.ShowTestImage = m_iniData.GetBoolValue("Main", "ShowTestImage", m_configMain.ShowTestImage);
 	m_configMain.PassthroughOpacity = (float)m_iniData.GetDoubleValue("Main", "PassthroughOpacity", m_configMain.PassthroughOpacity);
 	m_configMain.ProjectionDistanceFar = (float)m_iniData.GetDoubleValue("Main", "ProjectionDistanceFar", m_configMain.ProjectionDistanceFar);
-	m_configMain.ProjectionDistanceNear = (float)m_iniData.GetDoubleValue("Main", "ProjectionDistanceNear", m_configMain.ProjectionDistanceNear);
+	m_configMain.FloorHeightOffset = (float)m_iniData.GetDoubleValue("Main", "FloorHeightOffset", m_configMain.FloorHeightOffset);
 
 	m_configMain.Brightness = (float)m_iniData.GetDoubleValue("Main", "Brightness", m_configMain.Brightness);
 	m_configMain.Contrast = (float)m_iniData.GetDoubleValue("Main", "Contrast", m_configMain.Contrast);
@@ -109,7 +109,7 @@ void ConfigManager::UpdateConfig_Main()
 	m_iniData.SetBoolValue("Main", "ShowTestImage", m_configMain.ShowTestImage);
 	m_iniData.SetDoubleValue("Main", "PassthroughOpacity", m_configMain.PassthroughOpacity);
 	m_iniData.SetDoubleValue("Main", "ProjectionDistanceFar", m_configMain.ProjectionDistanceFar);
-	m_iniData.SetDoubleValue("Main", "ProjectionDistanceNear", m_configMain.ProjectionDistanceNear);
+	m_iniData.SetDoubleValue("Main", "FloorHeightOffset", m_configMain.FloorHeightOffset);
 
 	m_iniData.SetDoubleValue("Main", "Brightness", m_configMain.Brightness);
 	m_iniData.SetDoubleValue("Main", "Contrast", m_configMain.Contrast);

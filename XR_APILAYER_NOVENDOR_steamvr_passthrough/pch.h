@@ -43,19 +43,33 @@ using namespace std::chrono_literals;
 
 #ifdef XR_USE_PLATFORM_WIN32
 
-#define XR_USE_GRAPHICS_API_D3D11
-#define XR_USE_GRAPHICS_API_D3D12
-#define WIN32_LEAN_AND_MEAN
+	#define XR_USE_GRAPHICS_API_D3D11
+	#define XR_USE_GRAPHICS_API_D3D12
+	#define WIN32_LEAN_AND_MEAN
 
-#include <windows.h>
-#include <unknwn.h>
-#include <wrl.h>
-#include <d3d11.h>
-#include <d3d12.h>
+	#include <windows.h>
+	#include <unknwn.h>
+	#include <wrl.h>
+	#include <d3d11.h>
+	#include <d3d12.h>
 
-using Microsoft::WRL::ComPtr;
+	using Microsoft::WRL::ComPtr;
 
 #endif
+
+
+
+#define XR_USE_GRAPHICS_API_VULKAN
+
+#ifdef XR_USE_GRAPHICS_API_VULKAN
+
+	#ifdef XR_USE_PLATFORM_WIN32
+		#define VK_USE_PLATFORM_WIN32_KHR
+	#endif
+	#include <vulkan/vulkan.h>
+
+#endif
+
 
 #include <openxr/openxr.h>
 #include <openxr/openxr_platform.h>

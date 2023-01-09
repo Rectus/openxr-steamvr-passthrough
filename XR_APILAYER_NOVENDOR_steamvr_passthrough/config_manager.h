@@ -6,8 +6,8 @@ struct Config_Main
 	bool EnablePassthough = true;
 	bool ShowTestImage = false;
 	float PassthroughOpacity = 1.0f;
-	float ProjectionDistanceFar = 5.0f;
-	float ProjectionDistanceNear = 1.0f;
+	float ProjectionDistanceFar = 10.0f;
+	float FloorHeightOffset = 0.0f;
 
 	float Brightness = 0.0f;
 	float Contrast = 1.0f;

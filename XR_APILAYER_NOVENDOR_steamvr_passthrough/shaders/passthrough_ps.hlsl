@@ -4,8 +4,8 @@
 struct VS_OUTPUT
 {
 	float4 position : SV_POSITION;
-	float3 uvCoords : TEXCOORD0;
-	float2 originalUVCoords : TEXCOORD1;
+	float3 clipSpaceCoords : TEXCOORD0;
+	float3 screenCoords : TEXCOORD1;
 };
 
 cbuffer psPassConstantBuffer : register(b0)
@@ -19,10 +19,10 @@ cbuffer psPassConstantBuffer : register(b0)
 
 cbuffer psViewConstantBuffer : register(b1)
 {
-	float2 g_uvOffset;
+	float4 g_uvBounds;
 	float2 g_uvPrepassFactor;
 	float2 g_uvPrepassOffset;
-	uint g_arrayIndex;
+	uint g_arrayIndex;	
 };
 
 SamplerState g_SamplerState : register(s0);
@@ -31,14 +31,12 @@ Texture2D g_Texture : register(t0);
 
 float4 main(VS_OUTPUT input) : SV_TARGET
 {
-	// Divide to convert back from homogenous coordinates.
-	float2 outUvs = input.uvCoords.xy / input.uvCoords.z;
+	// Convert from homogenous clip space coordinates to 0-1.
+	float2 outUvs = (input.clipSpaceCoords.xy / input.clipSpaceCoords.z) * float2(0.5, -0.5) + float2(0.5, 0.5);
 
-	// Convert from clip space coordinates to 0-1.
-	outUvs = outUvs * float2(-0.5, -0.5) + float2(0.5, 0.5);
-
-	// Clamp to half of the frame texture and add the right eye offset.
-	outUvs = clamp(outUvs, float2(0.0, 0.0), float2(0.5, 1.0)) + g_uvOffset;
+	// Remap and clamp to frame UV bounds.
+	outUvs = outUvs * (g_uvBounds.zw - g_uvBounds.xy) + g_uvBounds.xy;
+	outUvs = clamp(outUvs, g_uvBounds.xy, g_uvBounds.zw);
 
 	float4 rgbColor = g_Texture.Sample(g_SamplerState, outUvs.xy);
 

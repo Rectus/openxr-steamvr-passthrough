@@ -18,6 +18,7 @@ enum ETrackedCameraFrameType
 #define POSTFRAME_SLEEP_INTERVAL (std::chrono::milliseconds(10))
 #define FRAME_POLL_INTERVAL (std::chrono::microseconds(100))
 
+#define NEAR_PROJECTION_DISTANCE 0.05f
 
 class CameraManager
 {
@@ -37,7 +38,7 @@ public:
 private:
 	void ServeFrames();
 	void GetTrackedCameraEyePoses(XrMatrix4x4f& LeftPose, XrMatrix4x4f& RightPose);
-	XrMatrix4x4f GetHMDMVPMatrix(const ERenderEye eye, const XrCompositionLayerProjection& layer, const XrReferenceSpaceCreateInfo& refSpaceInfo);
+	XrMatrix4x4f GetHMDWorldToViewMatrix(const ERenderEye eye, const XrCompositionLayerProjection& layer, const XrReferenceSpaceCreateInfo& refSpaceInfo);
 	void CalculateFrameProjectionForEye(const ERenderEye eye, std::shared_ptr<CameraFrame>& frame, const XrCompositionLayerProjection& layer, const XrReferenceSpaceCreateInfo& refSpaceInfo);
 
 	std::shared_ptr<ConfigManager> m_configManager;
@@ -50,7 +51,6 @@ private:
 	uint32_t m_cameraFrameBufferSize;
 
 	float m_projectionDistanceFar;
-	float m_projectionDistanceNear;
 
 	std::weak_ptr<IPassthroughRenderer> m_renderer;
 	ERenderAPI m_renderAPI;

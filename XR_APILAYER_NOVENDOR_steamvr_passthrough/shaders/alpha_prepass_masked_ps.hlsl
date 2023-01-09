@@ -4,8 +4,8 @@
 struct VS_OUTPUT
 {
 	float4 position : SV_POSITION;
-	float3 uvCoords : TEXCOORD0;
-	float2 originalUVCoords : TEXCOORD1;
+	float3 clipSpaceCoords : TEXCOORD0;
+	float3 screenCoords : TEXCOORD1;
 };
 
 cbuffer psPassConstantBuffer : register(b0)
@@ -14,11 +14,12 @@ cbuffer psPassConstantBuffer : register(b0)
 	float g_brightness;
 	float g_contrast;
 	float g_saturation;
+	bool g_bDoColorAdjustment;
 };
 
 cbuffer psViewConstantBuffer : register(b1)
 {
-	float2 g_uvOffset;
+	float4 g_uvBounds;
 	float2 g_uvPrepassFactor;
 	float2 g_uvPrepassOffset;
 	uint g_arrayIndex;
@@ -42,15 +43,19 @@ float main(VS_OUTPUT input) : SV_TARGET
 
 	if (g_bMaskedUseCamera)
 	{
-		float2 outUvs = input.uvCoords.xy / input.uvCoords.z;
-		outUvs = outUvs * float2(-0.5, -0.5) + float2(0.5, 0.5);
-		outUvs = clamp(outUvs, float2(0.0, 0.0), float2(0.5, 1.0)) + g_uvOffset;
+		float2 outUvs = input.clipSpaceCoords.xy / input.clipSpaceCoords.z;
+		outUvs = outUvs * float2(0.5, -0.5) + float2(0.5, 0.5);
+		outUvs = outUvs * (g_uvBounds.zw - g_uvBounds.xy) + g_uvBounds.xy;
+		outUvs = clamp(outUvs, g_uvBounds.xy, g_uvBounds.zw);
 
 		color = g_Texture.Sample(g_SamplerState, float3(outUvs.xy, 0));
 	}
 	else
 	{
-		color = g_Texture.Sample(g_SamplerState, float3((input.originalUVCoords * g_uvPrepassFactor + g_uvPrepassOffset).xy, float(g_arrayIndex)));
+		float2 outUvs = input.screenCoords.xy / input.screenCoords.z;
+		outUvs = outUvs * float2(0.5, -0.5) + float2(0.5, 0.5);
+
+		color = g_Texture.Sample(g_SamplerState, float3((outUvs * g_uvPrepassFactor + g_uvPrepassOffset).xy, float(g_arrayIndex)));
 	}
 
 	float3 difference = LinearRGBtoLAB_D65(color.xyz) - LinearRGBtoLAB_D65(g_maskedKey);
