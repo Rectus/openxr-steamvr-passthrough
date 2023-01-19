@@ -276,7 +276,8 @@ bool CameraManager::GetCameraFrame(std::shared_ptr<CameraFrame>& frame)
     std::unique_lock<std::mutex> lock(m_serveMutex, std::try_to_lock);
     if (lock.owns_lock() && m_servedFrame->bIsValid)
     {
-        m_renderFrame->bIsValid = false;
+        m_renderFrame->bIsValid = false;        
+        m_renderFrame->frameTextureResource = nullptr;
         m_renderFrame.swap(m_servedFrame);
 
         frame = m_renderFrame;
@@ -298,6 +299,13 @@ void CameraManager::ServeFrames()
     if (!trackedCamera)
     {
         return;
+    }
+
+    ComPtr<ID3D11Device> d3dInteropDevice;
+
+    if (m_renderAPI == Vulkan)
+    {
+        D3D11CreateDevice(NULL, D3D_DRIVER_TYPE_HARDWARE, NULL, 0, NULL, 0, D3D11_SDK_VERSION, &d3dInteropDevice, NULL, NULL);
     }
 
     bool bHasFrame = false;
@@ -349,6 +357,23 @@ void CameraManager::ServeFrames()
                 ErrorLog("GetVideoStreamTextureD3D11 error %i\n", error);
                 continue;
             }
+        }
+        else if (m_renderAPI == Vulkan)
+        {
+            ID3D11ShaderResourceView* srv;
+
+            vr::EVRTrackedCameraError error = trackedCamera->GetVideoStreamTextureD3D11(m_cameraHandle, m_frameType, d3dInteropDevice.Get(), (void**)&srv, nullptr, 0);
+            if (error != vr::VRTrackedCameraError_None)
+            {
+                ErrorLog("GetVideoStreamTextureD3D11 error %i\n", error);
+                continue;
+            }
+
+            ComPtr<IDXGIResource> dxgiRes;
+            ID3D11Resource* res;
+            srv->GetResource(&res);
+            res->QueryInterface(IID_PPV_ARGS(&dxgiRes));
+            dxgiRes->GetSharedHandle(&m_underConstructionFrame->frameTextureResource);
         }
         else
         {
@@ -422,10 +447,10 @@ void CameraManager::CalculateFrameProjection(std::shared_ptr<CameraFrame>& frame
     // Push back far plane by 1.2x to account for the flat projection place of the passthrough frame.
     if (m_configManager->GetConfig_Main().ProjectionDistanceFar * 1.2f != m_projectionDistanceFar)
     {
-        m_projectionDistanceFar = m_configManager->GetConfig_Main().ProjectionDistanceFar * 1.2f;
+        m_projectionDistanceFar = m_configManager->GetConfig_Main().ProjectionDistanceFar * 1.5f;
 
         vr::HmdMatrix44_t vrProjection;
-        vr::EVRTrackedCameraError error= trackedCamera->GetCameraProjection(m_hmdDeviceId, 0, m_frameType, NEAR_PROJECTION_DISTANCE, m_projectionDistanceFar, &vrProjection);
+        vr::EVRTrackedCameraError error= trackedCamera->GetCameraProjection(m_hmdDeviceId, 0, m_frameType, NEAR_PROJECTION_DISTANCE, m_projectionDistanceFar * 1.5f, &vrProjection);
 
         if (error != vr::VRTrackedCameraError_None)
         {
@@ -433,23 +458,30 @@ void CameraManager::CalculateFrameProjection(std::shared_ptr<CameraFrame>& frame
             return;
         }
 
+        XrMatrix4x4f scaleMatrix, offsetMatrix, transMatrix;
+
         // Hack to scale the projection to one half of the stereo frame.
         if (m_frameLayout == EStereoFrameLayout::StereoHorizontalLayout)
         {
-            vrProjection.m[0][0] *= 2.0f;
-            vrProjection.m[0][2] -= 0.5f;
+            XrMatrix4x4f_CreateScale(&scaleMatrix, 0.5f, 1.0f, 1.0f);
+            XrMatrix4x4f_CreateTranslation(&offsetMatrix, -0.5f, 0.0f, 0.0f);
         }
         else if (m_frameLayout == EStereoFrameLayout::StereoVerticalLayout)
         {
-            vrProjection.m[1][1] *= 2.0f;
-            vrProjection.m[1][2] -= 0.5f;
+            XrMatrix4x4f_CreateScale(&scaleMatrix, 1.0f, 0.5f, 1.0f);
+            XrMatrix4x4f_CreateTranslation(&offsetMatrix, 0.0f, -0.5f, 0.0f);
         }
 
-        m_cameraProjectionInvFarLeft = ToXRMatrix4x4Inverted(vrProjection);
+        XrMatrix4x4f_Multiply(&transMatrix, &offsetMatrix, &scaleMatrix);
+        
+        {
+            XrMatrix4x4f projectionMatrix = ToXRMatrix4x4Inverted(vrProjection);
+            XrMatrix4x4f_Multiply(&m_cameraProjectionInvFarLeft, &projectionMatrix, &transMatrix);
+        }
 
         if (m_frameLayout != EStereoFrameLayout::Mono)
         {
-            error = trackedCamera->GetCameraProjection(m_hmdDeviceId, 1, m_frameType, NEAR_PROJECTION_DISTANCE, m_projectionDistanceFar, &vrProjection);
+            error = trackedCamera->GetCameraProjection(m_hmdDeviceId, 1, m_frameType, NEAR_PROJECTION_DISTANCE, m_projectionDistanceFar * 1.2f, &vrProjection);
 
             if (error != vr::VRTrackedCameraError_None)
             {
@@ -457,19 +489,8 @@ void CameraManager::CalculateFrameProjection(std::shared_ptr<CameraFrame>& frame
                 return;
             }
 
-            // Hack to scale the projection to one half of the stereo frame.
-            if (m_frameLayout == EStereoFrameLayout::StereoHorizontalLayout)
-            {
-                vrProjection.m[0][0] *= 2.0f;
-                vrProjection.m[0][2] -= 0.5f;
-            }
-            else if (m_frameLayout == EStereoFrameLayout::StereoVerticalLayout)
-            {
-                vrProjection.m[1][1] *= 2.0f;
-                vrProjection.m[1][2] -= 0.5f;
-            }
-
-            m_cameraProjectionInvFarRight = ToXRMatrix4x4Inverted(vrProjection);
+            XrMatrix4x4f projectionMatrix = ToXRMatrix4x4Inverted(vrProjection);
+            XrMatrix4x4f_Multiply(&m_cameraProjectionInvFarRight, &projectionMatrix, &transMatrix);
         }
     }
 
@@ -494,7 +515,7 @@ void CameraManager::CalculateFrameProjectionForEye(const ERenderEye eye, std::sh
     XrMatrix4x4f_TransformVector3f(hmdWorldPos, &hmdViewToWorld, &inPos);
 
     XrMatrix4x4f hmdProjection;
-    XrMatrix4x4f_CreateProjectionFov(&hmdProjection, GRAPHICS_D3D, layer.views[(eye == LEFT_EYE) ? 0 : 1].fov, NEAR_PROJECTION_DISTANCE, m_projectionDistanceFar);
+    XrMatrix4x4f_CreateProjectionFov(&hmdProjection, GRAPHICS_D3D, layer.views[(eye == LEFT_EYE) ? 0 : 1].fov, NEAR_PROJECTION_DISTANCE, m_projectionDistanceFar * 1.5f);
 
     XrMatrix4x4f leftCameraToTrackingPose = ToXRMatrix4x4(frame->header.trackedDevicePose.mDeviceToAbsoluteTracking);
 

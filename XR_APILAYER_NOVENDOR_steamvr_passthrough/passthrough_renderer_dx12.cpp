@@ -809,7 +809,7 @@ void PassthroughRendererDX12::RenderPassthroughFrame(const XrCompositionLayerPro
 	m_commandList->IASetVertexBuffers(0, 1, &vertexBufferView);
 
 	
-	if (m_configManager->GetConfig_Main().ShowTestImage)
+	if (mainConf.ShowTestImage)
 	{
 		D3D12_GPU_DESCRIPTOR_HANDLE testImageSRVHandle = m_CBVSRVHeap->GetGPUDescriptorHandleForHeapStart();
 		testImageSRVHandle.ptr += INDEX_SRV_TESTIMAGE * m_CBVSRVHeapDescSize;

@@ -261,6 +261,33 @@ namespace
 					return true;
 				}
 
+				case XR_TYPE_GRAPHICS_BINDING_VULKAN_KHR: // same as XR_TYPE_GRAPHICS_BINDING_VULKAN2_KHR
+				{
+					const XrGraphicsBindingVulkanKHR* vulkanbindings = reinterpret_cast<const XrGraphicsBindingVulkanKHR*>(entry);
+					m_Renderer = std::make_unique<PassthroughRendererVulkan>(*vulkanbindings, g_dllModule, m_configManager);
+					
+					if (!m_cameraManager.get())
+					{
+						m_cameraManager = std::make_unique<CameraManager>(m_Renderer, Vulkan, m_configManager, m_openVRManager);
+					}
+					if (!m_cameraManager->InitCamera())
+					{
+						return false;
+					}
+					
+					m_cameraManager->GetFrameSize(cameraTextureWidth, cameraTextureHeight, cameraFrameBufferSize);
+					m_Renderer->SetFrameSize(cameraTextureWidth, cameraTextureHeight, cameraFrameBufferSize);
+					if (!m_Renderer->InitRenderer())
+					{
+						return false;
+					}
+
+					m_dashboardMenu->GetDisplayValues().bSessionActive = true;
+					m_dashboardMenu->GetDisplayValues().renderAPI = Vulkan;
+
+					return true;
+				}
+
 				default:
 
 					entry = reinterpret_cast<const XrBaseInStructure*>(entry->next);
@@ -305,6 +332,10 @@ namespace
 						m_bPassthroughAvailable = true;
 						m_bUsePassthrough = m_configManager->GetConfig_Main().EnablePassthough;
 						m_dashboardMenu->GetDisplayValues().currentApplication = GetApplicationName();
+					}
+					else
+					{
+						ErrorLog("Failed to initialize renderer.\n");
 					}
 				}
 

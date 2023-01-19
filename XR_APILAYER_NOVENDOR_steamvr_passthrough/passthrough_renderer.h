@@ -6,6 +6,7 @@
 #include <wrl.h>
 #include <winuser.h>
 #include <xr_linear.h>
+#include <functional>
 #include "config_manager.h"
 #include "layer.h"
 
@@ -115,6 +116,8 @@ inline XrVector4f GetFrameUVBounds(const ERenderEye eye, const EStereoFrameLayou
 class IPassthroughRenderer
 {
 public:
+	virtual ~IPassthroughRenderer() {};
+
 	virtual bool InitRenderer() = 0;
 	virtual void InitRenderTarget(const ERenderEye eye, void* rendertarget, const uint32_t imageIndex, const XrSwapchainCreateInfo& swapchainInfo) = 0;
 	virtual void SetFrameSize(const uint32_t width, const uint32_t height, const uint32_t bufferSize) = 0;
@@ -127,6 +130,7 @@ class PassthroughRendererDX11 : public IPassthroughRenderer
 {
 public:
 	PassthroughRendererDX11(ID3D11Device* device, HMODULE dllModule, std::shared_ptr<ConfigManager> configManager);
+	~PassthroughRendererDX11() {};
 
 	bool InitRenderer();
 	void InitRenderTarget(const ERenderEye eye, void* rendertarget, const uint32_t imageIndex, const XrSwapchainCreateInfo& swapchainInfo);
@@ -201,6 +205,7 @@ class PassthroughRendererDX12 : public IPassthroughRenderer
 {
 public:
 	PassthroughRendererDX12(ID3D12Device* device, ID3D12CommandQueue* commandQueue, HMODULE dllModule, std::shared_ptr<ConfigManager> configManager);
+	~PassthroughRendererDX12() {};
 
 	bool InitRenderer();	
 	void InitRenderTarget(const ERenderEye eye, void* rendertarget, const uint32_t imageIndex, const XrSwapchainCreateInfo& swapchainInfo);
@@ -281,7 +286,8 @@ private:
 class PassthroughRendererVulkan : public IPassthroughRenderer
 {
 public:
-	PassthroughRendererVulkan(XrGraphicsBindingVulkanKHR& binding, HMODULE dllModule, std::shared_ptr<ConfigManager> configManager);
+	PassthroughRendererVulkan(const XrGraphicsBindingVulkanKHR& binding, HMODULE dllModule, std::shared_ptr<ConfigManager> configManager);
+	~PassthroughRendererVulkan();
 
 	bool InitRenderer();
 	void InitRenderTarget(const ERenderEye eye, void* rendertarget, const uint32_t imageIndex, const XrSwapchainCreateInfo& swapchainInfo);
@@ -291,20 +297,22 @@ public:
 
 private:
 
-	bool SetupPipeline();
+	bool SetupPipeline(VkFormat format);
 	VkShaderModule CreateShaderModule(const uint32_t* bytecode, size_t codeSize);
 
-	void SetupTestImage();
-	void SetupFrameResource();
-	//void SetupIntermediateRenderTarget(uint32_t index, uint32_t width, uint32_t height);
-	//void GenerateMesh();
+	bool SetupTestImage(VkCommandBuffer commandBuffer);
+	bool GenerateMesh(VkCommandBuffer commandBuffer);
+	void SetupIntermediateRenderTarget(uint32_t index, uint32_t width, uint32_t height);
+	bool UpdateCameraFrameResource(VkCommandBuffer commandBuffer, int frameIndex, void* frameResource);
+	void UpdateDescriptorSets(VkCommandBuffer commandBuffer, int swapchainIndex, const XrCompositionLayerProjection* layer, EPassthroughBlendMode blendMode);
 
 	void RenderPassthroughView(const ERenderEye eye, const int32_t imageIndex, const XrCompositionLayerProjection* layer, CameraFrame* frame, EPassthroughBlendMode blendMode);
 	void RenderPassthroughViewMasked(const ERenderEye eye, const int32_t imageIndex, const XrCompositionLayerProjection* layer, CameraFrame* frame);
-	void RenderFrameFinish();
 
 	std::shared_ptr<ConfigManager> m_configManager;
 	HMODULE m_dllModule;
+
+	std::deque<std::function<void()>> m_deletionQueue;
 
 	int m_frameIndex = 0;
 
@@ -314,6 +322,8 @@ private:
 	uint32_t m_queueFamilyIndex;
 	uint32_t m_queueIndex;
 	VkQueue m_queue;
+	VkCommandPool m_commandPool;
+	VkCommandBuffer m_commandBuffer[NUM_SWAPCHAINS];
 
 	VkShaderModule m_vertexShader;
 	VkShaderModule m_pixelShader;
@@ -322,6 +332,7 @@ private:
 	VkShaderModule m_maskedPixelShader;
 
 	VkRenderPass m_renderpass;
+	VkRenderPass m_renderpassMaskedPrepass;
 
 	VkPipelineLayout m_pipelineLayout;
 
@@ -332,40 +343,48 @@ private:
 	VkPipeline m_pipelineMaskedPrepass;
 	VkPipeline m_pipelineMaskedRender;
 
-	/*ComPtr<ID3D12Device> m_d3dDevice;
-	ComPtr<ID3D12CommandQueue> m_d3dCommandQueue;
+	VkDescriptorPool m_descriptorPool;
+	VkDescriptorSet m_descriptorSets[NUM_SWAPCHAINS * 2];
+	VkDescriptorSetLayout m_descriptorLayout;
+	
 
-	ComPtr <ID3D12Resource> m_renderTargets[NUM_SWAPCHAINS * 2];
+	VkBuffer m_psPassConstantBuffer[NUM_SWAPCHAINS];
+	VkDeviceMemory m_psPassConstantBufferMem[NUM_SWAPCHAINS];
+	void* m_psPassConstantBufferMappings[NUM_SWAPCHAINS];
 
-	ComPtr<ID3D12CommandAllocator> m_commandAllocators[NUM_SWAPCHAINS * 2];
-	ComPtr<ID3D12GraphicsCommandList> m_commandList;
-	ComPtr<ID3D12DescriptorHeap> m_RTVHeap;
-	ComPtr<ID3D12DescriptorHeap> m_CBVSRVHeap;
-	UINT m_RTVHeapDescSize = 0;
-	UINT m_CBVSRVHeapDescSize = 0;
-	ComPtr<ID3D12RootSignature> m_rootSignature;
+	VkBuffer m_psMaskedConstantBuffer[NUM_SWAPCHAINS];
+	VkDeviceMemory m_psMaskedConstantBufferMem[NUM_SWAPCHAINS];
+	void* m_psMaskedConstantBufferMappings[NUM_SWAPCHAINS];
 
+	VkSampler m_cameraSampler;
+	VkSampler m_intermediateSampler;
 
-	ComPtr<ID3D12Resource> m_vsConstantBuffer;
-	UINT8* m_vsConstantBufferCPUData[NUM_SWAPCHAINS * 2];
+	VkImage m_testPattern;
+	VkImageView m_testPatternView;
+	VkDeviceMemory m_testPatternMem;
+	VkBuffer m_testPatternBuffer;
+	VkDeviceMemory m_testPatternBufferMem;
 
-	ComPtr<ID3D12Resource> m_psPassConstantBuffer;
-	UINT8* m_psPassConstantBufferCPUData[NUM_SWAPCHAINS];
+	VkImage m_cameraFrameRes[NUM_SWAPCHAINS];
+	VkImageView m_cameraFrameResView[NUM_SWAPCHAINS];
+	VkImageView m_cameraFrameResArrayView[NUM_SWAPCHAINS];
+	VkDeviceMemory m_cameraFrameResMem[NUM_SWAPCHAINS];
+	void* m_cameraFrameResExternalHandle[NUM_SWAPCHAINS];
+	
+	VkImage m_renderTargets[NUM_SWAPCHAINS * 2];
+	VkFramebuffer m_renderTargetFramebuffers[NUM_SWAPCHAINS * 2];
+	VkImageView m_renderTargetViews[NUM_SWAPCHAINS * 2];
 
-	ComPtr<ID3D12Resource> m_psViewConstantBuffer;
-	UINT8* m_psViewConstantBufferCPUData[NUM_SWAPCHAINS * 2];
+	VkImage m_intermediateRenderTargets[NUM_SWAPCHAINS * 2];
+	VkDeviceMemory m_intermediateRenderTargetMem[NUM_SWAPCHAINS * 2];
+	VkFramebuffer m_intermediateRenderTargetFramebuffers[NUM_SWAPCHAINS * 2];
+	VkImageView m_intermediateRenderTargetViews[NUM_SWAPCHAINS * 2];
+	uint32_t m_intermediateRenderTargetWidth[2];
+	uint32_t m_intermediateRenderTargetHeight[2];
 
-	ComPtr<ID3D12Resource> m_psMaskedConstantBuffer;
-	UINT8* m_psMaskedConstantBufferCPUData[NUM_SWAPCHAINS];
-
-	ComPtr<ID3D12Resource> m_testPattern;
-	ComPtr<ID3D12Resource> m_testPatternUploadHeap;
-
-	ComPtr<ID3D12Resource> m_cameraFrameRes[NUM_SWAPCHAINS];
-	ComPtr<ID3D12Resource> m_frameResUploadHeap;
-
-	ComPtr<ID3D12Resource> m_intermediateRenderTargets[NUM_SWAPCHAINS * 2];
-	ComPtr<ID3D12DescriptorHeap> m_intermediateRTVHeap;*/
+	VkDeviceMemory m_vertexBufferMem;
+	VkBuffer m_vertexBuffer;
+	std::vector<float> m_vertices;
 
 	uint32_t m_cameraTextureWidth;
 	uint32_t m_cameraTextureHeight;

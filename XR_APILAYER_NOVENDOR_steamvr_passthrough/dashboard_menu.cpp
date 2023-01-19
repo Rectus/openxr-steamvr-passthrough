@@ -149,6 +149,9 @@ void DashboardMenu::TickMenu()
 		case DirectX12:
 			ImGui::Text("Render API: DirectX 12");
 			break;
+		case Vulkan:
+			ImGui::Text("Render API: Vulkan");
+			break;
 		default:
 			ImGui::Text("Render API: None");
 		}

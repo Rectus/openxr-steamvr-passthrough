@@ -17,6 +17,40 @@ cbuffer psPassConstantBuffer : register(b0)
 	bool g_bDoColorAdjustment;
 };
 
+
+#ifdef VULKAN
+
+[[vk::push_constant]]
+cbuffer psViewConstantBuffer
+{
+	float4x4 g_cameraProjectionToWorld;
+	float4x4 g_hmdWorldToProjection;
+	float3 g_hmdViewWorldPos;
+	float g_projectionDistance;
+	float g_floorHeightOffset;
+
+	float4 g_uvBounds;
+	float2 g_uvPrepassFactor;
+	float2 g_uvPrepassOffset;
+	uint g_arrayIndex;
+};
+
+cbuffer psMaskedConstantBuffer : register(b1)
+{
+	float3 g_maskedKey;
+	float g_maskedFracChroma;
+	float g_maskedFracLuma;
+	float g_maskedSmooth;
+	bool g_bMaskedUseCamera;
+};
+
+SamplerState g_SamplerState : register(s2);
+Texture2D g_CameraTexture : register(t2);
+SamplerState g_blendSamplerState : register(s3);
+Texture2D g_BlendMask : register(t3);
+
+#else
+
 cbuffer psViewConstantBuffer : register(b1)
 {
 	float4 g_uvBounds;
@@ -37,6 +71,10 @@ cbuffer psMaskedConstantBuffer : register(b2)
 SamplerState g_SamplerState : register(s0);
 Texture2D g_CameraTexture : register(t0);
 Texture2D g_BlendMask : register(t1);
+
+#endif
+
+
 
 
 float4 main(VS_OUTPUT input) : SV_TARGET

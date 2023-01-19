@@ -17,16 +17,42 @@ cbuffer psPassConstantBuffer : register(b0)
 	bool g_bDoColorAdjustment;
 };
 
+#ifdef VULKAN
+
+[[vk::push_constant]]
+cbuffer psViewConstantBuffer
+{
+	float4x4 g_cameraProjectionToWorld;
+	float4x4 g_hmdWorldToProjection;
+	float3 g_hmdViewWorldPos;
+	float g_projectionDistance;
+	float g_floorHeightOffset;
+
+	float4 g_uvBounds;
+	float2 g_uvPrepassFactor;
+	float2 g_uvPrepassOffset;
+	uint g_arrayIndex;
+};
+
+SamplerState g_SamplerState : register(s2);
+Texture2D g_Texture : register(t2);
+
+#else
+
 cbuffer psViewConstantBuffer : register(b1)
 {
 	float4 g_uvBounds;
 	float2 g_uvPrepassFactor;
 	float2 g_uvPrepassOffset;
-	uint g_arrayIndex;	
+	uint g_arrayIndex;
 };
 
 SamplerState g_SamplerState : register(s0);
 Texture2D g_Texture : register(t0);
+
+#endif
+
+
 
 
 float4 main(VS_OUTPUT input) : SV_TARGET
