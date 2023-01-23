@@ -13,8 +13,8 @@ using Microsoft::WRL::ComPtr;
 
 #define DASHBOARD_OVERLAY_KEY "XR_APILAYER_NOVENDOR_steamvr_passthrough.{}.dashboard"
 
-#define OVERLAY_RES_WIDTH 800
-#define OVERLAY_RES_HEIGHT 420
+#define OVERLAY_RES_WIDTH 820
+#define OVERLAY_RES_HEIGHT 440
 
 
 

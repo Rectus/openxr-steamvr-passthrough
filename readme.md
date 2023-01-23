@@ -31,7 +31,7 @@ This software is distributed as-is, without any warranties or conditions of any 
 - The passthrough view only supports a fixed depth reconstruction. This is a slightly simpler version of the SteamVR 2D Room View mode.
 - The depth reconstruction from the 3D Room View is not supported. It is not currently accessible to developers.
 - The passthrough view has higher latency than the SteamVR compositor.
-- Vulkan and OpenGL applications are not currently supported.
+- OpenGL applications are not currently supported.
 - The DirectX12 renderer isn't using shared textures for the camera frames. This limits performance.
 
 
@@ -82,13 +82,12 @@ The following are required:
 - [LodePNG](https://github.com/lvandeve/lodepng) (Included as Git submodule)
 - [SimpleINI](https://github.com/brofield/simpleini) (Included as Git submodule)
 - [Dear ImGui](https://github.com/ocornut/imgui) (Included as Git submodule)
-
+- [Vulkan SDK](https://vulkan.lunarg.com/sdk/home) (Uses the VULKAN_SDK environment variable)
 
 ### Todo ###
 
-- Add curved projection distance to match the SteamVR 2D room view
 - Add partial support for the `XR_FB_passthrough` extension
-- Add Vulkan and OpenGL support
+- OpenGL support
 - Add edge shader modes
 - Add shared camera textures to DirectX 12 if possible (may only be possible by rendering with DirectX11 with 11On12)
 
@@ -99,6 +98,7 @@ The following are required:
 - Linux support (does passthrough work on Linux?)
 - Motion vector depth reconstruction (very complex implementation)
 - Passthrough override support for OpenVR apps (better as independent application)
+- Depth buffer blending
 
 
 ### Notes ###

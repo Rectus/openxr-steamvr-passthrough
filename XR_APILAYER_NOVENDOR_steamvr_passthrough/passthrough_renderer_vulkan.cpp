@@ -148,7 +148,7 @@ void TransitionImage(VkCommandBuffer commandBuffer, VkImage image, VkImageLayout
 	{
 		barrier.srcAccessMask = 0;
 		barrier.dstAccessMask = VK_ACCESS_COLOR_ATTACHMENT_WRITE_BIT;
-		srcStageMask = VK_PIPELINE_STAGE_ALL_GRAPHICS_BIT;
+		srcStageMask = VK_PIPELINE_STAGE_TOP_OF_PIPE_BIT;
 		dstStageMask = VK_PIPELINE_STAGE_COLOR_ATTACHMENT_OUTPUT_BIT;
 		depFlags = 0;
 	}
@@ -169,11 +169,11 @@ void TransitionImage(VkCommandBuffer commandBuffer, VkImage image, VkImageLayout
 		dstStageMask = VK_PIPELINE_STAGE_COLOR_ATTACHMENT_OUTPUT_BIT;
 		depFlags = 0;
 	}
-	else if (newLayout == VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL)
+	else if (oldLayout == VK_IMAGE_LAYOUT_UNDEFINED && newLayout == VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL)
 	{
 		barrier.srcAccessMask = 0;
 		barrier.dstAccessMask = VK_ACCESS_SHADER_READ_BIT;
-		srcStageMask = VK_PIPELINE_STAGE_FRAGMENT_SHADER_BIT;
+		srcStageMask = VK_PIPELINE_STAGE_TOP_OF_PIPE_BIT;
 		dstStageMask = VK_PIPELINE_STAGE_FRAGMENT_SHADER_BIT;
 		depFlags = 0;
 	}

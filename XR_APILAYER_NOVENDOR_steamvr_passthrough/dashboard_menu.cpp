@@ -80,6 +80,70 @@ void DashboardMenu::RunThread()
 }
 
 
+std::string GetImageFormatName(ERenderAPI api, int64_t format)
+{
+	switch (api)
+	{
+	case DirectX11:
+	case DirectX12:
+
+		switch (format)
+		{		
+		case 29:
+			return "DXGI_FORMAT_R8G8B8A8_UNORM_SRGB";
+		case 91:
+			return "DXGI_FORMAT_B8G8R8A8_UNORM_SRGB";
+		case 2:
+			return "DXGI_FORMAT_R32G32B32A32_FLOAT";
+		case 10:
+			return "DXGI_FORMAT_R16G16B16A16_FLOAT";
+		case 24:
+			return "DXGI_FORMAT_R10G10B10A2_UNORM";
+		case 40:
+			return "DXGI_FORMAT_D32_FLOAT";
+		case 55:
+			return "DXGI_FORMAT_D16_UNORM";
+		case 45:
+			return "DXGI_FORMAT_D24_UNORM_S8_UINT";
+		case 20:
+			return "DXGI_FORMAT_D32_FLOAT_S8X24_UINT";
+
+		default:
+			return "Unknown format";
+		}
+	case Vulkan:
+
+		switch (format)
+		{
+		case 43:
+			return "VK_FORMAT_R8G8B8A8_SRGB";
+		case 50:
+			return "VK_FORMAT_B8G8R8A8_SRGB";
+		case 109: 
+			return "VK_FORMAT_R32G32B32A32_SFLOAT";
+		case 106: 
+			return "VK_FORMAT_R32G32B32_SFLOAT";
+		case 97: 
+			return "VK_FORMAT_R16G16B16A16_SFLOAT";
+		case 126: 
+			return "VK_FORMAT_D32_SFLOAT";
+		case 124: 
+			return "VK_FORMAT_D16_UNORM";
+		case 129: 
+			return "VK_FORMAT_D24_UNORM_S8_UINT";
+		case 130:
+			return "VK_FORMAT_D32_SFLOAT_S8_UINT";
+
+		default:
+			return "Unknown format";
+		}
+		
+	default:
+		return "Unknown format";
+	}
+}
+
+
 void ScrollableSlider(const char* label, float* v, float v_min, float v_max, const char* format, float scrollFactor)
 {
 	ImGui::SliderFloat(label, v, v_min, v_max, format, ImGuiSliderFlags_None);
@@ -128,7 +192,7 @@ void DashboardMenu::TickMenu()
 
 	ImGui::Begin("OpenXR Passthrough", NULL, ImGuiWindowFlags_NoDecoration | ImGuiWindowFlags_NoResize);
 
-	ImGui::BeginChild("Main Pane", ImVec2(OVERLAY_RES_WIDTH * 0.4f, 0));
+	ImGui::BeginChild("Main Pane", ImVec2(OVERLAY_RES_WIDTH * 0.42f, 0));
 
 	if (ImGui::CollapsingHeader("Session"), ImGuiTreeNodeFlags_DefaultOpen)
 	{
@@ -174,7 +238,7 @@ void DashboardMenu::TickMenu()
 			ImGui::Text("Flags: No alpha");
 		}
 
-		ImGui::Text("Buffer format: %li", m_displayValues.frameBufferFormat);
+		ImGui::Text("Buffer format: %s (%li)", GetImageFormatName(m_displayValues.renderAPI, m_displayValues.frameBufferFormat).c_str(), m_displayValues.frameBufferFormat);
 
 		ImGui::Text("Exposure to render latency: %.1fms", m_displayValues.frameToRenderLatencyMS);
 		ImGui::Text("Exposure to photons latency: %.1fms", m_displayValues.frameToPhotonsLatencyMS);
