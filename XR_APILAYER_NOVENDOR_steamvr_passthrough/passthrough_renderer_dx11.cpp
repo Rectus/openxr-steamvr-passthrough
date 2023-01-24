@@ -114,7 +114,7 @@ bool PassthroughRendererDX11::InitRenderer()
 		return false;
 	}
 
-	bufferDesc.ByteWidth = 32;
+	bufferDesc.ByteWidth = 48;
 	if (FAILED(m_d3dDevice->CreateBuffer(&bufferDesc, nullptr, &m_psViewConstantBuffer)))
 	{
 		return false;

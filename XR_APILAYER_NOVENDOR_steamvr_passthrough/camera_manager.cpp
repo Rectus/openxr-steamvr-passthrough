@@ -465,14 +465,19 @@ void CameraManager::CalculateFrameProjection(std::shared_ptr<CameraFrame>& frame
         {
             XrMatrix4x4f_CreateScale(&scaleMatrix, 0.5f, 1.0f, 1.0f);
             XrMatrix4x4f_CreateTranslation(&offsetMatrix, -0.5f, 0.0f, 0.0f);
+            XrMatrix4x4f_Multiply(&transMatrix, &offsetMatrix, &scaleMatrix);
         }
         else if (m_frameLayout == EStereoFrameLayout::StereoVerticalLayout)
         {
             XrMatrix4x4f_CreateScale(&scaleMatrix, 1.0f, 0.5f, 1.0f);
             XrMatrix4x4f_CreateTranslation(&offsetMatrix, 0.0f, -0.5f, 0.0f);
+            XrMatrix4x4f_Multiply(&transMatrix, &offsetMatrix, &scaleMatrix);
         }
-
-        XrMatrix4x4f_Multiply(&transMatrix, &offsetMatrix, &scaleMatrix);
+        else
+        {
+            XrMatrix4x4f_CreateIdentity(&transMatrix);
+        }
+        
         
         {
             XrMatrix4x4f projectionMatrix = ToXRMatrix4x4Inverted(vrProjection);
