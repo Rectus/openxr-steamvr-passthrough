@@ -19,6 +19,7 @@ This software is distributed as-is, without any warranties or conditions of any 
 - Configuration menu available in the SteamVR dashboard.
 - User adjustable color parameters and opacity.
 - Override mode for applying passthrough to applications that do not support it. The passthrough view can be blended using chroma keying.
+- The floor projection height can be shifted up to get correct projection on an horizontal surface such as a desk.
 
 
 ### Limitations ###
@@ -28,7 +29,7 @@ This software is distributed as-is, without any warranties or conditions of any 
 - OpenVR applications are not supported.
 - Only applications that use the core specification passthrough by submitting frames with `environmentBlendMode` set are supported.
 - Applications using the Meta `XR_FB_passthrough` extension are not currently supported.
-- The passthrough view only supports a fixed depth reconstruction. This is a slightly simpler version of the SteamVR 2D Room View mode.
+- The passthrough view only supports a fixed depth reconstruction, while clamping the projection depth to the floor plane of the playspace. This works the same as the the SteamVR 2D Room View mode.
 - The depth reconstruction from the 3D Room View is not supported. It is not currently accessible to developers.
 - The passthrough view has higher latency than the SteamVR compositor.
 - OpenGL applications are not currently supported.
@@ -98,7 +99,7 @@ The following are required:
 - Linux support (does passthrough work on Linux?)
 - Motion vector depth reconstruction (very complex implementation)
 - Passthrough override support for OpenVR apps (better as independent application)
-- Depth buffer blending
+- Depth buffer based blending
 
 
 ### Notes ###
