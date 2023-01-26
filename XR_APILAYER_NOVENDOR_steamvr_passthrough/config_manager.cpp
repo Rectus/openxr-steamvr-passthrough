@@ -81,6 +81,7 @@ void ConfigManager::ParseConfig_Main()
 	m_configMain.Saturation = (float)m_iniData.GetDoubleValue("Main", "Saturation", m_configMain.Saturation);
 
 	m_configMain.RequireSteamVRRuntime = m_iniData.GetBoolValue("Main", "RequireSteamVRRuntime", m_configMain.RequireSteamVRRuntime);
+	m_configMain.AlternateProjectionCalc = m_iniData.GetBoolValue("Main", "AlternateProjectionCalc", m_configMain.AlternateProjectionCalc);
 }
 
 void ConfigManager::ParseConfig_Core()
@@ -116,6 +117,7 @@ void ConfigManager::UpdateConfig_Main()
 	m_iniData.SetDoubleValue("Main", "Saturation", m_configMain.Saturation);
 
 	m_iniData.SetBoolValue("Main", "RequireSteamVRRuntime", m_configMain.RequireSteamVRRuntime);
+	m_iniData.SetBoolValue("Main", "AlternateProjectionCalc", m_configMain.AlternateProjectionCalc);
 }
 
 void ConfigManager::UpdateConfig_Core()

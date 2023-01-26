@@ -256,6 +256,7 @@ void DashboardMenu::TickMenu()
 
 		ScrollableSlider("Projection Dist.", &mainConfig.ProjectionDistanceFar, 0.5f, 20.0f, "%.1f", 0.1f);
 		ScrollableSlider("Floor Height Offset", &mainConfig.FloorHeightOffset, 0.0f, 2.0f, "%.2f", 0.01f);
+		ImGui::Checkbox("Alternate Projection Calculation", &mainConfig.AlternateProjectionCalc);
 
 		ScrollableSlider("Opacity", &mainConfig.PassthroughOpacity, 0.0f, 1.0f, "%.1f", 0.1f);
 		ImGui::Separator();

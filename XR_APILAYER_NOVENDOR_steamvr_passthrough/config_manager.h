@@ -14,6 +14,7 @@ struct Config_Main
 	float Saturation = 1.0f;
 
 	bool RequireSteamVRRuntime = true;
+	bool AlternateProjectionCalc = false;
 };
 
 // Configuration for core-spec passthough

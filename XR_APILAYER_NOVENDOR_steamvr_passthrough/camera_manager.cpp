@@ -72,6 +72,7 @@ CameraManager::CameraManager(std::shared_ptr<IPassthroughRenderer> renderer, ERe
     , m_frameType(vr::VRTrackedCameraFrameType_MaximumUndistorted)
     , m_frameLayout(EStereoFrameLayout::Mono)
     , m_projectionDistanceFar(5.0f)
+    , m_useAlternateProjectionCalc(false)
 {
     m_renderFrame = std::make_shared<CameraFrame>();
     m_servedFrame = std::make_shared<CameraFrame>();
@@ -443,14 +444,16 @@ XrMatrix4x4f CameraManager::GetHMDWorldToViewMatrix(const ERenderEye eye, const 
 void CameraManager::CalculateFrameProjection(std::shared_ptr<CameraFrame>& frame, const XrCompositionLayerProjection& layer, const XrTime& displayTime, const XrReferenceSpaceCreateInfo& refSpaceInfo)
 {
     vr::IVRTrackedCamera* trackedCamera = m_openVRManager->GetVRTrackedCamera();
+    Config_Main& mainConf = m_configManager->GetConfig_Main();
 
-    // Push back far plane by 1.2x to account for the flat projection place of the passthrough frame.
-    if (m_configManager->GetConfig_Main().ProjectionDistanceFar * 1.2f != m_projectionDistanceFar)
+    // Push back far plane by 1.5x to account for the flat projection place of the passthrough frame.
+    if (mainConf.ProjectionDistanceFar * 1.5f != m_projectionDistanceFar || m_useAlternateProjectionCalc != mainConf.AlternateProjectionCalc)
     {
-        m_projectionDistanceFar = m_configManager->GetConfig_Main().ProjectionDistanceFar * 1.5f;
+        m_projectionDistanceFar = mainConf.ProjectionDistanceFar * 1.5f;
+        m_useAlternateProjectionCalc = mainConf.AlternateProjectionCalc;
 
         vr::HmdMatrix44_t vrProjection;
-        vr::EVRTrackedCameraError error= trackedCamera->GetCameraProjection(m_hmdDeviceId, 0, m_frameType, NEAR_PROJECTION_DISTANCE, m_projectionDistanceFar * 1.5f, &vrProjection);
+        vr::EVRTrackedCameraError error= trackedCamera->GetCameraProjection(m_hmdDeviceId, 0, m_frameType, NEAR_PROJECTION_DISTANCE, m_projectionDistanceFar, &vrProjection);
 
         if (error != vr::VRTrackedCameraError_None)
         {
@@ -461,32 +464,49 @@ void CameraManager::CalculateFrameProjection(std::shared_ptr<CameraFrame>& frame
         XrMatrix4x4f scaleMatrix, offsetMatrix, transMatrix;
 
         // Hack to scale the projection to one half of the stereo frame.
-        if (m_frameLayout == EStereoFrameLayout::StereoHorizontalLayout)
+        // The alternate mode applies the scaling before inverting the projection matrix,
+        // unlike the SteamVR room view, and looks more correct on the Index.
+        if (mainConf.AlternateProjectionCalc)
         {
-            XrMatrix4x4f_CreateScale(&scaleMatrix, 0.5f, 1.0f, 1.0f);
-            XrMatrix4x4f_CreateTranslation(&offsetMatrix, -0.5f, 0.0f, 0.0f);
-            XrMatrix4x4f_Multiply(&transMatrix, &offsetMatrix, &scaleMatrix);
-        }
-        else if (m_frameLayout == EStereoFrameLayout::StereoVerticalLayout)
-        {
-            XrMatrix4x4f_CreateScale(&scaleMatrix, 1.0f, 0.5f, 1.0f);
-            XrMatrix4x4f_CreateTranslation(&offsetMatrix, 0.0f, -0.5f, 0.0f);
-            XrMatrix4x4f_Multiply(&transMatrix, &offsetMatrix, &scaleMatrix);
+            if (m_frameLayout == EStereoFrameLayout::StereoHorizontalLayout)
+            {
+                vrProjection.m[0][0] *= 2.0f;
+                vrProjection.m[0][2] -= 0.5f;
+            }
+            else if (m_frameLayout == EStereoFrameLayout::StereoVerticalLayout)
+            {
+                vrProjection.m[1][1] *= 2.0f;
+                vrProjection.m[1][2] -= 0.5f;
+            }
+
+            m_cameraProjectionInvFarLeft = ToXRMatrix4x4Inverted(vrProjection);
         }
         else
         {
-            XrMatrix4x4f_CreateIdentity(&transMatrix);
-        }
-        
-        
-        {
+            if (m_frameLayout == EStereoFrameLayout::StereoHorizontalLayout)
+            {
+                XrMatrix4x4f_CreateScale(&scaleMatrix, 0.5f, 1.0f, 1.0f);
+                XrMatrix4x4f_CreateTranslation(&offsetMatrix, -0.5f, 0.0f, 0.0f);
+                XrMatrix4x4f_Multiply(&transMatrix, &offsetMatrix, &scaleMatrix);
+            }
+            else if (m_frameLayout == EStereoFrameLayout::StereoVerticalLayout)
+            {
+                XrMatrix4x4f_CreateScale(&scaleMatrix, 1.0f, 0.5f, 1.0f);
+                XrMatrix4x4f_CreateTranslation(&offsetMatrix, 0.0f, -0.5f, 0.0f);
+                XrMatrix4x4f_Multiply(&transMatrix, &offsetMatrix, &scaleMatrix);
+            }
+            else
+            {
+                XrMatrix4x4f_CreateIdentity(&transMatrix);
+            }
+
             XrMatrix4x4f projectionMatrix = ToXRMatrix4x4Inverted(vrProjection);
-            XrMatrix4x4f_Multiply(&m_cameraProjectionInvFarLeft, &projectionMatrix, &transMatrix);
+            XrMatrix4x4f_Multiply(&m_cameraProjectionInvFarLeft, &projectionMatrix, &transMatrix); 
         }
 
         if (m_frameLayout != EStereoFrameLayout::Mono)
         {
-            error = trackedCamera->GetCameraProjection(m_hmdDeviceId, 1, m_frameType, NEAR_PROJECTION_DISTANCE, m_projectionDistanceFar * 1.2f, &vrProjection);
+            error = trackedCamera->GetCameraProjection(m_hmdDeviceId, 1, m_frameType, NEAR_PROJECTION_DISTANCE, m_projectionDistanceFar, &vrProjection);
 
             if (error != vr::VRTrackedCameraError_None)
             {
@@ -494,8 +514,26 @@ void CameraManager::CalculateFrameProjection(std::shared_ptr<CameraFrame>& frame
                 return;
             }
 
-            XrMatrix4x4f projectionMatrix = ToXRMatrix4x4Inverted(vrProjection);
-            XrMatrix4x4f_Multiply(&m_cameraProjectionInvFarRight, &projectionMatrix, &transMatrix);
+            if (mainConf.AlternateProjectionCalc)
+            {
+                if (m_frameLayout == EStereoFrameLayout::StereoHorizontalLayout)
+                {
+                    vrProjection.m[0][0] *= 2.0f;
+                    vrProjection.m[0][2] -= 0.5f;
+                }
+                else if (m_frameLayout == EStereoFrameLayout::StereoVerticalLayout)
+                {
+                    vrProjection.m[1][1] *= 2.0f;
+                    vrProjection.m[1][2] -= 0.5f;
+                }
+
+                m_cameraProjectionInvFarRight = ToXRMatrix4x4Inverted(vrProjection);
+            }
+            else
+            {
+                XrMatrix4x4f projectionMatrix = ToXRMatrix4x4Inverted(vrProjection);
+                XrMatrix4x4f_Multiply(&m_cameraProjectionInvFarRight, &projectionMatrix, &transMatrix);
+            }
         }
     }
 

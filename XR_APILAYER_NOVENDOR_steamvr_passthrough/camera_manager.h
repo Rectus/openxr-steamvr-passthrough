@@ -51,6 +51,7 @@ private:
 	uint32_t m_cameraFrameBufferSize;
 
 	float m_projectionDistanceFar;
+	bool m_useAlternateProjectionCalc;
 
 	std::weak_ptr<IPassthroughRenderer> m_renderer;
 	ERenderAPI m_renderAPI;
