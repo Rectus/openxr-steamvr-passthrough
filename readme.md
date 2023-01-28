@@ -3,7 +3,7 @@ OpenXR SteamVR Passthrough API Layer
 
 This OpenXR API layer adds camera passthrough support to the SteamVR OpenXR runtime. It allows OpenXR applications that use the OpenXR passthrough feature to enable it when using the SteamVR runtime. 
 
-The SteamVR runtime itself does not currently support any OpenXR passthrough features, but provides access to the camera video feeds and projection data through the proprietary OpenVR interface. This layer acts as a compositor inbetween the application and  runtime, retrieves the passthrough data from OpenVR, and renders it on the frames submitted by the application before passing them on to the runtime.
+The SteamVR runtime itself does not currently support any OpenXR passthrough features, but provides access to the camera video feeds and projection data through the proprietary OpenVR interface. This layer acts as a compositor in-between the application and runtime, retrieves the passthrough data from OpenVR, and renders it on the frames submitted by the application before passing them on to the runtime.
 
 Please report any issues! Any comments and suggestions are also appreciated.
 
@@ -11,6 +11,8 @@ Please report any issues! Any comments and suggestions are also appreciated.
 This is an experimental release. Please be careful when using the passthrough. 
 
 This software is distributed as-is, without any warranties or conditions of any kind. Use at your own risk!
+
+Using the 3D stereo mode may induce heavy flickering on the display. Exercise caution if you are photosensitive.
 
 
 ### Features ###
@@ -20,21 +22,23 @@ This software is distributed as-is, without any warranties or conditions of any 
 - User adjustable color parameters and opacity.
 - Override mode for applying passthrough to applications that do not support it. The passthrough view can be blended using chroma keying.
 - The floor projection height can be shifted up to get correct projection on an horizontal surface such as a desk.
+- EXPERIMENTAL: Supports 3D stereo reconstruction to estimate projection depth, using OpenCV. Includes support for Weighted Least Squares disparity filtering, and Fast Bilateral Solver filtering.
+- EXPERIMENTAL: Supports custom fisheye lens rectification instead of using the OpenVR pre-rectified output.
 
 
 ### Limitations ###
 
 - Only the SteamVR runtime is supported.
-- Only headsets that provide the passthrough camera feed to SteamVR are supported. If the SteamVR room view does not work, this will not work.
+- Only headsets that provide the passthrough camera feed to SteamVR are supported. If the SteamVR Room View does not work, this will not work.
 - OpenVR applications are not supported.
 - Only applications that use the core specification passthrough by submitting frames with `environmentBlendMode` set are supported.
 - Applications using the Meta `XR_FB_passthrough` extension are not currently supported.
-- The passthrough view only supports a fixed depth reconstruction, while clamping the projection depth to the floor plane of the playspace. This works the same as the the SteamVR 2D Room View mode.
+- The default passthrough view only supports a fixed depth reconstruction, while clamping the projection depth to the floor plane of the playspace. This works the same as the the SteamVR 2D Room View mode.
 - The depth reconstruction from the 3D Room View is not supported. It is not currently accessible to developers.
 - The passthrough view has higher latency than the SteamVR compositor.
 - OpenGL applications are not currently supported.
 - The DirectX12 renderer isn't using shared textures for the camera frames. This limits performance.
-
+- The 3D reconstruction modes do not project the images correctly yet.
 
 ### Supported Headsets ###
 
@@ -84,22 +88,26 @@ The following are required:
 - [SimpleINI](https://github.com/brofield/simpleini) (Included as Git submodule)
 - [Dear ImGui](https://github.com/ocornut/imgui) (Included as Git submodule)
 - [Vulkan SDK](https://vulkan.lunarg.com/sdk/home) (Uses the VULKAN_SDK environment variable)
+- [OpenCV](https://github.com/opencv/opencv) (The project is setup for static linking by default - requires custom source build)
+- [OpenCV-Contrib](https://github.com/opencv/opencv_contrib) (The ximgproc module needs to be built along with OpenCV for WLS and FBS filtering support.)
 
 ### Todo ###
 
+- Remake settings menu
 - Add partial support for the `XR_FB_passthrough` extension
 - OpenGL support
 - Add edge shader modes
 - Add shared camera textures to DirectX 12 if possible (may only be possible by rendering with DirectX11 with 11On12)
-
+- Controller and hand depth projection + masking on 3D mode
+- Improvements to 3D reconstruction
 
 ### Possible improvements ###
 
 - `XR_HTC_passthrough` extension support (no headsets or applications use this yet)
 - Linux support (does passthrough work on Linux?)
-- Motion vector depth reconstruction (very complex implementation)
 - Passthrough override support for OpenVR apps (better as independent application)
 - Depth buffer based blending
+
 
 
 ### Notes ###

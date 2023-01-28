@@ -168,6 +168,30 @@ void ScrollableSlider(const char* label, float* v, float v_min, float v_max, con
 }
 
 
+void ScrollableSliderInt(const char* label, int* v, int v_min, int v_max, const char* format, int scrollFactor)
+{
+	ImGui::SliderInt(label, v, v_min, v_max, format, ImGuiSliderFlags_None);
+	ImGui::SetItemKeyOwner(ImGuiKey_MouseWheelY);
+	if (ImGui::IsItemHovered())
+	{
+		float wheel = ImGui::GetIO().MouseWheel;
+		if (wheel)
+		{
+			if (ImGui::IsItemActive())
+			{
+				ImGui::ClearActiveID();
+			}
+			else
+			{
+				*v += (int)wheel * scrollFactor;
+				if (*v < v_min) { *v = v_min; }
+				else if (*v > v_max) { *v = v_max; }
+			}
+		}
+	}
+}
+
+
 void DashboardMenu::TickMenu() 
 {
 	HandleEvents();
@@ -179,6 +203,8 @@ void DashboardMenu::TickMenu()
 
 	Config_Main& mainConfig = m_configManager->GetConfig_Main();
 	Config_Core& coreConfig = m_configManager->GetConfig_Core();
+	Config_Stereo& stereoConfig = m_configManager->GetConfig_Stereo();
+	Config_Stereo& stereoCustomConfig = m_configManager->GetConfig_CustomStereo();
 
 	ImGuiIO& io = ImGui::GetIO();
 
@@ -192,9 +218,10 @@ void DashboardMenu::TickMenu()
 
 	ImGui::Begin("OpenXR Passthrough", NULL, ImGuiWindowFlags_NoDecoration | ImGuiWindowFlags_NoResize);
 
-	ImGui::BeginChild("Main Pane", ImVec2(OVERLAY_RES_WIDTH * 0.42f, 0));
+	ImGui::BeginChild("Main Pane", ImVec2(OVERLAY_RES_WIDTH * 0.35f, 0));
 
-	if (ImGui::CollapsingHeader("Session"), ImGuiTreeNodeFlags_DefaultOpen)
+	ImGui::SetNextItemOpen(true, ImGuiCond_Once);
+	if (ImGui::CollapsingHeader("Session"))
 	{
 		if (m_displayValues.bSessionActive)
 		{
@@ -243,20 +270,35 @@ void DashboardMenu::TickMenu()
 		ImGui::Text("Exposure to render latency: %.1fms", m_displayValues.frameToRenderLatencyMS);
 		ImGui::Text("Exposure to photons latency: %.1fms", m_displayValues.frameToPhotonsLatencyMS);
 		ImGui::Text("Passthrough CPU render duration: %.2fms", m_displayValues.renderTimeMS);
+		ImGui::Text("Stereo reconstruction duration: %.2fms", m_displayValues.stereoReconstructionTimeMS);
 	}
 
 	
-
-	if (ImGui::CollapsingHeader("Main Settings"), ImGuiTreeNodeFlags_DefaultOpen)
+	ImGui::SetNextItemOpen(true, ImGuiCond_Once);
+	if (ImGui::CollapsingHeader("Main Settings"))
 	{
 		ImGui::BeginGroup();
 		ImGui::Checkbox("Enable Passthrough", &mainConfig.EnablePassthough);
-		ImGui::Checkbox("Show Test Image", &mainConfig.ShowTestImage);
+
+		ImGui::Text("Projection Mode");
+		if (ImGui::RadioButton("Room View 2D", mainConfig.ProjectionMode == ProjectionRoomView2D))
+		{
+			mainConfig.ProjectionMode = ProjectionRoomView2D;
+		}
+		if (ImGui::RadioButton("Custom 2D (Experimental)", mainConfig.ProjectionMode == ProjectionCustom2D))
+		{
+			mainConfig.ProjectionMode = ProjectionCustom2D;
+		}
+		if (ImGui::RadioButton("Stereo 3D (Experimental)", mainConfig.ProjectionMode == ProjectionStereoReconstruction))
+		{
+			mainConfig.ProjectionMode = ProjectionStereoReconstruction;
+		}
+
 		ImGui::Separator();
 
 		ScrollableSlider("Projection Dist.", &mainConfig.ProjectionDistanceFar, 0.5f, 20.0f, "%.1f", 0.1f);
 		ScrollableSlider("Floor Height Offset", &mainConfig.FloorHeightOffset, 0.0f, 2.0f, "%.2f", 0.01f);
-		ImGui::Checkbox("Alternate Projection Calculation", &mainConfig.AlternateProjectionCalc);
+		ScrollableSlider("Field of View Scale", &mainConfig.FieldOfViewScale, 0.0f, 1.0f, "%.1f", 0.0f);
 
 		ScrollableSlider("Opacity", &mainConfig.PassthroughOpacity, 0.0f, 1.0f, "%.1f", 0.1f);
 		ImGui::Separator();
@@ -278,8 +320,10 @@ void DashboardMenu::TickMenu()
 	ImGui::EndChild();
 	ImGui::SameLine();
 
-	ImGui::BeginChild("Core Pane", ImVec2(OVERLAY_RES_WIDTH * 0.25f, ImGui::GetContentRegionAvail().y));
-	if (ImGui::CollapsingHeader("OpenXR Core"), ImGuiTreeNodeFlags_DefaultOpen)
+	ImGui::BeginChild("Core Pane", ImVec2(OVERLAY_RES_WIDTH * 0.38f, ImGui::GetContentRegionAvail().y));
+
+	ImGui::SetNextItemOpen(true, ImGuiCond_Once);
+	if (ImGui::CollapsingHeader("OpenXR Core"))
 	{
 		if (m_displayValues.bCorePassthroughActive)
 		{
@@ -326,11 +370,106 @@ void DashboardMenu::TickMenu()
 		ImGui::EndGroup();
 	}
 
+	if (ImGui::CollapsingHeader("Stereo Reconstuction"))
+	{
+		ImGui::Checkbox("Use Multiple Cores", &stereoCustomConfig.StereoUseMulticore);
+		ImGui::Checkbox("Rectification Filtering", &stereoCustomConfig.StereoRectificationFiltering);
+		ScrollableSliderInt("Frame Skip Ratio", &stereoCustomConfig.StereoFrameSkip, 0, 14, "%d", 1);
+		
+		ScrollableSliderInt("Image Downscale Factor", &stereoCustomConfig.StereoDownscaleFactor, 1, 16, "%d", 1);
+		ImGui::Separator();
+
+		/*ImGui::BeginGroup();
+		ImGui::Text("Algorithm");
+		if (ImGui::RadioButton("BM###AlgBM", sterestereoCustomConfigoConfig.StereoAlgorithm == StereoAlgorithm_BM))
+		{
+			stereoCustomConfig.StereoAlgorithm = StereoAlgorithm_BM;
+		}
+		if (ImGui::RadioButton("SGBM###AlgSGBM", stereoCustomConfig.StereoAlgorithm == StereoAlgorithm_SGBM))
+		{
+			stereoCustomConfig.StereoAlgorithm = StereoAlgorithm_SGBM;
+		}
+		ImGui::EndGroup();
+
+		ImGui::Separator();*/
+
+		ImGui::BeginGroup();
+		ImGui::Text("SGBM Mode");
+		if (ImGui::RadioButton("Single Pass: 3 Samples", stereoCustomConfig.StereoSGBM_Mode == StereoMode_SGBM3Way))
+		{
+			stereoCustomConfig.StereoSGBM_Mode = StereoMode_SGBM3Way;
+		}
+		if (ImGui::RadioButton("Single Pass: 5 Samples", stereoCustomConfig.StereoSGBM_Mode == StereoMode_SGBM))
+		{
+			stereoCustomConfig.StereoSGBM_Mode = StereoMode_SGBM;
+		}
+		if (ImGui::RadioButton("Full Pass: 4 Samples", stereoCustomConfig.StereoSGBM_Mode == StereoMode_HH4))
+		{
+			stereoCustomConfig.StereoSGBM_Mode = StereoMode_HH4;
+		}
+		if (ImGui::RadioButton("Full Pass: 8 Samples", stereoCustomConfig.StereoSGBM_Mode == StereoMode_HH))
+		{
+			stereoCustomConfig.StereoSGBM_Mode = StereoMode_HH;
+		}
+		ImGui::EndGroup();
+
+		ImGui::Separator();
+
+		ScrollableSliderInt("BlockSize", &stereoCustomConfig.StereoBlockSize, 1, 35, "%d", 2);
+		if (stereoCustomConfig.StereoBlockSize % 2 == 0) { stereoCustomConfig.StereoBlockSize += 1;	}
+
+		//ScrollableSliderInt("MinDisparity", &stereoCustomConfig.StereoMinDisparity, 0, 128, "%d", 1);
+		ScrollableSliderInt("MaxDisparity", &stereoCustomConfig.StereoMaxDisparity, 16, 256, "%d", 1);
+		if (stereoCustomConfig.StereoMinDisparity % 2 != 0) { stereoCustomConfig.StereoMinDisparity += 1; }
+		if (stereoCustomConfig.StereoMinDisparity >= stereoCustomConfig.StereoMaxDisparity) { stereoCustomConfig.StereoMaxDisparity = stereoCustomConfig.StereoMinDisparity + 2; }
+		if (stereoCustomConfig.StereoMaxDisparity < 16) { stereoCustomConfig.StereoMaxDisparity = 16; }
+		if (stereoCustomConfig.StereoMaxDisparity % 16 != 0) { stereoCustomConfig.StereoMaxDisparity -= stereoCustomConfig.StereoMaxDisparity % 16; }
+
+		ScrollableSliderInt("SGBM_P1", &stereoCustomConfig.StereoSGBM_P1, 0, 256, "%d", 8);
+		ScrollableSliderInt("SGBM_P2", &stereoCustomConfig.StereoSGBM_P2, 0, 256, "%d", 32);
+		ScrollableSliderInt("SGBM_DispMaxDiff", &stereoCustomConfig.StereoSGBM_DispMaxDiff, 0, 256, "%d", 1);
+		ScrollableSliderInt("SGBM_PreFilterCap", &stereoCustomConfig.StereoSGBM_PreFilterCap, 0, 128, "%d", 1);
+		ScrollableSliderInt("SGBM_UniquenessRatio", &stereoCustomConfig.StereoSGBM_UniquenessRatio, 1, 32, "%d", 1);
+		ScrollableSliderInt("SGBM_SpeckleWindowSize", &stereoCustomConfig.StereoSGBM_SpeckleWindowSize, 0, 300, "%d", 10);
+		ScrollableSliderInt("SGBM_SpeckleRange", &stereoCustomConfig.StereoSGBM_SpeckleRange, 1, 8, "%d", 1);
+
+		ImGui::BeginGroup();
+		ImGui::Text("Filtering");
+		if (ImGui::RadioButton("None###FiltNone", stereoCustomConfig.StereoFiltering == StereoFiltering_None))
+		{
+			stereoCustomConfig.StereoFiltering = StereoFiltering_None;
+		}
+		if (ImGui::RadioButton("WLS###FiltWLS", stereoCustomConfig.StereoFiltering == StereoFiltering_WLS))
+		{
+			stereoCustomConfig.StereoFiltering = StereoFiltering_WLS;
+		}
+		if (ImGui::RadioButton("WLS & FBS###FiltFBS", stereoCustomConfig.StereoFiltering == StereoFiltering_WLS_FBS))
+		{
+			stereoCustomConfig.StereoFiltering = StereoFiltering_WLS_FBS;
+		}
+		ImGui::EndGroup();
+
+		ScrollableSlider("WLS_Lambda", &stereoCustomConfig.StereoWLS_Lambda, 1.0f, 10000.0f, "%.0f", 100.0f);
+		ScrollableSlider("WLS_Sigma", &stereoCustomConfig.StereoWLS_Sigma, 0.5f, 2.0f, "%.1f", 0.1f);
+		ScrollableSlider("FBS_Spatial", &stereoCustomConfig.StereoFBS_Spatial, 0.0f, 50.0f, "%.0f", 1.0f);
+		ScrollableSlider("FBS_Luma", &stereoCustomConfig.StereoFBS_Luma, 0.0f, 16.0f, "%.0f", 1.0f);
+		ScrollableSlider("FBS_Chroma", &stereoCustomConfig.StereoFBS_Chroma, 0.0f, 16.0f, "%.0f", 1.0f);
+		ScrollableSlider("FBS_Lambda", &stereoCustomConfig.StereoFBS_Lambda, 0.0f, 256.0f, "%.0f", 1.0f);
+
+		ScrollableSliderInt("FBS_Iterations", &stereoCustomConfig.StereoFBS_Iterations, 1, 35, "%d", 1);
+	}
+
+	stereoCustomConfig.StereoReconstructionFreeze = stereoConfig.StereoReconstructionFreeze;
+	stereoConfig = stereoCustomConfig;
+
 	ImGui::EndChild();
+
 	ImGui::SameLine();
 
+
 	ImGui::BeginChild("Overrides Pane", ImVec2(0, ImGui::GetContentRegionAvail().y));
-	if (ImGui::CollapsingHeader("Overrides"), ImGuiTreeNodeFlags_DefaultOpen)
+	ImGui::SetNextItemOpen(true, ImGuiCond_Once);
+	if (ImGui::CollapsingHeader("Overrides"))
 	{
 		ImGui::BeginGroup();
 		ImGui::Checkbox("Force Passthough Mode", &coreConfig.CoreForcePassthrough);
@@ -374,6 +513,13 @@ void DashboardMenu::TickMenu()
 
 
 		ImGui::EndGroup();
+	}
+	if (ImGui::CollapsingHeader("Debug"))
+	{
+		ImGui::Checkbox("Freeze Stereo Projection", &stereoConfig.StereoReconstructionFreeze);
+		ImGui::Checkbox("Debug Depth", &mainConfig.DebugDepth);
+		ImGui::Checkbox("Debug Valid Stereo", &mainConfig.DebugStereoValid);
+		ImGui::Checkbox("Show Test Image", &mainConfig.ShowTestImage);
 	}
 	ImGui::EndChild();
 

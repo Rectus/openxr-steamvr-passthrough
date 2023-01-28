@@ -5,15 +5,20 @@ struct VS_OUTPUT
 	float4 position : SV_POSITION;
 	float3 clipSpaceCoords : TEXCOORD0;
 	float3 screenCoords : TEXCOORD1;
+	float projectionValidity : TEXCOORD2;
 };
 
 cbuffer psPassConstantBuffer : register(b0)
 {
-	float g_opacity;
-	float g_brightness;
-	float g_contrast;
-	float g_saturation;
-	bool g_bDoColorAdjustment;
+    float2 g_depthRange;
+    float g_opacity;
+    float g_brightness;
+    float g_contrast;
+    float g_saturation;
+    bool g_bDoColorAdjustment;
+    bool g_bDebugDepth;
+    bool g_bDebugValidStereo;
+    bool g_bUseFisheyeCorrection;
 };
 
 #ifdef VULKAN
@@ -22,7 +27,9 @@ cbuffer psPassConstantBuffer : register(b0)
 cbuffer psViewConstantBuffer
 {
 	float4x4 g_cameraProjectionToWorld;
-	float4x4 g_hmdWorldToProjection;
+	//float4x4 g_worldToCameraProjection;
+	float4x4 g_worldToHMDProjection;
+	float4 g_vsUVBounds;
 	float3 g_hmdViewWorldPos;
 	float g_projectionDistance;
 	float g_floorHeightOffset;

@@ -21,7 +21,9 @@ using namespace steamvr_passthrough::log;
 struct VSConstantBuffer
 {
 	XrMatrix4x4f cameraProjectionToWorld;
-	XrMatrix4x4f hmdWorldToProjection;
+	//XrMatrix4x4f worldToCameraProjection;
+	XrMatrix4x4f worldToHMDProjection;
+	XrVector4f frameUVBounds;
 	XrVector3f hmdViewWorldPos;
 	float projectionDistance;
 	float floorHeightOffset;
@@ -31,11 +33,15 @@ struct VSConstantBuffer
 
 struct PSPassConstantBuffer
 {
+	XrVector2f depthRange;
 	float opacity;
 	float brightness;
 	float contrast;
 	float saturation;
-	bool bDoColorAdjustment;
+	uint32_t bDoColorAdjustment;
+	uint32_t bDebugDepth;
+	uint32_t bDebugValidStereo;
+	uint32_t bUseFisheyeCorrection;
 };
 
 struct PSViewConstantBuffer
@@ -234,7 +240,11 @@ PassthroughRendererVulkan::PassthroughRendererVulkan(const XrGraphicsBindingVulk
 	, m_testPatternMem(nullptr)
 	, m_testPatternBuffer(nullptr)
 	, m_testPatternBufferMem(nullptr)
-
+	, m_uvDistortionMap(nullptr)
+	, m_uvDistortionMapView(nullptr)
+	, m_uvDistortionMapMem(nullptr)
+	, m_uvDistortionMapBuffer(nullptr)
+	, m_uvDistortionMapBufferMem(nullptr)
 {
 	m_instance = binding.instance;
 	m_physDevice = binding.physicalDevice;
@@ -360,19 +370,20 @@ bool PassthroughRendererVulkan::InitRenderer()
 		}
 		m_deletionQueue.push_back([=]() { vkDestroyDescriptorPool(m_device, m_descriptorPool, nullptr); });
 
-		VkDescriptorSetLayoutBinding layoutBindings[5] =
+		VkDescriptorSetLayoutBinding layoutBindings[6] =
 		{
 			{0, VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER, 1, VK_SHADER_STAGE_FRAGMENT_BIT, nullptr},
 			{1, VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER, 1, VK_SHADER_STAGE_FRAGMENT_BIT, nullptr},
 			{2, VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER, 1, VK_SHADER_STAGE_FRAGMENT_BIT, nullptr},
 			{3, VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER, 1, VK_SHADER_STAGE_FRAGMENT_BIT, nullptr},
-			{4, VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER, 1, VK_SHADER_STAGE_FRAGMENT_BIT, nullptr}
+			{4, VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER, 1, VK_SHADER_STAGE_FRAGMENT_BIT, nullptr},
+			{5, VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER, 1, VK_SHADER_STAGE_FRAGMENT_BIT, nullptr}
 		};
 
 
 		VkDescriptorSetLayoutCreateInfo layoutInfo{};
 		layoutInfo.sType = VK_STRUCTURE_TYPE_DESCRIPTOR_SET_LAYOUT_CREATE_INFO;
-		layoutInfo.bindingCount = 5;
+		layoutInfo.bindingCount = 6;
 		layoutInfo.pBindings = layoutBindings;
 
 		if (vkCreateDescriptorSetLayout(m_device, &layoutInfo, nullptr, &m_descriptorLayout) != VK_SUCCESS)
@@ -578,7 +589,7 @@ bool PassthroughRendererVulkan::SetupPipeline(VkFormat format)
 	VkPipelineRasterizationStateCreateInfo rs{ VK_STRUCTURE_TYPE_PIPELINE_RASTERIZATION_STATE_CREATE_INFO };
 	rs.polygonMode = VK_POLYGON_MODE_FILL;
 	rs.cullMode = VK_CULL_MODE_BACK_BIT;
-	rs.frontFace = VK_FRONT_FACE_COUNTER_CLOCKWISE; // Front faces flipped since we are scaling mesh y axis by -1 in the shader
+	rs.frontFace = VK_FRONT_FACE_CLOCKWISE; // Front faces flipped since we are scaling mesh y axis by -1 in the shader
 	rs.depthClampEnable = VK_FALSE;
 	rs.rasterizerDiscardEnable = VK_FALSE;
 	rs.depthBiasEnable = VK_FALSE;
@@ -986,7 +997,7 @@ bool PassthroughRendererVulkan::GenerateMesh(VkCommandBuffer commandBuffer)
 
 	// Grenerate a triangle strip cylinder with radius and height 1.
 
-	float radianStep = 2.0f * MATH_PI / (float)NUM_MESH_BOUNDARY_VERTICES;
+	float radianStep = -2.0f * MATH_PI / (float)NUM_MESH_BOUNDARY_VERTICES;
 
 	for (int i = 0; i <= NUM_MESH_BOUNDARY_VERTICES; i++)
 	{
@@ -1034,6 +1045,115 @@ bool PassthroughRendererVulkan::GenerateMesh(VkCommandBuffer commandBuffer)
 	vkUnmapMemory(m_device, m_vertexBufferMem);
 
 	return true;
+}
+
+
+void PassthroughRendererVulkan::SetupUVDistortionMap(std::shared_ptr<std::vector<float>> uvDistortionMap)
+{
+	if (m_uvDistortionMap)
+	{
+		vkDestroyImage(m_device, m_uvDistortionMap, nullptr);
+		vkDestroyImageView(m_device, m_uvDistortionMapView, nullptr);
+		vkDestroyBuffer(m_device, m_uvDistortionMapBuffer, nullptr);
+		vkFreeMemory(m_device, m_uvDistortionMapMem, nullptr);
+
+		m_uvDistortionMap = nullptr;
+		m_uvDistortionMapView = nullptr;
+		m_uvDistortionMapBuffer = nullptr;
+		m_uvDistortionMapMem = nullptr;
+	}
+
+	if (!CreateBuffer(m_device, m_physDevice, m_uvDistortionMapBuffer, m_uvDistortionMapBufferMem, uvDistortionMap->size() * sizeof(float), VK_BUFFER_USAGE_TRANSFER_SRC_BIT, VK_MEMORY_PROPERTY_HOST_VISIBLE_BIT, &m_deletionQueue))
+	{
+		return;
+	}
+
+	void* mappedData;
+	vkMapMemory(m_device, m_uvDistortionMapBufferMem, 0, uvDistortionMap->size() * sizeof(float), 0, &mappedData);
+	memcpy(mappedData, uvDistortionMap->data(), uvDistortionMap->size() * sizeof(float));
+	vkUnmapMemory(m_device, m_uvDistortionMapBufferMem);
+
+
+	VkImageCreateInfo imageInfo{ VK_STRUCTURE_TYPE_IMAGE_CREATE_INFO };
+	imageInfo.imageType = VK_IMAGE_TYPE_2D;
+	imageInfo.extent.width = m_cameraTextureWidth;
+	imageInfo.extent.height = m_cameraTextureHeight;
+	imageInfo.extent.depth = 1;
+	imageInfo.mipLevels = 1;
+	imageInfo.arrayLayers = 1;
+	imageInfo.format = VK_FORMAT_R32G32_SFLOAT;
+	imageInfo.tiling = VK_IMAGE_TILING_OPTIMAL;
+	imageInfo.initialLayout = VK_IMAGE_LAYOUT_UNDEFINED;
+	imageInfo.usage = VK_IMAGE_USAGE_SAMPLED_BIT | VK_IMAGE_USAGE_TRANSFER_DST_BIT;
+	imageInfo.sharingMode = VK_SHARING_MODE_EXCLUSIVE;
+	imageInfo.samples = VK_SAMPLE_COUNT_1_BIT;
+
+
+	if (vkCreateImage(m_device, &imageInfo, nullptr, &m_uvDistortionMap) != VK_SUCCESS)
+	{
+		ErrorLog("UV distortion map vkCreateImage failure!\n");
+		return;
+	}
+
+	VkMemoryRequirements memReq{};
+	vkGetImageMemoryRequirements(m_device, m_uvDistortionMap, &memReq);
+
+	VkPhysicalDeviceMemoryProperties memProps{};
+	vkGetPhysicalDeviceMemoryProperties(m_physDevice, &memProps);
+
+	for (uint32_t j = 0; j < memProps.memoryTypeCount; j++)
+	{
+		if ((memReq.memoryTypeBits & (1 << j))
+			&& (memProps.memoryTypes[j].propertyFlags & VK_MEMORY_PROPERTY_DEVICE_LOCAL_BIT))
+		{
+			VkMemoryAllocateInfo allocInfo{ VK_STRUCTURE_TYPE_MEMORY_ALLOCATE_INFO };
+			allocInfo.allocationSize = memReq.size;
+			allocInfo.memoryTypeIndex = j;
+			if (vkAllocateMemory(m_device, &allocInfo, nullptr, &m_uvDistortionMapMem) != VK_SUCCESS)
+			{
+				ErrorLog("UV distortion map vkAllocateMemory failure!\n");
+				vkDestroyImage(m_device, m_uvDistortionMap, nullptr);
+				return;
+			}
+			break;
+		}
+	}
+
+	if (!m_uvDistortionMapMem)
+	{
+		ErrorLog("UV distortion map memory prop not found!\n");
+		vkDestroyImage(m_device, m_uvDistortionMap, nullptr);
+		m_uvDistortionMap = nullptr;
+		return;
+	}
+
+	vkBindImageMemory(m_device, m_uvDistortionMap, m_uvDistortionMapMem, 0);
+
+	VkImageViewCreateInfo viewInfo{ VK_STRUCTURE_TYPE_IMAGE_VIEW_CREATE_INFO };
+	viewInfo.image = m_uvDistortionMap;
+	viewInfo.viewType = VK_IMAGE_VIEW_TYPE_2D;
+	viewInfo.format = VK_FORMAT_R32G32_SFLOAT;
+	viewInfo.subresourceRange.aspectMask = VK_IMAGE_ASPECT_COLOR_BIT;
+	viewInfo.subresourceRange.baseMipLevel = 0;
+	viewInfo.subresourceRange.levelCount = 1;
+	viewInfo.subresourceRange.baseArrayLayer = 0;
+	viewInfo.subresourceRange.layerCount = 1;
+
+	if (vkCreateImageView(m_device, &viewInfo, nullptr, &m_uvDistortionMapView) != VK_SUCCESS)
+	{
+		vkDestroyImage(m_device, m_uvDistortionMap, nullptr);
+		vkFreeMemory(m_device, m_uvDistortionMapMem, nullptr);
+		m_uvDistortionMap = nullptr;
+		ErrorLog("UV distortion map vkCreateImageView failure!\n");
+		return;
+	}
+
+	UploadImage(m_commandBuffer[m_frameIndex], m_device, m_uvDistortionMapBuffer, m_uvDistortionMap, { m_cameraTextureWidth, m_cameraTextureHeight, 1 }, VK_IMAGE_LAYOUT_UNDEFINED, VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL);
+
+	m_deletionQueue.push_back([=]() { vkDestroyImage(m_device, m_uvDistortionMap, nullptr); });
+	m_deletionQueue.push_back([=]() { vkDestroyBuffer(m_device, m_uvDistortionMapBuffer, nullptr); });
+	m_deletionQueue.push_back([=]() { vkDestroyImageView(m_device, m_uvDistortionMapView, nullptr); });
+	m_deletionQueue.push_back([=]() { vkFreeMemory(m_device, m_uvDistortionMapMem, nullptr); });
 }
 
 
@@ -1292,7 +1412,7 @@ void PassthroughRendererVulkan::UpdateDescriptorSets(VkCommandBuffer commandBuff
 	cameraImageArrayInfo.imageView = m_cameraFrameResArrayView[m_frameIndex];
 	cameraImageArrayInfo.sampler = m_cameraSampler;
 
-	VkWriteDescriptorSet descriptorWrite[5]{};
+	VkWriteDescriptorSet descriptorWrite[6]{};
 	descriptorWrite[0].sType = VK_STRUCTURE_TYPE_WRITE_DESCRIPTOR_SET;
 	descriptorWrite[0].dstSet = m_descriptorSets[swapchainIndex];
 	descriptorWrite[0].dstBinding = 0;
@@ -1321,6 +1441,7 @@ void PassthroughRendererVulkan::UpdateDescriptorSets(VkCommandBuffer commandBuff
 
 	VkDescriptorImageInfo intermediateImageInfo{};
 	VkDescriptorImageInfo originalRTImageInfo{};
+	VkDescriptorImageInfo uvDistortionImageInfo{};
 
 	if (blendMode == Masked)
 	{
@@ -1366,6 +1487,51 @@ void PassthroughRendererVulkan::UpdateDescriptorSets(VkCommandBuffer commandBuff
 		descriptorWrite[4].pImageInfo = m_configManager->GetConfig_Core().CoreForceMaskedUseCameraImage ? &cameraImageArrayInfo : &originalRTImageInfo;
 
 		numdescriptors = 5;
+
+		if (m_configManager->GetConfig_Main().ProjectionMode != ProjectionRoomView2D)
+		{
+			uvDistortionImageInfo.imageLayout = VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL;
+			uvDistortionImageInfo.imageView = m_uvDistortionMapView;
+			uvDistortionImageInfo.sampler = m_cameraSampler;
+
+			descriptorWrite[5].sType = VK_STRUCTURE_TYPE_WRITE_DESCRIPTOR_SET;
+			descriptorWrite[5].dstSet = m_descriptorSets[swapchainIndex];
+			descriptorWrite[5].dstBinding = 5;
+			descriptorWrite[5].dstArrayElement = 0;
+			descriptorWrite[5].descriptorType = VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER;
+			descriptorWrite[5].descriptorCount = 1;
+			descriptorWrite[5].pImageInfo = &uvDistortionImageInfo;
+
+			numdescriptors = 6;
+		}
+	}
+	else if (m_configManager->GetConfig_Main().ProjectionMode != ProjectionRoomView2D)
+	{
+		uvDistortionImageInfo.imageLayout = VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL;
+		uvDistortionImageInfo.imageView = m_uvDistortionMapView;
+		uvDistortionImageInfo.sampler = m_cameraSampler;
+
+		descriptorWrite[3].sType = VK_STRUCTURE_TYPE_WRITE_DESCRIPTOR_SET;
+		descriptorWrite[3].dstSet = m_descriptorSets[swapchainIndex];
+		descriptorWrite[3].dstBinding = 3;
+		descriptorWrite[3].dstArrayElement = 0;
+		descriptorWrite[3].descriptorType = VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER;
+		descriptorWrite[3].descriptorCount = 1;
+		descriptorWrite[3].pImageInfo = &uvDistortionImageInfo;
+
+		numdescriptors = 4;
+	}
+	else
+	{
+		descriptorWrite[3].sType = VK_STRUCTURE_TYPE_WRITE_DESCRIPTOR_SET;
+		descriptorWrite[3].dstSet = m_descriptorSets[swapchainIndex];
+		descriptorWrite[3].dstBinding = 3;
+		descriptorWrite[3].dstArrayElement = 0;
+		descriptorWrite[3].descriptorType = VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER;
+		descriptorWrite[3].descriptorCount = 1;
+		descriptorWrite[3].pImageInfo = &cameraImageInfo;
+
+		numdescriptors = 4;
 	}
 
 	vkUpdateDescriptorSets(m_device, numdescriptors, descriptorWrite, 0, nullptr);
@@ -1376,7 +1542,7 @@ void PassthroughRendererVulkan::UpdateDescriptorSets(VkCommandBuffer commandBuff
 
 
 
-void PassthroughRendererVulkan::RenderPassthroughFrame(const XrCompositionLayerProjection* layer, CameraFrame* frame, EPassthroughBlendMode blendMode, int leftSwapchainIndex, int rightSwapchainIndex)
+void PassthroughRendererVulkan::RenderPassthroughFrame(const XrCompositionLayerProjection* layer, CameraFrame* frame, EPassthroughBlendMode blendMode, int leftSwapchainIndex, int rightSwapchainIndex, std::shared_ptr<DepthFrame> depthFrame, UVDistortionParameters& distortionParams)
 {
 
 	Config_Main& mainConf = m_configManager->GetConfig_Main();
@@ -1384,6 +1550,12 @@ void PassthroughRendererVulkan::RenderPassthroughFrame(const XrCompositionLayerP
 
 	VkCommandBufferBeginInfo beginInfo{ VK_STRUCTURE_TYPE_COMMAND_BUFFER_BEGIN_INFO };
 	beginInfo.flags = 0;
+
+	// TODO: Can't support stereo in Vulkan as long as SteamVR hangs when reading the camera frame buffer under it.
+	if (mainConf.ProjectionMode == ProjectionStereoReconstruction)
+	{
+		return;
+	}
 
 	vkBeginCommandBuffer(m_commandBuffer[m_frameIndex], &beginInfo);
 
@@ -1403,12 +1575,27 @@ void PassthroughRendererVulkan::RenderPassthroughFrame(const XrCompositionLayerP
 	}
 
 	{
+		std::shared_lock readLock(distortionParams.readWriteMutex);
+
+		if (mainConf.ProjectionMode != ProjectionRoomView2D &&
+			(!m_uvDistortionMap || m_fovScale != distortionParams.fovScale))
+		{
+			m_fovScale = distortionParams.fovScale;
+			SetupUVDistortionMap(distortionParams.uvDistortionMap);
+		}
+	}
+
+	{
 		PSPassConstantBuffer buffer = {};
+		buffer.depthRange = XrVector2f(NEAR_PROJECTION_DISTANCE, mainConf.ProjectionDistanceFar);
 		buffer.opacity = mainConf.PassthroughOpacity;
 		buffer.brightness = mainConf.Brightness;
 		buffer.contrast = mainConf.Contrast;
 		buffer.saturation = mainConf.Saturation;
 		buffer.bDoColorAdjustment = fabsf(mainConf.Brightness) > 0.01f || fabsf(mainConf.Contrast - 1.0f) > 0.01f || fabsf(mainConf.Saturation - 1.0f) > 0.01f;
+		buffer.bDebugDepth = mainConf.DebugDepth;
+		buffer.bDebugValidStereo = mainConf.DebugStereoValid;
+		buffer.bUseFisheyeCorrection = mainConf.ProjectionMode != ProjectionRoomView2D;
 
 		memcpy(m_psPassConstantBufferMappings[m_frameIndex], &buffer, sizeof(PSPassConstantBuffer));
 	}
@@ -1484,8 +1671,10 @@ void PassthroughRendererVulkan::RenderPassthroughView(const ERenderEye eye, cons
 	Config_Main& mainConf = m_configManager->GetConfig_Main();
 
 	VSConstantBuffer buffer = {};
-	buffer.cameraProjectionToWorld = (eye == LEFT_EYE) ? frame->cameraToWorldLeft : frame->cameraToWorldRight;
-	buffer.hmdWorldToProjection = (eye == LEFT_EYE) ? frame->hmdWorldToProjectionLeft : frame->hmdWorldToProjectionRight;
+	buffer.cameraProjectionToWorld = (eye == LEFT_EYE) ? frame->cameraProjectionToWorldLeft : frame->cameraProjectionToWorldRight;
+	//buffer.worldToCameraProjection = (eye == LEFT_EYE) ? frame->worldToCameraProjectionLeft : frame->worldToCameraProjectionRight;
+	buffer.worldToHMDProjection = (eye == LEFT_EYE) ? frame->worldToHMDProjectionLeft : frame->worldToHMDProjectionRight;
+	buffer.frameUVBounds = GetFrameUVBounds(eye, frame->frameLayout);
 	buffer.hmdViewWorldPos = (eye == LEFT_EYE) ? frame->hmdViewPosWorldLeft : frame->hmdViewPosWorldRight;
 	buffer.projectionDistance = mainConf.ProjectionDistanceFar;
 	buffer.floorHeightOffset = mainConf.FloorHeightOffset;
@@ -1584,8 +1773,10 @@ void PassthroughRendererVulkan::RenderPassthroughViewMasked(const ERenderEye eye
 	Config_Main& mainConf = m_configManager->GetConfig_Main();
 
 	VSConstantBuffer buffer = {};
-	buffer.cameraProjectionToWorld = (eye == LEFT_EYE) ? frame->cameraToWorldLeft : frame->cameraToWorldRight;
-	buffer.hmdWorldToProjection = (eye == LEFT_EYE) ? frame->hmdWorldToProjectionLeft : frame->hmdWorldToProjectionRight;
+	buffer.cameraProjectionToWorld = (eye == LEFT_EYE) ? frame->cameraProjectionToWorldLeft : frame->cameraProjectionToWorldRight;
+	//buffer.worldToCameraProjection = (eye == LEFT_EYE) ? frame->worldToCameraProjectionLeft : frame->worldToCameraProjectionRight;
+	buffer.frameUVBounds = GetFrameUVBounds(eye, frame->frameLayout);
+	buffer.worldToHMDProjection = (eye == LEFT_EYE) ? frame->worldToHMDProjectionLeft : frame->worldToHMDProjectionRight;
 	buffer.hmdViewWorldPos = (eye == LEFT_EYE) ? frame->hmdViewPosWorldLeft : frame->hmdViewPosWorldRight;
 	buffer.projectionDistance = mainConf.ProjectionDistanceFar;
 	buffer.floorHeightOffset = mainConf.FloorHeightOffset;

@@ -33,6 +33,9 @@
 #include <string>
 #include <memory>
 #include <deque>
+#include <thread>
+#include <mutex>
+#include <shared_mutex>
 
 using namespace std::chrono_literals;
 
@@ -73,6 +76,7 @@ using namespace std::chrono_literals;
 
 #include <openxr/openxr.h>
 #include <openxr/openxr_platform.h>
+#include <xr_linear.h>
 #include <loader_interfaces.h>
 
 #include <openvr.h>

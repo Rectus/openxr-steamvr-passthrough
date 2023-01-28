@@ -29,6 +29,7 @@
 #include "config_manager.h"
 #include "dashboard_menu.h"
 #include "openvr_manager.h"
+#include "depth_reconstruction.h"
 #include <log.h>
 #include <util.h>
 #include <map>
@@ -214,7 +215,7 @@ namespace
 
 					if (!m_cameraManager.get())
 					{
-						m_cameraManager = std::make_unique<CameraManager>(m_Renderer, DirectX11, m_configManager, m_openVRManager);
+						m_cameraManager = std::make_shared<CameraManager>(m_Renderer, DirectX11, m_configManager, m_openVRManager);
 					}
 					if (!m_cameraManager->InitCamera())
 					{
@@ -227,6 +228,8 @@ namespace
 					{
 						return false;
 					}
+
+					m_depthReconstruction = std::make_shared<DepthReconstruction>(m_configManager, m_openVRManager, m_cameraManager);
 
 					m_dashboardMenu->GetDisplayValues().bSessionActive = true;
 					m_dashboardMenu->GetDisplayValues().renderAPI = DirectX11;
@@ -255,6 +258,8 @@ namespace
 						return false;
 					}
 					
+					m_depthReconstruction = std::make_shared<DepthReconstruction>(m_configManager, m_openVRManager, m_cameraManager);
+
 					m_dashboardMenu->GetDisplayValues().bSessionActive = true;
 					m_dashboardMenu->GetDisplayValues().renderAPI = DirectX12;
 
@@ -281,6 +286,8 @@ namespace
 					{
 						return false;
 					}
+
+					m_depthReconstruction = std::make_shared<DepthReconstruction>(m_configManager, m_openVRManager, m_cameraManager);
 
 					m_dashboardMenu->GetDisplayValues().bSessionActive = true;
 					m_dashboardMenu->GetDisplayValues().renderAPI = Vulkan;
@@ -692,58 +699,66 @@ namespace
 			m_dashboardMenu->GetDisplayValues().frameBufferWidth = layer->views[0].subImage.imageRect.extent.width;
 			m_dashboardMenu->GetDisplayValues().frameBufferFlags = layer->layerFlags;
 
-			if (m_cameraManager->GetCameraFrame(frame))
+			if (!m_cameraManager->GetCameraFrame(frame))
 			{
-				LARGE_INTEGER perfFrequency;
-				LARGE_INTEGER preRenderTime;
-
-				QueryPerformanceFrequency(&perfFrequency);
-				QueryPerformanceCounter(&preRenderTime);
-
-				double frameToRenderTime = (float) (preRenderTime.QuadPart - frame->header.ulFrameExposureTime);
-				frameToRenderTime *= 1000.0f;
-				frameToRenderTime /= perfFrequency.QuadPart;
-				m_dashboardMenu->GetDisplayValues().frameToRenderLatencyMS = UpdateAveragePerfTime(m_frameToRenderTimes, (float)frameToRenderTime);
-
-				LARGE_INTEGER displayTime;
-
-				OpenXrApi::xrConvertTimeToWin32PerformanceCounterKHR(m_currentInstance, frameEndInfo->displayTime, &displayTime);
-
-				float frameToPhotonsTime = (float) (displayTime.QuadPart - frame->header.ulFrameExposureTime);
-				frameToPhotonsTime *= 1000.0f;
-				frameToPhotonsTime /= perfFrequency.QuadPart;
-				m_dashboardMenu->GetDisplayValues().frameToPhotonsLatencyMS = UpdateAveragePerfTime(m_frameToPhotonTimes, frameToPhotonsTime);
-
-
-
-				m_cameraManager->CalculateFrameProjection(frame, *layer, frameEndInfo->displayTime, m_refSpaces[layer->space]);
-
-				int leftIndex = UpdateSwapchains(LEFT_EYE, layer);
-				int rightIndex = UpdateSwapchains(RIGHT_EYE, layer);
-
-				EPassthroughBlendMode blendMode = (EPassthroughBlendMode)frameEndInfo->environmentBlendMode;
-
-				if (m_configManager->GetConfig_Core().CoreForcePassthrough && m_configManager->GetConfig_Core().CoreForceMode >= 0)
-				{
-					blendMode = (EPassthroughBlendMode)m_configManager->GetConfig_Core().CoreForceMode;
-				}
-
-				if (blendMode == AlphaBlendPremultiplied && layer->layerFlags & XR_COMPOSITION_LAYER_UNPREMULTIPLIED_ALPHA_BIT)
-				{
-					blendMode = AlphaBlendUnpremultiplied;
-				}
-
-				m_Renderer->RenderPassthroughFrame(layer, frame.get(), blendMode, leftIndex, rightIndex);
-
-
-				LARGE_INTEGER postRenderTime;
-				QueryPerformanceCounter(&postRenderTime);
-
-				float renderTime = (float) (postRenderTime.QuadPart - preRenderTime.QuadPart);
-				renderTime *= 1000.0f;
-				renderTime /= perfFrequency.QuadPart;
-				m_dashboardMenu->GetDisplayValues().renderTimeMS = UpdateAveragePerfTime(m_passthroughRenderTimes, renderTime);
+				return;
 			}
+
+			std::shared_lock readLock(frame->readWriteMutex);
+
+			LARGE_INTEGER perfFrequency;
+			LARGE_INTEGER preRenderTime;
+
+			QueryPerformanceFrequency(&perfFrequency);
+			QueryPerformanceCounter(&preRenderTime);
+
+			double frameToRenderTime = (float) (preRenderTime.QuadPart - frame->header.ulFrameExposureTime);
+			frameToRenderTime *= 1000.0f;
+			frameToRenderTime /= perfFrequency.QuadPart;
+			m_dashboardMenu->GetDisplayValues().frameToRenderLatencyMS = UpdateAveragePerfTime(m_frameToRenderTimes, (float)frameToRenderTime);
+
+			LARGE_INTEGER displayTime;
+
+			OpenXrApi::xrConvertTimeToWin32PerformanceCounterKHR(m_currentInstance, frameEndInfo->displayTime, &displayTime);
+
+			float frameToPhotonsTime = (float) (displayTime.QuadPart - frame->header.ulFrameExposureTime);
+			frameToPhotonsTime *= 1000.0f;
+			frameToPhotonsTime /= perfFrequency.QuadPart;
+			m_dashboardMenu->GetDisplayValues().frameToPhotonsLatencyMS = UpdateAveragePerfTime(m_frameToPhotonTimes, frameToPhotonsTime);
+
+			
+			m_cameraManager->CalculateFrameProjection(frame, *layer, frameEndInfo->displayTime, m_refSpaces[layer->space], m_depthReconstruction->GetDistortionParameters());
+	
+
+			int leftIndex = UpdateSwapchains(LEFT_EYE, layer);
+			int rightIndex = UpdateSwapchains(RIGHT_EYE, layer);
+
+			EPassthroughBlendMode blendMode = (EPassthroughBlendMode)frameEndInfo->environmentBlendMode;
+
+			if (m_configManager->GetConfig_Core().CoreForcePassthrough && m_configManager->GetConfig_Core().CoreForceMode >= 0)
+			{
+				blendMode = (EPassthroughBlendMode)m_configManager->GetConfig_Core().CoreForceMode;
+			}
+
+			if (blendMode == AlphaBlendPremultiplied && layer->layerFlags & XR_COMPOSITION_LAYER_UNPREMULTIPLIED_ALPHA_BIT)
+			{
+				blendMode = AlphaBlendUnpremultiplied;
+			}
+			
+			std::shared_ptr<DepthFrame> depthFrame = m_depthReconstruction->GetDepthFrame();
+
+			m_Renderer->RenderPassthroughFrame(layer, frame.get(), blendMode, leftIndex, rightIndex, depthFrame, m_depthReconstruction->GetDistortionParameters());
+
+
+			LARGE_INTEGER postRenderTime;
+			QueryPerformanceCounter(&postRenderTime);
+
+			float renderTime = (float) (postRenderTime.QuadPart - preRenderTime.QuadPart);
+			renderTime *= 1000.0f;
+			renderTime /= perfFrequency.QuadPart;
+			m_dashboardMenu->GetDisplayValues().renderTimeMS = UpdateAveragePerfTime(m_passthroughRenderTimes, renderTime);
+
+			m_dashboardMenu->GetDisplayValues().stereoReconstructionTimeMS = m_depthReconstruction->GetReconstructionPerfTime();
 		}
 
 
@@ -807,9 +822,10 @@ namespace
 		XrSession m_currentSession{XR_NULL_HANDLE};
 		std::shared_ptr<IPassthroughRenderer> m_Renderer;
 		std::shared_ptr<ConfigManager> m_configManager;
-		std::unique_ptr<CameraManager> m_cameraManager;
+		std::shared_ptr<CameraManager> m_cameraManager;
 		std::unique_ptr<DashboardMenu> m_dashboardMenu;
 		std::shared_ptr<OpenVRManager> m_openVRManager;
+		std::shared_ptr<DepthReconstruction> m_depthReconstruction;
 
 		bool m_bSuccessfullyLoaded = false;
 		bool m_bPassthroughAvailable = false;

@@ -8,3 +8,4 @@ bin/
 *.vcxproj.user
 *.csproj.user
 XR_APILAYER_NOVENDOR_steamvr_passthrough/shaders/*.h
+external/opencv/

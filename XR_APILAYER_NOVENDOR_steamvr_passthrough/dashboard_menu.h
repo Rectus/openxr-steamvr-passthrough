@@ -13,8 +13,8 @@ using Microsoft::WRL::ComPtr;
 
 #define DASHBOARD_OVERLAY_KEY "XR_APILAYER_NOVENDOR_steamvr_passthrough.{}.dashboard"
 
-#define OVERLAY_RES_WIDTH 820
-#define OVERLAY_RES_HEIGHT 460
+#define OVERLAY_RES_WIDTH 1150
+#define OVERLAY_RES_HEIGHT 660
 
 
 
@@ -30,7 +30,7 @@ struct MenuDisplayValues
 	float frameToRenderLatencyMS = 0.0f;
 	float frameToPhotonsLatencyMS = 0.0f;
 	float renderTimeMS = 0.0f;
-
+	float stereoReconstructionTimeMS = 0.0f;
 
 	bool bCorePassthroughActive = false;
 	int CoreCurrentMode = 0;

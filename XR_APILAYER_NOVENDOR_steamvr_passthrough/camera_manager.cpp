@@ -64,12 +64,14 @@ inline XrMatrix4x4f ToXRMatrix4x4Inverted(vr::HmdMatrix34_t& input)
 
 
 
+
+
+
 CameraManager::CameraManager(std::shared_ptr<IPassthroughRenderer> renderer, ERenderAPI renderAPI, std::shared_ptr<ConfigManager> configManager, std::shared_ptr<OpenVRManager> openVRManager)
     : m_renderer(renderer)
     , m_renderAPI(renderAPI)
     , m_configManager(configManager)
     , m_openVRManager(openVRManager)
-    , m_frameType(vr::VRTrackedCameraFrameType_MaximumUndistorted)
     , m_frameLayout(EStereoFrameLayout::Mono)
     , m_projectionDistanceFar(5.0f)
     , m_useAlternateProjectionCalc(false)
@@ -161,11 +163,42 @@ void CameraManager::DeinitCamera()
     }
 }
 
-void CameraManager::GetFrameSize(uint32_t& width, uint32_t& height, uint32_t& bufferSize)
+void CameraManager::GetFrameSize(uint32_t& width, uint32_t& height, uint32_t& bufferSize) const
 {
     width = m_cameraTextureWidth;
     height = m_cameraTextureHeight;
     bufferSize = m_cameraFrameBufferSize;
+}
+
+void CameraManager::GetIntrinsics(const uint32_t cameraIndex, XrVector2f& focalLength, XrVector2f& center) const
+{
+    vr::IVRTrackedCamera* trackedCamera = m_openVRManager->GetVRTrackedCamera();
+
+    vr::EVRTrackedCameraError cameraError = trackedCamera->GetCameraIntrinsics(m_hmdDeviceId, cameraIndex, vr::VRTrackedCameraFrameType_MaximumUndistorted, (vr::HmdVector2_t*)&focalLength, (vr::HmdVector2_t*)&center);
+    if (cameraError != vr::VRTrackedCameraError_None)
+    {
+        ErrorLog("GetCameraIntrinsics error %i on device Id %i\n", cameraError, m_hmdDeviceId);
+    }
+}
+
+void CameraManager::GetDistortionCoefficients(ECameraDistortionCoefficients& coeffs) const
+{
+    vr::TrackedPropertyError error;
+    uint32_t numBytes = m_openVRManager->GetVRSystem()->GetArrayTrackedDeviceProperty(m_hmdDeviceId, vr::Prop_CameraDistortionCoefficients_Float_Array, vr::k_unFloatPropertyTag, &coeffs, 16 * sizeof(double), &error);
+    if (error != vr::TrackedProp_Success || numBytes == 0)
+    {
+        ErrorLog("Failed to get tracked camera distortion coefficients, error [%i]\n", error);
+    }
+}
+
+EStereoFrameLayout CameraManager::GetFrameLayout() const
+{
+    return m_frameLayout;
+}
+
+XrMatrix4x4f CameraManager::GetLeftToRightCameraTransform() const
+{
+    return m_cameraLeftToRightPose;
 }
 
 void CameraManager::GetTrackedCameraEyePoses(XrMatrix4x4f& LeftPose, XrMatrix4x4f& RightPose)
@@ -212,7 +245,7 @@ void CameraManager::UpdateStaticCameraParameters()
     vr::IVRSystem* vrSystem = m_openVRManager->GetVRSystem();
     vr::IVRTrackedCamera* trackedCamera = m_openVRManager->GetVRTrackedCamera();
 
-    vr::EVRTrackedCameraError cameraError = trackedCamera->GetCameraFrameSize(m_hmdDeviceId, m_frameType, &m_cameraTextureWidth, &m_cameraTextureHeight, &m_cameraFrameBufferSize);
+    vr::EVRTrackedCameraError cameraError = trackedCamera->GetCameraFrameSize(m_hmdDeviceId, vr::VRTrackedCameraFrameType_Distorted, &m_cameraTextureWidth, &m_cameraTextureHeight, &m_cameraFrameBufferSize);
     if (cameraError != vr::VRTrackedCameraError_None)
     {
         ErrorLog("CameraFrameSize error %i on device Id %i\n", cameraError, m_hmdDeviceId);
@@ -237,37 +270,44 @@ void CameraManager::UpdateStaticCameraParameters()
         if ((layout & vr::EVRTrackedCameraFrameLayout_VerticalLayout) != 0)
         {
             m_frameLayout = EStereoFrameLayout::StereoVerticalLayout;
+            m_cameraFrameWidth = m_cameraTextureWidth;
+            m_cameraFrameHeight = m_cameraTextureHeight / 2;
         }
         else
         {
             m_frameLayout = EStereoFrameLayout::StereoHorizontalLayout;
+            m_cameraFrameWidth = m_cameraTextureWidth / 2;
+            m_cameraFrameHeight = m_cameraTextureHeight;
         }
     }
     else
     {
         m_frameLayout = EStereoFrameLayout::Mono;
+        m_cameraFrameWidth = m_cameraTextureWidth;
+        m_cameraFrameHeight = m_cameraTextureHeight;
     }
 
-    vr::HmdMatrix44_t vrHMDProjectionLeft = vrSystem->GetProjectionMatrix(vr::Hmd_Eye::Eye_Left, m_projectionDistanceFar * 0.1f, m_projectionDistanceFar * 2.0f);
-    m_rawHMDProjectionLeft = ToXRMatrix4x4(vrHMDProjectionLeft);
+    vr::HmdMatrix44_t vrHMDProjectionLeft = vrSystem->GetProjectionMatrix(vr::Hmd_Eye::Eye_Left, NEAR_PROJECTION_DISTANCE, m_projectionDistanceFar * 2.0f);
+    m_HMDViewToProjectionLeft = ToXRMatrix4x4(vrHMDProjectionLeft);
 
     vr::HmdMatrix34_t vrHMDViewLeft = vrSystem->GetEyeToHeadTransform(vr::Hmd_Eye::Eye_Left);
-    m_rawHMDViewLeft = ToXRMatrix4x4Inverted(vrHMDViewLeft);
+    m_viewToHMDLeft = ToXRMatrix4x4(vrHMDViewLeft);
+    m_HMDToViewLeft = ToXRMatrix4x4Inverted(vrHMDViewLeft);
 
-    vr::HmdMatrix44_t vrHMDProjectionRight = vrSystem->GetProjectionMatrix(vr::Hmd_Eye::Eye_Right, m_projectionDistanceFar * 0.1f, m_projectionDistanceFar * 2.0f);
-    m_rawHMDProjectionRight = ToXRMatrix4x4(vrHMDProjectionRight);
+    vr::HmdMatrix44_t vrHMDProjectionRight = vrSystem->GetProjectionMatrix(vr::Hmd_Eye::Eye_Right, NEAR_PROJECTION_DISTANCE, m_projectionDistanceFar * 2.0f);
+    m_HMDViewToProjectionRight = ToXRMatrix4x4(vrHMDProjectionRight);
 
     vr::HmdMatrix34_t vrHMDViewRight = vrSystem->GetEyeToHeadTransform(vr::Hmd_Eye::Eye_Right);
-    m_rawHMDViewRight = ToXRMatrix4x4Inverted(vrHMDViewRight);
+    m_viewToHMDRight = ToXRMatrix4x4(vrHMDViewRight);
+    m_HMDToViewRight = ToXRMatrix4x4Inverted(vrHMDViewRight);
 
-    XrMatrix4x4f LeftCameraPose, RightCameraPose;
-    GetTrackedCameraEyePoses(LeftCameraPose, RightCameraPose);
+    GetTrackedCameraEyePoses(m_cameraToHMDLeft, m_cameraToHMDRight);
 
-    m_cameraLeftToHMDPose = LeftCameraPose;
+    XrMatrix4x4f_Invert(&m_HMDToCameraLeft, &m_cameraToHMDLeft);
+    XrMatrix4x4f_Invert(&m_HMDToCameraRight, &m_cameraToHMDRight);
 
-    XrMatrix4x4f LeftCameraPoseInv;
-    XrMatrix4x4f_Invert(&LeftCameraPoseInv, &LeftCameraPose);
-    XrMatrix4x4f_Multiply(&m_cameraLeftToRightPose, &LeftCameraPoseInv, &RightCameraPose);
+    XrMatrix4x4f_Multiply(&m_cameraLeftToRightPose, &m_HMDToCameraRight, &m_cameraToHMDLeft);
+    XrMatrix4x4f_Multiply(&m_cameraRightToLeftPose, &m_HMDToCameraLeft, &m_cameraToHMDRight);
 }
 
 bool CameraManager::GetCameraFrame(std::shared_ptr<CameraFrame>& frame)
@@ -318,9 +358,14 @@ void CameraManager::ServeFrames()
 
         if (!m_bRunThread) { return; }
 
+        // Wait for the old frame struct to be available in case someone is still reading from it.
+        std::unique_lock writeLock(m_underConstructionFrame->readWriteMutex);
+
         while (true)
         {
-            vr::EVRTrackedCameraError error = trackedCamera->GetVideoStreamFrameBuffer(m_cameraHandle, m_frameType, nullptr, 0, &m_underConstructionFrame->header, sizeof(vr::CameraVideoStreamFrameHeader_t));
+            vr::EVRTrackedCameraFrameType frameType = m_configManager->GetConfig_Main().ProjectionMode == ProjectionRoomView2D ? vr::VRTrackedCameraFrameType_MaximumUndistorted : vr::VRTrackedCameraFrameType_Distorted;
+
+            vr::EVRTrackedCameraError error = trackedCamera->GetVideoStreamFrameBuffer(m_cameraHandle, frameType, nullptr, 0, &m_underConstructionFrame->header, sizeof(vr::CameraVideoStreamFrameHeader_t));
 
             if (error == vr::VRTrackedCameraError_None)
             {
@@ -347,12 +392,20 @@ void CameraManager::ServeFrames()
 
         if (!m_bRunThread) { return; }
 
+        Config_Main& mainConf = m_configManager->GetConfig_Main();
+
+        vr::EVRTrackedCameraFrameType frameType = mainConf.ProjectionMode == ProjectionRoomView2D ? vr::VRTrackedCameraFrameType_MaximumUndistorted : vr::VRTrackedCameraFrameType_Distorted;
 
         if (m_renderAPI == DirectX11)
         {
             std::shared_ptr<IPassthroughRenderer> renderer = m_renderer.lock();
 
-            vr::EVRTrackedCameraError error = trackedCamera->GetVideoStreamTextureD3D11(m_cameraHandle, m_frameType, renderer->GetRenderDevice(), &m_underConstructionFrame->frameTextureResource, nullptr, 0);
+            if (!renderer.get())
+            {
+                continue;
+            }
+
+            vr::EVRTrackedCameraError error = trackedCamera->GetVideoStreamTextureD3D11(m_cameraHandle, frameType, renderer->GetRenderDevice(), &m_underConstructionFrame->frameTextureResource, nullptr, 0);
             if (error != vr::VRTrackedCameraError_None)
             {
                 ErrorLog("GetVideoStreamTextureD3D11 error %i\n", error);
@@ -363,7 +416,7 @@ void CameraManager::ServeFrames()
         {
             ID3D11ShaderResourceView* srv;
 
-            vr::EVRTrackedCameraError error = trackedCamera->GetVideoStreamTextureD3D11(m_cameraHandle, m_frameType, d3dInteropDevice.Get(), (void**)&srv, nullptr, 0);
+            vr::EVRTrackedCameraError error = trackedCamera->GetVideoStreamTextureD3D11(m_cameraHandle, frameType, d3dInteropDevice.Get(), (void**)&srv, nullptr, 0);
             if (error != vr::VRTrackedCameraError_None)
             {
                 ErrorLog("GetVideoStreamTextureD3D11 error %i\n", error);
@@ -376,19 +429,26 @@ void CameraManager::ServeFrames()
             res->QueryInterface(IID_PPV_ARGS(&dxgiRes));
             dxgiRes->GetSharedHandle(&m_underConstructionFrame->frameTextureResource);
         }
-        else
+
+        m_underConstructionFrame->bHasFrameBuffer = false;
+
+        // TODO: Getting the framebuffer crashes under Vulkan
+        if(m_renderAPI == DirectX12 || 
+            (mainConf.ProjectionMode == ProjectionStereoReconstruction && m_renderAPI != Vulkan))
         {
             if (m_underConstructionFrame->frameBuffer.get() == nullptr)
             {
                 m_underConstructionFrame->frameBuffer = std::make_shared<std::vector<uint8_t>>(m_cameraFrameBufferSize);
             }
 
-            vr::EVRTrackedCameraError error = trackedCamera->GetVideoStreamFrameBuffer(m_cameraHandle, m_frameType, m_underConstructionFrame->frameBuffer->data(), (uint32_t)m_underConstructionFrame->frameBuffer->size(), nullptr, 0);
+            vr::EVRTrackedCameraError error = trackedCamera->GetVideoStreamFrameBuffer(m_cameraHandle, frameType, m_underConstructionFrame->frameBuffer->data(), (uint32_t)m_underConstructionFrame->frameBuffer->size(), nullptr, 0);
             if (error != vr::VRTrackedCameraError_None)
             {
                 ErrorLog("GetVideoStreamFrameBuffer error %i\n", error);
                 continue;
             }
+
+            m_underConstructionFrame->bHasFrameBuffer = true;
         }
 
         bHasFrame = true;
@@ -419,11 +479,12 @@ XrMatrix4x4f CameraManager::GetHMDWorldToViewMatrix(const ERenderEye eye, const 
 
     // The application provided HMD pose used to make sure reprojection works correctly.
     XrMatrix4x4f_CreateTranslationRotationScale(&pose, &layer.views[viewNum].pose.position, &layer.views[viewNum].pose.orientation, &scale);
-    XrMatrix4x4f_Invert(&viewToTracking, &pose);
+    XrMatrix4x4f_Invert(&viewToTracking, &pose);    
 
     // Apply any pose the application might have configured in its reference spaces.
     XrMatrix4x4f_CreateTranslationRotationScale(&pose, &refSpaceInfo.poseInReferenceSpace.position, &refSpaceInfo.poseInReferenceSpace.orientation, &scale);
     XrMatrix4x4f_Invert(&refSpacePose, &pose);
+
 
     if (refSpaceInfo.referenceSpaceType == XR_REFERENCE_SPACE_TYPE_LOCAL)
     {
@@ -441,19 +502,20 @@ XrMatrix4x4f CameraManager::GetHMDWorldToViewMatrix(const ERenderEye eye, const 
     return output;
 }
 
-void CameraManager::CalculateFrameProjection(std::shared_ptr<CameraFrame>& frame, const XrCompositionLayerProjection& layer, const XrTime& displayTime, const XrReferenceSpaceCreateInfo& refSpaceInfo)
+void CameraManager::UpdateProjectionMatrix(std::shared_ptr<CameraFrame>& frame)
 {
+    bool bIsStereo = m_frameLayout != EStereoFrameLayout::Mono;
+
     vr::IVRTrackedCamera* trackedCamera = m_openVRManager->GetVRTrackedCamera();
     Config_Main& mainConf = m_configManager->GetConfig_Main();
 
-    // Push back far plane by 1.5x to account for the flat projection place of the passthrough frame.
-    if (mainConf.ProjectionDistanceFar * 1.5f != m_projectionDistanceFar || m_useAlternateProjectionCalc != mainConf.AlternateProjectionCalc)
+    if (mainConf.ProjectionDistanceFar * 1.5f != m_projectionDistanceFar)
     {
+        // Push back far plane by 1.5x to account for the flat projection plane of the passthrough frame.
         m_projectionDistanceFar = mainConf.ProjectionDistanceFar * 1.5f;
-        m_useAlternateProjectionCalc = mainConf.AlternateProjectionCalc;
 
         vr::HmdMatrix44_t vrProjection;
-        vr::EVRTrackedCameraError error= trackedCamera->GetCameraProjection(m_hmdDeviceId, 0, m_frameType, NEAR_PROJECTION_DISTANCE, m_projectionDistanceFar, &vrProjection);
+        vr::EVRTrackedCameraError error = trackedCamera->GetCameraProjection(m_hmdDeviceId, 0, vr::VRTrackedCameraFrameType_MaximumUndistorted, NEAR_PROJECTION_DISTANCE, m_projectionDistanceFar, &vrProjection);
 
         if (error != vr::VRTrackedCameraError_None)
         {
@@ -463,50 +525,29 @@ void CameraManager::CalculateFrameProjection(std::shared_ptr<CameraFrame>& frame
 
         XrMatrix4x4f scaleMatrix, offsetMatrix, transMatrix;
 
-        // Hack to scale the projection to one half of the stereo frame.
-        // The alternate mode applies the scaling before inverting the projection matrix,
-        // unlike the SteamVR room view, and looks more correct on the Index.
-        if (mainConf.AlternateProjectionCalc)
+        if (m_frameLayout == EStereoFrameLayout::StereoHorizontalLayout)
         {
-            if (m_frameLayout == EStereoFrameLayout::StereoHorizontalLayout)
-            {
-                vrProjection.m[0][0] *= 2.0f;
-                vrProjection.m[0][2] -= 0.5f;
-            }
-            else if (m_frameLayout == EStereoFrameLayout::StereoVerticalLayout)
-            {
-                vrProjection.m[1][1] *= 2.0f;
-                vrProjection.m[1][2] -= 0.5f;
-            }
-
-            m_cameraProjectionInvFarLeft = ToXRMatrix4x4Inverted(vrProjection);
+            XrMatrix4x4f_CreateScale(&scaleMatrix, 0.5f, 1.0f, 1.0f);
+            XrMatrix4x4f_CreateTranslation(&offsetMatrix, -0.5f, 0.0f, 0.0f);
+            XrMatrix4x4f_Multiply(&transMatrix, &offsetMatrix, &scaleMatrix);
+        }
+        else if (m_frameLayout == EStereoFrameLayout::StereoVerticalLayout)
+        {
+            XrMatrix4x4f_CreateScale(&scaleMatrix, 1.0f, 0.5f, 1.0f);
+            XrMatrix4x4f_CreateTranslation(&offsetMatrix, 0.0f, -0.5f, 0.0f);
+            XrMatrix4x4f_Multiply(&transMatrix, &offsetMatrix, &scaleMatrix);
         }
         else
         {
-            if (m_frameLayout == EStereoFrameLayout::StereoHorizontalLayout)
-            {
-                XrMatrix4x4f_CreateScale(&scaleMatrix, 0.5f, 1.0f, 1.0f);
-                XrMatrix4x4f_CreateTranslation(&offsetMatrix, -0.5f, 0.0f, 0.0f);
-                XrMatrix4x4f_Multiply(&transMatrix, &offsetMatrix, &scaleMatrix);
-            }
-            else if (m_frameLayout == EStereoFrameLayout::StereoVerticalLayout)
-            {
-                XrMatrix4x4f_CreateScale(&scaleMatrix, 1.0f, 0.5f, 1.0f);
-                XrMatrix4x4f_CreateTranslation(&offsetMatrix, 0.0f, -0.5f, 0.0f);
-                XrMatrix4x4f_Multiply(&transMatrix, &offsetMatrix, &scaleMatrix);
-            }
-            else
-            {
-                XrMatrix4x4f_CreateIdentity(&transMatrix);
-            }
-
-            XrMatrix4x4f projectionMatrix = ToXRMatrix4x4Inverted(vrProjection);
-            XrMatrix4x4f_Multiply(&m_cameraProjectionInvFarLeft, &projectionMatrix, &transMatrix); 
+            XrMatrix4x4f_CreateIdentity(&transMatrix);
         }
 
-        if (m_frameLayout != EStereoFrameLayout::Mono)
+        XrMatrix4x4f projectionMatrix = ToXRMatrix4x4Inverted(vrProjection);
+        XrMatrix4x4f_Multiply(&m_cameraProjectionInvFarLeft, &projectionMatrix, &transMatrix);
+
+        if (bIsStereo)
         {
-            error = trackedCamera->GetCameraProjection(m_hmdDeviceId, 1, m_frameType, NEAR_PROJECTION_DISTANCE, m_projectionDistanceFar, &vrProjection);
+            error = trackedCamera->GetCameraProjection(m_hmdDeviceId, 1, vr::VRTrackedCameraFrameType_MaximumUndistorted, NEAR_PROJECTION_DISTANCE, m_projectionDistanceFar, &vrProjection);
 
             if (error != vr::VRTrackedCameraError_None)
             {
@@ -514,40 +555,30 @@ void CameraManager::CalculateFrameProjection(std::shared_ptr<CameraFrame>& frame
                 return;
             }
 
-            if (mainConf.AlternateProjectionCalc)
-            {
-                if (m_frameLayout == EStereoFrameLayout::StereoHorizontalLayout)
-                {
-                    vrProjection.m[0][0] *= 2.0f;
-                    vrProjection.m[0][2] -= 0.5f;
-                }
-                else if (m_frameLayout == EStereoFrameLayout::StereoVerticalLayout)
-                {
-                    vrProjection.m[1][1] *= 2.0f;
-                    vrProjection.m[1][2] -= 0.5f;
-                }
 
-                m_cameraProjectionInvFarRight = ToXRMatrix4x4Inverted(vrProjection);
-            }
-            else
-            {
-                XrMatrix4x4f projectionMatrix = ToXRMatrix4x4Inverted(vrProjection);
-                XrMatrix4x4f_Multiply(&m_cameraProjectionInvFarRight, &projectionMatrix, &transMatrix);
-            }
+            XrMatrix4x4f projectionMatrix = ToXRMatrix4x4Inverted(vrProjection);
+            XrMatrix4x4f_Multiply(&m_cameraProjectionInvFarRight, &projectionMatrix, &transMatrix);
+
         }
     }
-
-    CalculateFrameProjectionForEye(LEFT_EYE, frame, layer, refSpaceInfo);
-    CalculateFrameProjectionForEye(RIGHT_EYE, frame, layer, refSpaceInfo);
 }
 
-void CameraManager::CalculateFrameProjectionForEye(const ERenderEye eye, std::shared_ptr<CameraFrame>& frame, const XrCompositionLayerProjection& layer, const XrReferenceSpaceCreateInfo& refSpaceInfo)
+
+void CameraManager::CalculateFrameProjection(std::shared_ptr<CameraFrame>& frame, const XrCompositionLayerProjection& layer, const XrTime& displayTime, const XrReferenceSpaceCreateInfo& refSpaceInfo, UVDistortionParameters& distortionParams)
+{
+    UpdateProjectionMatrix(frame);
+
+    CalculateFrameProjectionForEye(LEFT_EYE, frame, layer, refSpaceInfo, distortionParams);
+    CalculateFrameProjectionForEye(RIGHT_EYE, frame, layer, refSpaceInfo, distortionParams);
+}
+
+void CameraManager::CalculateFrameProjectionForEye(const ERenderEye eye, std::shared_ptr<CameraFrame>& frame, const XrCompositionLayerProjection& layer, const XrReferenceSpaceCreateInfo& refSpaceInfo, UVDistortionParameters& distortionParams)
 {
     bool bIsStereo = m_frameLayout != EStereoFrameLayout::Mono;
     uint32_t CameraId = (eye == RIGHT_EYE && bIsStereo) ? 1 : 0;
 
-    XrMatrix4x4f* worldToHMDMatrix = (eye == LEFT_EYE) ? &frame->hmdWorldToProjectionLeft : &frame->hmdWorldToProjectionRight;
-    XrMatrix4x4f* trackedCameraMatrix = (eye == LEFT_EYE) ? &frame->cameraToWorldLeft : &frame->cameraToWorldRight;
+    XrMatrix4x4f* worldToHMDMatrix = (eye == LEFT_EYE) ? &frame->worldToHMDProjectionLeft : &frame->worldToHMDProjectionRight;
+    
     XrVector3f* hmdWorldPos = (eye == LEFT_EYE) ? &frame->hmdViewPosWorldLeft : &frame->hmdViewPosWorldRight;
     
     XrMatrix4x4f hmdWorldToView = GetHMDWorldToViewMatrix(eye, layer, refSpaceInfo);
@@ -558,22 +589,115 @@ void CameraManager::CalculateFrameProjectionForEye(const ERenderEye eye, std::sh
     XrMatrix4x4f_TransformVector3f(hmdWorldPos, &hmdViewToWorld, &inPos);
 
     XrMatrix4x4f hmdProjection;
-    XrMatrix4x4f_CreateProjectionFov(&hmdProjection, GRAPHICS_D3D, layer.views[(eye == LEFT_EYE) ? 0 : 1].fov, NEAR_PROJECTION_DISTANCE, m_projectionDistanceFar * 1.5f);
-
-    XrMatrix4x4f leftCameraToTrackingPose = ToXRMatrix4x4(frame->header.trackedDevicePose.mDeviceToAbsoluteTracking);
+    XrMatrix4x4f_CreateProjectionFov(&hmdProjection, GRAPHICS_D3D, layer.views[(eye == LEFT_EYE) ? 0 : 1].fov, NEAR_PROJECTION_DISTANCE, m_projectionDistanceFar);
 
     if (CameraId == 0)
     {
-        XrMatrix4x4f_Multiply(trackedCameraMatrix, &leftCameraToTrackingPose, &m_cameraProjectionInvFarLeft);
-
         XrMatrix4x4f_Multiply(worldToHMDMatrix, &hmdProjection, &hmdWorldToView);
     }
     else
     {
-        XrMatrix4x4f tempMatrix;
-        XrMatrix4x4f_Multiply(&tempMatrix, &leftCameraToTrackingPose, &m_cameraLeftToRightPose);
-        XrMatrix4x4f_Multiply(trackedCameraMatrix, &tempMatrix, &m_cameraProjectionInvFarRight);
-
         XrMatrix4x4f_Multiply(worldToHMDMatrix, &hmdProjection, &hmdWorldToView);
+    }
+
+
+
+    if (m_configManager->GetConfig_Main().ProjectionMode == ProjectionRoomView2D)
+    {
+        XrMatrix4x4f leftCameraToTrackingPose = ToXRMatrix4x4(frame->header.trackedDevicePose.mDeviceToAbsoluteTracking);
+
+        if (eye == LEFT_EYE)
+        {
+
+            XrMatrix4x4f_Multiply(&frame->cameraProjectionToWorldLeft, &leftCameraToTrackingPose, &m_cameraProjectionInvFarLeft);
+        }
+        else
+        {
+
+            if (bIsStereo)
+            {
+                XrMatrix4x4f tempMatrix;
+                XrMatrix4x4f_Multiply(&tempMatrix, &leftCameraToTrackingPose, &m_cameraRightToLeftPose);
+                XrMatrix4x4f_Multiply(&frame->cameraProjectionToWorldRight, &tempMatrix, &m_cameraProjectionInvFarRight);
+            }
+            else
+            {
+                XrMatrix4x4f_Multiply(&frame->cameraProjectionToWorldRight, &leftCameraToTrackingPose, &m_cameraProjectionInvFarLeft);
+            }
+        }
+    }
+    else
+    {
+        std::shared_lock readLock(distortionParams.readWriteMutex);
+
+        // The math on these matrices still don't seem to line up perfectly, I don't know if that is due to the shaders, the matrices, the output from OpenCV, or the calibration data from OpenVR.
+
+        XrMatrix4x4f frameProjection;
+        XrMatrix4x4f_Transpose(&frameProjection, (eye == LEFT_EYE) ? &distortionParams.cameraProjectionLeft : &distortionParams.cameraProjectionRight);
+
+        frameProjection.m[0] = 2.0f * frameProjection.m[0] / (float)m_cameraFrameWidth;
+        frameProjection.m[5] = -2.0f * frameProjection.m[5] / (float)m_cameraFrameHeight;
+        frameProjection.m[8] = (1.0f - 2.0f * frameProjection.m[8] / (float)m_cameraFrameWidth);
+        frameProjection.m[9] = (1.0f - 2.0f * frameProjection.m[9] / (float)m_cameraFrameHeight);
+
+        frameProjection.m[10] = -m_projectionDistanceFar / (m_projectionDistanceFar - NEAR_PROJECTION_DISTANCE);
+        frameProjection.m[11] = -1.0f;
+        frameProjection.m[12] = 0.0f;
+        frameProjection.m[13] = 0.0f;
+        frameProjection.m[14] = -(m_projectionDistanceFar * NEAR_PROJECTION_DISTANCE) / (m_projectionDistanceFar - NEAR_PROJECTION_DISTANCE);
+
+
+        // TODO: The custom 2D mode inverts the y view angle, but still projects better than everything else?!
+        XrMatrix4x4f frameProjection2;
+        XrMatrix4x4f_Transpose(&frameProjection2, (eye == LEFT_EYE) ? &distortionParams.cameraProjectionLeft : &distortionParams.cameraProjectionRight);
+
+        frameProjection2.m[0] = -2.0f * frameProjection2.m[0] / (float)m_cameraFrameWidth;
+        frameProjection2.m[5] = 2.0f * frameProjection2.m[5] / (float)m_cameraFrameHeight;
+        frameProjection2.m[8] = -(1.0f - 2.0f * frameProjection2.m[8] / (float)m_cameraFrameWidth);
+        frameProjection2.m[9] = -(1.0f - 2.0f * frameProjection2.m[9] / (float)m_cameraFrameHeight);
+
+        frameProjection2.m[10] = m_projectionDistanceFar / (m_projectionDistanceFar - NEAR_PROJECTION_DISTANCE);
+        frameProjection2.m[11] = 1.0f;
+        frameProjection2.m[12] = 0.0f;
+        frameProjection2.m[13] = 0.0f;
+        frameProjection2.m[14] = -(m_projectionDistanceFar * NEAR_PROJECTION_DISTANCE) / (m_projectionDistanceFar - NEAR_PROJECTION_DISTANCE);
+
+        XrMatrix4x4f frameProjectionInverse;
+        XrMatrix4x4f_Invert(&frameProjectionInverse, &frameProjection2);
+
+        XrMatrix4x4f leftCameraToTrackingPose = ToXRMatrix4x4(frame->header.trackedDevicePose.mDeviceToAbsoluteTracking);
+        XrMatrix4x4f leftCameraFromTrackingPose;
+        XrMatrix4x4f_Invert(&leftCameraFromTrackingPose, &leftCameraToTrackingPose);
+
+
+        if (eye == LEFT_EYE)
+        {
+            // The rotation should be 0 with the individually recalculated distortion correction.
+            //XrMatrix4x4f a;
+            //XrMatrix4x4f_Multiply(&a, &distortionParams.rectifiedRotationLeft, &leftCameraFromTrackingPose);
+            XrMatrix4x4f_Multiply(&frame->worldToCameraProjectionLeft, &frameProjection, &leftCameraFromTrackingPose);
+
+
+            //XrMatrix4x4f_Multiply(&a, &distortionParams.rectifiedRotationLeft, &frameProjectionInverse);
+            XrMatrix4x4f_Multiply(&frame->cameraProjectionToWorldLeft, &leftCameraToTrackingPose, &frameProjectionInverse);
+        }
+        else
+        {
+            XrMatrix4x4f a;
+            //XrMatrix4x4f b;
+            XrMatrix4x4f_Multiply(&a, &m_cameraLeftToRightPose, &leftCameraFromTrackingPose);
+            //XrMatrix4x4f_Multiply(&b, &distortionParams.rectifiedRotationRight, &a);
+            XrMatrix4x4f_Multiply(&frame->worldToCameraProjectionRight, &frameProjection, &a);
+
+            if (bIsStereo)
+            {
+                XrMatrix4x4f_Multiply(&a, &m_cameraRightToLeftPose, &frameProjectionInverse);
+                XrMatrix4x4f_Multiply(&frame->cameraProjectionToWorldRight, &leftCameraToTrackingPose, &a);
+            }
+            else
+            {
+                XrMatrix4x4f_Multiply(&frame->cameraProjectionToWorldRight, &leftCameraToTrackingPose, &frameProjectionInverse);
+            }
+        }
     }
 }
