@@ -39,6 +39,7 @@ Using the 3D stereo mode may induce heavy flickering on the display. Exercise ca
 - OpenGL applications are not currently supported.
 - The DirectX12 renderer isn't using shared textures for the camera frames. This limits performance.
 - The 3D reconstruction modes do not project the images correctly yet.
+- The 3D stereo reconstruction mode is not supported with Vulkan.
 
 ### Supported Headsets ###
 
@@ -88,7 +89,7 @@ The following are required:
 - [SimpleINI](https://github.com/brofield/simpleini) (Included as Git submodule)
 - [Dear ImGui](https://github.com/ocornut/imgui) (Included as Git submodule)
 - [Vulkan SDK](https://vulkan.lunarg.com/sdk/home) (Uses the VULKAN_SDK environment variable)
-- [OpenCV](https://github.com/opencv/opencv) (The project is setup for static linking by default - requires custom source build)
+- [OpenCV 4.7.0](https://github.com/opencv/opencv) (The project is setup for static linking by default - requires custom source build)
 - [OpenCV-Contrib](https://github.com/opencv/opencv_contrib) (The ximgproc module needs to be built along with OpenCV for WLS and FBS filtering support.)
 
 ### Todo ###
