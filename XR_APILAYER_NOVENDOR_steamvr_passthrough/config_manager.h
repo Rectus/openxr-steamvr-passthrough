@@ -44,6 +44,7 @@ struct Config_Core
 	float CoreForceMaskedSmoothing = 0.01f;
 	float CoreForceMaskedKeyColor[3] = { 0 ,0 ,0 };
 	bool CoreForceMaskedUseCameraImage = false;
+	bool CoreForceMaskedInvertMask = false;
 };
 
 enum EStereoAlgorithm

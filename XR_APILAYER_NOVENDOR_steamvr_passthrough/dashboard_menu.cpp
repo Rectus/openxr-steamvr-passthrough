@@ -511,6 +511,7 @@ void DashboardMenu::TickMenu()
 		}
 		ImGui::EndGroup();
 
+		ImGui::Checkbox("Invert mask", &coreConfig.CoreForceMaskedInvertMask);
 
 		ImGui::EndGroup();
 	}

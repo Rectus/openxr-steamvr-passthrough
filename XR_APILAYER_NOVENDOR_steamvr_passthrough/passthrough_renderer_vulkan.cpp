@@ -58,7 +58,8 @@ struct PSMaskedConstantBuffer
 	float maskedFracChroma;
 	float maskedFracLuma;
 	float maskedSmooth;
-	bool bMaskedUseCamera;
+	uint32_t bMaskedUseCamera;
+	uint32_t bMaskedInvert;
 };
 
 
@@ -500,12 +501,6 @@ bool PassthroughRendererVulkan::SetupPipeline(VkFormat format)
 	colorDesc.initialLayout = VK_IMAGE_LAYOUT_COLOR_ATTACHMENT_OPTIMAL;
 	colorDesc.finalLayout = VK_IMAGE_LAYOUT_COLOR_ATTACHMENT_OPTIMAL;
 
-	VkAttachmentDescription maskedPrepassColorDesc = colorDesc;
-	maskedPrepassColorDesc.format = VK_FORMAT_R8_UNORM;
-	colorDesc.loadOp = VK_ATTACHMENT_LOAD_OP_DONT_CARE;
-	maskedPrepassColorDesc.initialLayout = VK_IMAGE_LAYOUT_COLOR_ATTACHMENT_OPTIMAL;
-	maskedPrepassColorDesc.finalLayout = VK_IMAGE_LAYOUT_COLOR_ATTACHMENT_OPTIMAL;
-
 	VkAttachmentReference colorRef{};
 	colorRef.attachment = 0;
 	colorRef.layout = VK_IMAGE_LAYOUT_COLOR_ATTACHMENT_OPTIMAL;
@@ -527,9 +522,24 @@ bool PassthroughRendererVulkan::SetupPipeline(VkFormat format)
 	}
 	m_deletionQueue.push_back([=]() { vkDestroyRenderPass(m_device, m_renderpass, nullptr); });
 
-	rpInfo.pAttachments = &maskedPrepassColorDesc;
 
-	if (vkCreateRenderPass(m_device, &rpInfo, nullptr, &m_renderpassMaskedPrepass) != VK_SUCCESS)
+	VkAttachmentDescription maskedPrepassColorDesc;
+	maskedPrepassColorDesc.format = VK_FORMAT_R8_UNORM;
+	maskedPrepassColorDesc.samples = VK_SAMPLE_COUNT_1_BIT;
+	maskedPrepassColorDesc.loadOp = VK_ATTACHMENT_LOAD_OP_DONT_CARE;
+	maskedPrepassColorDesc.storeOp = VK_ATTACHMENT_STORE_OP_STORE;
+	maskedPrepassColorDesc.stencilLoadOp = VK_ATTACHMENT_LOAD_OP_DONT_CARE;
+	maskedPrepassColorDesc.stencilStoreOp = VK_ATTACHMENT_STORE_OP_DONT_CARE;
+	maskedPrepassColorDesc.initialLayout = VK_IMAGE_LAYOUT_COLOR_ATTACHMENT_OPTIMAL;
+	maskedPrepassColorDesc.finalLayout = VK_IMAGE_LAYOUT_COLOR_ATTACHMENT_OPTIMAL;
+
+	VkRenderPassCreateInfo maskedRPInfo{ VK_STRUCTURE_TYPE_RENDER_PASS_CREATE_INFO };
+	maskedRPInfo.attachmentCount = 1;
+	maskedRPInfo.pAttachments = &maskedPrepassColorDesc;
+	maskedRPInfo.subpassCount = 1;
+	maskedRPInfo.pSubpasses = &subpass;
+
+	if (vkCreateRenderPass(m_device, &maskedRPInfo, nullptr, &m_renderpassMaskedPrepass) != VK_SUCCESS)
 	{
 		return false;
 	}
@@ -1610,6 +1620,7 @@ void PassthroughRendererVulkan::RenderPassthroughFrame(const XrCompositionLayerP
 		maskedBuffer.maskedFracLuma = coreConf.CoreForceMaskedFractionLuma * 100.0f;
 		maskedBuffer.maskedSmooth = coreConf.CoreForceMaskedSmoothing * 100.0f;
 		maskedBuffer.bMaskedUseCamera = coreConf.CoreForceMaskedUseCameraImage;
+		maskedBuffer.bMaskedInvert = coreConf.CoreForceMaskedInvertMask;
 
 		memcpy(m_psMaskedConstantBufferMappings[m_frameIndex], &maskedBuffer, sizeof(PSMaskedConstantBuffer));
 

@@ -48,6 +48,7 @@ cbuffer psMaskedConstantBuffer : register(b1)
 	float g_maskedFracLuma;
 	float g_maskedSmooth;
 	bool g_bMaskedUseCamera;
+	bool g_bMaskedInvert;
 };
 
 SamplerState g_samplerState : register(s4);
@@ -71,6 +72,7 @@ cbuffer psMaskedConstantBuffer : register(b2)
 	float g_maskedFracLuma;
 	float g_maskedSmooth;
 	bool g_bMaskedUseCamera;
+	bool g_bMaskedInvert;
 };
 
 SamplerState g_samplerState : register(s0);
@@ -84,6 +86,8 @@ Texture2D<float2> g_fisheyeCorrectionTexture : register(t1);
 float main(VS_OUTPUT input) : SV_TARGET
 {
 	float4 color;
+	
+    bool bInvertOutput = g_bMaskedInvert;
 
 	if (g_bMaskedUseCamera)
 	{
@@ -103,7 +107,8 @@ float main(VS_OUTPUT input) : SV_TARGET
         }
 		
 		color = g_texture.Sample(g_samplerState, float3(outUvs.xy, 0));
-	}
+        bInvertOutput = !bInvertOutput;
+    }
 	else
 	{
 		float2 outUvs = input.screenCoords.xy / input.screenCoords.z;
@@ -119,6 +124,13 @@ float main(VS_OUTPUT input) : SV_TARGET
 
 	float distChroma = smoothstep(fracChromaSqr, fracChromaSqr + pow(g_maskedSmooth, 2), (distChromaSqr.x + distChromaSqr.y));
 	float distLuma = smoothstep(g_maskedFracLuma, g_maskedFracLuma + g_maskedSmooth, abs(difference.x));
-
-	return max(distChroma, distLuma);
+	
+    if (bInvertOutput)
+    {
+        return 1.0 - max(distChroma, distLuma);
+    }
+    else
+    {
+        return max(distChroma, distLuma);
+    }
 }

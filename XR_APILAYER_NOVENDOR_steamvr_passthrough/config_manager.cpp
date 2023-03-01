@@ -109,6 +109,7 @@ void ConfigManager::ParseConfig_Core()
 	m_configCore.CoreForceMaskedKeyColor[2] = (float)m_iniData.GetDoubleValue("Core", "CoreForceMaskedKeyColorB", m_configCore.CoreForceMaskedKeyColor[2]);
 
 	m_configCore.CoreForceMaskedUseCameraImage = m_iniData.GetBoolValue("Core", "CoreForceMaskedUseCameraImage", m_configCore.CoreForceMaskedUseCameraImage);
+	m_configCore.CoreForceMaskedInvertMask = m_iniData.GetBoolValue("Core", "CoreForceMaskedInvertMask", m_configCore.CoreForceMaskedInvertMask);
 }
 
 void ConfigManager::ParseConfig_Stereo()
@@ -178,6 +179,7 @@ void ConfigManager::UpdateConfig_Core()
 	m_iniData.SetDoubleValue("Core", "CoreForceMaskedKeyColorB", m_configCore.CoreForceMaskedKeyColor[2]);
 
 	m_iniData.SetBoolValue("Core", "CoreForceMaskedUseCameraImage", m_configCore.CoreForceMaskedUseCameraImage);
+	m_iniData.SetBoolValue("Core", "CoreForceMaskedInvertMask", m_configCore.CoreForceMaskedInvertMask);
 }
 
 void ConfigManager::UpdateConfig_Stereo()

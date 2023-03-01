@@ -66,6 +66,7 @@ struct PSMaskedConstantBuffer
 	float maskedFracLuma;
 	float maskedSmooth;
 	uint32_t bMaskedUseCamera;
+	uint32_t bMaskedInvert;
 };
 
 
@@ -747,6 +748,7 @@ void PassthroughRendererDX11::RenderPassthroughFrame(const XrCompositionLayerPro
 		maskedBuffer.maskedFracLuma = coreConf.CoreForceMaskedFractionLuma * 100.0f;
 		maskedBuffer.maskedSmooth = coreConf.CoreForceMaskedSmoothing * 100.0f;
 		maskedBuffer.bMaskedUseCamera = coreConf.CoreForceMaskedUseCameraImage;
+		maskedBuffer.bMaskedInvert = coreConf.CoreForceMaskedInvertMask;
 
 		m_renderContext->UpdateSubresource(m_psMaskedConstantBuffer.Get(), 0, nullptr, &maskedBuffer, 0, 0);
 

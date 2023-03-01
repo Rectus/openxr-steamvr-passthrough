@@ -123,7 +123,8 @@ struct PSMaskedConstantBuffer
 	float maskedFracChroma;
 	float maskedFracLuma;
 	float maskedSmooth;
-	bool bMaskedUseCamera;
+	uint32_t bMaskedUseCamera;
+	uint32_t bMaskedInvert;
 };
 
 
@@ -1172,6 +1173,7 @@ void PassthroughRendererDX12::RenderPassthroughFrame(const XrCompositionLayerPro
 		maskedBuffer->maskedFracLuma = coreConf.CoreForceMaskedFractionLuma * 100.0f;
 		maskedBuffer->maskedSmooth = coreConf.CoreForceMaskedSmoothing * 100.0f;
 		maskedBuffer->bMaskedUseCamera = coreConf.CoreForceMaskedUseCameraImage;
+		maskedBuffer->bMaskedInvert = coreConf.CoreForceMaskedInvertMask;
 
 		D3D12_GPU_DESCRIPTOR_HANDLE maskedCBVHandle = m_CBVSRVHeap->GetGPUDescriptorHandleForHeapStart();
 		maskedCBVHandle.ptr += (INDEX_CBV_PS_MASKED_0 + m_frameIndex) * m_CBVSRVHeapDescSize;
