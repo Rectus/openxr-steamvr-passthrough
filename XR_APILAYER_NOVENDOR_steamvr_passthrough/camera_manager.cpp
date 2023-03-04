@@ -491,8 +491,8 @@ XrMatrix4x4f CameraManager::GetHMDWorldToViewMatrix(const ERenderEye eye, const 
         vr::HmdMatrix34_t mat = vrSystem->GetSeatedZeroPoseToStandingAbsoluteTrackingPose();
         trackingToStage = ToXRMatrix4x4Inverted(mat);
 
-        XrMatrix4x4f_Multiply(&pose, &viewToTracking, &trackingToStage);
-        XrMatrix4x4f_Multiply(&output, &pose, &refSpacePose);
+        XrMatrix4x4f_Multiply(&pose, &refSpacePose, &trackingToStage);
+        XrMatrix4x4f_Multiply(&output,  &viewToTracking, &pose);
     }
     else
     {
