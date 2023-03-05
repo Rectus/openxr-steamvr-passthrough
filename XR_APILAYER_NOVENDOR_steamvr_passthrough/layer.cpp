@@ -337,7 +337,7 @@ namespace
 					{
 						Log("Passthrough API layer enabled for session.\n");
 						m_bPassthroughAvailable = true;
-						m_bUsePassthrough = m_configManager->GetConfig_Main().EnablePassthough;
+						m_bUsePassthrough = m_configManager->GetConfig_Main().EnablePassthrough;
 						m_dashboardMenu->GetDisplayValues().currentApplication = GetApplicationName();
 					}
 					else
@@ -590,7 +590,7 @@ namespace
 		{
 			if (isCurrentSession(session))
 			{
-				m_bUsePassthrough = m_bPassthroughAvailable && m_configManager->GetConfig_Main().EnablePassthough;
+				m_bUsePassthrough = m_bPassthroughAvailable && m_configManager->GetConfig_Main().EnablePassthrough;
 			}
 
 			return OpenXrApi::xrBeginFrame(session, frameBeginInfo);

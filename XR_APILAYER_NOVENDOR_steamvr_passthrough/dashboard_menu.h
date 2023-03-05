@@ -6,17 +6,24 @@
 #include "layer.h"
 #include "config_manager.h"
 #include "openvr_manager.h"
-
+#include "imgui.h"
 
 using Microsoft::WRL::ComPtr;
 
 
 #define DASHBOARD_OVERLAY_KEY "XR_APILAYER_NOVENDOR_steamvr_passthrough.{}.dashboard"
 
-#define OVERLAY_RES_WIDTH 1150
-#define OVERLAY_RES_HEIGHT 660
+#define OVERLAY_RES_WIDTH 1200
+#define OVERLAY_RES_HEIGHT 700
 
-
+enum EMenuTab
+{
+	TabMain,
+	TabApplication,
+	TabStereo,
+	TabOverrides,
+	TabDebug
+};
 
 struct MenuDisplayValues
 {
@@ -59,6 +66,8 @@ private:
 
 	void SetupDX11();
 
+	void TextDescription(const char* fmt, ...);
+
 	std::shared_ptr<ConfigManager> m_configManager;
 	std::shared_ptr<OpenVRManager> m_openVRManager;
 	HMODULE m_dllModule;
@@ -76,5 +85,9 @@ private:
 
 	bool m_bMenuIsVisible;
 	MenuDisplayValues m_displayValues;
+	EMenuTab m_activeTab;
+
+	ImFont* m_mainFont;
+	ImFont* m_smallFont;
 };
 

@@ -55,6 +55,8 @@ DepthReconstruction::DepthReconstruction(std::shared_ptr<ConfigManager> configMa
     , m_openVRManager(openVRManager)
     , m_cameraManager(cameraManager)
     , m_distortionParams()
+    , m_reconstructionTimes({0.0f})
+    , m_averageReconstructionTime(0.0f)
 {
     Config_Stereo& stereoConfig = m_configManager->GetConfig_Stereo();
 

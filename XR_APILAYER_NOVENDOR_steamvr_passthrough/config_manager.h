@@ -11,7 +11,7 @@ enum EProjectionMode
 
 struct Config_Main
 {
-	bool EnablePassthough = true;
+	bool EnablePassthrough = true;
 	EProjectionMode ProjectionMode = ProjectionRoomView2D;
 
 	float PassthroughOpacity = 1.0f;
@@ -30,7 +30,7 @@ struct Config_Main
 	bool DebugStereoValid = false;
 };
 
-// Configuration for core-spec passthough
+// Configuration for core-spec passthrough
 struct Config_Core
 {
 	bool CorePassthroughEnable = true;

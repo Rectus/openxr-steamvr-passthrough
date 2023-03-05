@@ -74,7 +74,7 @@ void ConfigManager::ResetToDefaults()
 
 void ConfigManager::ParseConfig_Main()
 {
-	m_configMain.EnablePassthough = m_iniData.GetBoolValue("Main", "EnablePassthough", m_configMain.EnablePassthough);
+	m_configMain.EnablePassthrough = m_iniData.GetBoolValue("Main", "EnablePassthrough", m_configMain.EnablePassthrough);
 	m_configMain.ProjectionMode = (EProjectionMode)m_iniData.GetLongValue("Main", "ProjectionMode", m_configMain.ProjectionMode);
 
 	//m_configMain.ShowTestImage = m_iniData.GetBoolValue("Main", "ShowTestImage", m_configMain.ShowTestImage);
@@ -144,7 +144,7 @@ void ConfigManager::ParseConfig_Stereo()
 
 void ConfigManager::UpdateConfig_Main()
 {
-	m_iniData.SetBoolValue("Main", "EnablePassthough", m_configMain.EnablePassthough);
+	m_iniData.SetBoolValue("Main", "EnablePassthrough", m_configMain.EnablePassthrough);
 	m_iniData.SetLongValue("Main", "ProjectionMode", (long)m_configMain.ProjectionMode);
 
 	//m_iniData.SetBoolValue("Main", "ShowTestImage", m_configMain.ShowTestImage);
