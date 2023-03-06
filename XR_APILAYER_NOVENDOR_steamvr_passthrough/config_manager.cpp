@@ -31,6 +31,9 @@ void ConfigManager::ReadConfigFile()
 		ParseConfig_Main();
 		ParseConfig_Core();
 		ParseConfig_Stereo();
+
+		// TODO: Using the custom preset while we don't have presets.
+		m_configStereo = m_configCustomStereo;
 	}
 	m_bConfigUpdated = false;
 }
@@ -53,6 +56,10 @@ void ConfigManager::UpdateConfigFile()
 void ConfigManager::ConfigUpdated()
 {
 	m_bConfigUpdated = true;
+
+	// TODO: Using the custom preset while we don't have presets.
+	m_configCustomStereo.StereoReconstructionFreeze = m_configStereo.StereoReconstructionFreeze;
+	m_configStereo = m_configCustomStereo;
 }
 
 void ConfigManager::DispatchUpdate()

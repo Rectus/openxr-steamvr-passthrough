@@ -107,31 +107,37 @@ bool PassthroughRendererDX11::InitRenderer()
 
 	if (FAILED(m_d3dDevice->CreateVertexShader(g_PassthroughShaderVS, sizeof(g_PassthroughShaderVS), nullptr, &m_vertexShader)))
 	{
+		ErrorLog("g_PassthroughShaderVS creation failure!\n");
 		return false;
 	}
 
 	if (FAILED(m_d3dDevice->CreateVertexShader(g_PassthroughStereoShaderVS, sizeof(g_PassthroughStereoShaderVS), nullptr, &m_stereoVertexShader)))
 	{
+		ErrorLog("g_PassthroughStereoShaderVS creation failure!\n");
 		return false;
 	}
 
 	if (FAILED(m_d3dDevice->CreatePixelShader(g_PassthroughShaderPS, sizeof(g_PassthroughShaderPS), nullptr, &m_pixelShader)))
 	{
+		ErrorLog("g_PassthroughShaderPS creation failure!\n");
 		return false;
 	}
 
 	if (FAILED(m_d3dDevice->CreatePixelShader(g_AlphaPrepassShaderPS, sizeof(g_AlphaPrepassShaderPS), nullptr, &m_prepassShader)))
 	{
+		ErrorLog("g_AlphaPrepassShaderPS creation failure!\n");
 		return false;
 	}
 
 	if (FAILED(m_d3dDevice->CreatePixelShader(g_AlphaPrepassMaskedShaderPS, sizeof(g_AlphaPrepassMaskedShaderPS), nullptr, &m_maskedPrepassShader)))
 	{
+		ErrorLog("g_AlphaPrepassMaskedShaderPS creation failure!\n");
 		return false;
 	}
 
 	if (FAILED(m_d3dDevice->CreatePixelShader(g_PassthroughMaskedShaderPS, sizeof(g_PassthroughMaskedShaderPS), nullptr, &m_maskedPixelShader)))
 	{
+		ErrorLog("g_PassthroughMaskedShaderPS creation failure!\n");
 		return false;
 	}
 
@@ -142,6 +148,7 @@ bool PassthroughRendererDX11::InitRenderer()
 	{
 		if (FAILED(m_d3dDevice->CreateBuffer(&bufferDesc, nullptr,  &m_vsViewConstantBuffer[i])))
 		{
+			ErrorLog("m_vsViewConstantBuffer creation failure!\n");
 			return false;
 		}
 	}
@@ -151,6 +158,7 @@ bool PassthroughRendererDX11::InitRenderer()
 	{
 		if (FAILED(m_d3dDevice->CreateBuffer(&bufferDesc, nullptr, &m_vsPassConstantBuffer[i])))
 		{
+			ErrorLog("m_vsPassConstantBuffer creation failure!\n");
 			return false;
 		}
 	}
@@ -159,18 +167,21 @@ bool PassthroughRendererDX11::InitRenderer()
 	bufferDesc.ByteWidth = 48;
 	if (FAILED(m_d3dDevice->CreateBuffer(&bufferDesc, nullptr, &m_psPassConstantBuffer)))
 	{
+		ErrorLog("m_psPassConstantBuffer creation failure!\n");
 		return false;
 	}
 
 	bufferDesc.ByteWidth = 48;
 	if (FAILED(m_d3dDevice->CreateBuffer(&bufferDesc, nullptr, &m_psViewConstantBuffer)))
 	{
+		ErrorLog("m_psViewConstantBuffer creation failure!\n");
 		return false;
 	}
 
 	bufferDesc.ByteWidth = 32;
 	if (FAILED(m_d3dDevice->CreateBuffer(&bufferDesc, nullptr, &m_psMaskedConstantBuffer)))
 	{
+		ErrorLog("m_psMaskedConstantBuffer creation failure!\n");
 		return false;
 	}
 
@@ -184,6 +195,7 @@ bool PassthroughRendererDX11::InitRenderer()
 	sampler.MaxLOD = D3D12_FLOAT32_MAX;
 	if (FAILED(m_d3dDevice->CreateSamplerState(&sampler, m_defaultSampler.GetAddressOf())))
 	{
+		ErrorLog("CreateSamplerState failure!\n");
 		return false;
 	}
 
@@ -198,6 +210,7 @@ bool PassthroughRendererDX11::InitRenderer()
 	blendState.RenderTarget[0].DestBlendAlpha = D3D11_BLEND_ONE;
 	if (FAILED(m_d3dDevice->CreateBlendState(&blendState, m_blendStateBase.GetAddressOf())))
 	{
+		ErrorLog("CreateBlendState failure!\n");
 		return false;
 	}
 
@@ -205,6 +218,7 @@ bool PassthroughRendererDX11::InitRenderer()
 
 	if (FAILED(m_d3dDevice->CreateBlendState(&blendState, m_blendStateAlphaPremultiplied.GetAddressOf())))
 	{
+		ErrorLog("CreateBlendState failure!\n");
 		return false;
 	}
 
@@ -213,6 +227,7 @@ bool PassthroughRendererDX11::InitRenderer()
 
 	if (FAILED(m_d3dDevice->CreateBlendState(&blendState, m_blendStateSrcAlpha.GetAddressOf())))
 	{
+		ErrorLog("CreateBlendState failure!\n");
 		return false;
 	}
 
@@ -224,6 +239,7 @@ bool PassthroughRendererDX11::InitRenderer()
 
 	if (FAILED(m_d3dDevice->CreateBlendState(&blendState, m_blendStatePrepassUseAppAlpha.GetAddressOf())))
 	{
+		ErrorLog("CreateBlendState failure!\n");
 		return false;
 	}
 
@@ -231,6 +247,7 @@ bool PassthroughRendererDX11::InitRenderer()
 
 	if (FAILED(m_d3dDevice->CreateBlendState(&blendState, m_blendStatePrepassIgnoreAppAlpha.GetAddressOf())))
 	{
+		ErrorLog("CreateBlendState failure!\n");
 		return false;
 	}
 
@@ -243,6 +260,7 @@ bool PassthroughRendererDX11::InitRenderer()
 	rasterizerDesc.ScissorEnable = true;
 	if (FAILED(m_d3dDevice->CreateRasterizerState(&rasterizerDesc, m_rasterizerState.GetAddressOf())))
 	{
+		ErrorLog("CreateRasterizerState failure!\n");
 		return false;
 	}
 
@@ -255,7 +273,11 @@ bool PassthroughRendererDX11::InitRenderer()
 	vertexDesc.InputSlotClass = D3D11_INPUT_PER_VERTEX_DATA;
 	vertexDesc.InstanceDataStepRate = 0;
 
-	m_d3dDevice->CreateInputLayout(&vertexDesc, 1, g_PassthroughShaderVS, sizeof(g_PassthroughShaderVS), &m_inputLayout);
+	if (FAILED(m_d3dDevice->CreateInputLayout(&vertexDesc, 1, g_PassthroughShaderVS, sizeof(g_PassthroughShaderVS), &m_inputLayout)))
+	{
+		ErrorLog("CreateInputLayout failure!\n");
+		return false;
+	}
 
 	SetupTestImage();
 	SetupFrameResource();
@@ -272,6 +294,7 @@ void PassthroughRendererDX11::SetupTestImage()
 	if (FAILED(GetModuleFileNameA(m_dllModule, path, sizeof(path))))
 	{
 		ErrorLog("Error opening test pattern.\n");
+		return;
 	}
 
 	std::string pathStr = path;
@@ -284,6 +307,7 @@ void PassthroughRendererDX11::SetupTestImage()
 	if (error)
 	{
 		ErrorLog("Error decoding test pattern.\n");
+		return;
 	}
 
 	D3D11_TEXTURE2D_DESC textureDesc = {};
@@ -298,7 +322,11 @@ void PassthroughRendererDX11::SetupTestImage()
 	textureDesc.Usage = D3D11_USAGE_DEFAULT;
 	textureDesc.CPUAccessFlags = 0;
 
-	m_d3dDevice->CreateTexture2D(&textureDesc, nullptr, &m_testPatternTexture);
+	if (FAILED(m_d3dDevice->CreateTexture2D(&textureDesc, nullptr, &m_testPatternTexture)))
+	{
+		ErrorLog("Test pattern CreateTexture2D error!\n");
+		return;
+	}
 
 	D3D11_TEXTURE2D_DESC uploadTextureDesc = textureDesc;
 	uploadTextureDesc.BindFlags = 0;
@@ -306,14 +334,22 @@ void PassthroughRendererDX11::SetupTestImage()
 	uploadTextureDesc.CPUAccessFlags = D3D11_CPU_ACCESS_WRITE;
 
 	ComPtr<ID3D11Texture2D> uploadTexture;
-	m_d3dDevice->CreateTexture2D(&uploadTextureDesc, nullptr, &uploadTexture);
+	if (FAILED(m_d3dDevice->CreateTexture2D(&uploadTextureDesc, nullptr, &uploadTexture)))
+	{
+		ErrorLog("Test pattern CreateTexture2D error!\n");
+		return;
+	}
 
 	D3D11_SHADER_RESOURCE_VIEW_DESC srvDesc = {};
 	srvDesc.ViewDimension = D3D11_SRV_DIMENSION_TEXTURE2D;
 	srvDesc.Format = textureDesc.Format;
 	srvDesc.Texture2D.MipLevels = 1;
 
-	m_d3dDevice->CreateShaderResourceView(m_testPatternTexture.Get(), &srvDesc, &m_testPatternSRV);
+	if (FAILED(m_d3dDevice->CreateShaderResourceView(m_testPatternTexture.Get(), &srvDesc, &m_testPatternSRV)))
+	{
+		ErrorLog("Test pattern CreateShaderResourceView error!\n");
+		return;
+	}
 
 	D3D11_MAPPED_SUBRESOURCE res = {};
 	m_deviceContext->Map(uploadTexture.Get(), 0, D3D11_MAP_WRITE, 0, &res);
@@ -350,7 +386,11 @@ void PassthroughRendererDX11::SetupFrameResource()
 	srvDesc.Format = textureDesc.Format;
 	srvDesc.Texture2D.MipLevels = 1;
 
-	m_d3dDevice->CreateTexture2D(&uploadTextureDesc, nullptr, &m_cameraFrameUploadTexture);
+	if (FAILED(m_d3dDevice->CreateTexture2D(&uploadTextureDesc, nullptr, &m_cameraFrameUploadTexture)))
+	{
+		ErrorLog("Frame Resource CreateTexture2D error!\n");
+		return;
+	}
 
 	D3D11_MAPPED_SUBRESOURCE res = {};
 	m_deviceContext->Map(m_cameraFrameUploadTexture.Get(), 0, D3D11_MAP_WRITE, 0, &res);
@@ -359,8 +399,16 @@ void PassthroughRendererDX11::SetupFrameResource()
 
 	for (int i = 0; i < NUM_SWAPCHAINS; i++)
 	{
-		m_d3dDevice->CreateTexture2D(&textureDesc, nullptr, &m_cameraFrameTexture[i]);
-		m_d3dDevice->CreateShaderResourceView(m_cameraFrameTexture[i].Get(), &srvDesc, &m_cameraFrameSRV[i]);
+		if (FAILED(m_d3dDevice->CreateTexture2D(&textureDesc, nullptr, &m_cameraFrameTexture[i])))
+		{
+			ErrorLog("Frame Resource CreateTexture2D error!\n");
+			return;
+		}
+		if (FAILED(m_d3dDevice->CreateShaderResourceView(m_cameraFrameTexture[i].Get(), &srvDesc, &m_cameraFrameSRV[i])))
+		{
+			ErrorLog("Frame Resource CreateShaderResourceView error!\n");
+			return;
+		}
 		m_deviceContext->CopyResource(m_cameraFrameTexture[i].Get(), m_cameraFrameUploadTexture.Get());
 	}
 }
@@ -390,12 +438,24 @@ void PassthroughRendererDX11::SetupDisparityMap(uint32_t width, uint32_t height)
 	srvDesc.Format = textureDesc.Format;
 	srvDesc.Texture2D.MipLevels = 1;
 
-	m_d3dDevice->CreateTexture2D(&uploadTextureDesc, nullptr, &m_disparityMapUploadTexture);
+	if (FAILED(m_d3dDevice->CreateTexture2D(&uploadTextureDesc, nullptr, &m_disparityMapUploadTexture)))
+	{
+		ErrorLog("Disparity Map CreateTexture2D error!\n");
+		return;
+	}
 
 	for (int i = 0; i < NUM_SWAPCHAINS * 2; i++)
 	{
-		m_d3dDevice->CreateTexture2D(&textureDesc, nullptr, &m_disparityMap[i]);
-		m_d3dDevice->CreateShaderResourceView(m_disparityMap[i].Get(), &srvDesc, &m_disparityMapSRV[i]);
+		if (FAILED(m_d3dDevice->CreateTexture2D(&textureDesc, nullptr, &m_disparityMap[i])))
+		{
+			ErrorLog("Disparity Map CreateTexture2D error!\n");
+			return;
+		}
+		if (FAILED(m_d3dDevice->CreateShaderResourceView(m_disparityMap[i].Get(), &srvDesc, &m_disparityMapSRV[i])))
+		{
+			ErrorLog("Disparity Map CreateShaderResourceView error!\n");
+			return;
+		}
 	}
 }
 
@@ -414,7 +474,11 @@ void PassthroughRendererDX11::SetupUVDistortionMap(std::shared_ptr<std::vector<f
 	textureDesc.Usage = D3D11_USAGE_DEFAULT;
 	textureDesc.CPUAccessFlags = 0;
 
-	m_d3dDevice->CreateTexture2D(&textureDesc, nullptr, &m_uvDistortionMap);
+	if (FAILED(m_d3dDevice->CreateTexture2D(&textureDesc, nullptr, &m_uvDistortionMap)))
+	{
+		ErrorLog("UV Distortion Map CreateTexture2D error!\n");
+		return;
+	}
 
 	D3D11_TEXTURE2D_DESC uploadTextureDesc = textureDesc;
 	uploadTextureDesc.BindFlags = 0;
@@ -422,7 +486,11 @@ void PassthroughRendererDX11::SetupUVDistortionMap(std::shared_ptr<std::vector<f
 	uploadTextureDesc.CPUAccessFlags = D3D11_CPU_ACCESS_WRITE;
 
 	ComPtr<ID3D11Texture2D> uploadTexture;
-	m_d3dDevice->CreateTexture2D(&uploadTextureDesc, nullptr, &uploadTexture);
+	if (FAILED(m_d3dDevice->CreateTexture2D(&uploadTextureDesc, nullptr, &uploadTexture)))
+	{
+		ErrorLog("UV Distortion Map CreateTexture2D error!\n");
+		return;
+	}
 
 	UploadTexture(m_deviceContext, uploadTexture, (uint8_t*)uvDistortionMap->data(), m_cameraTextureHeight, m_cameraTextureWidth * sizeof(float) * 2);
 
@@ -433,7 +501,11 @@ void PassthroughRendererDX11::SetupUVDistortionMap(std::shared_ptr<std::vector<f
 	srvDesc.Format = textureDesc.Format;
 	srvDesc.Texture2D.MipLevels = 1;
 
-	m_d3dDevice->CreateShaderResourceView(m_uvDistortionMap.Get(), &srvDesc, &m_uvDistortionMapSRV);
+	if (FAILED(m_d3dDevice->CreateShaderResourceView(m_uvDistortionMap.Get(), &srvDesc, &m_uvDistortionMapSRV)))
+	{
+		ErrorLog("UV Distortion Map CreateShaderResourceView error!\n");
+		return;
+	}
 }
 
 
@@ -454,6 +526,7 @@ void PassthroughRendererDX11::SetupTemporaryRenderTarget(ID3D11Texture2D** textu
 
 	if (FAILED(m_d3dDevice->CreateTexture2D(&textureDesc, nullptr, texture)))
 	{
+		ErrorLog("Temporary Render Target CreateTexture2D error!\n");
 		return;
 	}
 
@@ -462,13 +535,21 @@ void PassthroughRendererDX11::SetupTemporaryRenderTarget(ID3D11Texture2D** textu
 	srvDesc.Format = textureDesc.Format;
 	srvDesc.Texture2D.MipLevels = 1;
 
-	m_d3dDevice->CreateShaderResourceView(*texture, &srvDesc, srv);
+	if (FAILED(m_d3dDevice->CreateShaderResourceView(*texture, &srvDesc, srv)))
+	{
+		ErrorLog("Temporary Render Target CreateShaderResourceView error!\n");
+		return;
+	}
 
 	D3D11_RENDER_TARGET_VIEW_DESC rtvDesc{};
 	rtvDesc.Format = textureDesc.Format;
 	rtvDesc.ViewDimension = D3D11_RTV_DIMENSION_TEXTURE2D;
 
-	m_d3dDevice->CreateRenderTargetView(*texture, &rtvDesc, rtv);
+	if (FAILED(m_d3dDevice->CreateRenderTargetView(*texture, &rtvDesc, rtv)))
+	{
+		ErrorLog("Temporary Render Target CreateRenderTargetView error!\n");
+		return;
+	}
 }
 
 
@@ -489,7 +570,12 @@ void PassthroughRendererDX11::InitRenderTarget(const ERenderEye eye, void* rende
 	rtvDesc.Texture2DArray.FirstArraySlice = swapchainInfo.arraySize > 1 ? viewIndex : 0;
 	//rtvDesc.ViewDimension = swapchainInfo.arraySize > 1 ? D3D11_RTV_DIMENSION_TEXTURE2DARRAY : D3D11_RTV_DIMENSION_TEXTURE2D;
 
-	m_d3dDevice->CreateRenderTargetView((ID3D11Resource*)rendertarget, &rtvDesc, m_renderTargetViews[bufferIndex].GetAddressOf());
+	if (FAILED(m_d3dDevice->CreateRenderTargetView((ID3D11Resource*)rendertarget, &rtvDesc, m_renderTargetViews[bufferIndex].GetAddressOf())))
+	{
+		ErrorLog("Render Target CreateRenderTargetView error!\n");
+		return;
+	}
+
 	m_renderTargets[bufferIndex] = (ID3D11Resource*)rendertarget;
 
 	D3D11_SHADER_RESOURCE_VIEW_DESC srvDesc = {};
@@ -501,7 +587,11 @@ void PassthroughRendererDX11::InitRenderTarget(const ERenderEye eye, void* rende
 	srvDesc.Texture2DArray.ArraySize = swapchainInfo.arraySize;
 	//srvDesc.Texture2DArray.FirstArraySlice = swapchainInfo.arraySize > 1 ? viewIndex : 0;
 
-	m_d3dDevice->CreateShaderResourceView((ID3D11Resource*)rendertarget, &srvDesc, &m_renderTargetSRVs[bufferIndex]);
+	if (FAILED(m_d3dDevice->CreateShaderResourceView((ID3D11Resource*)rendertarget, &srvDesc, &m_renderTargetSRVs[bufferIndex])))
+	{
+		ErrorLog("Render Target CreateRenderTargetView error!\n");
+		return;
+	}
 }
 
 
@@ -558,7 +648,11 @@ void PassthroughRendererDX11::GenerateMesh()
 	vertexBufferData.pSysMem = m_vertices.data();
 
 	CD3D11_BUFFER_DESC vertexBufferDesc((UINT)m_vertices.size() * sizeof(float), D3D11_BIND_VERTEX_BUFFER);
-	m_d3dDevice->CreateBuffer(&vertexBufferDesc, &vertexBufferData, &m_vertexBuffer);
+	if (FAILED(m_d3dDevice->CreateBuffer(&vertexBufferDesc, &vertexBufferData, &m_vertexBuffer)))
+	{
+		ErrorLog("Mesh CreateBuffer error!\n");
+		return;
+	}
 }
 
 
@@ -606,7 +700,11 @@ void PassthroughRendererDX11::GenerateDepthMesh(uint32_t width, uint32_t height)
 	vertexBufferData.pSysMem = m_stereoVertices.data();
 
 	CD3D11_BUFFER_DESC vertexBufferDesc((UINT)m_stereoVertices.size() * sizeof(float), D3D11_BIND_VERTEX_BUFFER);
-	m_d3dDevice->CreateBuffer(&vertexBufferDesc, &vertexBufferData, &m_stereoVertexBuffer);
+	if (FAILED(m_d3dDevice->CreateBuffer(&vertexBufferDesc, &vertexBufferData, &m_stereoVertexBuffer)))
+	{
+		ErrorLog("Stereo Mesh CreateBuffer error!\n");
+		return;
+	}
 }
 
 

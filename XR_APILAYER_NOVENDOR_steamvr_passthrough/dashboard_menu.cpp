@@ -6,6 +6,7 @@
 #include "imgui_impl_dx11.h"
 
 #include "fonts/roboto_medium.cpp"
+#include "fonts/cousine_regular.cpp"
 
 using namespace steamvr_passthrough;
 using namespace steamvr_passthrough::log;
@@ -59,6 +60,7 @@ void DashboardMenu::RunThread()
 	io.LogFilename = nullptr;
 	m_mainFont = io.Fonts->AddFontFromMemoryCompressedTTF(roboto_medium_compressed_data, roboto_medium_compressed_size, 24);
 	m_smallFont = io.Fonts->AddFontFromMemoryCompressedTTF(roboto_medium_compressed_data, roboto_medium_compressed_size, 22);
+	m_fixedFont = io.Fonts->AddFontFromMemoryCompressedTTF(cousine_regular_compressed_data, cousine_regular_compressed_size, 18);
 	ImGui::StyleColorsDark();
 
 	SetupDX11();
@@ -149,7 +151,7 @@ std::string GetImageFormatName(ERenderAPI api, int64_t format)
 }
 
 
-void ScrollableSlider(const char* label, float* v, float v_min, float v_max, const char* format, float scrollFactor)
+inline void ScrollableSlider(const char* label, float* v, float v_min, float v_max, const char* format, float scrollFactor)
 {
 	ImGui::SliderFloat(label, v, v_min, v_max, format, ImGuiSliderFlags_None);
 	ImGui::SetItemKeyOwner(ImGuiKey_MouseWheelY);
@@ -173,7 +175,7 @@ void ScrollableSlider(const char* label, float* v, float v_min, float v_max, con
 }
 
 
-void ScrollableSliderInt(const char* label, int* v, int v_min, int v_max, const char* format, int scrollFactor)
+inline void ScrollableSliderInt(const char* label, int* v, int v_min, int v_max, const char* format, int scrollFactor)
 {
 	ImGui::SliderInt(label, v, v_min, v_max, format, ImGuiSliderFlags_None);
 	ImGui::SetItemKeyOwner(ImGuiKey_MouseWheelY);
@@ -267,6 +269,7 @@ if (bIsActiveTab) { ImGui::PopStyleColor(1); bIsActiveTab = false; }
 	ImGui::BeginChild("Sep1", ImVec2(0, 70));
 	ImGui::EndChild();
 
+	ImGui::PushFont(m_smallFont);
 	ImGui::Indent();
 	ImGui::Text("Application:");
 	ImGui::Text("%s", m_displayValues.currentApplication.c_str());
@@ -279,6 +282,7 @@ if (bIsActiveTab) { ImGui::PopStyleColor(1); bIsActiveTab = false; }
 	ImGui::Text("Passthrough:");
 	m_displayValues.bCorePassthroughActive ? ImGui::TextColored(colorTextGreen, "Active") : ImGui::TextColored(colorTextRed, "Inactive");
 	ImGui::Unindent();
+	ImGui::PopFont();
 
 	ImGui::BeginChild("Sep2", ImVec2(0, -ImGui::GetFrameHeightWithSpacing() - 30));
 	ImGui::EndChild();
@@ -326,23 +330,32 @@ if (bIsActiveTab) { ImGui::PopStyleColor(1); bIsActiveTab = false; }
 			TextDescription("Accurate depth estimation.");
 			IMGUI_BIG_SPACING;
 
+			ImGui::Text("Image Controls");
+			ImGui::PushItemWidth(ImGui::GetContentRegionAvail().x * 0.45f);
 			ScrollableSlider("Opacity", &mainConfig.PassthroughOpacity, 0.0f, 1.0f, "%.1f", 0.1f);
 			ScrollableSlider("Brightness", &mainConfig.Brightness, -50.0f, 50.0f, "%.0f", 1.0f);
 			ScrollableSlider("Contrast", &mainConfig.Contrast, 0.0f, 2.0f, "%.1f", 0.1f);
 			ScrollableSlider("Saturation", &mainConfig.Saturation, 0.0f, 2.0f, "%.1f", 0.1f);
+			ImGui::PopItemWidth();
 			IMGUI_BIG_SPACING;
 		}
 
 		ImGui::SetNextItemOpen(true, ImGuiCond_Once);
 		if (ImGui::CollapsingHeader("Projection Settings"))
 		{
-			ImGui::Spacing();
+			IMGUI_BIG_SPACING;
+
+			ImGui::SetNextItemWidth(ImGui::GetContentRegionAvail().x * 0.45f);
 			ScrollableSlider("Projection Distance (m)", &mainConfig.ProjectionDistanceFar, 0.5f, 20.0f, "%.1f", 0.1f);
 			TextDescription("The horizontal projection distance in 2D modes, and maximum projection distance in the 3D mode.");
+			IMGUI_BIG_SPACING;
 
+			ImGui::SetNextItemWidth(ImGui::GetContentRegionAvail().x * 0.45f);
 			ScrollableSlider("Floor Height Offset (m)", &mainConfig.FloorHeightOffset, 0.0f, 2.0f, "%.2f", 0.01f);
 			TextDescription("Allows setting the floor height higher in the 2D modes, for example to have correct projection on a table surface.");
+			IMGUI_BIG_SPACING;
 
+			ImGui::SetNextItemWidth(ImGui::GetContentRegionAvail().x * 0.45f);
 			ScrollableSlider("Field of View Scale", &mainConfig.FieldOfViewScale, 0.0f, 1.0f, "%.1f", 0.0f);
 			TextDescription("Sets the size of the rendered area in the Custom 2D and Stereo 3D projection modes.");
 		}	
@@ -363,6 +376,7 @@ if (bIsActiveTab) { ImGui::PopStyleColor(1); bIsActiveTab = false; }
 			TextDescription("Options for application controlled passthrough features built into the OpenXR core specification. Allows using the environment blend modes for passthrough.");
 			IMGUI_BIG_SPACING;
 
+			ImGui::PushFont(m_fixedFont);
 			ImGui::Text("Core passthrough:");
 			ImGui::SameLine();
 			if (m_displayValues.bCorePassthroughActive)
@@ -380,6 +394,7 @@ if (bIsActiveTab) { ImGui::PopStyleColor(1); bIsActiveTab = false; }
 			else if (m_displayValues.CoreCurrentMode == 2) { ImGui::Text("Additive"); }
 			else if (m_displayValues.CoreCurrentMode == 1) { ImGui::Text("Opaque"); }
 			else { ImGui::Text("Unknown"); }
+			ImGui::PopFont();
 
 			IMGUI_BIG_SPACING;
 
@@ -426,6 +441,8 @@ if (bIsActiveTab) { ImGui::PopStyleColor(1); bIsActiveTab = false; }
 		ImGui::SetNextItemOpen(true, ImGuiCond_Once);
 		if (ImGui::CollapsingHeader("Status"))
 		{
+			ImGui::PushFont(m_fixedFont);
+
 			if (m_displayValues.renderAPI == Vulkan)
 			{
 				ImGui::TextColored(colorTextRed, "Stereo reconstruction not supported under Vulkan!");
@@ -437,9 +454,7 @@ if (bIsActiveTab) { ImGui::PopStyleColor(1); bIsActiveTab = false; }
 			else
 			{
 				ImGui::TextColored(colorTextRed, "Stereo reconstruction disabled");
-			}
-
-			ImGui::PushFont(m_smallFont);
+			}			
 			ImGui::Text("Exposure to render latency: %.1fms", m_displayValues.frameToRenderLatencyMS);
 			ImGui::Text("Exposure to photons latency: %.1fms", m_displayValues.frameToPhotonsLatencyMS);
 			ImGui::Text("Passthrough CPU render duration: %.2fms", m_displayValues.renderTimeMS);
@@ -451,14 +466,7 @@ if (bIsActiveTab) { ImGui::PopStyleColor(1); bIsActiveTab = false; }
 		if (ImGui::CollapsingHeader("Settings"))
 		{
 			TextDescription("Settings for the 3D stereo reconstuction.");
-			ImGui::Checkbox("Use Multiple Cores", &stereoCustomConfig.StereoUseMulticore);
-			TextDescription("Allows the stereo calculations to use multiple CPU cores. This can be turned off for CPU limited applications.");
-
-			ScrollableSliderInt("Frame Skip Ratio", &stereoCustomConfig.StereoFrameSkip, 0, 14, "%d", 1);
-			TextDescription("Skip stereo processing of this many frames for each frame processed. This does not affect the frame rate of viewed camera frames, every frame will still be reprojected on the latest stereo data.");
-
-			ScrollableSliderInt("Image Downscale Factor", &stereoCustomConfig.StereoDownscaleFactor, 1, 16, "%d", 1);
-			TextDescription("Ratio of the stereo processed image to the camera frame. Larger values will improve performance.");
+			IMGUI_BIG_SPACING;
 
 			ImGui::BeginGroup();
 			ImGui::Text("Filtering");
@@ -480,6 +488,22 @@ if (bIsActiveTab) { ImGui::PopStyleColor(1); bIsActiveTab = false; }
 			}
 			TextDescription("Patches up invalid areas, and filters the output. May produce worse depth results.");
 			ImGui::EndGroup();
+
+			IMGUI_BIG_SPACING;
+
+			ImGui::Checkbox("Use Multiple Cores", &stereoCustomConfig.StereoUseMulticore);
+			TextDescription("Allows the stereo calculations to use multiple CPU cores. This can be turned off for CPU limited applications.");
+			IMGUI_BIG_SPACING;
+
+			ImGui::SetNextItemWidth(ImGui::GetContentRegionAvail().x * 0.45f);
+			ScrollableSliderInt("Frame Skip Ratio", &stereoCustomConfig.StereoFrameSkip, 0, 14, "%d", 1);
+			TextDescription("Skip stereo processing of this many frames for each frame processed. This does not affect the frame rate of viewed camera frames, every frame will still be reprojected on the latest stereo data.");
+			IMGUI_BIG_SPACING;
+
+			ImGui::SetNextItemWidth(ImGui::GetContentRegionAvail().x * 0.45f);
+			ScrollableSliderInt("Image Downscale Factor", &stereoCustomConfig.StereoDownscaleFactor, 1, 16, "%d", 1);
+			TextDescription("Ratio of the stereo processed image to the camera frame. Larger values will improve performance.");
+			IMGUI_BIG_SPACING;
 		}
 
 		ImGui::SetNextItemOpen(true, ImGuiCond_Once);
@@ -492,6 +516,8 @@ if (bIsActiveTab) { ImGui::PopStyleColor(1); bIsActiveTab = false; }
 			ImGui::SetNextItemOpen(true, ImGuiCond_Once);
 			if (ImGui::TreeNode("Block Matching"))
 			{
+				ImGui::Spacing();
+
 				/*ImGui::BeginGroup();
 				ImGui::Text("Algorithm");
 				if (ImGui::RadioButton("BM###AlgBM", sterestereoCustomConfigoConfig.StereoAlgorithm == StereoAlgorithm_BM))
@@ -528,6 +554,7 @@ if (bIsActiveTab) { ImGui::PopStyleColor(1); bIsActiveTab = false; }
 
 				IMGUI_BIG_SPACING;
 
+				ImGui::PushItemWidth(ImGui::GetContentRegionAvail().x * 0.45f);
 				ScrollableSliderInt("BlockSize", &stereoCustomConfig.StereoBlockSize, 1, 35, "%d", 2);
 				if (stereoCustomConfig.StereoBlockSize % 2 == 0) { stereoCustomConfig.StereoBlockSize += 1; }
 
@@ -545,6 +572,7 @@ if (bIsActiveTab) { ImGui::PopStyleColor(1); bIsActiveTab = false; }
 				ScrollableSliderInt("SGBM UniquenessRatio", &stereoCustomConfig.StereoSGBM_UniquenessRatio, 1, 32, "%d", 1);
 				ScrollableSliderInt("SGBM SpeckleWindowSize", &stereoCustomConfig.StereoSGBM_SpeckleWindowSize, 0, 300, "%d", 10);
 				ScrollableSliderInt("SGBM SpeckleRange", &stereoCustomConfig.StereoSGBM_SpeckleRange, 1, 8, "%d", 1);
+				ImGui::PopItemWidth();
 
 				ImGui::TreePop();
 			}
@@ -552,6 +580,7 @@ if (bIsActiveTab) { ImGui::PopStyleColor(1); bIsActiveTab = false; }
 			ImGui::SetNextItemOpen(true, ImGuiCond_Once);
 			if (ImGui::TreeNode("Filter Settings"))
 			{
+				ImGui::PushItemWidth(ImGui::GetContentRegionAvail().x * 0.45f);
 				ScrollableSlider("WLS Lambda", &stereoCustomConfig.StereoWLS_Lambda, 1.0f, 10000.0f, "%.0f", 100.0f);
 				ScrollableSlider("WLS Sigma", &stereoCustomConfig.StereoWLS_Sigma, 0.5f, 2.0f, "%.1f", 0.1f);
 				IMGUI_BIG_SPACING;
@@ -562,12 +591,14 @@ if (bIsActiveTab) { ImGui::PopStyleColor(1); bIsActiveTab = false; }
 				ScrollableSlider("FBS Lambda", &stereoCustomConfig.StereoFBS_Lambda, 0.0f, 256.0f, "%.0f", 1.0f);
 
 				ScrollableSliderInt("FBS Iterations", &stereoCustomConfig.StereoFBS_Iterations, 1, 35, "%d", 1);
+				ImGui::PopItemWidth();
 				ImGui::TreePop();
 			}
 		}
 		IMGUI_BIG_SPACING;
 
 		stereoCustomConfig.StereoReconstructionFreeze = stereoConfig.StereoReconstructionFreeze;
+		// TODO: Using the custom preset while we don't have presets.
 		stereoConfig = stereoCustomConfig;
 
 		ImGui::EndChild();
@@ -648,9 +679,22 @@ if (bIsActiveTab) { ImGui::PopStyleColor(1); bIsActiveTab = false; }
 		ImGui::BeginChild("TabDebug");
 
 		ImGui::SetNextItemOpen(true, ImGuiCond_Once);
-		if (ImGui::CollapsingHeader("Status"))
+		if (ImGui::CollapsingHeader("Debug"))
 		{
-			ImGui::PushFont(m_smallFont);
+			ImGui::BeginGroup();
+			ImGui::Checkbox("Freeze Stereo Projection", &stereoConfig.StereoReconstructionFreeze);
+			ImGui::Checkbox("Debug Depth", &mainConfig.DebugDepth);
+			ImGui::Checkbox("Debug Valid Stereo", &mainConfig.DebugStereoValid);
+			ImGui::Checkbox("Show Test Image", &mainConfig.ShowTestImage);
+			ImGui::EndGroup();
+
+			ImGui::SameLine();
+			ImGui::SeparatorEx(ImGuiSeparatorFlags_Vertical);
+			ImGui::SameLine();
+
+			ImGui::BeginGroup();
+		
+			ImGui::PushFont(m_fixedFont);
 			ImGui::Text("Layer Version: %s", steamvr_passthrough::VersionString.c_str());
 
 			switch (m_displayValues.renderAPI)
@@ -693,23 +737,26 @@ if (bIsActiveTab) { ImGui::PopStyleColor(1); bIsActiveTab = false; }
 			ImGui::Text("Passthrough CPU render duration: %.2fms", m_displayValues.renderTimeMS);
 			ImGui::Text("Stereo reconstruction duration: %.2fms", m_displayValues.stereoReconstructionTimeMS);
 			ImGui::PopFont();
-		}
-
-		ImGui::SetNextItemOpen(true, ImGuiCond_Once);
-		if (ImGui::CollapsingHeader("Debug"))
-		{
-			ImGui::Checkbox("Freeze Stereo Projection", &stereoConfig.StereoReconstructionFreeze);
-			ImGui::Checkbox("Debug Depth", &mainConfig.DebugDepth);
-			ImGui::Checkbox("Debug Valid Stereo", &mainConfig.DebugStereoValid);
-			ImGui::Checkbox("Show Test Image", &mainConfig.ShowTestImage);
+			ImGui::EndGroup();		
 		}
 
 		ImGui::SetNextItemOpen(true, ImGuiCond_Once);
 		if (ImGui::CollapsingHeader("Log"))
 		{
 			ImGui::BeginChild("Log", ImVec2(0, 0), true);
-			ImGui::Text("Log text goes here!");
+			ImGui::PushFont(m_fixedFont);
+			ImGui::PushTextWrapPos(ImGui::GetContentRegionAvail().x);
 
+			ReadLogBuffer([](std::deque<std::string>& logBuffer) 
+			{
+				for (auto it = logBuffer.begin(); it != logBuffer.end(); it++)
+				{
+					ImGui::Text(it->c_str());
+				}		
+			});
+
+			ImGui::PopTextWrapPos();
+			ImGui::PopFont();
 			ImGui::EndChild();
 		}
 		ImGui::EndChild();
@@ -780,6 +827,7 @@ void DashboardMenu::CreateOverlay()
 			vrOverlay->SetOverlayInputMethod(m_overlayHandle, vr::VROverlayInputMethod_Mouse);
 			vrOverlay->SetOverlayFlag(m_overlayHandle, vr::VROverlayFlags_IsPremultiplied, true);
 			vrOverlay->SetOverlayFlag(m_overlayHandle, vr::VROverlayFlags_SendVRDiscreteScrollEvents, true);
+			vrOverlay->SetOverlayTextureColorSpace(m_overlayHandle, vr::ColorSpace_Gamma);
 
 			vrOverlay->SetOverlayWidthInMeters(m_overlayHandle, 2.775f);
 

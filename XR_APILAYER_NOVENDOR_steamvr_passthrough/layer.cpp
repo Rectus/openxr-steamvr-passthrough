@@ -1,6 +1,6 @@
 ﻿// MIT License
 //
-// Copyright(c) 2022 Rectus
+// Copyright(c) 2023 Rectus
 //
 // Permission is hereby granted, free of charge, to any person obtaining a copy
 // of this softwareand associated documentation files(the "Software"), to deal
@@ -89,6 +89,7 @@ namespace
 			
 			XrResult result = OpenXrApi::xrCreateInstance(createInfo);
 
+			Log("Application %s creating OpenXR instance...\n", GetApplicationName().c_str());
 
 #if USE_TRACELOGGING
 			// Dump the application name and OpenXR runtime information to help debugging issues.
@@ -141,7 +142,7 @@ namespace
 
 				if (strncmp(instanceProperties.runtimeName, "SteamVR/OpenXR", 14))
 				{
-					ErrorLog("The active OpenXR runtime is not SteamVR, passthrough layer not enabled.");
+					ErrorLog("The active OpenXR runtime is not SteamVR, passthrough layer not enabled");
 					return result;
 				}
 			}
@@ -150,6 +151,7 @@ namespace
 			m_dashboardMenu = std::make_unique<DashboardMenu>(g_dllModule, m_configManager, m_openVRManager);
 
 			m_bSuccessfullyLoaded = true;
+			Log("OpenXR instance successfully created\n");
 
 			return result;
 		}
@@ -233,6 +235,7 @@ namespace
 
 					m_dashboardMenu->GetDisplayValues().bSessionActive = true;
 					m_dashboardMenu->GetDisplayValues().renderAPI = DirectX11;
+					Log("Direct3D 11 renderer initialized\n");
 
 					return true;
 				}
@@ -262,6 +265,7 @@ namespace
 
 					m_dashboardMenu->GetDisplayValues().bSessionActive = true;
 					m_dashboardMenu->GetDisplayValues().renderAPI = DirectX12;
+					Log("Direct3D 12 renderer initialized\n");
 
 					return true;
 				}
@@ -291,6 +295,7 @@ namespace
 
 					m_dashboardMenu->GetDisplayValues().bSessionActive = true;
 					m_dashboardMenu->GetDisplayValues().renderAPI = Vulkan;
+					Log("Vulkan renderer initialized\n");
 
 					return true;
 				}
@@ -335,14 +340,14 @@ namespace
 					m_currentSession = *session;
 					if (SetupRenderer(instance, createInfo, session))
 					{
-						Log("Passthrough API layer enabled for session.\n");
+						Log("Passthrough API layer enabled for session\n");
 						m_bPassthroughAvailable = true;
 						m_bUsePassthrough = m_configManager->GetConfig_Main().EnablePassthrough;
 						m_dashboardMenu->GetDisplayValues().currentApplication = GetApplicationName();
 					}
 					else
 					{
-						ErrorLog("Failed to initialize renderer.\n");
+						ErrorLog("Failed to initialize renderer\n");
 					}
 				}
 

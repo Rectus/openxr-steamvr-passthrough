@@ -64,15 +64,21 @@ The SteamVR settings UI will misconfigure the original HTC Vive camera if the fr
 
 
 ### Usage ###
-Starting an OpenXR application will automatically start the API layer. If the application natively supports passthrough, it may now enable it. While an application is running, the SteamVR dashboard will have an additional button in the bottom left, pressing it will open the settings overlay.
+Starting an OpenXR application will automatically start the API layer. If the application natively supports passthrough, the API layer will by default notify the application that additional environment blend modes are available. If the application does not support the OpenXR passthrough features, it is still possible to enable limited passthrough modes (see below).
+
+While an application is running, the SteamVR dashboard will have an additional button in the bottom left, pressing it will open the settings overlay.
 
 ![Settings menu](https://github.com/Rectus/openxr-steamvr-passthrough/blob/main/settings_menu.png?raw=true)
 
 The options under the OpenXR Core allow setting what passthrough modes are available for the application to use, as well as what mode it should prefer. Some applications may automatically switch to the preferred mode even though they don't support passthrough.
 
-The options under Overrides allow forcing the passthrough mode regardless of whether the application supports it. Note that the Alpha Blend mode will show nothing unless the application submits alpha channels to the compositor.
+The options under Overrides allow forcing the passthrough mode regardless of whether the application has support for passthrough. Note that the Alpha Blend mode will show nothing unless the application submits alpha channels to the compositor.
 
-The Masked override mode allows setting a chroma key color that gets replaced with the passthrough view, as well as range for how similar colors get replaced, and a smoothness of the transition.
+The Additive mode will blend the passthrough on top of the view.
+
+The Opaque mode will replace the application view with the passthrough.
+
+The Masked mode allows setting a chroma key color that gets replaced with the passthrough view, as well as range for how similar colors get replaced, and a smoothness of the transition.
 
 The settings can also be edited from `%APPDATA%\OpenXR SteamVR Passthrough\config.ini`
 
@@ -94,7 +100,6 @@ The following are required:
 
 ### Todo ###
 
-- Remake settings menu
 - Add partial support for the `XR_FB_passthrough` extension
 - OpenGL support
 - Add edge shader modes

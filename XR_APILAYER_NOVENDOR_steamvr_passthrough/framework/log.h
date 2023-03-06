@@ -49,4 +49,7 @@ namespace LAYER_NAMESPACE::log {
     // Error logging function. Goes silent after too many errors.
     void ErrorLog(const char* fmt, ...);
 
+    // Read buffer of log lines through passed function for display.
+    void ReadLogBuffer(void (*printFunc)(std::deque<std::string>& logBuffer));
+
 } // namespace LAYER_NAMESPACE::log

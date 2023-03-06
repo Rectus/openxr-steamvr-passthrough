@@ -86,14 +86,14 @@ struct Config_Stereo
 	int StereoSGBM_P2 = 0;
 	int StereoSGBM_DispMaxDiff = 0;
 	int StereoSGBM_PreFilterCap = 4;
-	int StereoSGBM_UniquenessRatio = 7;
-	int StereoSGBM_SpeckleWindowSize = 0;
+	int StereoSGBM_UniquenessRatio = 4;
+	int StereoSGBM_SpeckleWindowSize = 80;
 	int StereoSGBM_SpeckleRange = 1;
 
-	EStereoFiltering StereoFiltering = StereoFiltering_WLS_FBS;
+	EStereoFiltering StereoFiltering = StereoFiltering_WLS;
 	float StereoWLS_Lambda = 8000.0f;
 	float StereoWLS_Sigma = 1.8f;
-	float StereoFBS_Spatial = 8.0f;
+	float StereoFBS_Spatial = 6.0f;
 	float StereoFBS_Luma = 8.0f;
 	float StereoFBS_Chroma = 8.0f;
 	float StereoFBS_Lambda = 128.0f;

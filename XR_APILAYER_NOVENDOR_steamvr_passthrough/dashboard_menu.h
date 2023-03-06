@@ -89,5 +89,6 @@ private:
 
 	ImFont* m_mainFont;
 	ImFont* m_smallFont;
+	ImFont* m_fixedFont;
 };
 

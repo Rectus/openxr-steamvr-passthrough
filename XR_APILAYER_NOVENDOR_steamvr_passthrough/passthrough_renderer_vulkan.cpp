@@ -315,6 +315,7 @@ bool PassthroughRendererVulkan::InitRenderer()
 
 		if (vkCreateCommandPool(m_device, &poolInfo, nullptr, &m_commandPool) != VK_SUCCESS)
 		{
+			ErrorLog("vkCreateCommandPool failure!\n");
 			return false;
 		}
 	
@@ -325,6 +326,7 @@ bool PassthroughRendererVulkan::InitRenderer()
 
 		if (vkAllocateCommandBuffers(m_device, &allocInfo, m_commandBuffer) != VK_SUCCESS)
 		{
+			ErrorLog("vkAllocateCommandBuffers failure!\n");
 			return false;
 		}
 
@@ -350,6 +352,7 @@ bool PassthroughRendererVulkan::InitRenderer()
 
 	if (!m_vertexShader || !m_pixelShader || !m_prepassShader || !m_maskedPrepassShader || !m_maskedPixelShader)
 	{
+		ErrorLog("Shader module creation failure!\n");
 		return false;
 	}
 
@@ -367,6 +370,7 @@ bool PassthroughRendererVulkan::InitRenderer()
 
 		if (vkCreateDescriptorPool(m_device, &poolInfo, nullptr, &m_descriptorPool) != VK_SUCCESS)
 		{
+			ErrorLog("vkCreateDescriptorPool failure!\n");
 			return false;
 		}
 		m_deletionQueue.push_back([=]() { vkDestroyDescriptorPool(m_device, m_descriptorPool, nullptr); });
@@ -389,6 +393,7 @@ bool PassthroughRendererVulkan::InitRenderer()
 
 		if (vkCreateDescriptorSetLayout(m_device, &layoutInfo, nullptr, &m_descriptorLayout) != VK_SUCCESS)
 		{
+			ErrorLog("vkCreateDescriptorSetLayout failure!\n");
 			return false;
 		}
 		m_deletionQueue.push_back([=]() { vkDestroyDescriptorSetLayout(m_device, m_descriptorLayout, nullptr); });
@@ -409,6 +414,7 @@ bool PassthroughRendererVulkan::InitRenderer()
 
 		if (vkAllocateDescriptorSets(m_device, &allocInfo, m_descriptorSets) != VK_SUCCESS)
 		{
+			ErrorLog("vkAllocateDescriptorSets failure!\n");
 			return false;
 		}
 
@@ -417,6 +423,7 @@ bool PassthroughRendererVulkan::InitRenderer()
 		{
 			if (!CreateBuffer(m_device, m_physDevice, m_psPassConstantBuffer[i], m_psPassConstantBufferMem[i], 256, VK_BUFFER_USAGE_UNIFORM_BUFFER_BIT, VK_MEMORY_PROPERTY_HOST_VISIBLE_BIT | VK_MEMORY_PROPERTY_HOST_COHERENT_BIT, &m_deletionQueue))
 			{
+				ErrorLog("m_psPassConstantBuffer creation failure!\n");
 				return false;
 			}
 
@@ -430,6 +437,7 @@ bool PassthroughRendererVulkan::InitRenderer()
 
 			if (!CreateBuffer(m_device, m_physDevice, m_psMaskedConstantBuffer[i], m_psMaskedConstantBufferMem[i], 256, VK_BUFFER_USAGE_UNIFORM_BUFFER_BIT, VK_MEMORY_PROPERTY_HOST_VISIBLE_BIT | VK_MEMORY_PROPERTY_HOST_COHERENT_BIT, &m_deletionQueue))
 			{
+				ErrorLog("psMaskedConstantBuffer creation failure!\n");
 				return false;
 			}
 
@@ -452,12 +460,14 @@ bool PassthroughRendererVulkan::InitRenderer()
 	
 	if (vkCreateSampler(m_device, &samplerInfo, nullptr, &m_cameraSampler) != VK_SUCCESS)
 	{
+		ErrorLog("Camera vkCreateSampler failure!\n");
 		return false;
 	}
 	m_deletionQueue.push_back([=]() { vkDestroySampler(m_device, m_intermediateSampler, nullptr); });
 
 	if (vkCreateSampler(m_device, &samplerInfo, nullptr, &m_intermediateSampler) != VK_SUCCESS)
 	{
+		ErrorLog("Intermediate vkCreateSampler failure!\n");
 		return false;
 	}
 	m_deletionQueue.push_back([=]() { vkDestroySampler(m_device, m_cameraSampler, nullptr); });
@@ -518,6 +528,7 @@ bool PassthroughRendererVulkan::SetupPipeline(VkFormat format)
 
 	if (vkCreateRenderPass(m_device, &rpInfo, nullptr, &m_renderpass) != VK_SUCCESS)
 	{
+		ErrorLog("Default vkCreateRenderPass failure!\n");
 		return false;
 	}
 	m_deletionQueue.push_back([=]() { vkDestroyRenderPass(m_device, m_renderpass, nullptr); });
@@ -541,6 +552,7 @@ bool PassthroughRendererVulkan::SetupPipeline(VkFormat format)
 
 	if (vkCreateRenderPass(m_device, &maskedRPInfo, nullptr, &m_renderpassMaskedPrepass) != VK_SUCCESS)
 	{
+		ErrorLog("Masked vkCreateRenderPass failure!\n");
 		return false;
 	}
 	m_deletionQueue.push_back([=]() { vkDestroyRenderPass(m_device, m_renderpassMaskedPrepass, nullptr); });
@@ -560,6 +572,7 @@ bool PassthroughRendererVulkan::SetupPipeline(VkFormat format)
 
 	if (vkCreatePipelineLayout(m_device, &pipelineLayoutInfo, nullptr, &m_pipelineLayout) != VK_SUCCESS)
 	{
+		ErrorLog("vkCreatePipelineLayout failure!\n");
 		return false;
 	}
 	m_deletionQueue.push_back([=]() { vkDestroyPipelineLayout(m_device, m_pipelineLayout, nullptr); });
@@ -786,6 +799,7 @@ bool PassthroughRendererVulkan::SetupPipeline(VkFormat format)
 
 	if (vkCreateGraphicsPipelines(m_device, VK_NULL_HANDLE, (uint32_t)pipelineInfos.size(), pipelineInfos.data(), nullptr, pipelines.data()) != VK_SUCCESS)
 	{
+		ErrorLog("vkCreateGraphicsPipelines failure!\n");
 		return false;
 	}
 
@@ -817,6 +831,7 @@ VkShaderModule PassthroughRendererVulkan::CreateShaderModule(const uint32_t* byt
 
 	if (vkCreateShaderModule(m_device, &createInfo, nullptr, &module) != VK_SUCCESS)
 	{
+		ErrorLog("vkCreateShaderModule failure!\n");
 		return nullptr;
 	}
 
@@ -849,6 +864,7 @@ bool PassthroughRendererVulkan::SetupTestImage(VkCommandBuffer commandBuffer)
 
 	if (!CreateBuffer(m_device, m_physDevice, m_testPatternBuffer, m_testPatternBufferMem, image.size(), VK_BUFFER_USAGE_TRANSFER_SRC_BIT, VK_MEMORY_PROPERTY_HOST_VISIBLE_BIT, &m_deletionQueue))
 	{
+		ErrorLog("Test image buffer creation failure!\n");
 		return false;
 	}
 
@@ -873,6 +889,7 @@ bool PassthroughRendererVulkan::SetupTestImage(VkCommandBuffer commandBuffer)
 
 	if (vkCreateImage(m_device, &imageInfo, nullptr, &m_testPattern) != VK_SUCCESS)
 	{
+		ErrorLog("Test image vkCreateImage failure!\n");
 		return false;
 	}
 	m_deletionQueue.push_back([=]() { vkDestroyImage(m_device, m_testPattern, nullptr); });
@@ -894,6 +911,7 @@ bool PassthroughRendererVulkan::SetupTestImage(VkCommandBuffer commandBuffer)
 			allocInfo.memoryTypeIndex = i;
 			if (vkAllocateMemory(m_device, &allocInfo, nullptr, &m_testPatternMem) != VK_SUCCESS)
 			{
+				ErrorLog("Test image vkAllocateMemory failure!\n");
 				return false;
 			}
 			break;
@@ -902,6 +920,7 @@ bool PassthroughRendererVulkan::SetupTestImage(VkCommandBuffer commandBuffer)
 
 	if (!m_testPatternMem)
 	{
+		ErrorLog("Test image memory allocation failure!\n");
 		return false;
 	}
 	m_deletionQueue.push_back([=]() { vkFreeMemory(m_device, m_testPatternMem, nullptr); });
@@ -923,6 +942,7 @@ bool PassthroughRendererVulkan::SetupTestImage(VkCommandBuffer commandBuffer)
 
 	if (vkCreateImageView(m_device, &viewInfo, nullptr, &m_testPatternView) != VK_SUCCESS)
 	{
+		ErrorLog("Test image vkCreateImageView failure!\n");
 		return false;
 	}
 	m_deletionQueue.push_back([=]() { vkDestroyImageView(m_device, m_testPatternView, nullptr); });
@@ -974,6 +994,7 @@ void PassthroughRendererVulkan::InitRenderTarget(const ERenderEye eye, void* ren
 	if (vkCreateImageView(m_device, &viewInfo, nullptr, &m_renderTargetViews[bufferIndex]) != VK_SUCCESS)
 	{
 		m_renderTargets[bufferIndex] = nullptr;
+		ErrorLog("Render target vkCreateImageView failure!\n");
 		return;
 	}
 
@@ -988,6 +1009,7 @@ void PassthroughRendererVulkan::InitRenderTarget(const ERenderEye eye, void* ren
 	{
 		m_renderTargets[bufferIndex] = nullptr;
 		vkDestroyImageView(m_device, m_renderTargetViews[bufferIndex], nullptr);
+		ErrorLog("Render target vkCreateFramebuffer failure!\n");
 		return;
 	}
 }
@@ -1046,6 +1068,7 @@ bool PassthroughRendererVulkan::GenerateMesh(VkCommandBuffer commandBuffer)
 
 	if (!CreateBuffer(m_device, m_physDevice, m_vertexBuffer, m_vertexBufferMem, bufferSize, VK_BUFFER_USAGE_VERTEX_BUFFER_BIT, VK_MEMORY_PROPERTY_HOST_VISIBLE_BIT, &m_deletionQueue))
 	{
+		ErrorLog("Mesh vertex buffer creation failure!\n");
 		return false;
 	}
 
@@ -1075,6 +1098,7 @@ void PassthroughRendererVulkan::SetupUVDistortionMap(std::shared_ptr<std::vector
 
 	if (!CreateBuffer(m_device, m_physDevice, m_uvDistortionMapBuffer, m_uvDistortionMapBufferMem, uvDistortionMap->size() * sizeof(float), VK_BUFFER_USAGE_TRANSFER_SRC_BIT, VK_MEMORY_PROPERTY_HOST_VISIBLE_BIT, &m_deletionQueue))
 	{
+		ErrorLog("UV distortion map buffer creation failure!\n");
 		return;
 	}
 
@@ -1551,6 +1575,7 @@ void PassthroughRendererVulkan::UpdateDescriptorSets(VkCommandBuffer commandBuff
 
 
 
+static bool g_bVulkanStereoErrorShown = false;
 
 void PassthroughRendererVulkan::RenderPassthroughFrame(const XrCompositionLayerProjection* layer, CameraFrame* frame, EPassthroughBlendMode blendMode, int leftSwapchainIndex, int rightSwapchainIndex, std::shared_ptr<DepthFrame> depthFrame, UVDistortionParameters& distortionParams)
 {
@@ -1564,6 +1589,11 @@ void PassthroughRendererVulkan::RenderPassthroughFrame(const XrCompositionLayerP
 	// TODO: Can't support stereo in Vulkan as long as SteamVR hangs when reading the camera frame buffer under it.
 	if (mainConf.ProjectionMode == ProjectionStereoReconstruction)
 	{
+		if (!g_bVulkanStereoErrorShown)
+		{
+			g_bVulkanStereoErrorShown = true;
+			ErrorLog("Stereo reconstruction is not currently supported under Vulkan!\n");
+		}
 		return;
 	}
 
