@@ -58,7 +58,11 @@ VS_OUTPUT main(float3 inPosition : POSITION, uint vertexID : SV_VertexID)
 
 	output.projectionValidity = 0.0;
 
-	//if (disparity < 0.00001) { disparity = 0.00001;}
+	if (disparity < 0.0000001) 
+	{ 
+        disparity = 0.001;
+        output.projectionValidity = -1.0;
+    }
 	if (disparity > 0.9) 
 	{
 		disparity = 0.0001; 

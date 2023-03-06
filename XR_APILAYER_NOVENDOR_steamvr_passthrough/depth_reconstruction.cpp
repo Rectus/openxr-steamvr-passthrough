@@ -466,14 +466,8 @@ void DepthReconstruction::RunThread()
             std::unique_lock writeLock(m_underConstructionDepthFrame->readWriteMutex);
 
             m_disparityMatrix = cv::Mat(m_cvImageHeight, m_cvImageWidth, CV_16U, m_underConstructionDepthFrame->disparityMap->data());
-
-            for (uint32_t y = 0; y < m_cvImageHeight; y++)
-            {
-                for (uint32_t x = 0; x < m_cvImageWidth; x++)
-                {
-                    m_disparityMatrix.at<uint16_t>(y, x) = (uint16_t)outputMatrix->at<int16_t>(y, x + m_maxDisparity);
-                }
-            }
+            
+            (*outputMatrix)(cv::Rect(m_maxDisparity, 0, m_cvImageWidth, m_cvImageHeight)).convertTo(m_disparityMatrix, CV_16U);
 
             XrMatrix4x4f_Multiply(&m_underConstructionDepthFrame->disparityViewToWorldLeft, &viewToWorld, &m_disparityRotationInvLeft);
             XrMatrix4x4f_Multiply(&m_underConstructionDepthFrame->disparityViewToWorldRight, &viewToWorld, &m_disparityRotationInvRight);
