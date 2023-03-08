@@ -12,12 +12,13 @@ enum EProjectionMode
 struct Config_Main
 {
 	bool EnablePassthrough = true;
-	EProjectionMode ProjectionMode = ProjectionRoomView2D;
+	EProjectionMode ProjectionMode = ProjectionCustom2D;
 
 	float PassthroughOpacity = 1.0f;
 	float ProjectionDistanceFar = 10.0f;
 	float FloorHeightOffset = 0.0f;
-	float FieldOfViewScale = 0.7f;
+	float FieldOfViewScale = 0.9f;
+	float DepthOffsetCalibration = 1.0f;
 
 	float Brightness = 0.0f;
 	float Contrast = 1.0f;
@@ -25,6 +26,7 @@ struct Config_Main
 
 	bool RequireSteamVRRuntime = true;
 
+	// Transient settings not written to file
 	bool ShowTestImage = false;
 	bool DebugDepth = false;
 	bool DebugStereoValid = false;
@@ -74,17 +76,18 @@ struct Config_Stereo
 	bool StereoUseMulticore = true;
 	bool StereoReconstructionFreeze = false;
 	bool StereoRectificationFiltering = false;
+	bool StereoUseColor = false;
 	int StereoFrameSkip = 0;
-	int StereoDownscaleFactor = 4;
+	int StereoDownscaleFactor = 2;
 	EStereoAlgorithm StereoAlgorithm = StereoAlgorithm_SGBM;
 	//int StereoAlgorithmQuality = 0;
-	int StereoBlockSize = 7;
+	int StereoBlockSize = 1;
 	int StereoMinDisparity = 0;
 	int StereoMaxDisparity = 96;
 	EStereoSGBM_Mode StereoSGBM_Mode = StereoMode_SGBM3Way;
-	int StereoSGBM_P1 = 0;
-	int StereoSGBM_P2 = 0;
-	int StereoSGBM_DispMaxDiff = 0;
+	int StereoSGBM_P1 = 200;
+	int StereoSGBM_P2 = 220;
+	int StereoSGBM_DispMaxDiff = 3;
 	int StereoSGBM_PreFilterCap = 4;
 	int StereoSGBM_UniquenessRatio = 4;
 	int StereoSGBM_SpeckleWindowSize = 80;
@@ -100,6 +103,12 @@ struct Config_Stereo
 	int StereoFBS_Iterations = 11;
 };
 
+struct Config_Depth
+{
+	bool DepthReadFromApplication = true;
+	bool DepthWriteOutput = true;
+	bool DepthForceComposition = false;
+};
 
 
 class ConfigManager
@@ -117,6 +126,7 @@ public:
 	Config_Core& GetConfig_Core() { return m_configCore; }
 	Config_Stereo& GetConfig_Stereo() { return m_configStereo; }
 	Config_Stereo& GetConfig_CustomStereo() { return m_configCustomStereo; }
+	Config_Depth& GetConfig_Depth() { return m_configDepth; }
 
 
 private:
@@ -125,10 +135,12 @@ private:
 	void ParseConfig_Main();
 	void ParseConfig_Core();
 	void ParseConfig_Stereo();
+	void ParseConfig_Depth();
 
 	void UpdateConfig_Main();
 	void UpdateConfig_Core();
 	void UpdateConfig_Stereo();
+	void UpdateConfig_Depth();
 
 	std::wstring m_configFile;
 	CSimpleIniA m_iniData;
@@ -138,5 +150,6 @@ private:
 	Config_Core m_configCore;
 	Config_Stereo m_configStereo;
 	Config_Stereo m_configCustomStereo;
+	Config_Depth m_configDepth;
 };
 

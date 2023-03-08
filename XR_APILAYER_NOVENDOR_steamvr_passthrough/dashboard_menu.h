@@ -34,10 +34,12 @@ struct MenuDisplayValues
 	int frameBufferHeight = 0;
 	XrCompositionLayerFlags frameBufferFlags = 0;
 	int64_t frameBufferFormat = 0;
+	int64_t depthBufferFormat = 0;
 	float frameToRenderLatencyMS = 0.0f;
 	float frameToPhotonsLatencyMS = 0.0f;
 	float renderTimeMS = 0.0f;
 	float stereoReconstructionTimeMS = 0.0f;
+	float frameRetrievalTimeMS = 0.0f;
 
 	bool bCorePassthroughActive = false;
 	int CoreCurrentMode = 0;
@@ -90,5 +92,8 @@ private:
 	ImFont* m_mainFont;
 	ImFont* m_smallFont;
 	ImFont* m_fixedFont;
+
+	std::vector<DeviceDebugProperties> m_deviceDebugProps;
+	int m_currentDebugDevice;
 };
 

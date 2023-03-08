@@ -31,6 +31,7 @@ void ConfigManager::ReadConfigFile()
 		ParseConfig_Main();
 		ParseConfig_Core();
 		ParseConfig_Stereo();
+		ParseConfig_Depth();
 
 		// TODO: Using the custom preset while we don't have presets.
 		m_configStereo = m_configCustomStereo;
@@ -43,6 +44,7 @@ void ConfigManager::UpdateConfigFile()
 	UpdateConfig_Main();
 	UpdateConfig_Core();
 	UpdateConfig_Stereo();
+	UpdateConfig_Depth();
 
 	SI_Error result = m_iniData.SaveFile(m_configFile.c_str());
 	if (result < 0)
@@ -76,6 +78,7 @@ void ConfigManager::ResetToDefaults()
 	m_configCore = Config_Core();
 	m_configStereo = Config_Stereo();
 	m_configCustomStereo = Config_Stereo();
+	m_configDepth = Config_Depth();
 	UpdateConfigFile();
 }
 
@@ -84,11 +87,11 @@ void ConfigManager::ParseConfig_Main()
 	m_configMain.EnablePassthrough = m_iniData.GetBoolValue("Main", "EnablePassthrough", m_configMain.EnablePassthrough);
 	m_configMain.ProjectionMode = (EProjectionMode)m_iniData.GetLongValue("Main", "ProjectionMode", m_configMain.ProjectionMode);
 
-	//m_configMain.ShowTestImage = m_iniData.GetBoolValue("Main", "ShowTestImage", m_configMain.ShowTestImage);
 	m_configMain.PassthroughOpacity = (float)m_iniData.GetDoubleValue("Main", "PassthroughOpacity", m_configMain.PassthroughOpacity);
 	m_configMain.ProjectionDistanceFar = (float)m_iniData.GetDoubleValue("Main", "ProjectionDistanceFar", m_configMain.ProjectionDistanceFar);
 	m_configMain.FloorHeightOffset = (float)m_iniData.GetDoubleValue("Main", "FloorHeightOffset", m_configMain.FloorHeightOffset);
 	m_configMain.FieldOfViewScale = (float)m_iniData.GetDoubleValue("Main", "FieldOfViewScale", m_configMain.FieldOfViewScale);
+	m_configMain.DepthOffsetCalibration = (float)m_iniData.GetDoubleValue("Main", "DepthOffsetCalibration", m_configMain.DepthOffsetCalibration);
 
 	m_configMain.Brightness = (float)m_iniData.GetDoubleValue("Main", "Brightness", m_configMain.Brightness);
 	m_configMain.Contrast = (float)m_iniData.GetDoubleValue("Main", "Contrast", m_configMain.Contrast);
@@ -123,6 +126,7 @@ void ConfigManager::ParseConfig_Stereo()
 {
 	m_configCustomStereo.StereoUseMulticore = m_iniData.GetBoolValue("StereoCustom", "StereoUseMulticore", m_configCustomStereo.StereoUseMulticore);
 	m_configCustomStereo.StereoRectificationFiltering = m_iniData.GetBoolValue("StereoCustom", "StereoRectificationFiltering", m_configCustomStereo.StereoRectificationFiltering);
+	m_configCustomStereo.StereoUseColor = m_iniData.GetBoolValue("StereoCustom", "StereoUseColor", m_configCustomStereo.StereoUseColor);
 
 	m_configCustomStereo.StereoFrameSkip = m_iniData.GetLongValue("StereoCustom", "StereoFrameSkip", m_configCustomStereo.StereoFrameSkip);
 	m_configCustomStereo.StereoDownscaleFactor = m_iniData.GetLongValue("StereoCustom", "StereoDownscaleFactor", m_configCustomStereo.StereoDownscaleFactor);
@@ -149,6 +153,14 @@ void ConfigManager::ParseConfig_Stereo()
 	m_configCustomStereo.StereoFBS_Iterations = m_iniData.GetLongValue("StereoCustom", "StereoFBS_Iterations", m_configCustomStereo.StereoFBS_Iterations);
 }
 
+void ConfigManager::ParseConfig_Depth()
+{
+	m_configDepth.DepthReadFromApplication = m_iniData.GetBoolValue("Depth", "DepthReadFromApplication", m_configDepth.DepthReadFromApplication);
+	m_configDepth.DepthWriteOutput = m_iniData.GetBoolValue("Depth", "DepthWriteOutput", m_configDepth.DepthWriteOutput);
+	m_configDepth.DepthForceComposition = m_iniData.GetBoolValue("Depth", "DepthForceComposition", m_configDepth.DepthForceComposition);
+}
+
+
 void ConfigManager::UpdateConfig_Main()
 {
 	m_iniData.SetBoolValue("Main", "EnablePassthrough", m_configMain.EnablePassthrough);
@@ -159,6 +171,7 @@ void ConfigManager::UpdateConfig_Main()
 	m_iniData.SetDoubleValue("Main", "ProjectionDistanceFar", m_configMain.ProjectionDistanceFar);
 	m_iniData.SetDoubleValue("Main", "FloorHeightOffset", m_configMain.FloorHeightOffset);
 	m_iniData.SetDoubleValue("Main", "FieldOfViewScale", m_configMain.FieldOfViewScale);
+	m_iniData.SetDoubleValue("Main", "DepthOffsetCalibration", m_configMain.DepthOffsetCalibration);
 
 	m_iniData.SetDoubleValue("Main", "Brightness", m_configMain.Brightness);
 	m_iniData.SetDoubleValue("Main", "Contrast", m_configMain.Contrast);
@@ -193,6 +206,7 @@ void ConfigManager::UpdateConfig_Stereo()
 {
 	m_iniData.SetBoolValue("StereoCustom", "StereoUseMulticore", m_configCustomStereo.StereoUseMulticore);
 	m_iniData.SetBoolValue("StereoCustom", "StereoRectificationFiltering", m_configCustomStereo.StereoRectificationFiltering);
+	m_iniData.SetBoolValue("StereoCustom", "StereoUseColor", m_configCustomStereo.StereoUseColor);
 	m_iniData.SetLongValue("StereoCustom", "StereoFrameSkip", m_configCustomStereo.StereoFrameSkip);
 	m_iniData.SetLongValue("StereoCustom", "StereoDownscaleFactor", m_configCustomStereo.StereoDownscaleFactor);
 	m_iniData.SetLongValue("StereoCustom", "StereoAlgorithm", m_configCustomStereo.StereoAlgorithm);
@@ -216,4 +230,11 @@ void ConfigManager::UpdateConfig_Stereo()
 	m_iniData.SetDoubleValue("StereoCustom", "StereoFBS_Chroma", m_configCustomStereo.StereoFBS_Chroma);
 	m_iniData.SetDoubleValue("StereoCustom", "StereoFBS_Lambda", m_configCustomStereo.StereoFBS_Lambda);
 	m_iniData.SetLongValue("StereoCustom", "StereoFBS_Iterations", m_configCustomStereo.StereoFBS_Iterations);
+}
+
+void ConfigManager::UpdateConfig_Depth()
+{
+	m_iniData.SetBoolValue("Depth", "DepthReadFromApplication", m_configDepth.DepthReadFromApplication);
+	m_iniData.SetBoolValue("Depth", "DepthWriteOutput", m_configDepth.DepthWriteOutput);
+	m_iniData.SetBoolValue("Depth", "DepthForceComposition", m_configDepth.DepthForceComposition);
 }

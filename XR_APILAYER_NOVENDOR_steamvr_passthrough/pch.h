@@ -53,7 +53,8 @@ using namespace std::chrono_literals;
 	#include <windows.h>
 	#include <unknwn.h>
 	#include <wrl.h>
-	#include <d3d11.h>
+	#include <d3d11_4.h>
+	#include <dxgi1_4.h>
 	#include <d3d12.h>
 
 	using Microsoft::WRL::ComPtr;

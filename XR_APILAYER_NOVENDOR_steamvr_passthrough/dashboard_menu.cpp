@@ -227,6 +227,7 @@ void DashboardMenu::TickMenu()
 	Config_Core& coreConfig = m_configManager->GetConfig_Core();
 	Config_Stereo& stereoConfig = m_configManager->GetConfig_Stereo();
 	Config_Stereo& stereoCustomConfig = m_configManager->GetConfig_CustomStereo();
+	Config_Depth& depthConfig = m_configManager->GetConfig_Depth();
 
 	ImVec4 colorTextGreen(0.2f, 0.8f, 0.2f, 1.0f);
 	ImVec4 colorTextRed(0.8f, 0.2f, 0.2f, 1.0f);
@@ -310,39 +311,50 @@ if (bIsActiveTab) { ImGui::PopStyleColor(1); bIsActiveTab = false; }
 			IMGUI_BIG_SPACING;
 
 			ImGui::Text("Projection Mode");
-			TextDescription("Method for projectiong the passthrough cameras to the VR view.");
-			if (ImGui::RadioButton("Room View 2D", mainConfig.ProjectionMode == ProjectionRoomView2D))
+			TextDescription("Method for projecting the passthrough cameras to the VR view.");
+			if (ImGui::RadioButton("2D Room View", mainConfig.ProjectionMode == ProjectionRoomView2D))
 			{
 				mainConfig.ProjectionMode = ProjectionRoomView2D;
 			}
 			TextDescription("Cylindrical projection with floor. Matches the projection in the SteamVR Room View 2D mode.");
 
-			if (ImGui::RadioButton("Custom 2D (Experimental)", mainConfig.ProjectionMode == ProjectionCustom2D))
+			if (ImGui::RadioButton("2D Custom", mainConfig.ProjectionMode == ProjectionCustom2D))
 			{
 				mainConfig.ProjectionMode = ProjectionCustom2D;
 			}
 			TextDescription("Cylindrical projection with floor. Custom distortion correction and projection calculation.");
 
-			if (ImGui::RadioButton("Stereo 3D (Experimental)", mainConfig.ProjectionMode == ProjectionStereoReconstruction))
+			if (ImGui::RadioButton("3D Stereo (Experimental)", mainConfig.ProjectionMode == ProjectionStereoReconstruction))
 			{
 				mainConfig.ProjectionMode = ProjectionStereoReconstruction;
 			}
-			TextDescription("Accurate depth estimation.");
+			TextDescription("Full depth estimation.");
 			IMGUI_BIG_SPACING;
 
-			ImGui::Text("Image Controls");
-			ImGui::PushItemWidth(ImGui::GetContentRegionAvail().x * 0.45f);
-			ScrollableSlider("Opacity", &mainConfig.PassthroughOpacity, 0.0f, 1.0f, "%.1f", 0.1f);
-			ScrollableSlider("Brightness", &mainConfig.Brightness, -50.0f, 50.0f, "%.0f", 1.0f);
-			ScrollableSlider("Contrast", &mainConfig.Contrast, 0.0f, 2.0f, "%.1f", 0.1f);
-			ScrollableSlider("Saturation", &mainConfig.Saturation, 0.0f, 2.0f, "%.1f", 0.1f);
-			ImGui::PopItemWidth();
-			IMGUI_BIG_SPACING;
+			ImGui::SetNextItemOpen(true, ImGuiCond_Once);
+			if (ImGui::TreeNode("Image Controls"))
+			{
+				ImGui::PushItemWidth(ImGui::GetContentRegionAvail().x * 0.45f);
+				ScrollableSlider("Opacity", &mainConfig.PassthroughOpacity, 0.0f, 1.0f, "%.1f", 0.1f);
+				ScrollableSlider("Brightness", &mainConfig.Brightness, -50.0f, 50.0f, "%.0f", 1.0f);
+				ScrollableSlider("Contrast", &mainConfig.Contrast, 0.0f, 2.0f, "%.1f", 0.1f);
+				ScrollableSlider("Saturation", &mainConfig.Saturation, 0.0f, 2.0f, "%.1f", 0.1f);
+				ImGui::PopItemWidth();
+				IMGUI_BIG_SPACING;
+
+				ImGui::TreePop();
+			}
 		}
 
 		ImGui::SetNextItemOpen(true, ImGuiCond_Once);
 		if (ImGui::CollapsingHeader("Projection Settings"))
 		{
+			IMGUI_BIG_SPACING;
+
+			ImGui::SetNextItemWidth(ImGui::GetContentRegionAvail().x * 0.45f);
+			ScrollableSlider("Depth Offset Calibration", &mainConfig.DepthOffsetCalibration, 0.5f, 1.5f, "%.2f", 0.01f);
+			TextDescription("Calibration to compensate for incorrect distance between stereo cameras.");
+
 			IMGUI_BIG_SPACING;
 
 			ImGui::SetNextItemWidth(ImGui::GetContentRegionAvail().x * 0.45f);
@@ -352,12 +364,13 @@ if (bIsActiveTab) { ImGui::PopStyleColor(1); bIsActiveTab = false; }
 
 			ImGui::SetNextItemWidth(ImGui::GetContentRegionAvail().x * 0.45f);
 			ScrollableSlider("Floor Height Offset (m)", &mainConfig.FloorHeightOffset, 0.0f, 2.0f, "%.2f", 0.01f);
-			TextDescription("Allows setting the floor height higher in the 2D modes, for example to have correct projection on a table surface.");
+			TextDescription("Allows setting the floor height higher in the 2D modes,\nfor example to have correct projection on a table surface.");
 			IMGUI_BIG_SPACING;
-
+			
 			ImGui::SetNextItemWidth(ImGui::GetContentRegionAvail().x * 0.45f);
-			ScrollableSlider("Field of View Scale", &mainConfig.FieldOfViewScale, 0.0f, 1.0f, "%.1f", 0.0f);
+			ScrollableSlider("Field of View Scale", &mainConfig.FieldOfViewScale, 0.0f, 1.0f, "%.1f", 0.1f);
 			TextDescription("Sets the size of the rendered area in the Custom 2D and Stereo 3D projection modes.");
+
 		}	
 		IMGUI_BIG_SPACING;
 
@@ -509,6 +522,9 @@ if (bIsActiveTab) { ImGui::PopStyleColor(1); bIsActiveTab = false; }
 		ImGui::SetNextItemOpen(true, ImGuiCond_Once);
 		if (ImGui::CollapsingHeader("Advanced"))
 		{
+			ImGui::Checkbox("Use Color", &stereoCustomConfig.StereoUseColor);
+			TextDescription("Uses full color images for stereo proecssing.");
+
 			ImGui::Checkbox("Rectification Filtering", &stereoCustomConfig.StereoRectificationFiltering);
 			TextDescription("Applies linear filtering before stereo processing.");
 			IMGUI_BIG_SPACING;
@@ -609,8 +625,29 @@ if (bIsActiveTab) { ImGui::PopStyleColor(1); bIsActiveTab = false; }
 	if (m_activeTab == TabOverrides)
 	{
 		ImGui::BeginChild("Overrides Pane");
+
 		ImGui::SetNextItemOpen(true, ImGuiCond_Once);
-		if (ImGui::CollapsingHeader("Overrides"))
+		if (ImGui::CollapsingHeader("Depth"))
+		{
+			ImGui::Checkbox("Force Depth Composition", &depthConfig.DepthForceComposition);
+			TextDescription("Enables composing the passthough by depth for applications that submit a depth buffer.");
+			
+			//ImGui::SetNextItemOpen(true, ImGuiCond_Once);
+			if (ImGui::TreeNode("Advanced"))
+			{
+				ImGui::Checkbox("Read Depth Buffers", &depthConfig.DepthReadFromApplication);
+				TextDescription("Allow reading depth buffers submitted by the application.");
+
+				ImGui::Checkbox("Write Depth", &depthConfig.DepthWriteOutput);
+				TextDescription("Allows writing passthrough depth to depth buffers submitted to the runtime.");
+
+				ImGui::TreePop();
+			}
+			IMGUI_BIG_SPACING;
+		}
+
+		ImGui::SetNextItemOpen(true, ImGuiCond_Once);
+		if (ImGui::CollapsingHeader("Mode"))
 		{
 			ImGui::Checkbox("Force Passthrough Mode", &coreConfig.CoreForcePassthrough);
 			TextDescription("Forces passthrough on even if the application does not support it.");
@@ -643,7 +680,9 @@ if (bIsActiveTab) { ImGui::PopStyleColor(1); bIsActiveTab = false; }
 		ImGui::SetNextItemOpen(true, ImGuiCond_Once);
 		if (ImGui::CollapsingHeader("Masked Croma Key Settings"))
 		{
-			ImGui::BeginChild("KeySettings", ImVec2(OVERLAY_RES_WIDTH * 0.48f, 0));
+			
+			ImGui::BeginGroup();
+			ImGui::PushItemWidth(ImGui::GetContentRegionAvail().x * 0.35f);
 			ScrollableSlider("Chroma Range", &coreConfig.CoreForceMaskedFractionChroma, 0.0f, 1.0f, "%.2f", 0.01f);
 			ScrollableSlider("Luma Range", &coreConfig.CoreForceMaskedFractionLuma, 0.0f, 1.0f, "%.2f", 0.01f);
 			ScrollableSlider("Smoothing", &coreConfig.CoreForceMaskedSmoothing, 0.01f, 0.2f, "%.3f", 0.005f);
@@ -660,13 +699,16 @@ if (bIsActiveTab) { ImGui::PopStyleColor(1); bIsActiveTab = false; }
 				coreConfig.CoreForceMaskedUseCameraImage = true;
 			}
 			ImGui::EndGroup();
+			ImGui::PopItemWidth();
 
-			ImGui::EndChild();
+			ImGui::EndGroup();
+
 			ImGui::SameLine();
 
-			ImGui::BeginChild("KeyPicker");
+			ImGui::BeginGroup();
+			ImGui::SetNextItemWidth(ImGui::GetContentRegionAvail().x * 0.75f);
 			ImGui::ColorPicker3("Key", coreConfig.CoreForceMaskedKeyColor, ImGuiColorEditFlags_Uint8 | ImGuiColorEditFlags_DisplayRGB | ImGuiColorEditFlags_DisplayHSV | ImGuiColorEditFlags_PickerHueBar);
-			ImGui::EndChild();
+			ImGui::EndGroup();
 		}
 
 		ImGui::EndChild();
@@ -730,20 +772,269 @@ if (bIsActiveTab) { ImGui::PopStyleColor(1); bIsActiveTab = false; }
 				ImGui::Text("Flags: No alpha");
 			}
 
-			ImGui::Text("Buffer format: %s (%li)", GetImageFormatName(m_displayValues.renderAPI, m_displayValues.frameBufferFormat).c_str(), m_displayValues.frameBufferFormat);
+			ImGui::Text("Framebuffer format: %s (%li)", GetImageFormatName(m_displayValues.renderAPI, m_displayValues.frameBufferFormat).c_str(), m_displayValues.frameBufferFormat);
+			ImGui::Text("Depthbuffer format: %s (%li)", GetImageFormatName(m_displayValues.renderAPI, m_displayValues.depthBufferFormat).c_str(), m_displayValues.depthBufferFormat);
 
 			ImGui::Text("Exposure to render latency: %.1fms", m_displayValues.frameToRenderLatencyMS);
 			ImGui::Text("Exposure to photons latency: %.1fms", m_displayValues.frameToPhotonsLatencyMS);
 			ImGui::Text("Passthrough CPU render duration: %.2fms", m_displayValues.renderTimeMS);
 			ImGui::Text("Stereo reconstruction duration: %.2fms", m_displayValues.stereoReconstructionTimeMS);
+			ImGui::Text("Camera frame retrieval duration: %.2fms", m_displayValues.frameRetrievalTimeMS);
 			ImGui::PopFont();
 			ImGui::EndGroup();		
 		}
 
 		ImGui::SetNextItemOpen(true, ImGuiCond_Once);
+		if (ImGui::CollapsingHeader("Device Properties"))
+		{
+			if (ImGui::Button("Refresh"))
+			{
+				m_openVRManager->GetCameraDebugProperties(m_deviceDebugProps);
+			}
+
+			ImGui::SameLine();
+
+			std::string comboPreview = "No device";
+
+			if (m_deviceDebugProps.size() > m_currentDebugDevice)
+			{
+				comboPreview.assign(std::format("[{}] {}", m_currentDebugDevice, m_deviceDebugProps[m_currentDebugDevice].DeviceName));
+			}
+			 
+
+			if (ImGui::BeginCombo("Devices", comboPreview.c_str()))
+			{
+				for (int i = 0; i < m_deviceDebugProps.size(); i++)
+				{
+					std::string comboValue = std::format("[{}] {}", i, m_deviceDebugProps[i].DeviceName);
+
+					const bool bIsSelected = (m_currentDebugDevice == i);
+					if (ImGui::Selectable(comboValue.c_str(), bIsSelected))
+					{
+						m_currentDebugDevice = i;
+					}
+
+					if (bIsSelected)
+					{
+						ImGui::SetItemDefaultFocus();
+					}
+				}
+				ImGui::EndCombo();
+			}
+
+			ImGui::Spacing();
+			if (m_deviceDebugProps.size() > m_currentDebugDevice)
+			{
+				DeviceDebugProperties& props = m_deviceDebugProps[m_currentDebugDevice];
+
+				ImGui::PushFont(m_fixedFont);
+
+				ImGui::Text("Class:");
+				ImGui::SameLine();
+				switch (props.DeviceClass)
+				{
+				case vr::TrackedDeviceClass_HMD:
+					ImGui::Text("HMD");
+					break;
+				case vr::TrackedDeviceClass_Controller:
+					ImGui::Text("Controller");
+					break;
+				case vr::TrackedDeviceClass_GenericTracker:
+					ImGui::Text("Generic Tracker");
+					break;
+				case vr::TrackedDeviceClass_TrackingReference:
+					ImGui::Text("Tracking Reference");
+					break;
+				case vr::TrackedDeviceClass_DisplayRedirect:
+					ImGui::Text("Display Redirect");
+					break;
+				default:
+					ImGui::Text("Unknown");
+				}
+
+				if (props.bHasCamera) { ImGui::Text("Has camera: True"); } else { ImGui::Text("Has camera: False"); }
+				ImGui::Text("Number of cameras: %u", props.NumCameras);
+				ImGui::Text("Camera firmware: %s, version: %lu", props.CameraFirmwareDescription.c_str(), props.CameraFirmwareVersion);
+				ImGui::Text("Camera compatibility mode: %u", props.CameraCompatibilityMode);
+				if (props.bCameraSupportsCompatibilityModes) { ImGui::Text("Camera supports compatibility modes: True"); }
+				else { ImGui::Text("Camera supports compatibility modes: False"); }
+				ImGui::Text("Camera exposure time: %f", props.CameraExposureTime);
+				ImGui::Text("Camera global gain: %f", props.CameraGlobalGain);
+
+				ImGui::Text("Camera frame layout:");
+				if (props.CameraFrameLayout & vr::EVRTrackedCameraFrameLayout_Mono)
+				{
+					ImGui::SameLine();
+					ImGui::Text("Mono");
+				}
+				if (props.CameraFrameLayout & vr::EVRTrackedCameraFrameLayout_Stereo)
+				{
+					ImGui::SameLine();
+					ImGui::Text("Stereo");
+				}
+				if (props.CameraFrameLayout & vr::EVRTrackedCameraFrameLayout_HorizontalLayout)
+				{
+					ImGui::SameLine();
+					ImGui::Text("Horizontal");
+				}
+				if (props.CameraFrameLayout & vr::EVRTrackedCameraFrameLayout_VerticalLayout)
+				{
+					ImGui::SameLine();
+					ImGui::Text("Vertical");
+				}
+				if (props.CameraFrameLayout & ~0x33)
+				{
+					ImGui::SameLine();
+					ImGui::Text("Unknown flags!");
+				}
+
+				ImGui::Text("Camera stream format:");
+				ImGui::SameLine();
+				switch (props.CameraStreamFormat)
+				{
+				case 1:
+					ImGui::Text("RAW10");
+					break;
+				case 2:
+					ImGui::Text("NV12");
+					break;
+				case 3:
+					ImGui::Text("RGB24");
+					break;
+				case 4:
+					ImGui::Text("NV12_2");
+					break;
+				case 5:
+					ImGui::Text("YUYV16");
+					break;
+				case 6:
+					ImGui::Text("BAYER16BG");
+					break;
+				case 7:
+					ImGui::Text("MJPEG");
+					break;
+				case 8:
+					ImGui::Text("RGBX32");
+					break;
+				default:
+					ImGui::Text("Unknown");
+				}
+
+				ImGui::Text("Camera to head transform:");
+				for (int y = 0; y < 3; y++)
+				{
+					ImGui::Text("[");
+					ImGui::SameLine();
+					for (int x = 0; x < 4; x++)
+					{
+						ImGui::Text("%f", props.CameraToHeadTransform.m[y][x]);
+						ImGui::SameLine();
+					}
+					ImGui::Text("]");
+				}
+
+				ImGui::Text("Distorted camera frame size: %d x %d", props.DistortedFrameWidth, props.DistortedFrameHeight);
+				ImGui::Text("Undistorted camera frame size: %d x %d", props.UndistortedFrameWidth, props.UndistortedFrameHeight);
+				ImGui::Text("Max undistorted camera frame size: %d x %d", props.MaximumUndistortedFrameWidth, props.MaximumUndistortedFrameHeight);
+
+				IMGUI_BIG_SPACING;
+
+				for (uint32_t i = 0; i < props.NumCameras; i++)
+				{
+					ImGui::BeginGroup();
+
+					ImGui::Text("Camera %u:", i);
+
+					ImGui::Text("Undistorted intrinsics:\nf = [ %.2f %.2f ] c = [ %.2f %.2f ]", props.CameraProps[i].UndistortedFocalLength.v[0], props.CameraProps[i].UndistortedFocalLength.v[1], props.CameraProps[i].UndistortedOpticalCenter.v[0], props.CameraProps[i].UndistortedOpticalCenter.v[1]);
+
+					ImGui::Text("Max undistorted intrinsics:\nf = [ %.2f %.2f ] c = [ %.2f %.2f ]", props.CameraProps[i].MaximumUndistortedFocalLength.v[0], props.CameraProps[i].MaximumUndistortedFocalLength.v[1], props.CameraProps[i].MaximumUndistortedOpticalCenter.v[0], props.CameraProps[i].MaximumUndistortedOpticalCenter.v[1]);
+
+					ImGui::Spacing();
+
+					ImGui::Text("Camera to head transform:");
+					for (int y = 0; y < 3; y++)
+					{
+						ImGui::Text("[");
+						ImGui::SameLine();
+						for (int x = 0; x < 4; x++)
+						{
+							ImGui::Text("%f", props.CameraProps[i].CameraToHeadTransform.m[y][x]);
+							ImGui::SameLine();
+						}
+						ImGui::Text("]");
+					}
+					
+					ImGui::Spacing();
+
+					ImGui::Text("Undistorted projection:");
+					for (int y = 0; y < 4; y++)
+					{
+						ImGui::Text("[");
+						ImGui::SameLine();
+						for (int x = 0; x < 4; x++)
+						{
+							ImGui::Text("%f", props.CameraProps[i].UndistortedProjecton.m[y][x]);
+							ImGui::SameLine();
+						}
+						ImGui::Text("]");
+					}
+
+					ImGui::Text("Max undistorted projection:");
+					for (int y = 0; y < 4; y++)
+					{
+						ImGui::Text("[");
+						ImGui::SameLine();
+						for (int x = 0; x < 4; x++)
+						{
+							ImGui::Text("%f", props.CameraProps[i].MaximumUndistortedProjecton.m[y][x]);
+							ImGui::SameLine();
+						}
+						ImGui::Text("]");
+					}
+
+					ImGui::Spacing();
+
+					ImGui::Text("White balance:\n[ %f %f %f %f ]", props.CameraProps[i].WhiteBalance.v[0], props.CameraProps[i].WhiteBalance.v[1], props.CameraProps[i].WhiteBalance.v[2], props.CameraProps[i].WhiteBalance.v[3]);
+
+					ImGui::Spacing();
+
+					ImGui::Text("Distortion function:");
+					ImGui::SameLine();
+					switch (props.CameraProps[i].DistortionFunction)
+					{
+					case vr::VRDistortionFunctionType_None:
+						ImGui::Text("None");
+						break;
+					case vr::VRDistortionFunctionType_FTheta:
+						ImGui::Text("F-theta");
+						break;
+					case vr::VRDistortionFunctionType_Extended_FTheta:
+						ImGui::Text("Extended F-theta");
+						break;
+					default:
+						ImGui::Text("Unknown");
+					}
+
+					ImGui::Text("Distortion coefficients:\n[ %f %f %f %f ]\n[ %f %f %f %f ]", props.CameraProps[i].DistortionCoefficients[0], props.CameraProps[i].DistortionCoefficients[1], props.CameraProps[i].DistortionCoefficients[2], props.CameraProps[i].DistortionCoefficients[3], props.CameraProps[i].DistortionCoefficients[4], props.CameraProps[i].DistortionCoefficients[5], props.CameraProps[i].DistortionCoefficients[6], props.CameraProps[i].DistortionCoefficients[7]);
+
+
+					ImGui::EndGroup();
+
+					if (i % 2 == 0 && i < props.NumCameras - 1)
+					{
+						ImGui::SameLine();
+					}
+				}
+
+				ImGui::PopFont();
+			}
+			IMGUI_BIG_SPACING;
+		}
+
+		ImGui::SetNextItemOpen(true, ImGuiCond_Once);
 		if (ImGui::CollapsingHeader("Log"))
 		{
-			ImGui::BeginChild("Log", ImVec2(0, 0), true);
+			//ImGui::BeginChild("Log", ImVec2(0, 0), true);
 			ImGui::PushFont(m_fixedFont);
 			ImGui::PushTextWrapPos(ImGui::GetContentRegionAvail().x);
 
@@ -757,7 +1048,7 @@ if (bIsActiveTab) { ImGui::PopStyleColor(1); bIsActiveTab = false; }
 
 			ImGui::PopTextWrapPos();
 			ImGui::PopFont();
-			ImGui::EndChild();
+			//ImGui::EndChild();
 		}
 		ImGui::EndChild();
 	}

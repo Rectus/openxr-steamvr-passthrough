@@ -3,6 +3,7 @@
 
 #include <mutex>
 #include <shared_mutex>
+#include "layer.h"
 
 
 class OpenVRManager
@@ -40,6 +41,8 @@ public:
 	{
 		return m_hmdDeviceId;
 	}
+
+	void GetCameraDebugProperties(std::vector<DeviceDebugProperties>& properties);
 
 private:
 	bool InitRuntime();

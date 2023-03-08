@@ -42,7 +42,6 @@ HMODULE g_dllModule = NULL;
 #define CONFIG_FILE_DIR L"\\OpenXR SteamVR Passthrough\\"
 #define CONFIG_FILE_NAME L"config.ini"
 
-#define PERF_TIME_AVERAGE_VALUES 20
 
 
 namespace
@@ -379,6 +378,7 @@ namespace
 				m_dashboardMenu->GetDisplayValues().renderAPI = None;
 				m_dashboardMenu->GetDisplayValues().frameBufferFlags = 0;
 				m_dashboardMenu->GetDisplayValues().frameBufferFormat = 0;
+				m_dashboardMenu->GetDisplayValues().depthBufferFormat = 0;
 				m_dashboardMenu->GetDisplayValues().frameBufferWidth = 0;
 				m_dashboardMenu->GetDisplayValues().frameBufferHeight = 0;
 				m_dashboardMenu->GetDisplayValues().frameToPhotonsLatencyMS = 0;
@@ -632,28 +632,79 @@ namespace
 
 			int imageIndex = held->second;
 
-			if (newSwapchain != *storedSwapchain)
+			if (newSwapchain == *storedSwapchain)
 			{
-				Log("Updating swapchain %u to %u with eye %u, index %u, arraySize %u\n", *storedSwapchain, newSwapchain, eye, imageIndex, props->second.arraySize);
+				return imageIndex;
+			}
 
-				XrSwapchainImageD3D12KHR swapchainImages[3];
-				uint32_t numImages = 0;
+			Log("Updating swapchain %u to %u with eye %u, index %u, arraySize %u\n", *storedSwapchain, newSwapchain, eye, imageIndex, props->second.arraySize);
 
-				XrResult result = OpenXrApi::xrEnumerateSwapchainImages(newSwapchain, 3, &numImages, (XrSwapchainImageBaseHeader*)swapchainImages);
-				if (XR_SUCCEEDED(result))
+			XrSwapchainImageD3D12KHR swapchainImages[3];
+			uint32_t numImages = 0;
+
+			XrResult result = OpenXrApi::xrEnumerateSwapchainImages(newSwapchain, 3, &numImages, (XrSwapchainImageBaseHeader*)swapchainImages);
+			if (XR_SUCCEEDED(result))
+			{
+				for (uint32_t i = 0; i < numImages; i++)
 				{
-					for (uint32_t i = 0; i < numImages; i++)
-					{
-						m_Renderer->InitRenderTarget(eye, swapchainImages[i].texture, i, props->second);
-					}
-					*storedSwapchain = newSwapchain;
+					m_Renderer->InitRenderTarget(eye, swapchainImages[i].texture, i, props->second);
 				}
-				else
+				*storedSwapchain = newSwapchain;
+			}
+			else
+			{
+				ErrorLog("Error in xrEnumerateSwapchainImages: %i\n", result);
+				return -1;
+			}
+
+			if (!m_configManager->GetConfig_Depth().DepthReadFromApplication)
+			{
+				return imageIndex;
+			}
+
+			// Find associated depth swapchain if one exists.
+			auto depthInfo = (const XrCompositionLayerDepthInfoKHR*) layer->views[viewIndex].next;
+
+			while (depthInfo != nullptr)
+			{
+				if (depthInfo->type == XR_TYPE_COMPOSITION_LAYER_DEPTH_INFO_KHR)
 				{
-					ErrorLog("Error in xrEnumerateSwapchainImages: %i\n", result);
-					return -1;
+					break;
+				}
+				depthInfo = (const XrCompositionLayerDepthInfoKHR*) depthInfo->next;
+			}
+
+			if (depthInfo != nullptr)
+			{
+				auto depthProps = m_swapchainProperties.find(depthInfo->subImage.swapchain);
+
+				if (depthProps != m_swapchainProperties.end())
+				{
+					if (eye == LEFT_EYE)
+					{
+						m_dashboardMenu->GetDisplayValues().depthBufferFormat = depthProps->second.format;
+					}
+
+					Log("Found depth swapchain %u for color swapchain %u, arraySize %u, depth range [%f:%f], Z-range[%g:%g]\n", depthInfo->subImage.swapchain, newSwapchain, depthProps->second.arraySize, depthInfo->minDepth, depthInfo->maxDepth, depthInfo->nearZ, depthInfo->farZ);
+
+					XrSwapchainImageD3D12KHR depthImages[3];
+					numImages = 0;
+
+					XrResult result = OpenXrApi::xrEnumerateSwapchainImages(depthInfo->subImage.swapchain, 3, &numImages, (XrSwapchainImageBaseHeader*)depthImages);
+					if (XR_SUCCEEDED(result))
+					{
+						for (uint32_t i = 0; i < numImages; i++)
+						{
+							m_Renderer->InitDepthBuffer(eye, depthImages[i].texture, i, depthProps->second);
+						}
+					}
+					else
+					{
+						ErrorLog("Error in xrEnumerateSwapchainImages when enumerating depthbuffers: %i\n", result);
+					}
 				}
 			}
+
 			return imageIndex;
 		}
 
@@ -676,25 +727,6 @@ namespace
 		}
 
 
-		float UpdateAveragePerfTime(std::deque<float>& times, float newTime)
-		{
-			if (times.size() >= PERF_TIME_AVERAGE_VALUES)
-			{
-				times.pop_front();
-			}
-
-			times.push_back(newTime);
-
-			float average = 0;
-
-			for (const float& val : times)
-			{
-				average += val;
-			}
-			return average / times.size();
-		}
-
-
 		void RenderPassthroughOnAppLayer(const XrFrameEndInfo* frameEndInfo, uint32_t layerNum)
 		{
 			const XrCompositionLayerProjection* layer = (const XrCompositionLayerProjection*)frameEndInfo->layers[layerNum];
@@ -711,25 +743,18 @@ namespace
 
 			std::shared_lock readLock(frame->readWriteMutex);
 
-			LARGE_INTEGER perfFrequency;
-			LARGE_INTEGER preRenderTime;
 
-			QueryPerformanceFrequency(&perfFrequency);
-			QueryPerformanceCounter(&preRenderTime);
+			LARGE_INTEGER preRenderTime = StartPerfTimer();
 
-			double frameToRenderTime = (float) (preRenderTime.QuadPart - frame->header.ulFrameExposureTime);
-			frameToRenderTime *= 1000.0f;
-			frameToRenderTime /= perfFrequency.QuadPart;
-			m_dashboardMenu->GetDisplayValues().frameToRenderLatencyMS = UpdateAveragePerfTime(m_frameToRenderTimes, (float)frameToRenderTime);
+			float frameToRenderTime = GetPerfTimerDiff(frame->header.ulFrameExposureTime, preRenderTime.QuadPart);
+			m_dashboardMenu->GetDisplayValues().frameToRenderLatencyMS = UpdateAveragePerfTime(m_frameToRenderTimes, frameToRenderTime, 20);
 
 			LARGE_INTEGER displayTime;
 
 			OpenXrApi::xrConvertTimeToWin32PerformanceCounterKHR(m_currentInstance, frameEndInfo->displayTime, &displayTime);
 
-			float frameToPhotonsTime = (float) (displayTime.QuadPart - frame->header.ulFrameExposureTime);
-			frameToPhotonsTime *= 1000.0f;
-			frameToPhotonsTime /= perfFrequency.QuadPart;
-			m_dashboardMenu->GetDisplayValues().frameToPhotonsLatencyMS = UpdateAveragePerfTime(m_frameToPhotonTimes, frameToPhotonsTime);
+			float frameToPhotonsTime = GetPerfTimerDiff(frame->header.ulFrameExposureTime, displayTime.QuadPart);
+			m_dashboardMenu->GetDisplayValues().frameToPhotonsLatencyMS = UpdateAveragePerfTime(m_frameToPhotonTimes, frameToPhotonsTime, 20);
 
 			
 			m_cameraManager->CalculateFrameProjection(frame, *layer, frameEndInfo->displayTime, m_refSpaces[layer->space], m_depthReconstruction->GetDistortionParameters());
@@ -755,15 +780,13 @@ namespace
 			m_Renderer->RenderPassthroughFrame(layer, frame.get(), blendMode, leftIndex, rightIndex, depthFrame, m_depthReconstruction->GetDistortionParameters());
 
 
-			LARGE_INTEGER postRenderTime;
-			QueryPerformanceCounter(&postRenderTime);
 
-			float renderTime = (float) (postRenderTime.QuadPart - preRenderTime.QuadPart);
-			renderTime *= 1000.0f;
-			renderTime /= perfFrequency.QuadPart;
-			m_dashboardMenu->GetDisplayValues().renderTimeMS = UpdateAveragePerfTime(m_passthroughRenderTimes, renderTime);
+
+			float renderTime = EndPerfTimer(preRenderTime.QuadPart);
+			m_dashboardMenu->GetDisplayValues().renderTimeMS = UpdateAveragePerfTime(m_passthroughRenderTimes, renderTime, 20);
 
 			m_dashboardMenu->GetDisplayValues().stereoReconstructionTimeMS = m_depthReconstruction->GetReconstructionPerfTime();
+			m_dashboardMenu->GetDisplayValues().frameRetrievalTimeMS = m_cameraManager->GetFrameRetrievalPerfTime();
 		}
 
 

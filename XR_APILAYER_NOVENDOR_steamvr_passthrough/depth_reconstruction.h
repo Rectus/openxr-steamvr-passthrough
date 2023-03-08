@@ -57,8 +57,10 @@ private:
 	uint32_t m_lastFrameSequence;
 	uint32_t m_downscaleFactor;
 	float m_fovScale;
+	float m_depthOffsetCalibration;
 	int m_maxDisparity;
 	bool m_bUseMulticore;
+	bool m_bUseColor;
 
 	cv::Mat m_intrinsicsLeft;
 	cv::Mat m_intrinsicsRight;
@@ -70,11 +72,7 @@ private:
 	cv::Mat m_rightMap1;
 	cv::Mat m_rightMap2;
 
-	XrMatrix4x4f m_cameraProjectionToView;
 	XrMatrix4x4f m_disparityToDepth;
-
-	XrMatrix4x4f m_disparityRotationInvLeft;
-	XrMatrix4x4f m_disparityRotationInvRight;
 
 	XrMatrix4x4f m_rectifiedRotationLeft;
 	XrMatrix4x4f m_rectifiedRotationRight;
@@ -91,12 +89,11 @@ private:
 	cv::Mat m_inputFrame;
 	cv::Mat m_inputFrameLeft;
 	cv::Mat m_inputFrameRight;
-	cv::Mat m_inputFrameGreyLeft;
-	cv::Mat m_inputFrameGreyRight;
+	cv::Mat m_inputAlphaLeft;
+	cv::Mat m_inputAlphaRight;
 
 	cv::Mat m_rectifiedFrameLeft;
 	cv::Mat m_rectifiedFrameRight;
-
 	cv::Mat m_scaledFrameLeft;
 	cv::Mat m_scaledFrameRight;
 

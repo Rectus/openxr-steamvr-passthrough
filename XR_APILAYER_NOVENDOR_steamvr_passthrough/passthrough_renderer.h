@@ -67,6 +67,7 @@ public:
 
 	virtual bool InitRenderer() = 0;
 	virtual void InitRenderTarget(const ERenderEye eye, void* rendertarget, const uint32_t imageIndex, const XrSwapchainCreateInfo& swapchainInfo) = 0;
+	virtual void InitDepthBuffer(const ERenderEye eye, void* depthBuffer, const uint32_t imageIndex, const XrSwapchainCreateInfo& swapchainInfo) {}
 	virtual void SetFrameSize(const uint32_t width, const uint32_t height, const uint32_t bufferSize) = 0;
 	virtual void RenderPassthroughFrame(const XrCompositionLayerProjection* layer, CameraFrame* frame, EPassthroughBlendMode blendMode, int leftSwapchainIndex, int rightSwapchainIndex, std::shared_ptr<DepthFrame> depthFrame, UVDistortionParameters& distortionParams) = 0;
 	virtual void* GetRenderDevice() = 0;
@@ -81,6 +82,7 @@ public:
 
 	bool InitRenderer();
 	void InitRenderTarget(const ERenderEye eye, void* rendertarget, const uint32_t imageIndex, const XrSwapchainCreateInfo& swapchainInfo);
+	void InitDepthBuffer(const ERenderEye eye, void* depthBuffer, const uint32_t imageIndex, const XrSwapchainCreateInfo& swapchainInfo);
 	void SetFrameSize(const uint32_t width, const uint32_t height, const uint32_t bufferSize);
 
 	void RenderPassthroughFrame(const XrCompositionLayerProjection* layer, CameraFrame* frame, EPassthroughBlendMode blendMode, int leftSwapchainIndex, int rightSwapchainIndex, std::shared_ptr<DepthFrame> depthFrame, UVDistortionParameters& distortionParams);
@@ -115,6 +117,14 @@ private:
 	ComPtr<ID3D11RenderTargetView> m_renderTargetViews[NUM_SWAPCHAINS * 2];
 	ComPtr<ID3D11ShaderResourceView> m_renderTargetSRVs[NUM_SWAPCHAINS * 2];
 
+	ComPtr<ID3D11Resource> m_depthStencils[NUM_SWAPCHAINS * 2];
+	ComPtr<ID3D11DepthStencilView> m_depthStencilViews[NUM_SWAPCHAINS * 2];
+	ComPtr<ID3D11DepthStencilState> m_depthStencilStateDisabled;
+	ComPtr<ID3D11DepthStencilState> m_depthStencilStateLess;
+	ComPtr<ID3D11DepthStencilState> m_depthStencilStateLessWrite;
+	ComPtr<ID3D11DepthStencilState> m_depthStencilStateGreater;
+	ComPtr<ID3D11DepthStencilState> m_depthStencilStateGreaterWrite;
+
 	ComPtr<ID3D11VertexShader> m_vertexShader;
 	ComPtr<ID3D11VertexShader> m_stereoVertexShader;
 	ComPtr<ID3D11PixelShader> m_pixelShader;
@@ -133,6 +143,7 @@ private:
 	ComPtr<ID3D11BlendState> m_blendStateBase;
 	ComPtr<ID3D11BlendState> m_blendStateAlphaPremultiplied;
 	ComPtr<ID3D11BlendState> m_blendStateSrcAlpha;
+	ComPtr<ID3D11BlendState> m_blendStatePrepassInverseAppAlpha;
 	ComPtr<ID3D11BlendState> m_blendStatePrepassUseAppAlpha;
 	ComPtr<ID3D11BlendState> m_blendStatePrepassIgnoreAppAlpha;
 
@@ -177,6 +188,7 @@ public:
 
 	bool InitRenderer();	
 	void InitRenderTarget(const ERenderEye eye, void* rendertarget, const uint32_t imageIndex, const XrSwapchainCreateInfo& swapchainInfo);
+	void InitDepthBuffer(const ERenderEye eye, void* depthBuffer, const uint32_t imageIndex, const XrSwapchainCreateInfo& swapchainInfo);
 	void SetFrameSize(const uint32_t width, const uint32_t height, const uint32_t bufferSize);
 	void RenderPassthroughFrame(const XrCompositionLayerProjection* layer, CameraFrame* frame, EPassthroughBlendMode blendMode, int leftSwapchainIndex, int rightSwapchainIndex, std::shared_ptr<DepthFrame> depthFrame, UVDistortionParameters& distortionParams);
 	void* GetRenderDevice();
@@ -188,7 +200,7 @@ private:
 	void SetupDisparityMap(uint32_t width, uint32_t height);
 	void SetupUVDistortionMap(std::shared_ptr<std::vector<float>> uvDistortionMap);
 	bool CreateRootSignature();
-	bool InitPipeline(DXGI_FORMAT rtFormat);
+	bool InitPipeline();
 	void SetupIntermediateRenderTarget(uint32_t index, uint32_t width, uint32_t height);
 	void GenerateMesh();
 	void GenerateDepthMesh(uint32_t width, uint32_t height);
@@ -205,29 +217,28 @@ private:
 	ComPtr<ID3D12Device> m_d3dDevice;
 	ComPtr<ID3D12CommandQueue> m_d3dCommandQueue;
 
-	ComPtr <ID3D12Resource> m_renderTargets[NUM_SWAPCHAINS * 2];
+	ComPtr<ID3D12Resource> m_renderTargets[NUM_SWAPCHAINS * 2];
+	ComPtr<ID3D12Resource> m_depthStencils[NUM_SWAPCHAINS * 2];
 	
 	ComPtr<ID3D12CommandAllocator> m_commandAllocators[NUM_SWAPCHAINS * 2];
 	ComPtr<ID3D12GraphicsCommandList> m_commandList;
 	ComPtr<ID3D12DescriptorHeap> m_RTVHeap;
+	ComPtr<ID3D12DescriptorHeap> m_DSVHeap;
 	ComPtr<ID3D12DescriptorHeap> m_CBVSRVHeap;
 	UINT m_RTVHeapDescSize = 0;
+	UINT m_DSVHeapDescSize = 0;
 	UINT m_CBVSRVHeapDescSize = 0;
 	ComPtr<ID3D12RootSignature> m_rootSignature;
 
-	ComPtr<ID3D12PipelineState> m_psoDefault;
-	ComPtr<ID3D12PipelineState> m_psoAlphaPremultiplied;
-	ComPtr<ID3D12PipelineState> m_psoPrepassUseAppAlpha;
-	ComPtr<ID3D12PipelineState> m_psoPrepassIgnoreAppAlpha;
-	ComPtr<ID3D12PipelineState> m_psoMaskedPrepass;
-	ComPtr<ID3D12PipelineState> m_psoMaskedRender;
+	ComPtr<ID3D12PipelineState> m_psoPrepass;
+	ComPtr<ID3D12PipelineState> m_psoMainPass;
 
-	ComPtr<ID3D12PipelineState> m_psoStereoDefault;
-	ComPtr<ID3D12PipelineState> m_psoStereoAlphaPremultiplied;
-	ComPtr<ID3D12PipelineState> m_psoStereoPrepassUseAppAlpha;
-	ComPtr<ID3D12PipelineState> m_psoStereoPrepassIgnoreAppAlpha;
-	ComPtr<ID3D12PipelineState> m_psoStereoMaskedPrepass;
-	ComPtr<ID3D12PipelineState> m_psoStereoMaskedRender;
+	DXGI_FORMAT m_swapchainFormat;
+	DXGI_FORMAT m_depthStencilFormat;
+	EPassthroughBlendMode m_blendMode;
+	bool m_bUsingStereo;
+	bool m_bUsingDepth;
+	bool m_bUsingReversedDepth;
 	
 	ComPtr<ID3D12Resource> m_vsPassConstantBuffer;
 	UINT8* m_vsPassConstantBufferCPUData[NUM_SWAPCHAINS];

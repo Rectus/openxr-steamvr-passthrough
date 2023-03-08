@@ -28,7 +28,7 @@ namespace steamvr_passthrough
 {
 
     const std::string LayerName = "XR_APILAYER_NOVENDOR_steamvr_passthrough";
-    const std::string VersionString = "0.2.2";
+    const std::string VersionString = "0.2.3";
 
     // Singleton accessor.
     OpenXrApi* GetInstance();
@@ -86,6 +86,7 @@ struct CameraFrame
 		, frameLayout(Mono)
 		, bIsValid(false)
 		, bHasFrameBuffer(false)
+		, bHasReversedDepth(false)
 	{
 	}
 
@@ -105,6 +106,7 @@ struct CameraFrame
 	EStereoFrameLayout frameLayout;
 	bool bIsValid;
 	bool bHasFrameBuffer;
+	bool bHasReversedDepth;
 };
 
 struct DepthFrame
@@ -150,4 +152,116 @@ struct UVDistortionParameters
 	float fovScale;
 };
 
+struct CameraDebugProperties
+{
+	vr::HmdVector2_t DistortedFocalLength;
+	vr::HmdVector2_t UndistortedFocalLength;
+	vr::HmdVector2_t MaximumUndistortedFocalLength;
+
+	vr::HmdVector2_t DistortedOpticalCenter;
+	vr::HmdVector2_t UndistortedOpticalCenter;
+	vr::HmdVector2_t MaximumUndistortedOpticalCenter;
+
+	vr::HmdMatrix44_t UndistortedProjecton;
+	vr::HmdMatrix44_t MaximumUndistortedProjecton;
+
+	vr::HmdMatrix34_t CameraToHeadTransform;
+	vr::HmdVector4_t WhiteBalance;
+	vr::EVRDistortionFunctionType DistortionFunction;
+	double DistortionCoefficients[8];
+};
+
+struct DeviceDebugProperties
+{
+	vr::ETrackedDeviceClass DeviceClass;
+	uint32_t DeviceId;
+	std::string DeviceName;
+	bool bHasCamera;
+	uint32_t NumCameras;
+	CameraDebugProperties CameraProps[4];
+
+	uint32_t DistortedFrameHeight;
+	uint32_t DistortedFrameWidth;
+	uint32_t UndistortedFrameHeight;
+	uint32_t UndistortedFrameWidth;
+	uint32_t MaximumUndistortedFrameHeight;
+	uint32_t MaximumUndistortedFrameWidth;
+
+	vr::EVRTrackedCameraFrameLayout CameraFrameLayout;
+	int32_t	CameraStreamFormat;
+	vr::HmdMatrix34_t CameraToHeadTransform;
+	uint64_t CameraFirmwareVersion;
+	std::string CameraFirmwareDescription;
+	int32_t CameraCompatibilityMode;
+	bool bCameraSupportsCompatibilityModes;
+	float CameraExposureTime;
+	float CameraGlobalGain;
+};
+
 #define NEAR_PROJECTION_DISTANCE 0.05f
+
+
+// Profiling functions
+
+inline LARGE_INTEGER StartPerfTimer()
+{
+	LARGE_INTEGER startTime;	
+	QueryPerformanceCounter(&startTime);
+	return startTime;
+}
+
+inline float EndPerfTimer(LARGE_INTEGER startTime)
+{
+	LARGE_INTEGER endTime, perfFrequency;
+
+	QueryPerformanceCounter(&endTime);
+	QueryPerformanceFrequency(&perfFrequency);
+
+	float perfTime = (float)(endTime.QuadPart - startTime.QuadPart);
+	perfTime *= 1000.0f;
+	perfTime /= perfFrequency.QuadPart;
+	return perfTime;
+}
+
+inline float EndPerfTimer(uint64_t startTimeQuadPart)
+{
+	LARGE_INTEGER endTime, perfFrequency;
+
+	QueryPerformanceCounter(&endTime);
+	QueryPerformanceFrequency(&perfFrequency);
+
+	float perfTime = (float)(endTime.QuadPart - startTimeQuadPart);
+	perfTime *= 1000.0f;
+	perfTime /= perfFrequency.QuadPart;
+	return perfTime;
+}
+
+inline float GetPerfTimerDiff(uint64_t startTimeQuadPart, uint64_t endTimeQuadPart)
+{
+	LARGE_INTEGER perfFrequency;
+
+	QueryPerformanceFrequency(&perfFrequency);
+
+	float perfTime = (float)(endTimeQuadPart - startTimeQuadPart);
+	perfTime *= 1000.0f;
+	perfTime /= perfFrequency.QuadPart;
+	return perfTime;
+}
+
+inline float UpdateAveragePerfTime(std::deque<float>& times, float newTime, int numAverages)
+{
+	if (times.size() >= numAverages)
+	{
+		times.pop_front();
+	}
+
+	times.push_back(newTime);
+
+	float average = 0;
+
+	for (const float& val : times)
+	{
+		average += val;
+	}
+	return average / times.size();
+}
