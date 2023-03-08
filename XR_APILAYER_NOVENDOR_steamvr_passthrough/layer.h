@@ -86,6 +86,7 @@ struct CameraFrame
 		, frameLayout(Mono)
 		, bIsValid(false)
 		, bHasFrameBuffer(false)
+		, bHasReversedDepth(false)
 	{
 	}
 
@@ -105,6 +106,7 @@ struct CameraFrame
 	EStereoFrameLayout frameLayout;
 	bool bIsValid;
 	bool bHasFrameBuffer;
+	bool bHasReversedDepth;
 };
 
 struct DepthFrame

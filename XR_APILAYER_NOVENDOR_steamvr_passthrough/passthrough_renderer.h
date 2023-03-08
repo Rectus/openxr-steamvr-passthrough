@@ -67,6 +67,7 @@ public:
 
 	virtual bool InitRenderer() = 0;
 	virtual void InitRenderTarget(const ERenderEye eye, void* rendertarget, const uint32_t imageIndex, const XrSwapchainCreateInfo& swapchainInfo) = 0;
+	virtual void InitDepthBuffer(const ERenderEye eye, void* depthBuffer, const uint32_t imageIndex, const XrSwapchainCreateInfo& swapchainInfo) {}
 	virtual void SetFrameSize(const uint32_t width, const uint32_t height, const uint32_t bufferSize) = 0;
 	virtual void RenderPassthroughFrame(const XrCompositionLayerProjection* layer, CameraFrame* frame, EPassthroughBlendMode blendMode, int leftSwapchainIndex, int rightSwapchainIndex, std::shared_ptr<DepthFrame> depthFrame, UVDistortionParameters& distortionParams) = 0;
 	virtual void* GetRenderDevice() = 0;
@@ -81,6 +82,7 @@ public:
 
 	bool InitRenderer();
 	void InitRenderTarget(const ERenderEye eye, void* rendertarget, const uint32_t imageIndex, const XrSwapchainCreateInfo& swapchainInfo);
+	void InitDepthBuffer(const ERenderEye eye, void* depthBuffer, const uint32_t imageIndex, const XrSwapchainCreateInfo& swapchainInfo);
 	void SetFrameSize(const uint32_t width, const uint32_t height, const uint32_t bufferSize);
 
 	void RenderPassthroughFrame(const XrCompositionLayerProjection* layer, CameraFrame* frame, EPassthroughBlendMode blendMode, int leftSwapchainIndex, int rightSwapchainIndex, std::shared_ptr<DepthFrame> depthFrame, UVDistortionParameters& distortionParams);
@@ -114,6 +116,14 @@ private:
 	ComPtr<ID3D11Resource> m_renderTargets[NUM_SWAPCHAINS * 2];
 	ComPtr<ID3D11RenderTargetView> m_renderTargetViews[NUM_SWAPCHAINS * 2];
 	ComPtr<ID3D11ShaderResourceView> m_renderTargetSRVs[NUM_SWAPCHAINS * 2];
+
+	ComPtr<ID3D11Resource> m_depthStencils[NUM_SWAPCHAINS * 2];
+	ComPtr<ID3D11DepthStencilView> m_depthStencilViews[NUM_SWAPCHAINS * 2];
+	ComPtr<ID3D11DepthStencilState> m_depthStencilStateDisabled;
+	ComPtr<ID3D11DepthStencilState> m_depthStencilStateLess;
+	ComPtr<ID3D11DepthStencilState> m_depthStencilStateLessWrite;
+	ComPtr<ID3D11DepthStencilState> m_depthStencilStateGreater;
+	ComPtr<ID3D11DepthStencilState> m_depthStencilStateGreaterWrite;
 
 	ComPtr<ID3D11VertexShader> m_vertexShader;
 	ComPtr<ID3D11VertexShader> m_stereoVertexShader;

@@ -574,6 +574,8 @@ void CameraManager::CalculateFrameProjection(std::shared_ptr<CameraFrame>& frame
 
 void CameraManager::CalculateFrameProjectionForEye(const ERenderEye eye, std::shared_ptr<CameraFrame>& frame, const XrCompositionLayerProjection& layer, const XrReferenceSpaceCreateInfo& refSpaceInfo, UVDistortionParameters& distortionParams)
 {
+    Config_Main& mainConf = m_configManager->GetConfig_Main();
+
     bool bIsStereo = m_frameLayout != EStereoFrameLayout::Mono;
     uint32_t CameraId = (eye == RIGHT_EYE && bIsStereo) ? 1 : 0;
 
@@ -588,8 +590,53 @@ void CameraManager::CalculateFrameProjectionForEye(const ERenderEye eye, std::sh
     XrVector3f inPos{ 0,0,0 };
     XrMatrix4x4f_TransformVector3f(hmdWorldPos, &hmdViewToWorld, &inPos);
 
+    auto depthInfo = (const XrCompositionLayerDepthInfoKHR*)layer.views[(eye == LEFT_EYE) ? 0 : 1].next;
+
+    while (depthInfo != nullptr)
+    {
+        if (depthInfo->type == XR_TYPE_COMPOSITION_LAYER_DEPTH_INFO_KHR)
+        {
+            break;
+        }
+        depthInfo = (const XrCompositionLayerDepthInfoKHR*)depthInfo->next;
+    }
+
+    float nearZ = NEAR_PROJECTION_DISTANCE;
+    float farZ = m_projectionDistanceFar;
+
+    if (depthInfo)
+    {
+        // Handle reversed depth
+        if (depthInfo->farZ < depthInfo->nearZ)
+        {
+            nearZ = depthInfo->farZ;
+            farZ = depthInfo->nearZ;
+            frame->bHasReversedDepth = true;
+        }
+        else
+        {
+            nearZ = depthInfo->nearZ;
+            farZ = depthInfo->farZ;
+            frame->bHasReversedDepth = false;
+        }
+    }
+
     XrMatrix4x4f hmdProjection;
-    XrMatrix4x4f_CreateProjectionFov(&hmdProjection, GRAPHICS_D3D, layer.views[(eye == LEFT_EYE) ? 0 : 1].fov, NEAR_PROJECTION_DISTANCE, m_projectionDistanceFar);
+    XrMatrix4x4f_CreateProjectionFov(&hmdProjection, GRAPHICS_D3D, layer.views[(eye == LEFT_EYE) ? 0 : 1].fov, nearZ, farZ);
+
+    // Handle infinite far Z - XrMatrix4x4f_CreateProjectionFov sets it up wrong.
+    if (depthInfo && (farZ == (std::numeric_limits<float>::max)() || !std::isfinite(farZ) ))
+    {
+        hmdProjection.m[10] = 0;
+        hmdProjection.m[14] = nearZ;
+    }
+    else if (frame->bHasReversedDepth)
+    {
+        //hmdProjection.m[10] *= -1;
+        //hmdProjection.m[14] *= -1;
+        //hmdProjection.m[10] = (depthInfo->farZ) / (depthInfo->farZ - depthInfo->nearZ);
+        //hmdProjection.m[14] = (depthInfo->farZ * (depthInfo->nearZ)) / (depthInfo->farZ - depthInfo->nearZ);
+    }
 
     if (CameraId == 0)
     {
@@ -606,6 +653,11 @@ void CameraManager::CalculateFrameProjectionForEye(const ERenderEye eye, std::sh
     {
         XrMatrix4x4f leftCameraToTrackingPose = ToXRMatrix4x4(frame->header.trackedDevicePose.mDeviceToAbsoluteTracking);
 
+        XrMatrix4x4f cameraRightToLeftPose = m_cameraRightToLeftPose;
+        //cameraRightToLeftPose.m[12] *= mainConf.DepthOffsetCalibration;
+        //cameraRightToLeftPose.m[13] *= mainConf.DepthOffsetCalibration;
+        //cameraRightToLeftPose.m[14] *= mainConf.DepthOffsetCalibration;
+
         if (eye == LEFT_EYE)
         {
 
@@ -617,7 +669,7 @@ void CameraManager::CalculateFrameProjectionForEye(const ERenderEye eye, std::sh
             if (bIsStereo)
             {
                 XrMatrix4x4f tempMatrix;
-                XrMatrix4x4f_Multiply(&tempMatrix, &leftCameraToTrackingPose, &m_cameraRightToLeftPose);
+                XrMatrix4x4f_Multiply(&tempMatrix, &leftCameraToTrackingPose, &cameraRightToLeftPose);
                 XrMatrix4x4f_Multiply(&frame->cameraProjectionToWorldRight, &tempMatrix, &m_cameraProjectionInvFarRight);
             }
             else
@@ -670,6 +722,18 @@ void CameraManager::CalculateFrameProjectionForEye(const ERenderEye eye, std::sh
         XrMatrix4x4f_Invert(&leftCameraFromTrackingPose, &leftCameraToTrackingPose);
 
 
+        
+        XrMatrix4x4f cameraLeftToRightPose = m_cameraLeftToRightPose;
+        cameraLeftToRightPose.m[12] *= mainConf.DepthOffsetCalibration;
+        cameraLeftToRightPose.m[13] *= mainConf.DepthOffsetCalibration;
+        cameraLeftToRightPose.m[14] *= mainConf.DepthOffsetCalibration;
+
+        XrMatrix4x4f cameraRightToLeftPose = m_cameraRightToLeftPose;
+        //cameraRightToLeftPose.m[12] *= mainConf.DepthOffsetCalibration;
+        //cameraRightToLeftPose.m[13] *= mainConf.DepthOffsetCalibration;
+        //cameraRightToLeftPose.m[14] *= mainConf.DepthOffsetCalibration;
+        
+
         if (eye == LEFT_EYE)
         {
             // The rotation should be 0 with the individually recalculated distortion correction.
@@ -685,13 +749,13 @@ void CameraManager::CalculateFrameProjectionForEye(const ERenderEye eye, std::sh
         {
             XrMatrix4x4f a;
             //XrMatrix4x4f b;
-            XrMatrix4x4f_Multiply(&a, &m_cameraLeftToRightPose, &leftCameraFromTrackingPose);
+            XrMatrix4x4f_Multiply(&a, &cameraLeftToRightPose, &leftCameraFromTrackingPose);
             //XrMatrix4x4f_Multiply(&b, &distortionParams.rectifiedRotationRight, &a);
             XrMatrix4x4f_Multiply(&frame->worldToCameraProjectionRight, &frameProjection, &a);
 
             if (bIsStereo)
             {
-                XrMatrix4x4f_Multiply(&a, &m_cameraRightToLeftPose, &frameProjectionInverse);
+                XrMatrix4x4f_Multiply(&a, &cameraRightToLeftPose, &frameProjectionInverse);
                 XrMatrix4x4f_Multiply(&frame->cameraProjectionToWorldRight, &leftCameraToTrackingPose, &a);
             }
             else

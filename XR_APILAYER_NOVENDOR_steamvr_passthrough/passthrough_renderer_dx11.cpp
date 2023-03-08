@@ -185,6 +185,50 @@ bool PassthroughRendererDX11::InitRenderer()
 		return false;
 	}
 
+	D3D11_DEPTH_STENCIL_DESC depth = {};
+	depth.DepthEnable = false;
+	depth.DepthWriteMask = D3D11_DEPTH_WRITE_MASK_ZERO;
+	depth.DepthFunc = D3D11_COMPARISON_ALWAYS;
+	depth.StencilEnable = false;
+	if (FAILED(m_d3dDevice->CreateDepthStencilState(&depth, m_depthStencilStateDisabled.GetAddressOf())))
+	{
+		ErrorLog("CreateDepthStencilState failure!\n");
+		return false;
+	}
+
+	depth.DepthEnable = true;
+	depth.DepthWriteMask = D3D11_DEPTH_WRITE_MASK_ZERO;
+	depth.DepthFunc = D3D11_COMPARISON_LESS_EQUAL;
+	if (FAILED(m_d3dDevice->CreateDepthStencilState(&depth, m_depthStencilStateLess.GetAddressOf())))
+	{
+		ErrorLog("CreateDepthStencilState failure!\n");
+		return false;
+	}
+
+	depth.DepthWriteMask = D3D11_DEPTH_WRITE_MASK_ALL;
+	depth.DepthFunc = D3D11_COMPARISON_LESS_EQUAL;
+	if (FAILED(m_d3dDevice->CreateDepthStencilState(&depth, m_depthStencilStateLessWrite.GetAddressOf())))
+	{
+		ErrorLog("CreateDepthStencilState failure!\n");
+		return false;
+	}
+
+	depth.DepthWriteMask = D3D11_DEPTH_WRITE_MASK_ZERO;
+	depth.DepthFunc = D3D11_COMPARISON_GREATER_EQUAL;
+	if (FAILED(m_d3dDevice->CreateDepthStencilState(&depth, m_depthStencilStateGreater.GetAddressOf())))
+	{
+		ErrorLog("CreateDepthStencilState failure!\n");
+		return false;
+	}
+
+	depth.DepthWriteMask = D3D11_DEPTH_WRITE_MASK_ALL;
+	depth.DepthFunc = D3D11_COMPARISON_GREATER_EQUAL;
+	if (FAILED(m_d3dDevice->CreateDepthStencilState(&depth, m_depthStencilStateGreaterWrite.GetAddressOf())))
+	{
+		ErrorLog("CreateDepthStencilState failure!\n");
+		return false;
+	}
+
 
 	D3D11_SAMPLER_DESC sampler = {};
 	sampler.Filter = D3D11_FILTER_MIN_MAG_MIP_LINEAR;
@@ -595,6 +639,32 @@ void PassthroughRendererDX11::InitRenderTarget(const ERenderEye eye, void* rende
 }
 
 
+void PassthroughRendererDX11::InitDepthBuffer(const ERenderEye eye, void* depthBuffer, const uint32_t imageIndex, const XrSwapchainCreateInfo& swapchainInfo)
+{
+	int viewIndex = (eye == LEFT_EYE) ? 0 : 1;
+	int bufferIndex = viewIndex * NUM_SWAPCHAINS + imageIndex;
+	if (m_depthStencils[bufferIndex].Get() == (ID3D11Resource*)depthBuffer)
+	{
+		return;
+	}
+
+	// The RTV and SRV are set to use size 1 arrays to support both single and array for passed targets.
+	D3D11_DEPTH_STENCIL_VIEW_DESC dsvDesc{};
+	dsvDesc.Format = (DXGI_FORMAT)swapchainInfo.format;
+	dsvDesc.ViewDimension = D3D11_DSV_DIMENSION_TEXTURE2DARRAY;
+	dsvDesc.Texture2DArray.ArraySize = 1;
+	dsvDesc.Texture2DArray.FirstArraySlice = swapchainInfo.arraySize > 1 ? viewIndex : 0;
+
+	if (FAILED(m_d3dDevice->CreateDepthStencilView((ID3D11Resource*)depthBuffer, &dsvDesc, m_depthStencilViews[bufferIndex].GetAddressOf())))
+	{
+		ErrorLog("Depth map CreateDepthStencilView error!\n");
+		return;
+	}
+
+	m_depthStencils[bufferIndex] = (ID3D11Resource*)depthBuffer;
+}
+
+
 void PassthroughRendererDX11::SetFrameSize(const uint32_t width, const uint32_t height, const uint32_t bufferSize)
 {
 	m_cameraTextureWidth = width;
@@ -708,6 +778,13 @@ void PassthroughRendererDX11::GenerateDepthMesh(uint32_t width, uint32_t height)
 }
 
 
+
+
+
+#define GET_DEPTH_STENCIL_STATE(bEnabled, bReverse, bWrite) (bEnabled ? (bReverse ? \
+	(bWrite ? m_depthStencilStateGreaterWrite.Get() : m_depthStencilStateGreater.Get() ) : \
+	(bWrite ? m_depthStencilStateLessWrite.Get() : m_depthStencilStateLess.Get() ) ) : \
+	m_depthStencilStateDisabled.Get() )
 
 
 void PassthroughRendererDX11::RenderPassthroughFrame(const XrCompositionLayerProjection* layer, CameraFrame* frame, EPassthroughBlendMode blendMode, int leftSwapchainIndex, int rightSwapchainIndex, std::shared_ptr<DepthFrame> depthFrame, UVDistortionParameters& distortionParams)
@@ -871,10 +948,12 @@ void PassthroughRendererDX11::RenderPassthroughView(const ERenderEye eye, const 
 	int bufferIndex = viewIndex * NUM_SWAPCHAINS + swapchainIndex;
 
 	ID3D11RenderTargetView* rendertarget =  m_renderTargetViews[bufferIndex].Get();
+	ID3D11DepthStencilView* depthStencil = m_depthStencilViews[bufferIndex].Get();
 
 	if (!rendertarget) { return; }
 
-	m_renderContext->OMSetRenderTargets(1, &rendertarget, nullptr);
+	m_renderContext->OMSetRenderTargets(1, &rendertarget, depthStencil);
+
 
 	XrRect2Di rect = layer->views[viewIndex].subImage.imageRect;
 
@@ -923,6 +1002,8 @@ void PassthroughRendererDX11::RenderPassthroughView(const ERenderEye eye, const 
 			m_renderContext->OMSetBlendState(m_blendStatePrepassIgnoreAppAlpha.Get(), nullptr, UINT_MAX);
 		}
 
+		m_renderContext->OMSetDepthStencilState(GET_DEPTH_STENCIL_STATE(true, frame->bHasReversedDepth, false), 1);
+
 		m_renderContext->Draw(numVertices, 0);
 	}
 
@@ -944,6 +1025,8 @@ void PassthroughRendererDX11::RenderPassthroughView(const ERenderEye eye, const 
 		m_renderContext->OMSetBlendState(m_blendStateBase.Get(), nullptr, UINT_MAX);
 	}
 
+	m_renderContext->OMSetDepthStencilState(GET_DEPTH_STENCIL_STATE(true, frame->bHasReversedDepth, true), 1);
+
 	m_renderContext->PSSetShader(m_pixelShader.Get(), nullptr, 0);
 	
 	m_renderContext->Draw(numVertices, 0);
@@ -958,6 +1041,7 @@ void PassthroughRendererDX11::RenderPassthroughViewMasked(const ERenderEye eye, 
 	int bufferIndex = viewIndex * NUM_SWAPCHAINS + swapchainIndex;
 
 	ID3D11RenderTargetView* rendertarget = m_renderTargetViews[bufferIndex].Get();
+	ID3D11DepthStencilView* depthStencil = m_depthStencilViews[bufferIndex].Get();
 
 	if (!rendertarget) { return; }
 
@@ -1010,9 +1094,9 @@ void PassthroughRendererDX11::RenderPassthroughViewMasked(const ERenderEye eye, 
 
 	SetupTemporaryRenderTarget(&tempTexture, &tempSRV, &tempRTV, (uint32_t)rect.extent.width, (uint32_t)rect.extent.height);
 
-	m_renderContext->OMSetRenderTargets(1, tempRTV.GetAddressOf(), nullptr);
+	m_renderContext->OMSetRenderTargets(1, tempRTV.GetAddressOf(), depthStencil);
 	m_renderContext->OMSetBlendState(nullptr, nullptr, UINT_MAX);
-
+	m_renderContext->OMSetDepthStencilState(GET_DEPTH_STENCIL_STATE(true, frame->bHasReversedDepth, false), 1);
 
 	ID3D11ShaderResourceView* cameraFrameSRV;
 
@@ -1081,8 +1165,9 @@ void PassthroughRendererDX11::RenderPassthroughViewMasked(const ERenderEye eye, 
 		m_renderContext->PSSetShaderResources(0, 3, views);
 	}
 	
-	m_renderContext->OMSetRenderTargets(1, &rendertarget, nullptr);
-	m_renderContext->OMSetBlendState(m_blendStateSrcAlpha.Get(), nullptr, UINT_MAX);	
+	m_renderContext->OMSetRenderTargets(1, &rendertarget, depthStencil);
+	m_renderContext->OMSetBlendState(m_blendStateSrcAlpha.Get(), nullptr, UINT_MAX);
+	m_renderContext->OMSetDepthStencilState(GET_DEPTH_STENCIL_STATE(true, frame->bHasReversedDepth, true), 1);
 	m_renderContext->PSSetShader(m_maskedPixelShader.Get(), nullptr, 0);
 
 	m_renderContext->Draw(numVertices, 0);

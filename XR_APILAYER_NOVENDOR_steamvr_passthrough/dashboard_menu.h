@@ -34,6 +34,7 @@ struct MenuDisplayValues
 	int frameBufferHeight = 0;
 	XrCompositionLayerFlags frameBufferFlags = 0;
 	int64_t frameBufferFormat = 0;
+	int64_t depthBufferFormat = 0;
 	float frameToRenderLatencyMS = 0.0f;
 	float frameToPhotonsLatencyMS = 0.0f;
 	float renderTimeMS = 0.0f;

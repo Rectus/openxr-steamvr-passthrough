@@ -89,6 +89,7 @@ void ConfigManager::ParseConfig_Main()
 	m_configMain.ProjectionDistanceFar = (float)m_iniData.GetDoubleValue("Main", "ProjectionDistanceFar", m_configMain.ProjectionDistanceFar);
 	m_configMain.FloorHeightOffset = (float)m_iniData.GetDoubleValue("Main", "FloorHeightOffset", m_configMain.FloorHeightOffset);
 	m_configMain.FieldOfViewScale = (float)m_iniData.GetDoubleValue("Main", "FieldOfViewScale", m_configMain.FieldOfViewScale);
+	m_configMain.DepthOffsetCalibration = (float)m_iniData.GetDoubleValue("Main", "DepthOffsetCalibration", m_configMain.DepthOffsetCalibration);
 
 	m_configMain.Brightness = (float)m_iniData.GetDoubleValue("Main", "Brightness", m_configMain.Brightness);
 	m_configMain.Contrast = (float)m_iniData.GetDoubleValue("Main", "Contrast", m_configMain.Contrast);
@@ -159,6 +160,7 @@ void ConfigManager::UpdateConfig_Main()
 	m_iniData.SetDoubleValue("Main", "ProjectionDistanceFar", m_configMain.ProjectionDistanceFar);
 	m_iniData.SetDoubleValue("Main", "FloorHeightOffset", m_configMain.FloorHeightOffset);
 	m_iniData.SetDoubleValue("Main", "FieldOfViewScale", m_configMain.FieldOfViewScale);
+	m_iniData.SetDoubleValue("Main", "DepthOffsetCalibration", m_configMain.DepthOffsetCalibration);
 
 	m_iniData.SetDoubleValue("Main", "Brightness", m_configMain.Brightness);
 	m_iniData.SetDoubleValue("Main", "Contrast", m_configMain.Contrast);

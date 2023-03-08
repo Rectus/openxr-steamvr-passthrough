@@ -379,6 +379,7 @@ namespace
 				m_dashboardMenu->GetDisplayValues().renderAPI = None;
 				m_dashboardMenu->GetDisplayValues().frameBufferFlags = 0;
 				m_dashboardMenu->GetDisplayValues().frameBufferFormat = 0;
+				m_dashboardMenu->GetDisplayValues().depthBufferFormat = 0;
 				m_dashboardMenu->GetDisplayValues().frameBufferWidth = 0;
 				m_dashboardMenu->GetDisplayValues().frameBufferHeight = 0;
 				m_dashboardMenu->GetDisplayValues().frameToPhotonsLatencyMS = 0;
@@ -632,28 +633,75 @@ namespace
 
 			int imageIndex = held->second;
 
-			if (newSwapchain != *storedSwapchain)
+			if (newSwapchain == *storedSwapchain)
 			{
-				Log("Updating swapchain %u to %u with eye %u, index %u, arraySize %u\n", *storedSwapchain, newSwapchain, eye, imageIndex, props->second.arraySize);
+				return imageIndex;
+			}
 
-				XrSwapchainImageD3D12KHR swapchainImages[3];
-				uint32_t numImages = 0;
+			Log("Updating swapchain %u to %u with eye %u, index %u, arraySize %u\n", *storedSwapchain, newSwapchain, eye, imageIndex, props->second.arraySize);
 
-				XrResult result = OpenXrApi::xrEnumerateSwapchainImages(newSwapchain, 3, &numImages, (XrSwapchainImageBaseHeader*)swapchainImages);
-				if (XR_SUCCEEDED(result))
+			XrSwapchainImageD3D12KHR swapchainImages[3];
+			uint32_t numImages = 0;
+
+			XrResult result = OpenXrApi::xrEnumerateSwapchainImages(newSwapchain, 3, &numImages, (XrSwapchainImageBaseHeader*)swapchainImages);
+			if (XR_SUCCEEDED(result))
+			{
+				for (uint32_t i = 0; i < numImages; i++)
 				{
-					for (uint32_t i = 0; i < numImages; i++)
-					{
-						m_Renderer->InitRenderTarget(eye, swapchainImages[i].texture, i, props->second);
-					}
-					*storedSwapchain = newSwapchain;
+					m_Renderer->InitRenderTarget(eye, swapchainImages[i].texture, i, props->second);
 				}
-				else
+				*storedSwapchain = newSwapchain;
+			}
+			else
+			{
+				ErrorLog("Error in xrEnumerateSwapchainImages: %i\n", result);
+				return -1;
+			}
+
+
+			// Find associated depth swapchian if one exists.
+			auto depthInfo = (const XrCompositionLayerDepthInfoKHR*) layer->views[viewIndex].next;
+
+			while (depthInfo != nullptr)
+			{
+				if (depthInfo->type == XR_TYPE_COMPOSITION_LAYER_DEPTH_INFO_KHR)
 				{
-					ErrorLog("Error in xrEnumerateSwapchainImages: %i\n", result);
-					return -1;
+					break;
+				}
+				depthInfo = (const XrCompositionLayerDepthInfoKHR*) depthInfo->next;
+			}
+
+			if (depthInfo != nullptr)
+			{
+				auto depthProps = m_swapchainProperties.find(depthInfo->subImage.swapchain);
+
+				if (depthProps != m_swapchainProperties.end())
+				{
+					if (eye == LEFT_EYE)
+					{
+						m_dashboardMenu->GetDisplayValues().depthBufferFormat = depthProps->second.format;
+					}
+
+					Log("Found depth swapchain %u for color swapchain %u, arraySize %u, depth range [%f:%f], Z-range[%g:%g]\n", depthInfo->subImage.swapchain, newSwapchain, depthProps->second.arraySize, depthInfo->minDepth, depthInfo->maxDepth, depthInfo->nearZ, depthInfo->farZ);
+
+					XrSwapchainImageD3D12KHR depthImages[3];
+					numImages = 0;
+
+					XrResult result = OpenXrApi::xrEnumerateSwapchainImages(depthInfo->subImage.swapchain, 3, &numImages, (XrSwapchainImageBaseHeader*)depthImages);
+					if (XR_SUCCEEDED(result))
+					{
+						for (uint32_t i = 0; i < numImages; i++)
+						{
+							m_Renderer->InitDepthBuffer(eye, depthImages[i].texture, i, depthProps->second);
+						}
+					}
+					else
+					{
+						ErrorLog("Error in xrEnumerateSwapchainImages when enumerating depthbuffers: %i\n", result);
+					}
 				}
 			}
+
 			return imageIndex;
 		}
 
