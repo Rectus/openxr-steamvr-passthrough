@@ -632,6 +632,7 @@ void CameraManager::CalculateFrameProjectionForEye(const ERenderEye eye, std::sh
     }
     else if (frame->bHasReversedDepth)
     {
+        // TODO check that apps with finite reversed z work
         //hmdProjection.m[10] *= -1;
         //hmdProjection.m[14] *= -1;
         //hmdProjection.m[10] = (depthInfo->farZ) / (depthInfo->farZ - depthInfo->nearZ);
@@ -653,11 +654,6 @@ void CameraManager::CalculateFrameProjectionForEye(const ERenderEye eye, std::sh
     {
         XrMatrix4x4f leftCameraToTrackingPose = ToXRMatrix4x4(frame->header.trackedDevicePose.mDeviceToAbsoluteTracking);
 
-        XrMatrix4x4f cameraRightToLeftPose = m_cameraRightToLeftPose;
-        //cameraRightToLeftPose.m[12] *= mainConf.DepthOffsetCalibration;
-        //cameraRightToLeftPose.m[13] *= mainConf.DepthOffsetCalibration;
-        //cameraRightToLeftPose.m[14] *= mainConf.DepthOffsetCalibration;
-
         if (eye == LEFT_EYE)
         {
 
@@ -669,7 +665,7 @@ void CameraManager::CalculateFrameProjectionForEye(const ERenderEye eye, std::sh
             if (bIsStereo)
             {
                 XrMatrix4x4f tempMatrix;
-                XrMatrix4x4f_Multiply(&tempMatrix, &leftCameraToTrackingPose, &cameraRightToLeftPose);
+                XrMatrix4x4f_Multiply(&tempMatrix, &leftCameraToTrackingPose, &m_cameraRightToLeftPose);
                 XrMatrix4x4f_Multiply(&frame->cameraProjectionToWorldRight, &tempMatrix, &m_cameraProjectionInvFarRight);
             }
             else
@@ -694,9 +690,10 @@ void CameraManager::CalculateFrameProjectionForEye(const ERenderEye eye, std::sh
 
         frameProjection.m[10] = -m_projectionDistanceFar / (m_projectionDistanceFar - NEAR_PROJECTION_DISTANCE);
         frameProjection.m[11] = -1.0f;
-        frameProjection.m[12] = 0.0f;
+        frameProjection.m[12] = 2.0f * frameProjection.m[12] / (float)m_cameraFrameWidth;
         frameProjection.m[13] = 0.0f;
         frameProjection.m[14] = -(m_projectionDistanceFar * NEAR_PROJECTION_DISTANCE) / (m_projectionDistanceFar - NEAR_PROJECTION_DISTANCE);
+        frameProjection.m[15] = 0.0f;
 
 
         // TODO: The custom 2D mode inverts the y view angle, but still projects better than everything else?!
@@ -710,57 +707,64 @@ void CameraManager::CalculateFrameProjectionForEye(const ERenderEye eye, std::sh
 
         frameProjection2.m[10] = m_projectionDistanceFar / (m_projectionDistanceFar - NEAR_PROJECTION_DISTANCE);
         frameProjection2.m[11] = 1.0f;
-        frameProjection2.m[12] = 0.0f;
+        frameProjection2.m[12] = -2.0f * frameProjection.m[12] / (float)m_cameraFrameWidth;
         frameProjection2.m[13] = 0.0f;
         frameProjection2.m[14] = -(m_projectionDistanceFar * NEAR_PROJECTION_DISTANCE) / (m_projectionDistanceFar - NEAR_PROJECTION_DISTANCE);
+        frameProjection.m[15] = 0.0f;
 
         XrMatrix4x4f frameProjectionInverse;
         XrMatrix4x4f_Invert(&frameProjectionInverse, &frameProjection2);
 
         XrMatrix4x4f leftCameraToTrackingPose = ToXRMatrix4x4(frame->header.trackedDevicePose.mDeviceToAbsoluteTracking);
         XrMatrix4x4f leftCameraFromTrackingPose;
-        XrMatrix4x4f_Invert(&leftCameraFromTrackingPose, &leftCameraToTrackingPose);
-
-
-        
-        XrMatrix4x4f cameraLeftToRightPose = m_cameraLeftToRightPose;
-        cameraLeftToRightPose.m[12] *= mainConf.DepthOffsetCalibration;
-        cameraLeftToRightPose.m[13] *= mainConf.DepthOffsetCalibration;
-        cameraLeftToRightPose.m[14] *= mainConf.DepthOffsetCalibration;
-
-        XrMatrix4x4f cameraRightToLeftPose = m_cameraRightToLeftPose;
-        //cameraRightToLeftPose.m[12] *= mainConf.DepthOffsetCalibration;
-        //cameraRightToLeftPose.m[13] *= mainConf.DepthOffsetCalibration;
-        //cameraRightToLeftPose.m[14] *= mainConf.DepthOffsetCalibration;
-        
+        XrMatrix4x4f_Invert(&leftCameraFromTrackingPose, &leftCameraToTrackingPose);      
 
         if (eye == LEFT_EYE)
         {
-            // The rotation should be 0 with the individually recalculated distortion correction.
-            //XrMatrix4x4f a;
-            //XrMatrix4x4f_Multiply(&a, &distortionParams.rectifiedRotationLeft, &leftCameraFromTrackingPose);
-            XrMatrix4x4f_Multiply(&frame->worldToCameraProjectionLeft, &frameProjection, &leftCameraFromTrackingPose);
+            XrMatrix4x4f rectifiedRotationInverse;
+            XrMatrix4x4f_Transpose(&rectifiedRotationInverse, &distortionParams.rectifiedRotationLeft);
 
+            XrMatrix4x4f a;
+            XrMatrix4x4f_Multiply(&a, &rectifiedRotationInverse, &leftCameraFromTrackingPose);
+            XrMatrix4x4f_Multiply(&frame->worldToCameraProjectionLeft, &frameProjection, &a);
 
-            //XrMatrix4x4f_Multiply(&a, &distortionParams.rectifiedRotationLeft, &frameProjectionInverse);
-            XrMatrix4x4f_Multiply(&frame->cameraProjectionToWorldLeft, &leftCameraToTrackingPose, &frameProjectionInverse);
+            XrMatrix4x4f_Multiply(&a, &distortionParams.rectifiedRotationLeft, &frameProjectionInverse);
+            XrMatrix4x4f_Multiply(&frame->cameraProjectionToWorldLeft, &leftCameraToTrackingPose, &a);
         }
         else
         {
+            XrMatrix4x4f rectifiedRotation = distortionParams.rectifiedRotationRight;
+
+            // The right eye rotation matrices work for some reasong with x and z axis rotations reversed.
+            rectifiedRotation.m[1] *= -1;
+            rectifiedRotation.m[4] *= -1;
+            rectifiedRotation.m[6] *= -1;
+            rectifiedRotation.m[9] *= -1;
+            
             XrMatrix4x4f a;
-            //XrMatrix4x4f b;
-            XrMatrix4x4f_Multiply(&a, &cameraLeftToRightPose, &leftCameraFromTrackingPose);
-            //XrMatrix4x4f_Multiply(&b, &distortionParams.rectifiedRotationRight, &a);
+            XrMatrix4x4f_Multiply(&a, &rectifiedRotation, &leftCameraFromTrackingPose);
             XrMatrix4x4f_Multiply(&frame->worldToCameraProjectionRight, &frameProjection, &a);
 
             if (bIsStereo)
             {
-                XrMatrix4x4f_Multiply(&a, &cameraRightToLeftPose, &frameProjectionInverse);
+                XrMatrix4x4f rectifiedRotationInverse;
+                XrMatrix4x4f_Transpose(&rectifiedRotationInverse, &distortionParams.rectifiedRotationRight);
+
+                rectifiedRotationInverse.m[1] *= -1;
+                rectifiedRotationInverse.m[4] *= -1;
+                rectifiedRotationInverse.m[6] *= -1;
+                rectifiedRotationInverse.m[9] *= -1;
+
+                XrMatrix4x4f_Multiply(&a, &rectifiedRotationInverse, &frameProjectionInverse);
                 XrMatrix4x4f_Multiply(&frame->cameraProjectionToWorldRight, &leftCameraToTrackingPose, &a);
             }
             else
             {
-                XrMatrix4x4f_Multiply(&frame->cameraProjectionToWorldRight, &leftCameraToTrackingPose, &frameProjectionInverse);
+                XrMatrix4x4f rectifiedRotationInverse;
+                XrMatrix4x4f_Transpose(&rectifiedRotationInverse, &distortionParams.rectifiedRotationLeft);
+
+                XrMatrix4x4f_Multiply(&a, &rectifiedRotationInverse, &frameProjectionInverse);
+                XrMatrix4x4f_Multiply(&frame->cameraProjectionToWorldRight, &leftCameraToTrackingPose, &a);
             }
         }
     }

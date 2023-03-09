@@ -354,14 +354,22 @@ if (bIsActiveTab) { ImGui::PopStyleColor(1); bIsActiveTab = false; }
 			ScrollableSlider("Floor Height Offset (m)", &mainConfig.FloorHeightOffset, 0.0f, 2.0f, "%.2f", 0.01f);
 			TextDescription("Allows setting the floor height higher in the 2D modes, for example to have correct projection on a table surface.");
 			IMGUI_BIG_SPACING;
+			
+			if (ImGui::TreeNode("Advanced"))
+			{
+				IMGUI_BIG_SPACING;
 
-			ImGui::SetNextItemWidth(ImGui::GetContentRegionAvail().x * 0.45f);
-			ScrollableSlider("Field of View Scale", &mainConfig.FieldOfViewScale, 0.0f, 1.0f, "%.1f", 0.1f);
-			TextDescription("Sets the size of the rendered area in the Custom 2D and Stereo 3D projection modes.");
+				ImGui::SetNextItemWidth(ImGui::GetContentRegionAvail().x * 0.45f);
+				ScrollableSlider("Field of View Scale", &mainConfig.FieldOfViewScale, 0.0f, 1.0f, "%.1f", 0.1f);
+				TextDescription("Sets the size of the rendered area in the Custom 2D and Stereo 3D projection modes.");
+				IMGUI_BIG_SPACING;
 
-			ImGui::SetNextItemWidth(ImGui::GetContentRegionAvail().x * 0.45f);
-			ScrollableSlider("Depth Offset Calibration", &mainConfig.DepthOffsetCalibration, 0.5f, 1.5f, "%.2f", 0.01f);
-			TextDescription("Calibration to compensate for incorrect depth.");
+				ImGui::SetNextItemWidth(ImGui::GetContentRegionAvail().x * 0.45f);
+				ScrollableSlider("Depth Offset Calibration", &mainConfig.DepthOffsetCalibration, 0.5f, 1.5f, "%.2f", 0.01f);
+				TextDescription("Calibration to compensate for incorrect depth.");
+				
+				ImGui::TreePop();
+			}
 		}	
 		IMGUI_BIG_SPACING;
 

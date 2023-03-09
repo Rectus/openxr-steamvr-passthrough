@@ -17,7 +17,7 @@ struct Config_Main
 	float PassthroughOpacity = 1.0f;
 	float ProjectionDistanceFar = 10.0f;
 	float FloorHeightOffset = 0.0f;
-	float FieldOfViewScale = 0.7f;
+	float FieldOfViewScale = 0.9f;
 	float DepthOffsetCalibration = 1.0f;
 
 	float Brightness = 0.0f;

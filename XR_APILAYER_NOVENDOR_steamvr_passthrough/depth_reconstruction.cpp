@@ -182,11 +182,18 @@ void DepthReconstruction::InitReconstruction()
     cv::fisheye::initUndistortRectifyMap(m_intrinsicsLeft, m_distortionParamsLeft, R1, P1, textureSize, CV_32FC1, m_leftMap1, m_leftMap2);
     cv::fisheye::initUndistortRectifyMap(m_intrinsicsRight, m_distortionParamsRight, R2, P2, textureSize, CV_32FC1, m_rightMap1, m_rightMap2);
 
+    m_fishEyeProjectionLeft = CVMatToXrMatrix(P1);
+    m_fishEyeProjectionRight = CVMatToXrMatrix(P2);
 
     XrMatrix4x4f XR_R1 = CVMatToXrMatrix(R1);
-    XrMatrix4x4f_Transpose(&m_disparityRotationInvLeft, &XR_R1);
+    XrMatrix4x4f_Transpose(&m_rectifiedRotationLeft, &XR_R1);
     XrMatrix4x4f XR_R2 = CVMatToXrMatrix(R2);
-    XrMatrix4x4f_Transpose(&m_disparityRotationInvRight, &XR_R2);
+    XrMatrix4x4f_Transpose(&m_rectifiedRotationRight, &XR_R2);
+
+    m_distortionParams.cameraProjectionLeft = m_fishEyeProjectionLeft;
+    m_distortionParams.cameraProjectionRight = m_fishEyeProjectionRight;
+    m_distortionParams.rectifiedRotationLeft = m_rectifiedRotationLeft;
+    m_distortionParams.rectifiedRotationRight = m_rectifiedRotationRight;
 
     XrMatrix4x4f XR_Q = CVMatToXrMatrix(Q);
     XrMatrix4x4f_Transpose(&m_disparityToDepth, &XR_Q);
@@ -209,7 +216,6 @@ void DepthReconstruction::InitReconstruction()
     m_depthFrame->disparityMap->resize(m_cvImageWidth * m_cvImageHeight);
     m_servedDepthFrame->disparityMap->resize(m_cvImageWidth * m_cvImageHeight);
     m_underConstructionDepthFrame->disparityMap->resize(m_cvImageWidth * m_cvImageHeight);
-
 }
 
 
@@ -228,35 +234,6 @@ void DepthReconstruction::CreateDistortionMap()
 
     distMap.resize(m_cameraTextureHeight * m_cameraTextureWidth * 2);
 
-    // Create separate matrices and maps for rectifying the camera frames, since cv::fisheye::stereoRectify 
-    // creates weird matrices that distort when modified to use with shaders.
-
-    cv::Mat R1, R2, R3, P1, P2;
-
-    cv::Size textureSize(m_cameraFrameWidth, m_cameraFrameHeight);
-
-    cv::fisheye::estimateNewCameraMatrixForUndistortRectify(m_intrinsicsLeft, m_distortionParamsLeft, textureSize, R1, P1, 0.0, textureSize, m_fovScale);
-    cv::fisheye::estimateNewCameraMatrixForUndistortRectify(m_intrinsicsRight, m_distortionParamsRight, textureSize, R2, P2, 0.0, textureSize, m_fovScale);
-    
-    cv::Mat leftMap1, leftMap2, rightMap1, rightMap2;
-
-    cv::fisheye::initUndistortRectifyMap(m_intrinsicsLeft, m_distortionParamsLeft, R1, P1, textureSize, CV_32FC1, leftMap1, leftMap2);
-    cv::fisheye::initUndistortRectifyMap(m_intrinsicsRight, m_distortionParamsRight, R2, P2, textureSize, CV_32FC1, rightMap1, rightMap2);
-
-    m_rectifiedRotationLeft = CVMatToXrMatrix(R1);
-    m_rectifiedRotationRight = CVMatToXrMatrix(R2);
-
-    m_fishEyeProjectionLeft = CVMatToXrMatrix(P1);
-    m_fishEyeProjectionRight = CVMatToXrMatrix(P2);
-
-    m_distortionParams.cameraProjectionLeft = m_fishEyeProjectionLeft;
-    m_distortionParams.cameraProjectionRight = m_fishEyeProjectionRight;
-
-    // These should be identity matrices.
-    m_distortionParams.rectifiedRotationLeft = m_rectifiedRotationLeft;
-    m_distortionParams.rectifiedRotationRight = m_rectifiedRotationRight;
-
-
     if (m_frameLayout == StereoHorizontalLayout)
     {
         for (uint32_t y = 0; y < m_cameraTextureHeight; y++)
@@ -265,16 +242,16 @@ void DepthReconstruction::CreateDistortionMap()
 
             for (uint32_t x = 0; x < m_cameraFrameWidth * 2; x += 2)
             {
-                distMap[rowStart + x] = (leftMap1.at<float>(y, x / 2) - x / 2) / m_cameraFrameWidth / 2;
-                distMap[rowStart + x + 1] = (leftMap2.at<float>(y, x / 2) - y) / m_cameraFrameHeight;
+                distMap[rowStart + x] = (m_leftMap1.at<float>(y, x / 2) - x / 2) / m_cameraFrameWidth / 2;
+                distMap[rowStart + x + 1] = (m_leftMap2.at<float>(y, x / 2) - y) / m_cameraFrameHeight;
             }
 
             rowStart = y * m_cameraTextureWidth * 2 + m_cameraFrameWidth * 2;
 
             for (uint32_t x = 0; x < m_cameraFrameWidth * 2; x += 2)
             {
-                distMap[rowStart + x] = (rightMap1.at<float>(y, x / 2) - x / 2) / m_cameraFrameWidth / 2;
-                distMap[rowStart + x + 1] = (rightMap2.at<float>(y, x / 2) - y) / m_cameraFrameHeight;
+                distMap[rowStart + x] = (m_rightMap1.at<float>(y, x / 2) - x / 2) / m_cameraFrameWidth / 2;
+                distMap[rowStart + x + 1] = (m_rightMap2.at<float>(y, x / 2) - y) / m_cameraFrameHeight;
             }
         }
     }
@@ -286,16 +263,16 @@ void DepthReconstruction::CreateDistortionMap()
 
             for (uint32_t x = 0; x < m_cameraFrameWidth * 2; x += 2)
             {
-                distMap[rowStart + x] = (leftMap1.at<float>(y, x / 2) - x / 2) / m_cameraFrameWidth;
-                distMap[rowStart + x + 1] = (leftMap2.at<float>(y, x / 2) - y) / m_cameraFrameHeight / 2;
+                distMap[rowStart + x] = (m_leftMap1.at<float>(y, x / 2) - x / 2) / m_cameraFrameWidth;
+                distMap[rowStart + x + 1] = (m_leftMap2.at<float>(y, x / 2) - y) / m_cameraFrameHeight / 2;
             }
 
             rowStart = m_cameraFrameHeight * m_cameraTextureWidth * 2 + y * m_cameraTextureWidth * 2;
 
             for (uint32_t x = 0; x < m_cameraFrameWidth * 2; x += 2)
             {
-                distMap[rowStart + x] = (rightMap1.at<float>(y, x / 2) - x / 2) / m_cameraFrameWidth;
-                distMap[rowStart + x + 1] = (rightMap2.at<float>(y, x / 2) - y) / m_cameraFrameHeight / 2;
+                distMap[rowStart + x] = (m_rightMap1.at<float>(y, x / 2) - x / 2) / m_cameraFrameWidth;
+                distMap[rowStart + x + 1] = (m_rightMap2.at<float>(y, x / 2) - y) / m_cameraFrameHeight / 2;
             }
         }
     }
@@ -307,8 +284,8 @@ void DepthReconstruction::CreateDistortionMap()
 
             for (uint32_t x = 0; x < m_cameraFrameWidth * 2; x += 2)
             {
-                distMap[rowStart + x] = (leftMap1.at<float>(y, x / 2) - x / 2) / m_cameraFrameWidth;
-                distMap[rowStart + x + 1] = (leftMap2.at<float>(y, x / 2) - y) / m_cameraFrameHeight;
+                distMap[rowStart + x] = (m_leftMap1.at<float>(y, x / 2) - x / 2) / m_cameraFrameWidth;
+                distMap[rowStart + x + 1] = (m_leftMap2.at<float>(y, x / 2) - y) / m_cameraFrameHeight;
             }
         }
     }
@@ -469,8 +446,8 @@ void DepthReconstruction::RunThread()
             
             (*outputMatrix)(cv::Rect(m_maxDisparity, 0, m_cvImageWidth, m_cvImageHeight)).convertTo(m_disparityMatrix, CV_16U);
 
-            XrMatrix4x4f_Multiply(&m_underConstructionDepthFrame->disparityViewToWorldLeft, &viewToWorld, &m_disparityRotationInvLeft);
-            XrMatrix4x4f_Multiply(&m_underConstructionDepthFrame->disparityViewToWorldRight, &viewToWorld, &m_disparityRotationInvRight);
+            XrMatrix4x4f_Multiply(&m_underConstructionDepthFrame->disparityViewToWorldLeft, &viewToWorld, &m_rectifiedRotationLeft);
+            XrMatrix4x4f_Multiply(&m_underConstructionDepthFrame->disparityViewToWorldRight, &viewToWorld, &m_rectifiedRotationRight);
             m_underConstructionDepthFrame->disparityToDepth = m_disparityToDepth;
             m_underConstructionDepthFrame->disparityTextureSize[0] = m_cvImageWidth;
             m_underConstructionDepthFrame->disparityTextureSize[1] = m_cvImageHeight;

@@ -70,11 +70,7 @@ private:
 	cv::Mat m_rightMap1;
 	cv::Mat m_rightMap2;
 
-	XrMatrix4x4f m_cameraProjectionToView;
 	XrMatrix4x4f m_disparityToDepth;
-
-	XrMatrix4x4f m_disparityRotationInvLeft;
-	XrMatrix4x4f m_disparityRotationInvRight;
 
 	XrMatrix4x4f m_rectifiedRotationLeft;
 	XrMatrix4x4f m_rectifiedRotationRight;
