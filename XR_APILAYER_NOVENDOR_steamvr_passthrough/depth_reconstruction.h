@@ -57,6 +57,7 @@ private:
 	uint32_t m_lastFrameSequence;
 	uint32_t m_downscaleFactor;
 	float m_fovScale;
+	float m_depthOffsetCalibration;
 	int m_maxDisparity;
 	bool m_bUseMulticore;
 

@@ -67,6 +67,7 @@ DepthReconstruction::DepthReconstruction(std::shared_ptr<ConfigManager> configMa
     m_underConstructionDepthFrame = std::make_shared<DepthFrame>();
 
     m_fovScale = m_configManager->GetConfig_Main().FieldOfViewScale;
+    m_depthOffsetCalibration = m_configManager->GetConfig_Main().DepthOffsetCalibration;
 
     m_bUseMulticore = stereoConfig.StereoUseMulticore;
     cv::setNumThreads(m_bUseMulticore ? -1 : 0);
@@ -197,6 +198,8 @@ void DepthReconstruction::InitReconstruction()
 
     XrMatrix4x4f XR_Q = CVMatToXrMatrix(Q);
     XrMatrix4x4f_Transpose(&m_disparityToDepth, &XR_Q);
+
+    m_disparityToDepth.m[11] *= m_depthOffsetCalibration;
     
     CreateDistortionMap();
 
@@ -304,11 +307,13 @@ void DepthReconstruction::RunThread()
 
         if (m_maxDisparity != stereoConfig.StereoMaxDisparity ||
             m_downscaleFactor != stereoConfig.StereoDownscaleFactor ||
-            m_fovScale != mainConfig.FieldOfViewScale)
+            m_fovScale != mainConfig.FieldOfViewScale ||
+            m_depthOffsetCalibration != mainConfig.DepthOffsetCalibration)
         {
             m_maxDisparity = stereoConfig.StereoMaxDisparity;
             m_downscaleFactor = stereoConfig.StereoDownscaleFactor;
             m_fovScale = mainConfig.FieldOfViewScale;
+            m_depthOffsetCalibration = mainConfig.DepthOffsetCalibration;
 
             InitReconstruction();
         }

@@ -152,4 +152,31 @@ struct UVDistortionParameters
 	float fovScale;
 };
 
+struct CameraDebugProperties
+{
+	vr::HmdMatrix34_t CameraToHeadTransform;
+	vr::HmdVector4_t WhiteBalance;
+	vr::EVRDistortionFunctionType DistortionFunction;
+	double DistortionCoefficients[8];
+};
+
+struct DeviceDebugProperties
+{
+	uint32_t DeviceId;
+	std::string DeviceName;
+	bool bHasCamera;
+	uint32_t NumCameras;
+	CameraDebugProperties CameraProps[4];
+
+	vr::EVRTrackedCameraFrameLayout CameraFrameLayout;
+	int32_t	CameraStreamFormat;
+	vr::HmdMatrix34_t CameraToHeadTransform;
+	uint64_t CameraFirmwareVersion;
+	std::string CameraFirmwareDescription;
+	int32_t CameraCompatibilityMode;
+	bool bCameraSupportsCompatibilityModes;
+	float CameraExposureTime;
+	float CameraGlobalGain;
+};
+
 #define NEAR_PROJECTION_DISTANCE 0.05f

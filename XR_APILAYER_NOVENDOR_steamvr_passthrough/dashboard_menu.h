@@ -91,5 +91,8 @@ private:
 	ImFont* m_mainFont;
 	ImFont* m_smallFont;
 	ImFont* m_fixedFont;
+
+	std::vector<DeviceDebugProperties> m_deviceDebugProps;
+	int m_currentDebugDevice;
 };
 

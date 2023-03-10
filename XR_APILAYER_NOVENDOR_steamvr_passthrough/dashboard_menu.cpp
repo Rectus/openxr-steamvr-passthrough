@@ -754,9 +754,63 @@ if (bIsActiveTab) { ImGui::PopStyleColor(1); bIsActiveTab = false; }
 		}
 
 		ImGui::SetNextItemOpen(true, ImGuiCond_Once);
+		if (ImGui::CollapsingHeader("Device Properties"))
+		{
+			if (ImGui::Button("Update"))
+			{
+				m_openVRManager->GetCameraDebugProperties(m_deviceDebugProps);
+			}
+
+			ImGui::SameLine();
+
+			std::string comboPreview = "No device";
+
+			if (m_deviceDebugProps.size() > m_currentDebugDevice)
+			{
+				comboPreview.assign(std::format("[{}] {}", m_currentDebugDevice, m_deviceDebugProps[m_currentDebugDevice].DeviceName));
+			}
+			 
+
+			if (ImGui::BeginCombo("Devices", comboPreview.c_str()))
+			{
+				for (int i = 0; i < m_deviceDebugProps.size(); i++)
+				{
+					std::string comboValue = std::format("[{}] {}", i, m_deviceDebugProps[i].DeviceName);
+
+					const bool bIsSelected = (m_currentDebugDevice == i);
+					if (ImGui::Selectable(comboValue.c_str(), bIsSelected))
+					{
+						m_currentDebugDevice = i;
+					}
+
+					if (bIsSelected)
+					{
+						ImGui::SetItemDefaultFocus();
+					}
+				}
+				ImGui::EndCombo();
+			}
+
+			IMGUI_BIG_SPACING;
+			if (m_deviceDebugProps.size() > m_currentDebugDevice)
+			{
+				DeviceDebugProperties& props = m_deviceDebugProps[m_currentDebugDevice];
+
+				ImGui::PushFont(m_fixedFont);
+
+				if (props.bHasCamera) { ImGui::Text("Has camera: True"); } else { ImGui::Text("Has camera: False"); }
+				ImGui::Text("Number of cameras: %u", props.NumCameras);
+				ImGui::Text("Camera firmware: %s, version: %lu", props.CameraFirmwareDescription.c_str(), props.CameraFirmwareVersion);
+
+				ImGui::PopFont();
+			}
+			IMGUI_BIG_SPACING;
+		}
+
+		ImGui::SetNextItemOpen(true, ImGuiCond_Once);
 		if (ImGui::CollapsingHeader("Log"))
 		{
-			ImGui::BeginChild("Log", ImVec2(0, 0), true);
+			//ImGui::BeginChild("Log", ImVec2(0, 0), true);
 			ImGui::PushFont(m_fixedFont);
 			ImGui::PushTextWrapPos(ImGui::GetContentRegionAvail().x);
 
@@ -770,7 +824,7 @@ if (bIsActiveTab) { ImGui::PopStyleColor(1); bIsActiveTab = false; }
 
 			ImGui::PopTextWrapPos();
 			ImGui::PopFont();
-			ImGui::EndChild();
+			//ImGui::EndChild();
 		}
 		ImGui::EndChild();
 	}
