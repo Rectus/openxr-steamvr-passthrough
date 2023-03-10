@@ -650,7 +650,7 @@ void CameraManager::CalculateFrameProjectionForEye(const ERenderEye eye, std::sh
 
 
 
-    if (m_configManager->GetConfig_Main().ProjectionMode == ProjectionRoomView2D)
+    if (mainConf.ProjectionMode == ProjectionRoomView2D)
     {
         XrMatrix4x4f leftCameraToTrackingPose = ToXRMatrix4x4(frame->header.trackedDevicePose.mDeviceToAbsoluteTracking);
 

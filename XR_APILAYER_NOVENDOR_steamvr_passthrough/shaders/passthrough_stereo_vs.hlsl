@@ -53,7 +53,8 @@ VS_OUTPUT main(float3 inPosition : POSITION, uint vertexID : SV_VertexID)
 	VS_OUTPUT output;
 	inPosition.xy = inPosition.xy * float2(1, 1) + float2(0, 0);
 
-	float disparity = g_disparityTexture.Load(uint3(inPosition.xy * g_disparityTextureSize, 0));
+    float2 pixelPos = g_disparityTextureSize * (inPosition.xy * (g_uvBounds.zw - g_uvBounds.xy) + g_uvBounds.xy);
+    float disparity = g_disparityTexture.Load(uint3(pixelPos, 0));
 	//float disparity = g_disparityTexture.SampleLevel(g_samplerState, inPosition.xy, 0);
 
 	output.projectionValidity = 0.0;
@@ -70,11 +71,11 @@ VS_OUTPUT main(float3 inPosition : POSITION, uint vertexID : SV_VertexID)
 	}
 
 
-	float2 texturePos = float2(inPosition.x, inPosition.y) * g_disparityTextureSize * g_disparityDownscaleFactor;
+    float2 texturePos = inPosition.xy * g_disparityTextureSize * (g_uvBounds.zw - g_uvBounds.xy) * g_disparityDownscaleFactor;
 
 	// Convert to uint16 range with 4 bit fixed decimal: 65536 / 16
 	disparity *= 4096.0 * g_disparityDownscaleFactor;
-	float4 viewSpaceCoords = mul(g_disparityToDepth, float4(texturePos, disparity, 1.0));
+    float4 viewSpaceCoords = mul(g_disparityToDepth, float4(texturePos, disparity, 1.0));
 	viewSpaceCoords.y = 1 - viewSpaceCoords.y;
 	viewSpaceCoords.z *= -1;
 	viewSpaceCoords /= viewSpaceCoords.w;

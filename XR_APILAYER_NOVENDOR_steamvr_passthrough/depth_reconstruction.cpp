@@ -165,6 +165,10 @@ void DepthReconstruction::InitReconstruction()
 
     double leftToRightTranslation[3] = { leftToRightMatrix.m[12], leftToRightMatrix.m[13], leftToRightMatrix.m[14] };
 
+    leftToRightTranslation[0] *= m_depthOffsetCalibration;
+    leftToRightTranslation[1] *= m_depthOffsetCalibration;
+    leftToRightTranslation[2] *= m_depthOffsetCalibration;
+
     XrMatrix4x4f_Transpose(&leftToRightTransposed, &leftToRightMatrix);
 
     double leftToRightRotation[9] = {
@@ -199,7 +203,7 @@ void DepthReconstruction::InitReconstruction()
     XrMatrix4x4f XR_Q = CVMatToXrMatrix(Q);
     XrMatrix4x4f_Transpose(&m_disparityToDepth, &XR_Q);
 
-    m_disparityToDepth.m[11] *= m_depthOffsetCalibration;
+    //m_disparityToDepth.m[11] *= m_depthOffsetCalibration;
     
     CreateDistortionMap();
 
@@ -210,15 +214,17 @@ void DepthReconstruction::InitReconstruction()
     m_scaledExtFrameRight = cv::Mat(m_cvImageHeight, m_cvImageWidth + m_maxDisparity, CV_8U);
 
     m_rawDisparity = cv::Mat(m_cvImageHeight, m_cvImageWidth + m_maxDisparity, CV_16S);
+    m_rightDisparity = cv::Mat(m_cvImageHeight, m_cvImageWidth + m_maxDisparity, CV_16S);
     m_filteredDisparity = cv::Mat(m_cvImageHeight, m_cvImageWidth + m_maxDisparity, CV_16S);
+    m_bilateralDisparity = cv::Mat(m_cvImageHeight, m_cvImageWidth + m_maxDisparity, CV_16S);
 
     std::unique_lock writeLock(m_depthFrame->readWriteMutex);
     std::unique_lock writeLock2(m_servedDepthFrame->readWriteMutex);
     std::unique_lock writeLock3(m_underConstructionDepthFrame->readWriteMutex);
 
-    m_depthFrame->disparityMap->resize(m_cvImageWidth * m_cvImageHeight);
-    m_servedDepthFrame->disparityMap->resize(m_cvImageWidth * m_cvImageHeight);
-    m_underConstructionDepthFrame->disparityMap->resize(m_cvImageWidth * m_cvImageHeight);
+    m_depthFrame->disparityMap->resize(m_cvImageWidth * 2 * m_cvImageHeight);
+    m_servedDepthFrame->disparityMap->resize(m_cvImageWidth * 2 * m_cvImageHeight);
+    m_underConstructionDepthFrame->disparityMap->resize(m_cvImageWidth * 2 * m_cvImageHeight);
 }
 
 
@@ -363,6 +369,13 @@ void DepthReconstruction::RunThread()
                     stereoConfig.StereoSGBM_PreFilterCap, stereoConfig.StereoSGBM_UniquenessRatio,
                     stereoConfig.StereoSGBM_SpeckleWindowSize, speckleRange,
                     (int)stereoConfig.StereoSGBM_Mode);
+
+                m_rightMatcher = cv::StereoSGBM::create(stereoConfig.StereoMinDisparity, m_maxDisparity - stereoConfig.StereoMinDisparity, stereoConfig.StereoBlockSize,
+                    stereoConfig.StereoSGBM_P1, stereoConfig.StereoSGBM_P2, stereoConfig.StereoSGBM_DispMaxDiff,
+                    stereoConfig.StereoSGBM_PreFilterCap, stereoConfig.StereoSGBM_UniquenessRatio,
+                    stereoConfig.StereoSGBM_SpeckleWindowSize, speckleRange,
+                    (int)stereoConfig.StereoSGBM_Mode);
+                //m_rightMatcher = cv::ximgproc::createRightMatcher(m_stereoSGBM);
             }
             else if (stereoConfig.StereoAlgorithm == StereoAlgorithm_BM)
             {
@@ -373,6 +386,8 @@ void DepthReconstruction::RunThread()
                 m_stereoBM->setSpeckleWindowSize(stereoConfig.StereoSGBM_SpeckleWindowSize);
                 m_stereoBM->setSpeckleRange(speckleRange);
                 m_stereoBM->setUniquenessRatio(stereoConfig.StereoSGBM_UniquenessRatio);
+
+                //m_rightMatcher = cv::ximgproc::createRightMatcher(m_stereoSGBM);
             }
 
 
@@ -415,20 +430,23 @@ void DepthReconstruction::RunThread()
         {
             m_stereoBM->compute(m_scaledExtFrameLeft, m_scaledExtFrameRight, m_rawDisparity);
         }
+        
+        m_rightMatcher->compute(m_scaledExtFrameRight, m_scaledExtFrameLeft, m_rightDisparity);
+
+        //m_rightDisparity = m_rightDisparity * -1;
 
         cv::Mat* outputMatrix = &m_rawDisparity;
 
         if (stereoConfig.StereoFiltering != StereoFiltering_None)
         {
-            m_rightMatcher = cv::ximgproc::createRightMatcher(m_stereoSGBM);
-            m_rightMatcher->compute(m_scaledExtFrameRight, m_scaledExtFrameLeft, m_rightDisparity);
+            
 
             m_wlsFilter = cv::ximgproc::createDisparityWLSFilter(m_stereoSGBM);
 
             m_wlsFilter->setLambda(stereoConfig.StereoWLS_Lambda);
             m_wlsFilter->setSigmaColor(stereoConfig.StereoWLS_Sigma);
 
-            m_wlsFilter->filter(m_rawDisparity, m_scaledExtFrameLeft, m_filteredDisparity, m_rightDisparity);
+            m_wlsFilter->filter(m_rawDisparity, m_scaledExtFrameLeft, m_filteredDisparity, m_rightDisparity, cv::Rect(), m_scaledExtFrameRight);
 
             if (stereoConfig.StereoFiltering == StereoFiltering_WLS_FBS)
             {
@@ -447,14 +465,26 @@ void DepthReconstruction::RunThread()
         {
             std::unique_lock writeLock(m_underConstructionDepthFrame->readWriteMutex);
 
-            m_disparityMatrix = cv::Mat(m_cvImageHeight, m_cvImageWidth, CV_16U, m_underConstructionDepthFrame->disparityMap->data());
+            m_disparityMatrix = cv::Mat(m_cvImageHeight, m_cvImageWidth * 2, CV_16U, m_underConstructionDepthFrame->disparityMap->data());
             
-            (*outputMatrix)(cv::Rect(m_maxDisparity, 0, m_cvImageWidth, m_cvImageHeight)).convertTo(m_disparityMatrix, CV_16U);
+            cv::Mat tempMat = cv::Mat(m_cvImageHeight, m_cvImageWidth, CV_16U);
+
+            (*outputMatrix)(cv::Rect(m_maxDisparity, 0, m_cvImageWidth, m_cvImageHeight)).convertTo(tempMat , CV_16U);
+            tempMat.copyTo(m_disparityMatrix(cv::Rect(0, 0, m_cvImageWidth, m_cvImageHeight)));
+
+            cv::Mat tempMat2 = cv::Mat(m_cvImageHeight, m_cvImageWidth, CV_16U);
+            
+            m_rightDisparity = m_rightDisparity * -1;
+            //m_rightDisparity = 32 - m_rightDisparity;
+            (*outputMatrix)(cv::Rect(m_maxDisparity, 0, m_cvImageWidth, m_cvImageHeight)).convertTo(tempMat2, CV_16U);
+            //m_rightDisparity(cv::Rect(m_maxDisparity, 0, m_cvImageWidth, m_cvImageHeight)).convertTo(tempMat2, CV_16U);
+            
+            tempMat2.copyTo(m_disparityMatrix(cv::Rect(m_cvImageWidth, 0, m_cvImageWidth, m_cvImageHeight)));
 
             XrMatrix4x4f_Multiply(&m_underConstructionDepthFrame->disparityViewToWorldLeft, &viewToWorld, &m_rectifiedRotationLeft);
             XrMatrix4x4f_Multiply(&m_underConstructionDepthFrame->disparityViewToWorldRight, &viewToWorld, &m_rectifiedRotationRight);
             m_underConstructionDepthFrame->disparityToDepth = m_disparityToDepth;
-            m_underConstructionDepthFrame->disparityTextureSize[0] = m_cvImageWidth;
+            m_underConstructionDepthFrame->disparityTextureSize[0] = m_cvImageWidth * 2;
             m_underConstructionDepthFrame->disparityTextureSize[1] = m_cvImageHeight;
             m_underConstructionDepthFrame->disparityDownscaleFactor = (float)m_downscaleFactor;
             m_underConstructionDepthFrame->bIsValid = true;
