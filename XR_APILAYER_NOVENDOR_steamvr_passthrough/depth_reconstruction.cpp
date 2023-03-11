@@ -1,6 +1,12 @@
 #include "pch.h"
 #include "depth_reconstruction.h"
 
+#include <log.h>
+
+
+
+using namespace steamvr_passthrough;
+using namespace steamvr_passthrough::log;
 
 #define PERF_TIME_AVERAGE_VALUES 20
 
@@ -68,6 +74,7 @@ DepthReconstruction::DepthReconstruction(std::shared_ptr<ConfigManager> configMa
 
     m_fovScale = m_configManager->GetConfig_Main().FieldOfViewScale;
     m_depthOffsetCalibration = m_configManager->GetConfig_Main().DepthOffsetCalibration;
+    m_bUseColor = stereoConfig.StereoUseColor;
 
     m_bUseMulticore = stereoConfig.StereoUseMulticore;
     cv::setNumThreads(m_bUseMulticore ? -1 : 0);
@@ -195,23 +202,22 @@ void DepthReconstruction::InitReconstruction()
     XrMatrix4x4f XR_R2 = CVMatToXrMatrix(R2);
     XrMatrix4x4f_Transpose(&m_rectifiedRotationRight, &XR_R2);
 
-    m_distortionParams.cameraProjectionLeft = m_fishEyeProjectionLeft;
-    m_distortionParams.cameraProjectionRight = m_fishEyeProjectionRight;
-    m_distortionParams.rectifiedRotationLeft = m_rectifiedRotationLeft;
-    m_distortionParams.rectifiedRotationRight = m_rectifiedRotationRight;
-
     XrMatrix4x4f XR_Q = CVMatToXrMatrix(Q);
     XrMatrix4x4f_Transpose(&m_disparityToDepth, &XR_Q);
-
-    //m_disparityToDepth.m[11] *= m_depthOffsetCalibration;
     
     CreateDistortionMap();
 
-    m_inputFrameGreyLeft = cv::Mat(m_cvImageHeight, m_cvImageWidth, CV_8U);
-    m_inputFrameGreyRight = cv::Mat(m_cvImageHeight, m_cvImageWidth, CV_8U);
+    int frameFormat = m_bUseColor ? CV_8UC3 : CV_8U;
 
-    m_scaledExtFrameLeft = cv::Mat(m_cvImageHeight, m_cvImageWidth + m_maxDisparity, CV_8U);
-    m_scaledExtFrameRight = cv::Mat(m_cvImageHeight, m_cvImageWidth + m_maxDisparity, CV_8U);
+    m_inputFrameLeft = cv::Mat(m_cameraFrameHeight, m_cameraFrameWidth, frameFormat);
+    m_inputFrameRight = cv::Mat(m_cameraFrameHeight, m_cameraFrameWidth, frameFormat);
+    m_rectifiedFrameLeft = cv::Mat(m_cvImageHeight, m_cvImageWidth, frameFormat);
+    m_rectifiedFrameRight = cv::Mat(m_cvImageHeight, m_cvImageWidth, frameFormat);
+    m_scaledFrameLeft = cv::Mat(m_cvImageHeight, m_cvImageWidth, frameFormat);
+    m_scaledFrameRight = cv::Mat(m_cvImageHeight, m_cvImageWidth, frameFormat);
+    m_scaledExtFrameLeft = cv::Mat(m_cvImageHeight, m_cvImageWidth + m_maxDisparity, frameFormat);
+    m_scaledExtFrameRight = cv::Mat(m_cvImageHeight, m_cvImageWidth + m_maxDisparity, frameFormat);
+    
 
     m_rawDisparity = cv::Mat(m_cvImageHeight, m_cvImageWidth + m_maxDisparity, CV_16S);
     m_rightDisparity = cv::Mat(m_cvImageHeight, m_cvImageWidth + m_maxDisparity, CV_16S);
@@ -222,9 +228,9 @@ void DepthReconstruction::InitReconstruction()
     std::unique_lock writeLock2(m_servedDepthFrame->readWriteMutex);
     std::unique_lock writeLock3(m_underConstructionDepthFrame->readWriteMutex);
 
-    m_depthFrame->disparityMap->resize(m_cvImageWidth * 2 * m_cvImageHeight);
-    m_servedDepthFrame->disparityMap->resize(m_cvImageWidth * 2 * m_cvImageHeight);
-    m_underConstructionDepthFrame->disparityMap->resize(m_cvImageWidth * 2 * m_cvImageHeight);
+    m_depthFrame->disparityMap->resize(m_cvImageWidth * m_cvImageHeight);
+    m_servedDepthFrame->disparityMap->resize(m_cvImageWidth * m_cvImageHeight);
+    m_underConstructionDepthFrame->disparityMap->resize(m_cvImageWidth * m_cvImageHeight);
 }
 
 
@@ -236,6 +242,11 @@ void DepthReconstruction::CreateDistortionMap()
     {
         m_distortionParams.uvDistortionMap = std::make_shared<std::vector<float>>();
     }
+
+    m_distortionParams.cameraProjectionLeft = m_fishEyeProjectionLeft;
+    m_distortionParams.cameraProjectionRight = m_fishEyeProjectionRight;
+    m_distortionParams.rectifiedRotationLeft = m_rectifiedRotationLeft;
+    m_distortionParams.rectifiedRotationRight = m_rectifiedRotationRight;
 
     m_distortionParams.fovScale = m_fovScale;
 
@@ -314,12 +325,14 @@ void DepthReconstruction::RunThread()
         if (m_maxDisparity != stereoConfig.StereoMaxDisparity ||
             m_downscaleFactor != stereoConfig.StereoDownscaleFactor ||
             m_fovScale != mainConfig.FieldOfViewScale ||
-            m_depthOffsetCalibration != mainConfig.DepthOffsetCalibration)
+            m_depthOffsetCalibration != mainConfig.DepthOffsetCalibration ||
+            m_bUseColor != stereoConfig.StereoUseColor)
         {
             m_maxDisparity = stereoConfig.StereoMaxDisparity;
             m_downscaleFactor = stereoConfig.StereoDownscaleFactor;
             m_fovScale = mainConfig.FieldOfViewScale;
             m_depthOffsetCalibration = mainConfig.DepthOffsetCalibration;
+            m_bUseColor = stereoConfig.StereoUseColor;
 
             InitReconstruction();
         }
@@ -369,13 +382,6 @@ void DepthReconstruction::RunThread()
                     stereoConfig.StereoSGBM_PreFilterCap, stereoConfig.StereoSGBM_UniquenessRatio,
                     stereoConfig.StereoSGBM_SpeckleWindowSize, speckleRange,
                     (int)stereoConfig.StereoSGBM_Mode);
-
-                m_rightMatcher = cv::StereoSGBM::create(stereoConfig.StereoMinDisparity, m_maxDisparity - stereoConfig.StereoMinDisparity, stereoConfig.StereoBlockSize,
-                    stereoConfig.StereoSGBM_P1, stereoConfig.StereoSGBM_P2, stereoConfig.StereoSGBM_DispMaxDiff,
-                    stereoConfig.StereoSGBM_PreFilterCap, stereoConfig.StereoSGBM_UniquenessRatio,
-                    stereoConfig.StereoSGBM_SpeckleWindowSize, speckleRange,
-                    (int)stereoConfig.StereoSGBM_Mode);
-                //m_rightMatcher = cv::ximgproc::createRightMatcher(m_stereoSGBM);
             }
             else if (stereoConfig.StereoAlgorithm == StereoAlgorithm_BM)
             {
@@ -386,35 +392,47 @@ void DepthReconstruction::RunThread()
                 m_stereoBM->setSpeckleWindowSize(stereoConfig.StereoSGBM_SpeckleWindowSize);
                 m_stereoBM->setSpeckleRange(speckleRange);
                 m_stereoBM->setUniquenessRatio(stereoConfig.StereoSGBM_UniquenessRatio);
-
-                //m_rightMatcher = cv::ximgproc::createRightMatcher(m_stereoSGBM);
             }
-
 
             m_inputFrame = cv::Mat(m_cameraTextureHeight, m_cameraTextureWidth, CV_8UC4, frame->frameBuffer->data());
             
+            cv::Rect frameROILeft, frameROIRight;
 
             if (m_frameLayout == StereoHorizontalLayout)
             {
-                m_inputFrameLeft = m_inputFrame(cv::Rect(0, 0, m_cameraFrameWidth, m_cameraFrameHeight));
-                m_inputFrameRight = m_inputFrame(cv::Rect(m_cameraFrameWidth, 0, m_cameraFrameWidth, m_cameraFrameHeight));
+                frameROILeft = cv::Rect(0, 0, m_cameraFrameWidth, m_cameraFrameHeight);
+                frameROIRight = cv::Rect(m_cameraFrameWidth, 0, m_cameraFrameWidth, m_cameraFrameHeight);
             }
             else if (m_frameLayout == StereoVerticalLayout)
             {
-                m_inputFrameLeft = m_inputFrame(cv::Rect(0, m_cameraFrameHeight, m_cameraFrameWidth, m_cameraFrameHeight));
-                m_inputFrameRight = m_inputFrame(cv::Rect(0, 0, m_cameraFrameWidth, m_cameraFrameHeight));
+                frameROILeft = cv::Rect(0, m_cameraFrameHeight, m_cameraFrameWidth, m_cameraFrameHeight);
+                frameROIRight = cv::Rect(0, 0, m_cameraFrameWidth, m_cameraFrameHeight);
             }
 
-            cv::cvtColor(m_inputFrameLeft, m_inputFrameGreyLeft, cv::COLOR_RGBA2GRAY);
-            cv::cvtColor(m_inputFrameRight, m_inputFrameGreyRight, cv::COLOR_RGBA2GRAY);
+            if (m_bUseColor)
+            {
+                cv::cvtColor(m_inputFrame(frameROILeft), m_inputFrameLeft, cv::COLOR_RGBA2RGB);
+                cv::cvtColor(m_inputFrame(frameROIRight), m_inputFrameRight, cv::COLOR_RGBA2RGB);
+            }
+            else
+            {
+                //cv::cvtColor(m_inputFrame(frameROILeft), m_inputFrameLeft, cv::COLOR_RGBA2GRAY);
+                //cv::cvtColor(m_inputFrame(frameROIRight), m_inputFrameRight, cv::COLOR_RGBA2GRAY);
+                
+                // Uses B&W image in alpha channel of distorted frames, unsure if all headsets support this.
+                m_inputAlphaLeft = m_inputFrame(frameROILeft);
+                m_inputAlphaRight = m_inputFrame(frameROIRight);
+                int fromTo[2] = { 3, 0 };
+                cv::mixChannels(&m_inputAlphaLeft, 1, &m_inputFrameLeft, 1, fromTo, 1);
+                cv::mixChannels(&m_inputAlphaRight, 1, &m_inputFrameRight, 1, fromTo, 1);
+            }
         }
 
         int filter = stereoConfig.StereoRectificationFiltering ? CV_INTER_LINEAR : CV_INTER_NN;
 
-        cv::remap(m_inputFrameGreyLeft, m_rectifiedFrameLeft, m_leftMap1, m_leftMap2, filter, cv::BORDER_CONSTANT);
-        cv::remap(m_inputFrameGreyRight, m_rectifiedFrameRight, m_rightMap1, m_rightMap2, filter, cv::BORDER_CONSTANT);
+        cv::remap(m_inputFrameLeft, m_rectifiedFrameLeft, m_leftMap1, m_leftMap2, filter, cv::BORDER_CONSTANT);
+        cv::remap(m_inputFrameRight, m_rectifiedFrameRight, m_rightMap1, m_rightMap2, filter, cv::BORDER_CONSTANT);
         
-
         cv::resize(m_rectifiedFrameLeft, m_scaledFrameLeft, cv::Size(m_cvImageWidth, m_cvImageHeight));
         cv::resize(m_rectifiedFrameRight, m_scaledFrameRight, cv::Size(m_cvImageWidth, m_cvImageHeight));      
 
@@ -424,22 +442,20 @@ void DepthReconstruction::RunThread()
         
         if (stereoConfig.StereoAlgorithm == StereoAlgorithm_SGBM)
         {
-            m_stereoSGBM->compute(m_scaledExtFrameLeft, m_scaledExtFrameRight, m_rawDisparity);  
+            m_stereoSGBM->compute(m_scaledExtFrameLeft, m_scaledExtFrameRight, m_rawDisparity);
         }
         else if (stereoConfig.StereoAlgorithm == StereoAlgorithm_BM)
         {
             m_stereoBM->compute(m_scaledExtFrameLeft, m_scaledExtFrameRight, m_rawDisparity);
         }
         
-        m_rightMatcher->compute(m_scaledExtFrameRight, m_scaledExtFrameLeft, m_rightDisparity);
-
-        //m_rightDisparity = m_rightDisparity * -1;
 
         cv::Mat* outputMatrix = &m_rawDisparity;
 
         if (stereoConfig.StereoFiltering != StereoFiltering_None)
         {
-            
+            m_rightMatcher = cv::ximgproc::createRightMatcher(m_stereoSGBM);
+            m_rightMatcher->compute(m_scaledExtFrameRight, m_scaledExtFrameLeft, m_rightDisparity);
 
             m_wlsFilter = cv::ximgproc::createDisparityWLSFilter(m_stereoSGBM);
 
@@ -465,26 +481,14 @@ void DepthReconstruction::RunThread()
         {
             std::unique_lock writeLock(m_underConstructionDepthFrame->readWriteMutex);
 
-            m_disparityMatrix = cv::Mat(m_cvImageHeight, m_cvImageWidth * 2, CV_16U, m_underConstructionDepthFrame->disparityMap->data());
-            
-            cv::Mat tempMat = cv::Mat(m_cvImageHeight, m_cvImageWidth, CV_16U);
+            m_disparityMatrix = cv::Mat(m_cvImageHeight, m_cvImageWidth, CV_16U, m_underConstructionDepthFrame->disparityMap->data());
 
-            (*outputMatrix)(cv::Rect(m_maxDisparity, 0, m_cvImageWidth, m_cvImageHeight)).convertTo(tempMat , CV_16U);
-            tempMat.copyTo(m_disparityMatrix(cv::Rect(0, 0, m_cvImageWidth, m_cvImageHeight)));
-
-            cv::Mat tempMat2 = cv::Mat(m_cvImageHeight, m_cvImageWidth, CV_16U);
-            
-            m_rightDisparity = m_rightDisparity * -1;
-            //m_rightDisparity = 32 - m_rightDisparity;
-            (*outputMatrix)(cv::Rect(m_maxDisparity, 0, m_cvImageWidth, m_cvImageHeight)).convertTo(tempMat2, CV_16U);
-            //m_rightDisparity(cv::Rect(m_maxDisparity, 0, m_cvImageWidth, m_cvImageHeight)).convertTo(tempMat2, CV_16U);
-            
-            tempMat2.copyTo(m_disparityMatrix(cv::Rect(m_cvImageWidth, 0, m_cvImageWidth, m_cvImageHeight)));
+            (*outputMatrix)(cv::Rect(m_maxDisparity, 0, m_cvImageWidth, m_cvImageHeight)).convertTo(m_disparityMatrix, CV_16U);
 
             XrMatrix4x4f_Multiply(&m_underConstructionDepthFrame->disparityViewToWorldLeft, &viewToWorld, &m_rectifiedRotationLeft);
             XrMatrix4x4f_Multiply(&m_underConstructionDepthFrame->disparityViewToWorldRight, &viewToWorld, &m_rectifiedRotationRight);
             m_underConstructionDepthFrame->disparityToDepth = m_disparityToDepth;
-            m_underConstructionDepthFrame->disparityTextureSize[0] = m_cvImageWidth * 2;
+            m_underConstructionDepthFrame->disparityTextureSize[0] = m_cvImageWidth;
             m_underConstructionDepthFrame->disparityTextureSize[1] = m_cvImageHeight;
             m_underConstructionDepthFrame->disparityDownscaleFactor = (float)m_downscaleFactor;
             m_underConstructionDepthFrame->bIsValid = true;

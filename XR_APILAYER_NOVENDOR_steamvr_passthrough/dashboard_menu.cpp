@@ -355,6 +355,7 @@ if (bIsActiveTab) { ImGui::PopStyleColor(1); bIsActiveTab = false; }
 			TextDescription("Allows setting the floor height higher in the 2D modes, for example to have correct projection on a table surface.");
 			IMGUI_BIG_SPACING;
 			
+			ImGui::SetNextItemOpen(true, ImGuiCond_Once);
 			if (ImGui::TreeNode("Advanced"))
 			{
 				IMGUI_BIG_SPACING;
@@ -521,6 +522,10 @@ if (bIsActiveTab) { ImGui::PopStyleColor(1); bIsActiveTab = false; }
 		ImGui::SetNextItemOpen(true, ImGuiCond_Once);
 		if (ImGui::CollapsingHeader("Advanced"))
 		{
+			ImGui::Checkbox("Use Color", &stereoCustomConfig.StereoUseColor);
+			TextDescription("Uses full color images for stereo proecssing.");
+			IMGUI_BIG_SPACING;
+
 			ImGui::Checkbox("Rectification Filtering", &stereoCustomConfig.StereoRectificationFiltering);
 			TextDescription("Applies linear filtering before stereo processing.");
 			IMGUI_BIG_SPACING;

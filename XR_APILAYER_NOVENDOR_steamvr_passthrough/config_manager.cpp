@@ -124,6 +124,7 @@ void ConfigManager::ParseConfig_Stereo()
 {
 	m_configCustomStereo.StereoUseMulticore = m_iniData.GetBoolValue("StereoCustom", "StereoUseMulticore", m_configCustomStereo.StereoUseMulticore);
 	m_configCustomStereo.StereoRectificationFiltering = m_iniData.GetBoolValue("StereoCustom", "StereoRectificationFiltering", m_configCustomStereo.StereoRectificationFiltering);
+	m_configCustomStereo.StereoUseColor = m_iniData.GetBoolValue("StereoCustom", "StereoUseColor", m_configCustomStereo.StereoUseColor);
 
 	m_configCustomStereo.StereoFrameSkip = m_iniData.GetLongValue("StereoCustom", "StereoFrameSkip", m_configCustomStereo.StereoFrameSkip);
 	m_configCustomStereo.StereoDownscaleFactor = m_iniData.GetLongValue("StereoCustom", "StereoDownscaleFactor", m_configCustomStereo.StereoDownscaleFactor);
@@ -195,6 +196,7 @@ void ConfigManager::UpdateConfig_Stereo()
 {
 	m_iniData.SetBoolValue("StereoCustom", "StereoUseMulticore", m_configCustomStereo.StereoUseMulticore);
 	m_iniData.SetBoolValue("StereoCustom", "StereoRectificationFiltering", m_configCustomStereo.StereoRectificationFiltering);
+	m_iniData.SetBoolValue("StereoCustom", "StereoUseColor", m_configCustomStereo.StereoUseColor);
 	m_iniData.SetLongValue("StereoCustom", "StereoFrameSkip", m_configCustomStereo.StereoFrameSkip);
 	m_iniData.SetLongValue("StereoCustom", "StereoDownscaleFactor", m_configCustomStereo.StereoDownscaleFactor);
 	m_iniData.SetLongValue("StereoCustom", "StereoAlgorithm", m_configCustomStereo.StereoAlgorithm);

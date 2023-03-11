@@ -75,6 +75,7 @@ struct Config_Stereo
 	bool StereoUseMulticore = true;
 	bool StereoReconstructionFreeze = false;
 	bool StereoRectificationFiltering = false;
+	bool StereoUseColor = true;
 	int StereoFrameSkip = 0;
 	int StereoDownscaleFactor = 4;
 	EStereoAlgorithm StereoAlgorithm = StereoAlgorithm_SGBM;

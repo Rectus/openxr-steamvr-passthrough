@@ -60,6 +60,7 @@ private:
 	float m_depthOffsetCalibration;
 	int m_maxDisparity;
 	bool m_bUseMulticore;
+	bool m_bUseColor;
 
 	cv::Mat m_intrinsicsLeft;
 	cv::Mat m_intrinsicsRight;
@@ -88,12 +89,11 @@ private:
 	cv::Mat m_inputFrame;
 	cv::Mat m_inputFrameLeft;
 	cv::Mat m_inputFrameRight;
-	cv::Mat m_inputFrameGreyLeft;
-	cv::Mat m_inputFrameGreyRight;
+	cv::Mat m_inputAlphaLeft;
+	cv::Mat m_inputAlphaRight;
 
 	cv::Mat m_rectifiedFrameLeft;
 	cv::Mat m_rectifiedFrameRight;
-
 	cv::Mat m_scaledFrameLeft;
 	cv::Mat m_scaledFrameRight;
 
