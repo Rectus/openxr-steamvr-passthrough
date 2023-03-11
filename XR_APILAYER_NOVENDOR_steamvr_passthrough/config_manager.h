@@ -102,6 +102,10 @@ struct Config_Stereo
 	int StereoFBS_Iterations = 11;
 };
 
+struct Config_Depth
+{
+	bool DepthCompositionEnable = false;
+};
 
 
 class ConfigManager
@@ -119,6 +123,7 @@ public:
 	Config_Core& GetConfig_Core() { return m_configCore; }
 	Config_Stereo& GetConfig_Stereo() { return m_configStereo; }
 	Config_Stereo& GetConfig_CustomStereo() { return m_configCustomStereo; }
+	Config_Depth& GetConfig_Depth() { return m_configDepth; }
 
 
 private:
@@ -127,10 +132,12 @@ private:
 	void ParseConfig_Main();
 	void ParseConfig_Core();
 	void ParseConfig_Stereo();
+	void ParseConfig_Depth();
 
 	void UpdateConfig_Main();
 	void UpdateConfig_Core();
 	void UpdateConfig_Stereo();
+	void UpdateConfig_Depth();
 
 	std::wstring m_configFile;
 	CSimpleIniA m_iniData;
@@ -140,5 +147,6 @@ private:
 	Config_Core m_configCore;
 	Config_Stereo m_configStereo;
 	Config_Stereo m_configCustomStereo;
+	Config_Depth m_configDepth;
 };
 

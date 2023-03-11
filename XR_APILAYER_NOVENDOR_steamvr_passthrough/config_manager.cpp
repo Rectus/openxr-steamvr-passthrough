@@ -76,6 +76,7 @@ void ConfigManager::ResetToDefaults()
 	m_configCore = Config_Core();
 	m_configStereo = Config_Stereo();
 	m_configCustomStereo = Config_Stereo();
+	m_configDepth = Config_Depth();
 	UpdateConfigFile();
 }
 
@@ -151,6 +152,12 @@ void ConfigManager::ParseConfig_Stereo()
 	m_configCustomStereo.StereoFBS_Iterations = m_iniData.GetLongValue("StereoCustom", "StereoFBS_Iterations", m_configCustomStereo.StereoFBS_Iterations);
 }
 
+void ConfigManager::ParseConfig_Depth()
+{
+	m_configDepth.DepthCompositionEnable = m_iniData.GetBoolValue("Depth", "DepthCompositionEnable", m_configDepth.DepthCompositionEnable);
+}
+
+
 void ConfigManager::UpdateConfig_Main()
 {
 	m_iniData.SetBoolValue("Main", "EnablePassthrough", m_configMain.EnablePassthrough);
@@ -220,4 +227,9 @@ void ConfigManager::UpdateConfig_Stereo()
 	m_iniData.SetDoubleValue("StereoCustom", "StereoFBS_Chroma", m_configCustomStereo.StereoFBS_Chroma);
 	m_iniData.SetDoubleValue("StereoCustom", "StereoFBS_Lambda", m_configCustomStereo.StereoFBS_Lambda);
 	m_iniData.SetLongValue("StereoCustom", "StereoFBS_Iterations", m_configCustomStereo.StereoFBS_Iterations);
+}
+
+void ConfigManager::UpdateConfig_Depth()
+{
+	m_iniData.SetBoolValue("Depth", "DepthCompositionEnable", m_configDepth.DepthCompositionEnable);
 }

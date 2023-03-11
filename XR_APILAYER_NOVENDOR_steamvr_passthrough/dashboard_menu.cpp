@@ -227,6 +227,7 @@ void DashboardMenu::TickMenu()
 	Config_Core& coreConfig = m_configManager->GetConfig_Core();
 	Config_Stereo& stereoConfig = m_configManager->GetConfig_Stereo();
 	Config_Stereo& stereoCustomConfig = m_configManager->GetConfig_CustomStereo();
+	Config_Depth& depthConfig = m_configManager->GetConfig_Depth();
 
 	ImVec4 colorTextGreen(0.2f, 0.8f, 0.2f, 1.0f);
 	ImVec4 colorTextRed(0.8f, 0.2f, 0.2f, 1.0f);
@@ -625,8 +626,17 @@ if (bIsActiveTab) { ImGui::PopStyleColor(1); bIsActiveTab = false; }
 	if (m_activeTab == TabOverrides)
 	{
 		ImGui::BeginChild("Overrides Pane");
+
 		ImGui::SetNextItemOpen(true, ImGuiCond_Once);
-		if (ImGui::CollapsingHeader("Overrides"))
+		if (ImGui::CollapsingHeader("Depth"))
+		{
+			ImGui::Checkbox("Force Depth Composition", &depthConfig.DepthCompositionEnable);
+			TextDescription("Enables composing the passthough by depth for applications that submit a depth buffer.");
+			IMGUI_BIG_SPACING;
+		}
+
+		ImGui::SetNextItemOpen(true, ImGuiCond_Once);
+		if (ImGui::CollapsingHeader("Mode"))
 		{
 			ImGui::Checkbox("Force Passthrough Mode", &coreConfig.CoreForcePassthrough);
 			TextDescription("Forces passthrough on even if the application does not support it.");

@@ -416,15 +416,15 @@ void DepthReconstruction::RunThread()
             }
             else
             {
-                //cv::cvtColor(m_inputFrame(frameROILeft), m_inputFrameLeft, cv::COLOR_RGBA2GRAY);
-                //cv::cvtColor(m_inputFrame(frameROIRight), m_inputFrameRight, cv::COLOR_RGBA2GRAY);
+                cv::cvtColor(m_inputFrame(frameROILeft), m_inputFrameLeft, cv::COLOR_RGBA2GRAY);
+                cv::cvtColor(m_inputFrame(frameROIRight), m_inputFrameRight, cv::COLOR_RGBA2GRAY);
                 
                 // Uses B&W image in alpha channel of distorted frames, unsure if all headsets support this.
-                m_inputAlphaLeft = m_inputFrame(frameROILeft);
-                m_inputAlphaRight = m_inputFrame(frameROIRight);
-                int fromTo[2] = { 3, 0 };
-                cv::mixChannels(&m_inputAlphaLeft, 1, &m_inputFrameLeft, 1, fromTo, 1);
-                cv::mixChannels(&m_inputAlphaRight, 1, &m_inputFrameRight, 1, fromTo, 1);
+                //m_inputAlphaLeft = m_inputFrame(frameROILeft);
+                //m_inputAlphaRight = m_inputFrame(frameROIRight);
+                //int fromTo[2] = { 3, 0 };
+                //cv::mixChannels(&m_inputAlphaLeft, 1, &m_inputFrameLeft, 1, fromTo, 1);
+                //cv::mixChannels(&m_inputAlphaRight, 1, &m_inputFrameRight, 1, fromTo, 1);
             }
         }
 
@@ -486,7 +486,7 @@ void DepthReconstruction::RunThread()
             (*outputMatrix)(cv::Rect(m_maxDisparity, 0, m_cvImageWidth, m_cvImageHeight)).convertTo(m_disparityMatrix, CV_16U);
 
             XrMatrix4x4f_Multiply(&m_underConstructionDepthFrame->disparityViewToWorldLeft, &viewToWorld, &m_rectifiedRotationLeft);
-            XrMatrix4x4f_Multiply(&m_underConstructionDepthFrame->disparityViewToWorldRight, &viewToWorld, &m_rectifiedRotationRight);
+            //XrMatrix4x4f_Multiply(&m_underConstructionDepthFrame->disparityViewToWorldRight, &viewToWorld, &m_rectifiedRotationRight);
             m_underConstructionDepthFrame->disparityToDepth = m_disparityToDepth;
             m_underConstructionDepthFrame->disparityTextureSize[0] = m_cvImageWidth;
             m_underConstructionDepthFrame->disparityTextureSize[1] = m_cvImageHeight;
