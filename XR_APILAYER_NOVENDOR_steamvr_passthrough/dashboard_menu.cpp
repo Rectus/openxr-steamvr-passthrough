@@ -524,7 +524,6 @@ if (bIsActiveTab) { ImGui::PopStyleColor(1); bIsActiveTab = false; }
 		{
 			ImGui::Checkbox("Use Color", &stereoCustomConfig.StereoUseColor);
 			TextDescription("Uses full color images for stereo proecssing.");
-			IMGUI_BIG_SPACING;
 
 			ImGui::Checkbox("Rectification Filtering", &stereoCustomConfig.StereoRectificationFiltering);
 			TextDescription("Applies linear filtering before stereo processing.");
@@ -761,7 +760,7 @@ if (bIsActiveTab) { ImGui::PopStyleColor(1); bIsActiveTab = false; }
 		ImGui::SetNextItemOpen(true, ImGuiCond_Once);
 		if (ImGui::CollapsingHeader("Device Properties"))
 		{
-			if (ImGui::Button("Update"))
+			if (ImGui::Button("Refresh"))
 			{
 				m_openVRManager->GetCameraDebugProperties(m_deviceDebugProps);
 			}
@@ -796,16 +795,209 @@ if (bIsActiveTab) { ImGui::PopStyleColor(1); bIsActiveTab = false; }
 				ImGui::EndCombo();
 			}
 
-			IMGUI_BIG_SPACING;
+			ImGui::Spacing();
 			if (m_deviceDebugProps.size() > m_currentDebugDevice)
 			{
 				DeviceDebugProperties& props = m_deviceDebugProps[m_currentDebugDevice];
 
 				ImGui::PushFont(m_fixedFont);
 
+				ImGui::Text("Class:");
+				ImGui::SameLine();
+				switch (props.DeviceClass)
+				{
+				case vr::TrackedDeviceClass_HMD:
+					ImGui::Text("HMD");
+					break;
+				case vr::TrackedDeviceClass_Controller:
+					ImGui::Text("Controller");
+					break;
+				case vr::TrackedDeviceClass_GenericTracker:
+					ImGui::Text("Generic Tracker");
+					break;
+				case vr::TrackedDeviceClass_TrackingReference:
+					ImGui::Text("Tracking Reference");
+					break;
+				case vr::TrackedDeviceClass_DisplayRedirect:
+					ImGui::Text("Display Redirect");
+					break;
+				default:
+					ImGui::Text("Unknown");
+				}
+
 				if (props.bHasCamera) { ImGui::Text("Has camera: True"); } else { ImGui::Text("Has camera: False"); }
 				ImGui::Text("Number of cameras: %u", props.NumCameras);
 				ImGui::Text("Camera firmware: %s, version: %lu", props.CameraFirmwareDescription.c_str(), props.CameraFirmwareVersion);
+				ImGui::Text("Camera compatibility mode: %u", props.CameraCompatibilityMode);
+				if (props.bCameraSupportsCompatibilityModes) { ImGui::Text("Camera supports compatibility modes: True"); }
+				else { ImGui::Text("Camera supports compatibility modes: False"); }
+				ImGui::Text("Camera exposure time: %f", props.CameraExposureTime);
+				ImGui::Text("Camera global gain: %f", props.CameraGlobalGain);
+
+				ImGui::Text("Camera frame layout:");
+				if (props.CameraFrameLayout & vr::EVRTrackedCameraFrameLayout_Mono)
+				{
+					ImGui::SameLine();
+					ImGui::Text("Mono");
+				}
+				if (props.CameraFrameLayout & vr::EVRTrackedCameraFrameLayout_Stereo)
+				{
+					ImGui::SameLine();
+					ImGui::Text("Stereo");
+				}
+				if (props.CameraFrameLayout & vr::EVRTrackedCameraFrameLayout_HorizontalLayout)
+				{
+					ImGui::SameLine();
+					ImGui::Text("Horizontal");
+				}
+				if (props.CameraFrameLayout & vr::EVRTrackedCameraFrameLayout_VerticalLayout)
+				{
+					ImGui::SameLine();
+					ImGui::Text("Vertical");
+				}
+				if (props.CameraFrameLayout & ~0x33)
+				{
+					ImGui::SameLine();
+					ImGui::Text("Unknown flags!");
+				}
+
+				ImGui::Text("Camera stream format:");
+				ImGui::SameLine();
+				switch (props.CameraStreamFormat)
+				{
+				case 1:
+					ImGui::Text("RAW10");
+					break;
+				case 2:
+					ImGui::Text("NV12");
+					break;
+				case 3:
+					ImGui::Text("RGB24");
+					break;
+				case 4:
+					ImGui::Text("NV12_2");
+					break;
+				case 5:
+					ImGui::Text("YUYV16");
+					break;
+				case 6:
+					ImGui::Text("BAYER16BG");
+					break;
+				case 7:
+					ImGui::Text("MJPEG");
+					break;
+				case 8:
+					ImGui::Text("RGBX32");
+					break;
+				default:
+					ImGui::Text("Unknown");
+				}
+
+				ImGui::Text("Camera to head transform:");
+				for (int y = 0; y < 3; y++)
+				{
+					ImGui::Text("[");
+					ImGui::SameLine();
+					for (int x = 0; x < 4; x++)
+					{
+						ImGui::Text("%f", props.CameraToHeadTransform.m[y][x]);
+						ImGui::SameLine();
+					}
+					ImGui::Text("]");
+				}
+
+				ImGui::Text("Distorted camera frame size: %d x %d", props.DistortedFrameWidth, props.DistortedFrameHeight);
+				ImGui::Text("Undistorted camera frame size: %d x %d", props.UndistortedFrameWidth, props.UndistortedFrameHeight);
+				ImGui::Text("Max undistorted camera frame size: %d x %d", props.MaximumUndistortedFrameWidth, props.MaximumUndistortedFrameHeight);
+
+				IMGUI_BIG_SPACING;
+
+				for (uint32_t i = 0; i < props.NumCameras; i++)
+				{
+					ImGui::BeginGroup();
+
+					ImGui::Text("Camera %u:", i);
+
+					ImGui::Text("Undistorted intrinsics:\nf = [ %.2f %.2f ] c = [ %.2f %.2f ]", props.CameraProps[i].UndistortedFocalLength.v[0], props.CameraProps[i].UndistortedFocalLength.v[1], props.CameraProps[i].UndistortedOpticalCenter.v[0], props.CameraProps[i].UndistortedOpticalCenter.v[1]);
+
+					ImGui::Text("Max undistorted intrinsics:\nf = [ %.2f %.2f ] c = [ %.2f %.2f ]", props.CameraProps[i].MaximumUndistortedFocalLength.v[0], props.CameraProps[i].MaximumUndistortedFocalLength.v[1], props.CameraProps[i].MaximumUndistortedOpticalCenter.v[0], props.CameraProps[i].MaximumUndistortedOpticalCenter.v[1]);
+
+					ImGui::Spacing();
+
+					ImGui::Text("Camera to head transform:");
+					for (int y = 0; y < 3; y++)
+					{
+						ImGui::Text("[");
+						ImGui::SameLine();
+						for (int x = 0; x < 4; x++)
+						{
+							ImGui::Text("%f", props.CameraProps[i].CameraToHeadTransform.m[y][x]);
+							ImGui::SameLine();
+						}
+						ImGui::Text("]");
+					}
+					
+					ImGui::Spacing();
+
+					ImGui::Text("Undistorted projection:");
+					for (int y = 0; y < 4; y++)
+					{
+						ImGui::Text("[");
+						ImGui::SameLine();
+						for (int x = 0; x < 4; x++)
+						{
+							ImGui::Text("%f", props.CameraProps[i].UndistortedProjecton.m[y][x]);
+							ImGui::SameLine();
+						}
+						ImGui::Text("]");
+					}
+
+					ImGui::Text("Max undistorted projection:");
+					for (int y = 0; y < 4; y++)
+					{
+						ImGui::Text("[");
+						ImGui::SameLine();
+						for (int x = 0; x < 4; x++)
+						{
+							ImGui::Text("%f", props.CameraProps[i].MaximumUndistortedProjecton.m[y][x]);
+							ImGui::SameLine();
+						}
+						ImGui::Text("]");
+					}
+
+					ImGui::Spacing();
+
+					ImGui::Text("White balance:\n[ %f %f %f %f ]", props.CameraProps[i].WhiteBalance.v[0], props.CameraProps[i].WhiteBalance.v[1], props.CameraProps[i].WhiteBalance.v[2], props.CameraProps[i].WhiteBalance.v[3]);
+
+					ImGui::Spacing();
+
+					ImGui::Text("Distortion function:");
+					ImGui::SameLine();
+					switch (props.CameraProps[i].DistortionFunction)
+					{
+					case vr::VRDistortionFunctionType_None:
+						ImGui::Text("None");
+						break;
+					case vr::VRDistortionFunctionType_FTheta:
+						ImGui::Text("F-theta");
+						break;
+					case vr::VRDistortionFunctionType_Extended_FTheta:
+						ImGui::Text("Extended F-theta");
+						break;
+					default:
+						ImGui::Text("Unknown");
+					}
+
+					ImGui::Text("Distortion coefficients:\n[ %f %f %f %f ]\n[ %f %f %f %f ]", props.CameraProps[i].DistortionCoefficients[0], props.CameraProps[i].DistortionCoefficients[1], props.CameraProps[i].DistortionCoefficients[2], props.CameraProps[i].DistortionCoefficients[3], props.CameraProps[i].DistortionCoefficients[4], props.CameraProps[i].DistortionCoefficients[5], props.CameraProps[i].DistortionCoefficients[6], props.CameraProps[i].DistortionCoefficients[7]);
+
+
+					ImGui::EndGroup();
+
+					if (i % 2 == 0 && i < props.NumCameras - 1)
+					{
+						ImGui::SameLine();
+					}
+				}
 
 				ImGui::PopFont();
 			}

@@ -82,7 +82,7 @@ void OpenVRManager::GetCameraDebugProperties(std::vector<DeviceDebugProperties>&
     vr::IVRSystem* vrSystem = GetVRSystem();
     vr::IVRTrackedCamera* trackedCamera = GetVRTrackedCamera();
 
-    char stringPropBuffer[vr::k_unMaxPropertyStringSize];
+    char stringPropBuffer[256];
 
     for (uint32_t deviceId = 0; deviceId < vr::k_unMaxTrackedDeviceCount; deviceId++)
     {
@@ -91,9 +91,12 @@ void OpenVRManager::GetCameraDebugProperties(std::vector<DeviceDebugProperties>&
             continue;
         }
 
-        DeviceDebugProperties deviceProps;
+        properties.push_back(DeviceDebugProperties());
+        DeviceDebugProperties& deviceProps = properties.at(properties.size() - 1);
 
+        deviceProps.DeviceClass = vrSystem->GetTrackedDeviceClass(deviceId);
         deviceProps.DeviceId = deviceId;
+
 
         deviceProps.bHasCamera = vrSystem->GetBoolTrackedDeviceProperty(deviceId, vr::Prop_HasCamera_Bool);
         deviceProps.NumCameras = vrSystem->GetInt32TrackedDeviceProperty(deviceId, vr::Prop_NumCameras_Int32);
@@ -113,22 +116,37 @@ void OpenVRManager::GetCameraDebugProperties(std::vector<DeviceDebugProperties>&
         int32_t cameraDistortionFunctions[4];
         numBytes = vrSystem->GetArrayTrackedDeviceProperty(deviceId, vr::Prop_CameraDistortionFunction_Int32_Array, vr::k_unInt32PropertyTag, &cameraDistortionFunctions, sizeof(cameraDistortionFunctions));
 
-        double cameraDistortionCoeffs[vr::k_unMaxDistortionFunctionParameters][4];
+        double cameraDistortionCoeffs[4][vr::k_unMaxDistortionFunctionParameters];
         numBytes = vrSystem->GetArrayTrackedDeviceProperty(deviceId, vr::Prop_CameraDistortionCoefficients_Float_Array, vr::k_unFloatPropertyTag, &cameraDistortionCoeffs, sizeof(cameraDistortionCoeffs));
 
         vr::HmdVector4_t whiteBalance[4];
         numBytes = vrSystem->GetArrayTrackedDeviceProperty(deviceId, vr::Prop_CameraWhiteBalance_Vector4_Array, vr::k_unHmdVector4PropertyTag, &whiteBalance, sizeof(whiteBalance));
 
+        uint32_t fbSize;
+
+        trackedCamera->GetCameraFrameSize(deviceId, vr::VRTrackedCameraFrameType_Distorted, &deviceProps.DistortedFrameWidth, &deviceProps.DistortedFrameHeight, &fbSize);
+        trackedCamera->GetCameraFrameSize(deviceId, vr::VRTrackedCameraFrameType_Undistorted, &deviceProps.UndistortedFrameWidth, &deviceProps.UndistortedFrameHeight, &fbSize);
+        trackedCamera->GetCameraFrameSize(deviceId, vr::VRTrackedCameraFrameType_MaximumUndistorted, &deviceProps.MaximumUndistortedFrameWidth, &deviceProps.MaximumUndistortedFrameHeight, &fbSize);
+
         for (uint32_t cameraId = 0; cameraId < deviceProps.NumCameras; cameraId++)
         {
-            deviceProps.CameraProps[cameraId].CameraToHeadTransform = cameraToHeadmatrices[cameraId];
-            deviceProps.CameraProps[cameraId].DistortionFunction = (vr::EVRDistortionFunctionType)cameraDistortionFunctions[cameraId];
+            CameraDebugProperties& cameraProps = deviceProps.CameraProps[cameraId];
+
+            trackedCamera->GetCameraIntrinsics(deviceId, cameraId, vr::VRTrackedCameraFrameType_Distorted, &cameraProps.DistortedFocalLength, &cameraProps.DistortedOpticalCenter);
+            trackedCamera->GetCameraIntrinsics(deviceId, cameraId, vr::VRTrackedCameraFrameType_Undistorted, &cameraProps.UndistortedFocalLength, &cameraProps.UndistortedOpticalCenter);
+            trackedCamera->GetCameraIntrinsics(deviceId, cameraId, vr::VRTrackedCameraFrameType_MaximumUndistorted, &cameraProps.MaximumUndistortedFocalLength, &cameraProps.MaximumUndistortedOpticalCenter);
+
+            trackedCamera->GetCameraProjection(deviceId, cameraId, vr::VRTrackedCameraFrameType_Undistorted, 0.1f, 1.0f, &cameraProps.UndistortedProjecton);
+            trackedCamera->GetCameraProjection(deviceId, cameraId, vr::VRTrackedCameraFrameType_MaximumUndistorted, 0.1f, 1.0f, &cameraProps.MaximumUndistortedProjecton);
+
+            memcpy(&cameraProps.CameraToHeadTransform, &cameraToHeadmatrices[cameraId], sizeof(vr::HmdMatrix34_t));
+            cameraProps.DistortionFunction = (vr::EVRDistortionFunctionType)cameraDistortionFunctions[cameraId];
 
             for (uint32_t coeff = 0; coeff < vr::k_unMaxDistortionFunctionParameters; coeff++)
             {
-                deviceProps.CameraProps[cameraId].DistortionCoefficients[cameraId] = cameraDistortionCoeffs[coeff][cameraId];
+                cameraProps.DistortionCoefficients[coeff] = cameraDistortionCoeffs[cameraId][coeff];
             }
-            deviceProps.CameraProps[cameraId].WhiteBalance = whiteBalance[cameraId];
+            cameraProps.WhiteBalance = whiteBalance[cameraId];
         }
 
         deviceProps.CameraFrameLayout = (vr::EVRTrackedCameraFrameLayout)vrSystem->GetInt32TrackedDeviceProperty(deviceId, vr::Prop_CameraFrameLayout_Int32);
@@ -144,7 +162,5 @@ void OpenVRManager::GetCameraDebugProperties(std::vector<DeviceDebugProperties>&
         deviceProps.bCameraSupportsCompatibilityModes = vrSystem->GetBoolTrackedDeviceProperty(deviceId, vr::Prop_CameraSupportsCompatibilityModes_Bool);
         deviceProps.CameraExposureTime = vrSystem->GetFloatTrackedDeviceProperty(deviceId, vr::Prop_CameraExposureTime_Float);
         deviceProps.CameraGlobalGain = vrSystem->GetFloatTrackedDeviceProperty(deviceId, vr::Prop_CameraGlobalGain_Float);
-
-        properties.push_back(deviceProps);
     }
 }

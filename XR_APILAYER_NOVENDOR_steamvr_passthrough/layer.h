@@ -154,6 +154,17 @@ struct UVDistortionParameters
 
 struct CameraDebugProperties
 {
+	vr::HmdVector2_t DistortedFocalLength;
+	vr::HmdVector2_t UndistortedFocalLength;
+	vr::HmdVector2_t MaximumUndistortedFocalLength;
+
+	vr::HmdVector2_t DistortedOpticalCenter;
+	vr::HmdVector2_t UndistortedOpticalCenter;
+	vr::HmdVector2_t MaximumUndistortedOpticalCenter;
+
+	vr::HmdMatrix44_t UndistortedProjecton;
+	vr::HmdMatrix44_t MaximumUndistortedProjecton;
+
 	vr::HmdMatrix34_t CameraToHeadTransform;
 	vr::HmdVector4_t WhiteBalance;
 	vr::EVRDistortionFunctionType DistortionFunction;
@@ -162,11 +173,19 @@ struct CameraDebugProperties
 
 struct DeviceDebugProperties
 {
+	vr::ETrackedDeviceClass DeviceClass;
 	uint32_t DeviceId;
 	std::string DeviceName;
 	bool bHasCamera;
 	uint32_t NumCameras;
 	CameraDebugProperties CameraProps[4];
+
+	uint32_t DistortedFrameHeight;
+	uint32_t DistortedFrameWidth;
+	uint32_t UndistortedFrameHeight;
+	uint32_t UndistortedFrameWidth;
+	uint32_t MaximumUndistortedFrameHeight;
+	uint32_t MaximumUndistortedFrameWidth;
 
 	vr::EVRTrackedCameraFrameLayout CameraFrameLayout;
 	int32_t	CameraStreamFormat;
