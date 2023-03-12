@@ -26,6 +26,7 @@ struct Config_Main
 
 	bool RequireSteamVRRuntime = true;
 
+	// Transient settings not written to file
 	bool ShowTestImage = false;
 	bool DebugDepth = false;
 	bool DebugStereoValid = false;
@@ -104,7 +105,9 @@ struct Config_Stereo
 
 struct Config_Depth
 {
-	bool DepthCompositionEnable = false;
+	bool DepthReadFromApplication = true;
+	bool DepthWriteOutput = true;
+	bool DepthForceComposition = false;
 };
 
 

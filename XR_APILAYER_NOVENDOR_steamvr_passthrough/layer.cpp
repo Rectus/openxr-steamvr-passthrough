@@ -658,8 +658,12 @@ namespace
 				return -1;
 			}
 
+			if (!m_configManager->GetConfig_Depth().DepthReadFromApplication)
+			{
+				return imageIndex;
+			}
 
-			// Find associated depth swapchian if one exists.
+			// Find associated depth swapchain if one exists.
 			auto depthInfo = (const XrCompositionLayerDepthInfoKHR*) layer->views[viewIndex].next;
 
 			while (depthInfo != nullptr)

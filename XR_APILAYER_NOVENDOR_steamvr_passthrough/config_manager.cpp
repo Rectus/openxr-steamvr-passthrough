@@ -31,6 +31,7 @@ void ConfigManager::ReadConfigFile()
 		ParseConfig_Main();
 		ParseConfig_Core();
 		ParseConfig_Stereo();
+		ParseConfig_Depth();
 
 		// TODO: Using the custom preset while we don't have presets.
 		m_configStereo = m_configCustomStereo;
@@ -43,6 +44,7 @@ void ConfigManager::UpdateConfigFile()
 	UpdateConfig_Main();
 	UpdateConfig_Core();
 	UpdateConfig_Stereo();
+	UpdateConfig_Depth();
 
 	SI_Error result = m_iniData.SaveFile(m_configFile.c_str());
 	if (result < 0)
@@ -85,7 +87,6 @@ void ConfigManager::ParseConfig_Main()
 	m_configMain.EnablePassthrough = m_iniData.GetBoolValue("Main", "EnablePassthrough", m_configMain.EnablePassthrough);
 	m_configMain.ProjectionMode = (EProjectionMode)m_iniData.GetLongValue("Main", "ProjectionMode", m_configMain.ProjectionMode);
 
-	//m_configMain.ShowTestImage = m_iniData.GetBoolValue("Main", "ShowTestImage", m_configMain.ShowTestImage);
 	m_configMain.PassthroughOpacity = (float)m_iniData.GetDoubleValue("Main", "PassthroughOpacity", m_configMain.PassthroughOpacity);
 	m_configMain.ProjectionDistanceFar = (float)m_iniData.GetDoubleValue("Main", "ProjectionDistanceFar", m_configMain.ProjectionDistanceFar);
 	m_configMain.FloorHeightOffset = (float)m_iniData.GetDoubleValue("Main", "FloorHeightOffset", m_configMain.FloorHeightOffset);
@@ -154,7 +155,9 @@ void ConfigManager::ParseConfig_Stereo()
 
 void ConfigManager::ParseConfig_Depth()
 {
-	m_configDepth.DepthCompositionEnable = m_iniData.GetBoolValue("Depth", "DepthCompositionEnable", m_configDepth.DepthCompositionEnable);
+	m_configDepth.DepthReadFromApplication = m_iniData.GetBoolValue("Depth", "DepthReadFromApplication", m_configDepth.DepthReadFromApplication);
+	m_configDepth.DepthWriteOutput = m_iniData.GetBoolValue("Depth", "DepthWriteOutput", m_configDepth.DepthWriteOutput);
+	m_configDepth.DepthForceComposition = m_iniData.GetBoolValue("Depth", "DepthForceComposition", m_configDepth.DepthForceComposition);
 }
 
 
@@ -231,5 +234,7 @@ void ConfigManager::UpdateConfig_Stereo()
 
 void ConfigManager::UpdateConfig_Depth()
 {
-	m_iniData.SetBoolValue("Depth", "DepthCompositionEnable", m_configDepth.DepthCompositionEnable);
+	m_iniData.SetBoolValue("Depth", "DepthReadFromApplication", m_configDepth.DepthReadFromApplication);
+	m_iniData.SetBoolValue("Depth", "DepthWriteOutput", m_configDepth.DepthWriteOutput);
+	m_iniData.SetBoolValue("Depth", "DepthForceComposition", m_configDepth.DepthForceComposition);
 }

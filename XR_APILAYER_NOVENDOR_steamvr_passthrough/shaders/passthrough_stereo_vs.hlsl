@@ -77,12 +77,13 @@ VS_OUTPUT main(float3 inPosition : POSITION, uint vertexID : SV_VertexID)
 	viewSpaceCoords.y = 1 - viewSpaceCoords.y;
 	viewSpaceCoords.z *= -1;
 	viewSpaceCoords /= viewSpaceCoords.w;
+    viewSpaceCoords.z = sign(viewSpaceCoords.z) * min(abs(viewSpaceCoords.z), g_projectionDistance);
 
     float4 worldSpacePoint = mul(g_disparityViewToWorld, viewSpaceCoords);
 	
 #ifndef VULKAN
     float4 outCoords = mul(g_worldToCameraProjection, worldSpacePoint);
-	output.clipSpaceCoords = outCoords.xyw;// / outCoords.w;
+	output.clipSpaceCoords = outCoords.xyw;
 #endif
 	
     output.position = mul(g_worldToHMDProjection, worldSpacePoint);

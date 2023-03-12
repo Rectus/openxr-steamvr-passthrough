@@ -311,39 +311,49 @@ if (bIsActiveTab) { ImGui::PopStyleColor(1); bIsActiveTab = false; }
 			IMGUI_BIG_SPACING;
 
 			ImGui::Text("Projection Mode");
-			TextDescription("Method for projectiong the passthrough cameras to the VR view.");
-			if (ImGui::RadioButton("Room View 2D", mainConfig.ProjectionMode == ProjectionRoomView2D))
+			TextDescription("Method for projecting the passthrough cameras to the VR view.");
+			if (ImGui::RadioButton("2D Room View", mainConfig.ProjectionMode == ProjectionRoomView2D))
 			{
 				mainConfig.ProjectionMode = ProjectionRoomView2D;
 			}
 			TextDescription("Cylindrical projection with floor. Matches the projection in the SteamVR Room View 2D mode.");
 
-			if (ImGui::RadioButton("Custom 2D (Experimental)", mainConfig.ProjectionMode == ProjectionCustom2D))
+			if (ImGui::RadioButton("2D Custom", mainConfig.ProjectionMode == ProjectionCustom2D))
 			{
 				mainConfig.ProjectionMode = ProjectionCustom2D;
 			}
 			TextDescription("Cylindrical projection with floor. Custom distortion correction and projection calculation.");
 
-			if (ImGui::RadioButton("Stereo 3D (Experimental)", mainConfig.ProjectionMode == ProjectionStereoReconstruction))
+			if (ImGui::RadioButton("3D Stereo (Experimental)", mainConfig.ProjectionMode == ProjectionStereoReconstruction))
 			{
 				mainConfig.ProjectionMode = ProjectionStereoReconstruction;
 			}
-			TextDescription("Accurate depth estimation.");
+			TextDescription("Full depth estimation.");
 			IMGUI_BIG_SPACING;
 
-			ImGui::Text("Image Controls");
-			ImGui::PushItemWidth(ImGui::GetContentRegionAvail().x * 0.45f);
-			ScrollableSlider("Opacity", &mainConfig.PassthroughOpacity, 0.0f, 1.0f, "%.1f", 0.1f);
-			ScrollableSlider("Brightness", &mainConfig.Brightness, -50.0f, 50.0f, "%.0f", 1.0f);
-			ScrollableSlider("Contrast", &mainConfig.Contrast, 0.0f, 2.0f, "%.1f", 0.1f);
-			ScrollableSlider("Saturation", &mainConfig.Saturation, 0.0f, 2.0f, "%.1f", 0.1f);
-			ImGui::PopItemWidth();
-			IMGUI_BIG_SPACING;
+			if (ImGui::TreeNode("Image Controls"))
+			{
+				ImGui::PushItemWidth(ImGui::GetContentRegionAvail().x * 0.45f);
+				ScrollableSlider("Opacity", &mainConfig.PassthroughOpacity, 0.0f, 1.0f, "%.1f", 0.1f);
+				ScrollableSlider("Brightness", &mainConfig.Brightness, -50.0f, 50.0f, "%.0f", 1.0f);
+				ScrollableSlider("Contrast", &mainConfig.Contrast, 0.0f, 2.0f, "%.1f", 0.1f);
+				ScrollableSlider("Saturation", &mainConfig.Saturation, 0.0f, 2.0f, "%.1f", 0.1f);
+				ImGui::PopItemWidth();
+				IMGUI_BIG_SPACING;
+
+				ImGui::TreePop();
+			}
 		}
 
 		ImGui::SetNextItemOpen(true, ImGuiCond_Once);
 		if (ImGui::CollapsingHeader("Projection Settings"))
 		{
+			IMGUI_BIG_SPACING;
+
+			ImGui::SetNextItemWidth(ImGui::GetContentRegionAvail().x * 0.45f);
+			ScrollableSlider("Depth Offset Calibration", &mainConfig.DepthOffsetCalibration, 0.5f, 1.5f, "%.2f", 0.01f);
+			TextDescription("Calibration to compensate for incorrect distance between stereo cameras.");
+
 			IMGUI_BIG_SPACING;
 
 			ImGui::SetNextItemWidth(ImGui::GetContentRegionAvail().x * 0.45f);
@@ -353,25 +363,13 @@ if (bIsActiveTab) { ImGui::PopStyleColor(1); bIsActiveTab = false; }
 
 			ImGui::SetNextItemWidth(ImGui::GetContentRegionAvail().x * 0.45f);
 			ScrollableSlider("Floor Height Offset (m)", &mainConfig.FloorHeightOffset, 0.0f, 2.0f, "%.2f", 0.01f);
-			TextDescription("Allows setting the floor height higher in the 2D modes, for example to have correct projection on a table surface.");
+			TextDescription("Allows setting the floor height higher in the 2D modes,\nfor example to have correct projection on a table surface.");
 			IMGUI_BIG_SPACING;
 			
-			ImGui::SetNextItemOpen(true, ImGuiCond_Once);
-			if (ImGui::TreeNode("Advanced"))
-			{
-				IMGUI_BIG_SPACING;
+			ImGui::SetNextItemWidth(ImGui::GetContentRegionAvail().x * 0.45f);
+			ScrollableSlider("Field of View Scale", &mainConfig.FieldOfViewScale, 0.0f, 1.0f, "%.1f", 0.1f);
+			TextDescription("Sets the size of the rendered area in the Custom 2D and Stereo 3D projection modes.");
 
-				ImGui::SetNextItemWidth(ImGui::GetContentRegionAvail().x * 0.45f);
-				ScrollableSlider("Field of View Scale", &mainConfig.FieldOfViewScale, 0.0f, 1.0f, "%.1f", 0.1f);
-				TextDescription("Sets the size of the rendered area in the Custom 2D and Stereo 3D projection modes.");
-				IMGUI_BIG_SPACING;
-
-				ImGui::SetNextItemWidth(ImGui::GetContentRegionAvail().x * 0.45f);
-				ScrollableSlider("Depth Offset Calibration", &mainConfig.DepthOffsetCalibration, 0.5f, 1.5f, "%.2f", 0.01f);
-				TextDescription("Calibration to compensate for incorrect depth.");
-				
-				ImGui::TreePop();
-			}
 		}	
 		IMGUI_BIG_SPACING;
 
@@ -630,8 +628,20 @@ if (bIsActiveTab) { ImGui::PopStyleColor(1); bIsActiveTab = false; }
 		ImGui::SetNextItemOpen(true, ImGuiCond_Once);
 		if (ImGui::CollapsingHeader("Depth"))
 		{
-			ImGui::Checkbox("Force Depth Composition", &depthConfig.DepthCompositionEnable);
+			ImGui::Checkbox("Force Depth Composition", &depthConfig.DepthForceComposition);
 			TextDescription("Enables composing the passthough by depth for applications that submit a depth buffer.");
+			
+			//ImGui::SetNextItemOpen(true, ImGuiCond_Once);
+			if (ImGui::TreeNode("Advanced"))
+			{
+				ImGui::Checkbox("Read Depth Buffers", &depthConfig.DepthReadFromApplication);
+				TextDescription("Allow reading depth buffers submitted by the application.");
+
+				ImGui::Checkbox("Write Depth", &depthConfig.DepthWriteOutput);
+				TextDescription("Allows writing passthrough depth to depth buffers submitted to the runtime.");
+
+				ImGui::TreePop();
+			}
 			IMGUI_BIG_SPACING;
 		}
 
@@ -669,7 +679,9 @@ if (bIsActiveTab) { ImGui::PopStyleColor(1); bIsActiveTab = false; }
 		ImGui::SetNextItemOpen(true, ImGuiCond_Once);
 		if (ImGui::CollapsingHeader("Masked Croma Key Settings"))
 		{
-			ImGui::BeginChild("KeySettings", ImVec2(OVERLAY_RES_WIDTH * 0.48f, 0));
+			ImGui::SetNextItemWidth(ImGui::GetContentRegionAvail().x * 0.5f);
+			ImGui::BeginGroup();
+			//ImGui::BeginChild("KeySettings", ImVec2(OVERLAY_RES_WIDTH * 0.48f, 0));
 			ScrollableSlider("Chroma Range", &coreConfig.CoreForceMaskedFractionChroma, 0.0f, 1.0f, "%.2f", 0.01f);
 			ScrollableSlider("Luma Range", &coreConfig.CoreForceMaskedFractionLuma, 0.0f, 1.0f, "%.2f", 0.01f);
 			ScrollableSlider("Smoothing", &coreConfig.CoreForceMaskedSmoothing, 0.01f, 0.2f, "%.3f", 0.005f);
@@ -687,12 +699,15 @@ if (bIsActiveTab) { ImGui::PopStyleColor(1); bIsActiveTab = false; }
 			}
 			ImGui::EndGroup();
 
-			ImGui::EndChild();
+			//ImGui::EndChild();
+			ImGui::EndGroup();
 			ImGui::SameLine();
 
-			ImGui::BeginChild("KeyPicker");
+			//ImGui::BeginChild("KeyPicker");
+			ImGui::BeginGroup();
 			ImGui::ColorPicker3("Key", coreConfig.CoreForceMaskedKeyColor, ImGuiColorEditFlags_Uint8 | ImGuiColorEditFlags_DisplayRGB | ImGuiColorEditFlags_DisplayHSV | ImGuiColorEditFlags_PickerHueBar);
-			ImGui::EndChild();
+			ImGui::EndGroup();
+			//ImGui::EndChild();
 		}
 
 		ImGui::EndChild();
