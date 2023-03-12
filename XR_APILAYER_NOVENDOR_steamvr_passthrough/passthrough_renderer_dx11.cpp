@@ -295,6 +295,18 @@ bool PassthroughRendererDX11::InitRenderer()
 		return false;
 	}
 
+	blendState.RenderTarget[0].RenderTargetWriteMask = D3D11_COLOR_WRITE_ENABLE_ALL;
+	blendState.RenderTarget[0].SrcBlend = D3D11_BLEND_DEST_ALPHA;
+	blendState.RenderTarget[0].DestBlend = D3D11_BLEND_INV_DEST_ALPHA;
+	blendState.RenderTarget[0].BlendOpAlpha = D3D11_BLEND_OP_SUBTRACT;
+	blendState.RenderTarget[0].DestBlendAlpha = D3D11_BLEND_ONE;
+
+	if (FAILED(m_d3dDevice->CreateBlendState(&blendState, m_blendStatePrepassInverseAppAlpha.GetAddressOf())))
+	{
+		ErrorLog("CreateBlendState failure!\n");
+		return false;
+	}
+
 
 	D3D11_RASTERIZER_DESC rasterizerDesc = {};
 	rasterizerDesc.CullMode = D3D11_CULL_BACK;
@@ -991,11 +1003,15 @@ void PassthroughRendererDX11::RenderPassthroughView(const ERenderEye eye, const 
 	m_renderContext->PSSetConstantBuffers(0, 2, psBuffers);
 
 	// Extra draw if we need to preadjust the alpha.
-	if ((blendMode != AlphaBlendPremultiplied && blendMode != AlphaBlendUnpremultiplied) || m_configManager->GetConfig_Main().PassthroughOpacity < 1.0f)
+	if ((blendMode != AlphaBlendPremultiplied && blendMode != AlphaBlendUnpremultiplied) || m_configManager->GetConfig_Main().PassthroughOpacity < 1.0f || depthConfig.DepthForceComposition)
 	{
 		m_renderContext->PSSetShader(m_prepassShader.Get(), nullptr, 0);
 
-		if (blendMode == AlphaBlendPremultiplied || blendMode == AlphaBlendUnpremultiplied)
+		if (depthConfig.DepthForceComposition)
+		{
+			m_renderContext->OMSetBlendState(m_blendStatePrepassInverseAppAlpha.Get(), nullptr, UINT_MAX);
+		}
+		else if (blendMode == AlphaBlendPremultiplied || blendMode == AlphaBlendUnpremultiplied)
 		{
 			m_renderContext->OMSetBlendState(m_blendStatePrepassUseAppAlpha.Get(), nullptr, UINT_MAX);
 		}

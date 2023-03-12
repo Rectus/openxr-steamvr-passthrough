@@ -634,10 +634,10 @@ void CameraManager::CalculateFrameProjectionForEye(const ERenderEye eye, std::sh
         hmdProjection.m[10] = 0;
         hmdProjection.m[14] = nearZ;
     }
-    else if (depthInfo && frame->bHasReversedDepth)
+    else if (depthInfo)
     {
-        hmdProjection.m[10] = -(depthInfo->farZ) / (depthInfo->farZ - depthInfo->nearZ);
-        hmdProjection.m[14] = -(depthInfo->farZ * (depthInfo->nearZ)) / (depthInfo->farZ - depthInfo->nearZ);
+        hmdProjection.m[10] = -(depthInfo->farZ * depthInfo->maxDepth - depthInfo->nearZ * depthInfo->minDepth) / (depthInfo->farZ - depthInfo->nearZ);
+        hmdProjection.m[14] = -(depthInfo->farZ * depthInfo->nearZ * (depthInfo->maxDepth - depthInfo->minDepth)) / (depthInfo->farZ - depthInfo->nearZ);
     }
 
     XrMatrix4x4f* worldToHMDMatrix = (eye == LEFT_EYE) ? &frame->worldToHMDProjectionLeft : &frame->worldToHMDProjectionRight;
