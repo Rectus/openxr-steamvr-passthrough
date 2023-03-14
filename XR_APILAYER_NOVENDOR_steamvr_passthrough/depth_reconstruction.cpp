@@ -4,11 +4,9 @@
 #include <log.h>
 
 
-
 using namespace steamvr_passthrough;
 using namespace steamvr_passthrough::log;
 
-#define PERF_TIME_AVERAGE_VALUES 20
 
 inline XrMatrix4x4f ToXRMatrix4x4(vr::HmdMatrix34_t& input)
 {
@@ -36,23 +34,6 @@ XrMatrix4x4f CVMatToXrMatrix(cv::Mat& inMatrix)
     return outMatrix;
 }
 
-float UpdateAveragePerfTime(std::deque<float>& times, float newTime)
-{
-    if (times.size() >= PERF_TIME_AVERAGE_VALUES)
-    {
-        times.pop_front();
-    }
-
-    times.push_back(newTime);
-
-    float average = 0;
-
-    for (const float& val : times)
-    {
-        average += val;
-    }
-    return average / times.size();
-}
 
 
 DepthReconstruction::DepthReconstruction(std::shared_ptr<ConfigManager> configManager, std::shared_ptr<OpenVRManager> openVRManager, std::shared_ptr<CameraManager> cameraManager)
@@ -350,12 +331,7 @@ void DepthReconstruction::RunThread()
             cv::setNumThreads(m_bUseMulticore ? -1: 0);
         }
 
-        LARGE_INTEGER perfFrequency;
-        LARGE_INTEGER startTime;
-
-        QueryPerformanceFrequency(&perfFrequency);
-        QueryPerformanceCounter(&startTime);
-
+        LARGE_INTEGER startReconstructionTime = StartPerfTimer();
 
         XrMatrix4x4f viewToWorld;
 
@@ -497,16 +473,8 @@ void DepthReconstruction::RunThread()
 
             m_underConstructionDepthFrame.swap(m_servedDepthFrame);
         }
-
         
-
-        LARGE_INTEGER endTime;
-        QueryPerformanceCounter(&endTime);
-
-        float reconstructionTime = (float)(endTime.QuadPart - startTime.QuadPart);
-        reconstructionTime *= 1000.0f;
-        reconstructionTime /= perfFrequency.QuadPart;
-        m_averageReconstructionTime = UpdateAveragePerfTime(m_reconstructionTimes, reconstructionTime);
+        m_averageReconstructionTime = UpdateAveragePerfTime(m_reconstructionTimes, EndPerfTimer(startReconstructionTime), 20);
     }
 }
 

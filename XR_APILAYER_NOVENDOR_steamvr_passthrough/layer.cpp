@@ -42,7 +42,6 @@ HMODULE g_dllModule = NULL;
 #define CONFIG_FILE_DIR L"\\OpenXR SteamVR Passthrough\\"
 #define CONFIG_FILE_NAME L"config.ini"
 
-#define PERF_TIME_AVERAGE_VALUES 20
 
 
 namespace
@@ -728,25 +727,6 @@ namespace
 		}
 
 
-		float UpdateAveragePerfTime(std::deque<float>& times, float newTime)
-		{
-			if (times.size() >= PERF_TIME_AVERAGE_VALUES)
-			{
-				times.pop_front();
-			}
-
-			times.push_back(newTime);
-
-			float average = 0;
-
-			for (const float& val : times)
-			{
-				average += val;
-			}
-			return average / times.size();
-		}
-
-
 		void RenderPassthroughOnAppLayer(const XrFrameEndInfo* frameEndInfo, uint32_t layerNum)
 		{
 			const XrCompositionLayerProjection* layer = (const XrCompositionLayerProjection*)frameEndInfo->layers[layerNum];
@@ -763,25 +743,18 @@ namespace
 
 			std::shared_lock readLock(frame->readWriteMutex);
 
-			LARGE_INTEGER perfFrequency;
-			LARGE_INTEGER preRenderTime;
 
-			QueryPerformanceFrequency(&perfFrequency);
-			QueryPerformanceCounter(&preRenderTime);
+			LARGE_INTEGER preRenderTime = StartPerfTimer();
 
-			double frameToRenderTime = (float) (preRenderTime.QuadPart - frame->header.ulFrameExposureTime);
-			frameToRenderTime *= 1000.0f;
-			frameToRenderTime /= perfFrequency.QuadPart;
-			m_dashboardMenu->GetDisplayValues().frameToRenderLatencyMS = UpdateAveragePerfTime(m_frameToRenderTimes, (float)frameToRenderTime);
+			float frameToRenderTime = GetPerfTimerDiff(frame->header.ulFrameExposureTime, preRenderTime.QuadPart);
+			m_dashboardMenu->GetDisplayValues().frameToRenderLatencyMS = UpdateAveragePerfTime(m_frameToRenderTimes, frameToRenderTime, 20);
 
 			LARGE_INTEGER displayTime;
 
 			OpenXrApi::xrConvertTimeToWin32PerformanceCounterKHR(m_currentInstance, frameEndInfo->displayTime, &displayTime);
 
-			float frameToPhotonsTime = (float) (displayTime.QuadPart - frame->header.ulFrameExposureTime);
-			frameToPhotonsTime *= 1000.0f;
-			frameToPhotonsTime /= perfFrequency.QuadPart;
-			m_dashboardMenu->GetDisplayValues().frameToPhotonsLatencyMS = UpdateAveragePerfTime(m_frameToPhotonTimes, frameToPhotonsTime);
+			float frameToPhotonsTime = GetPerfTimerDiff(frame->header.ulFrameExposureTime, displayTime.QuadPart);
+			m_dashboardMenu->GetDisplayValues().frameToPhotonsLatencyMS = UpdateAveragePerfTime(m_frameToPhotonTimes, frameToPhotonsTime, 20);
 
 			
 			m_cameraManager->CalculateFrameProjection(frame, *layer, frameEndInfo->displayTime, m_refSpaces[layer->space], m_depthReconstruction->GetDistortionParameters());
@@ -807,15 +780,13 @@ namespace
 			m_Renderer->RenderPassthroughFrame(layer, frame.get(), blendMode, leftIndex, rightIndex, depthFrame, m_depthReconstruction->GetDistortionParameters());
 
 
-			LARGE_INTEGER postRenderTime;
-			QueryPerformanceCounter(&postRenderTime);
 
-			float renderTime = (float) (postRenderTime.QuadPart - preRenderTime.QuadPart);
-			renderTime *= 1000.0f;
-			renderTime /= perfFrequency.QuadPart;
-			m_dashboardMenu->GetDisplayValues().renderTimeMS = UpdateAveragePerfTime(m_passthroughRenderTimes, renderTime);
+
+			float renderTime = EndPerfTimer(preRenderTime.QuadPart);
+			m_dashboardMenu->GetDisplayValues().renderTimeMS = UpdateAveragePerfTime(m_passthroughRenderTimes, renderTime, 20);
 
 			m_dashboardMenu->GetDisplayValues().stereoReconstructionTimeMS = m_depthReconstruction->GetReconstructionPerfTime();
+			m_dashboardMenu->GetDisplayValues().frameRetrievalTimeMS = m_cameraManager->GetFrameRetrievalPerfTime();
 		}
 
 

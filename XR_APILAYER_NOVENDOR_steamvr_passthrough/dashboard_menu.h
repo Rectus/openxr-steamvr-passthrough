@@ -39,6 +39,7 @@ struct MenuDisplayValues
 	float frameToPhotonsLatencyMS = 0.0f;
 	float renderTimeMS = 0.0f;
 	float stereoReconstructionTimeMS = 0.0f;
+	float frameRetrievalTimeMS = 0.0f;
 
 	bool bCorePassthroughActive = false;
 	int CoreCurrentMode = 0;

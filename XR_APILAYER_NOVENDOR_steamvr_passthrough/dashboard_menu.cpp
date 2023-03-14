@@ -679,9 +679,9 @@ if (bIsActiveTab) { ImGui::PopStyleColor(1); bIsActiveTab = false; }
 		ImGui::SetNextItemOpen(true, ImGuiCond_Once);
 		if (ImGui::CollapsingHeader("Masked Croma Key Settings"))
 		{
-			ImGui::SetNextItemWidth(ImGui::GetContentRegionAvail().x * 0.5f);
+			
 			ImGui::BeginGroup();
-			//ImGui::BeginChild("KeySettings", ImVec2(OVERLAY_RES_WIDTH * 0.48f, 0));
+			ImGui::PushItemWidth(ImGui::GetContentRegionAvail().x * 0.35f);
 			ScrollableSlider("Chroma Range", &coreConfig.CoreForceMaskedFractionChroma, 0.0f, 1.0f, "%.2f", 0.01f);
 			ScrollableSlider("Luma Range", &coreConfig.CoreForceMaskedFractionLuma, 0.0f, 1.0f, "%.2f", 0.01f);
 			ScrollableSlider("Smoothing", &coreConfig.CoreForceMaskedSmoothing, 0.01f, 0.2f, "%.3f", 0.005f);
@@ -698,16 +698,16 @@ if (bIsActiveTab) { ImGui::PopStyleColor(1); bIsActiveTab = false; }
 				coreConfig.CoreForceMaskedUseCameraImage = true;
 			}
 			ImGui::EndGroup();
+			ImGui::PopItemWidth();
 
-			//ImGui::EndChild();
 			ImGui::EndGroup();
+
 			ImGui::SameLine();
 
-			//ImGui::BeginChild("KeyPicker");
 			ImGui::BeginGroup();
+			ImGui::SetNextItemWidth(ImGui::GetContentRegionAvail().x * 0.75f);
 			ImGui::ColorPicker3("Key", coreConfig.CoreForceMaskedKeyColor, ImGuiColorEditFlags_Uint8 | ImGuiColorEditFlags_DisplayRGB | ImGuiColorEditFlags_DisplayHSV | ImGuiColorEditFlags_PickerHueBar);
 			ImGui::EndGroup();
-			//ImGui::EndChild();
 		}
 
 		ImGui::EndChild();
@@ -778,6 +778,7 @@ if (bIsActiveTab) { ImGui::PopStyleColor(1); bIsActiveTab = false; }
 			ImGui::Text("Exposure to photons latency: %.1fms", m_displayValues.frameToPhotonsLatencyMS);
 			ImGui::Text("Passthrough CPU render duration: %.2fms", m_displayValues.renderTimeMS);
 			ImGui::Text("Stereo reconstruction duration: %.2fms", m_displayValues.stereoReconstructionTimeMS);
+			ImGui::Text("Camera frame retrieval duration: %.2fms", m_displayValues.frameRetrievalTimeMS);
 			ImGui::PopFont();
 			ImGui::EndGroup();		
 		}

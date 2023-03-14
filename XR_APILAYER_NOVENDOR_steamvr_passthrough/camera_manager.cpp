@@ -351,6 +351,7 @@ void CameraManager::ServeFrames()
 
     bool bHasFrame = false;
     uint32_t lastFrameSequence = 0;
+    LARGE_INTEGER startFrameRetrievalTime;
 
     while (m_bRunThread)
     {
@@ -363,6 +364,8 @@ void CameraManager::ServeFrames()
 
         while (true)
         {
+            startFrameRetrievalTime = StartPerfTimer();
+
             vr::EVRTrackedCameraFrameType frameType = m_configManager->GetConfig_Main().ProjectionMode == ProjectionRoomView2D ? vr::VRTrackedCameraFrameType_MaximumUndistorted : vr::VRTrackedCameraFrameType_Distorted;
 
             vr::EVRTrackedCameraError error = trackedCamera->GetVideoStreamFrameBuffer(m_cameraHandle, frameType, nullptr, 0, &m_underConstructionFrame->header, sizeof(vr::CameraVideoStreamFrameHeader_t));
@@ -462,6 +465,8 @@ void CameraManager::ServeFrames()
 
             m_servedFrame.swap(m_underConstructionFrame);
         }
+
+        m_averageFrameRetrievalTime = UpdateAveragePerfTime(m_frameRetrievalTimes, EndPerfTimer(startFrameRetrievalTime), 20);
     }
 }
 

@@ -40,6 +40,7 @@ public:
 	EStereoFrameLayout GetFrameLayout() const;
 	XrMatrix4x4f GetLeftToRightCameraTransform() const;
 	void UpdateStaticCameraParameters();
+	float GetFrameRetrievalPerfTime() { return m_averageFrameRetrievalTime; }
 	bool GetCameraFrame(std::shared_ptr<CameraFrame>& frame);
 	void CalculateFrameProjection(std::shared_ptr<CameraFrame>& frame, const XrCompositionLayerProjection& layer, const XrTime& displayTime, const XrReferenceSpaceCreateInfo& refSpaceInfo, UVDistortionParameters& distortionParams);
 
@@ -96,5 +97,8 @@ private:
 
 	XrMatrix4x4f m_cameraLeftToRightPose{};
 	XrMatrix4x4f m_cameraRightToLeftPose{};
+
+	std::deque<float> m_frameRetrievalTimes;
+	float m_averageFrameRetrievalTime;
 };
 
