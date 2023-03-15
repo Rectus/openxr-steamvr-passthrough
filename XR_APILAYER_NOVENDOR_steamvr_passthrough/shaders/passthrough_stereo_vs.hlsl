@@ -57,12 +57,17 @@ VS_OUTPUT main(float3 inPosition : POSITION, uint vertexID : SV_VertexID)
 
 	output.projectionValidity = 0.0;
 
-	if (disparity < 0.0000001) 
-	{ 
+	// Disparity at the max projection distance
+    float minDisparity = g_disparityToDepth[3][2] /
+    (g_projectionDistance * 4096.0 * g_disparityDownscaleFactor * g_disparityToDepth[2][3]);
+	
+    if (disparity < minDisparity) 
+	{
+		// Hack that causes some artifacting. Ideally patch any holes or discard and render behind instead.
         disparity = 0.001;
         output.projectionValidity = -1.0;
     }
-	if (disparity > 0.9) 
+	else if (disparity > 0.9) 
 	{
 		disparity = 0.0001; 
 		output.projectionValidity = -1.0;

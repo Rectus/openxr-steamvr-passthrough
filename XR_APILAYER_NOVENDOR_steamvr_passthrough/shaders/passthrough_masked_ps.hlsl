@@ -78,8 +78,8 @@ cbuffer psMaskedConstantBuffer : register(b2)
 
 SamplerState g_samplerState : register(s0);
 Texture2D g_cameraFrameTexture : register(t0);
-Texture2D g_blendMask : register(t1);
-Texture2D<float2> g_fisheyeCorrectionTexture : register(t2);
+Texture2D<float2> g_fisheyeCorrectionTexture : register(t1);
+Texture2D g_blendMask : register(t2);
 
 #endif
 

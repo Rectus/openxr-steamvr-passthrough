@@ -12,7 +12,7 @@ enum EProjectionMode
 struct Config_Main
 {
 	bool EnablePassthrough = true;
-	EProjectionMode ProjectionMode = ProjectionRoomView2D;
+	EProjectionMode ProjectionMode = ProjectionCustom2D;
 
 	float PassthroughOpacity = 1.0f;
 	float ProjectionDistanceFar = 10.0f;
@@ -76,18 +76,18 @@ struct Config_Stereo
 	bool StereoUseMulticore = true;
 	bool StereoReconstructionFreeze = false;
 	bool StereoRectificationFiltering = false;
-	bool StereoUseColor = true;
+	bool StereoUseColor = false;
 	int StereoFrameSkip = 0;
-	int StereoDownscaleFactor = 4;
+	int StereoDownscaleFactor = 2;
 	EStereoAlgorithm StereoAlgorithm = StereoAlgorithm_SGBM;
 	//int StereoAlgorithmQuality = 0;
-	int StereoBlockSize = 7;
+	int StereoBlockSize = 1;
 	int StereoMinDisparity = 0;
 	int StereoMaxDisparity = 96;
 	EStereoSGBM_Mode StereoSGBM_Mode = StereoMode_SGBM3Way;
-	int StereoSGBM_P1 = 0;
-	int StereoSGBM_P2 = 0;
-	int StereoSGBM_DispMaxDiff = 0;
+	int StereoSGBM_P1 = 200;
+	int StereoSGBM_P2 = 220;
+	int StereoSGBM_DispMaxDiff = 3;
 	int StereoSGBM_PreFilterCap = 4;
 	int StereoSGBM_UniquenessRatio = 4;
 	int StereoSGBM_SpeckleWindowSize = 80;

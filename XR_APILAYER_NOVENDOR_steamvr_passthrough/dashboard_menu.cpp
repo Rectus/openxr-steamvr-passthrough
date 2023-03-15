@@ -331,6 +331,7 @@ if (bIsActiveTab) { ImGui::PopStyleColor(1); bIsActiveTab = false; }
 			TextDescription("Full depth estimation.");
 			IMGUI_BIG_SPACING;
 
+			ImGui::SetNextItemOpen(true, ImGuiCond_Once);
 			if (ImGui::TreeNode("Image Controls"))
 			{
 				ImGui::PushItemWidth(ImGui::GetContentRegionAvail().x * 0.45f);

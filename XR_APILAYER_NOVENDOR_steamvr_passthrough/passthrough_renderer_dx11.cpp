@@ -965,6 +965,7 @@ void PassthroughRendererDX11::RenderPassthroughView(const ERenderEye eye, const 
 	if (!rendertarget) { return; }
 
 	Config_Depth& depthConfig = m_configManager->GetConfig_Depth();
+	bool bCompositeDepth = depthConfig.DepthForceComposition && depthConfig.DepthReadFromApplication;
 
 	m_renderContext->OMSetRenderTargets(1, &rendertarget, depthStencil);
 
@@ -1003,11 +1004,11 @@ void PassthroughRendererDX11::RenderPassthroughView(const ERenderEye eye, const 
 	m_renderContext->PSSetConstantBuffers(0, 2, psBuffers);
 
 	// Extra draw if we need to preadjust the alpha.
-	if ((blendMode != AlphaBlendPremultiplied && blendMode != AlphaBlendUnpremultiplied) || m_configManager->GetConfig_Main().PassthroughOpacity < 1.0f || depthConfig.DepthForceComposition)
+	if ((blendMode != AlphaBlendPremultiplied && blendMode != AlphaBlendUnpremultiplied) || m_configManager->GetConfig_Main().PassthroughOpacity < 1.0f || bCompositeDepth)
 	{
 		m_renderContext->PSSetShader(m_prepassShader.Get(), nullptr, 0);
 
-		if (depthConfig.DepthForceComposition)
+		if (bCompositeDepth)
 		{
 			m_renderContext->OMSetBlendState(m_blendStatePrepassInverseAppAlpha.Get(), nullptr, UINT_MAX);
 		}
@@ -1020,13 +1021,13 @@ void PassthroughRendererDX11::RenderPassthroughView(const ERenderEye eye, const 
 			m_renderContext->OMSetBlendState(m_blendStatePrepassIgnoreAppAlpha.Get(), nullptr, UINT_MAX);
 		}
 
-		m_renderContext->OMSetDepthStencilState(GET_DEPTH_STENCIL_STATE(depthConfig.DepthForceComposition, frame->bHasReversedDepth, false), 1);
+		m_renderContext->OMSetDepthStencilState(GET_DEPTH_STENCIL_STATE(bCompositeDepth, frame->bHasReversedDepth, false), 1);
 
 		m_renderContext->Draw(numVertices, 0);
 	}
 
 
-	if (blendMode == AlphaBlendPremultiplied)
+	if (blendMode == AlphaBlendPremultiplied && !bCompositeDepth)
 	{
 		m_renderContext->OMSetBlendState(m_blendStateAlphaPremultiplied.Get(), nullptr, UINT_MAX);
 	}
@@ -1034,7 +1035,7 @@ void PassthroughRendererDX11::RenderPassthroughView(const ERenderEye eye, const 
 	{
 		m_renderContext->OMSetBlendState(m_blendStateBase.Get(), nullptr, UINT_MAX);
 	}
-	else if (blendMode == Additive)
+	else if (blendMode == Additive && !bCompositeDepth)
 	{
 		m_renderContext->OMSetBlendState(m_blendStateAlphaPremultiplied.Get(), nullptr, UINT_MAX);
 	}
@@ -1043,7 +1044,7 @@ void PassthroughRendererDX11::RenderPassthroughView(const ERenderEye eye, const 
 		m_renderContext->OMSetBlendState(m_blendStateBase.Get(), nullptr, UINT_MAX);
 	}
 
-	m_renderContext->OMSetDepthStencilState(GET_DEPTH_STENCIL_STATE(depthConfig.DepthForceComposition, frame->bHasReversedDepth, depthConfig.DepthWriteOutput), 1);
+	m_renderContext->OMSetDepthStencilState(GET_DEPTH_STENCIL_STATE(bCompositeDepth, frame->bHasReversedDepth, depthConfig.DepthWriteOutput), 1);
 
 	m_renderContext->PSSetShader(m_pixelShader.Get(), nullptr, 0);
 	
@@ -1064,6 +1065,7 @@ void PassthroughRendererDX11::RenderPassthroughViewMasked(const ERenderEye eye, 
 	if (!rendertarget) { return; }
 
 	Config_Depth& depthConfig = m_configManager->GetConfig_Depth();
+	bool bCompositeDepth = depthConfig.DepthForceComposition && depthConfig.DepthReadFromApplication;
 
 	XrRect2Di rect = layer->views[viewIndex].subImage.imageRect;
 
@@ -1096,6 +1098,9 @@ void PassthroughRendererDX11::RenderPassthroughViewMasked(const ERenderEye eye, 
 		{
 			viewBuffer.prepassUVOffset = { (eye == LEFT_EYE) ? 0.0f : 0.5f, 0.0f };
 			viewBuffer.prepassUVFactor = { 0.5f, 1.0f };
+
+			//TODO: Output needs to be the same aspect as depth buffer
+			bCompositeDepth = false;
 		}
 		else
 		{
@@ -1116,7 +1121,7 @@ void PassthroughRendererDX11::RenderPassthroughViewMasked(const ERenderEye eye, 
 
 	m_renderContext->OMSetRenderTargets(1, tempRTV.GetAddressOf(), depthStencil);
 	m_renderContext->OMSetBlendState(nullptr, nullptr, UINT_MAX);
-	m_renderContext->OMSetDepthStencilState(GET_DEPTH_STENCIL_STATE(depthConfig.DepthForceComposition, frame->bHasReversedDepth, false), 1);
+	m_renderContext->OMSetDepthStencilState(GET_DEPTH_STENCIL_STATE(bCompositeDepth, frame->bHasReversedDepth, false), 1);
 
 	ID3D11ShaderResourceView* cameraFrameSRV;
 
@@ -1181,13 +1186,13 @@ void PassthroughRendererDX11::RenderPassthroughViewMasked(const ERenderEye eye, 
 	}
 	else
 	{
-		ID3D11ShaderResourceView* views[3] = { cameraFrameSRV, tempSRV.Get(), m_uvDistortionMapSRV.Get() };
+		ID3D11ShaderResourceView* views[3] = { cameraFrameSRV, m_uvDistortionMapSRV.Get(), tempSRV.Get() };
 		m_renderContext->PSSetShaderResources(0, 3, views);
 	}
 	
 	m_renderContext->OMSetRenderTargets(1, &rendertarget, depthStencil);
 	m_renderContext->OMSetBlendState(m_blendStateSrcAlpha.Get(), nullptr, UINT_MAX);
-	m_renderContext->OMSetDepthStencilState(GET_DEPTH_STENCIL_STATE(depthConfig.DepthForceComposition, frame->bHasReversedDepth, depthConfig.DepthWriteOutput), 1);
+	m_renderContext->OMSetDepthStencilState(GET_DEPTH_STENCIL_STATE(bCompositeDepth, frame->bHasReversedDepth, depthConfig.DepthWriteOutput), 1);
 	m_renderContext->PSSetShader(m_maskedPixelShader.Get(), nullptr, 0);
 
 	m_renderContext->Draw(numVertices, 0);

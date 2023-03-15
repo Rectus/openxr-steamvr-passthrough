@@ -23,7 +23,8 @@ Using the 3D stereo mode may induce heavy flickering on the display. Exercise ca
 - Override mode for applying passthrough to applications that do not support it. The passthrough view can be blended using chroma keying.
 - The floor projection height can be shifted up to get correct projection on an horizontal surface such as a desk.
 - EXPERIMENTAL: Supports 3D stereo reconstruction to estimate projection depth, using OpenCV. Includes support for Weighted Least Squares disparity filtering, and Fast Bilateral Solver filtering.
-- EXPERIMENTAL: Supports custom fisheye lens rectification instead of using the OpenVR pre-rectified output.
+- Supports custom fisheye lens rectification instead of using the OpenVR pre-rectified output.
+- Supports compositing the passthrough based on scene depth, for applications that supply depth buffers.
 
 
 ### Limitations ###
@@ -53,6 +54,8 @@ Using the 3D stereo mode may induce heavy flickering on the display. Exercise ca
 - Oculus/Meta headsets - Unsupported, no passthrough support in driver
 
 The SteamVR settings UI will misconfigure the original HTC Vive camera if the frame rate is not set the right way. To correctly set it, click the right end of the slider instead of dragging it. The USB drivers may need to be reset if the camera is incorrectly configured.
+
+The Valve Index camera poses may be poorly calibrated from the factory. The options menu allows adjusting the distance between cameras for better depth-perception when using the custom projection modes.
 
 
 ### Installation ###
@@ -106,13 +109,13 @@ The following are required:
 - Add shared camera textures to DirectX 12 if possible (may only be possible by rendering with DirectX11 with 11On12)
 - Controller and hand depth projection + masking on 3D mode
 - Improvements to 3D reconstruction
+- Support for Varjo OpenXR extensions for application controlled depth composition
 
 ### Possible improvements ###
 
 - `XR_HTC_passthrough` extension support (no headsets or applications use this yet)
 - Linux support (does passthrough work on Linux?)
 - Passthrough override support for OpenVR apps (better as independent application)
-- Depth buffer based blending
 
 
 

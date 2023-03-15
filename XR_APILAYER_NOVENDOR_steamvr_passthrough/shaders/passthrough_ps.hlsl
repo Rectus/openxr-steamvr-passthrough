@@ -113,5 +113,5 @@ float4 main(VS_OUTPUT input) : SV_TARGET
         }
     }
 	
-    return float4(rgbColor.xyz, 1 * g_opacity);
+    return float4(rgbColor.xyz, g_opacity);
 }
