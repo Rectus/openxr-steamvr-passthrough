@@ -728,6 +728,13 @@ bool PassthroughRendererDX12::InitPipeline()
 	D3D12_BLEND_DESC blendStatePrepassIgnoreAppAlpha = blendStateDestAlpha;
 	blendStatePrepassIgnoreAppAlpha.RenderTarget[0].DestBlendAlpha = D3D12_BLEND_ZERO;
 
+	D3D12_BLEND_DESC blendStateInverseAppAlpha = blendStateDestAlpha;
+	blendStateInverseAppAlpha.RenderTarget[0].SrcBlend = D3D12_BLEND_DEST_ALPHA;
+	blendStateInverseAppAlpha.RenderTarget[0].DestBlend = D3D12_BLEND_INV_DEST_ALPHA;
+	blendStateInverseAppAlpha.RenderTarget[0].BlendOpAlpha = D3D12_BLEND_OP_SUBTRACT;
+	blendStateInverseAppAlpha.RenderTarget[0].SrcBlendAlpha = D3D12_BLEND_ONE;
+	blendStateInverseAppAlpha.RenderTarget[0].DestBlendAlpha = D3D12_BLEND_ONE;
+
 	D3D12_BLEND_DESC blendStateDisabled = {};
 	blendStateDisabled.RenderTarget[0].BlendEnable = false;
 	blendStateDisabled.RenderTarget[0].RenderTargetWriteMask = D3D12_COLOR_WRITE_ENABLE_ALL;
@@ -802,6 +809,10 @@ bool PassthroughRendererDX12::InitPipeline()
 	if (m_blendMode == Masked)
 	{
 		psoDesc.BlendState = blendStateDisabled;
+	}
+	else if (m_bUsingDepth)
+	{
+		psoDesc.BlendState = blendStateInverseAppAlpha;
 	}
 	else if (m_blendMode == AlphaBlendPremultiplied || m_blendMode == AlphaBlendUnpremultiplied)
 	{
