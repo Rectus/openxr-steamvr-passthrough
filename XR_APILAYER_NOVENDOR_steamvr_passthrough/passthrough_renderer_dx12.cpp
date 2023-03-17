@@ -112,8 +112,7 @@ struct PSPassConstantBuffer
 struct PSViewConstantBuffer
 {
 	XrVector4f frameUVBounds;
-	XrVector2f prepassUVFactor;
-	XrVector2f prepassUVOffset;
+	XrVector4f prepassUVBounds;
 	uint32_t rtArrayIndex;
 };
 
@@ -1300,13 +1299,12 @@ void PassthroughRendererDX12::RenderPassthroughViewMasked(const ERenderEye eye, 
 	// Draw the correct half for single framebuffer views.
 	if (abs(layer->views[0].subImage.imageRect.offset.x - layer->views[1].subImage.imageRect.offset.x) > layer->views[0].subImage.imageRect.extent.width / 2)
 	{
-		psViewBuffer->prepassUVOffset = { (eye == LEFT_EYE) ? 0.0f : 0.5f, 0.0f };
-		psViewBuffer->prepassUVFactor = { 0.5f, 1.0f };
+		psViewBuffer->prepassUVBounds = { (eye == LEFT_EYE) ? 0.0f : 0.5f, 0.0f,
+			(eye == LEFT_EYE) ? 0.5f : 1.0f, 1.0f };
 	}
 	else
 	{
-		psViewBuffer->prepassUVOffset = { 0.0f, 0.0f };
-		psViewBuffer->prepassUVFactor = { 1.0f, 1.0f };
+		psViewBuffer->prepassUVBounds = { 0.0f, 0.0f, 1.0f, 1.0f };
 	}
 	psViewBuffer->frameUVBounds = GetFrameUVBounds(eye, frame->frameLayout);
 	psViewBuffer->rtArrayIndex = layer->views[viewIndex].subImage.imageArrayIndex;

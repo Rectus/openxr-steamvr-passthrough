@@ -54,8 +54,7 @@ struct PSPassConstantBuffer
 struct PSViewConstantBuffer
 {
 	XrVector4f frameUVBounds;
-	XrVector2f prepassUVFactor;
-	XrVector2f prepassUVOffset;
+	XrVector4f prepassUVBounds;
 	uint32_t rtArrayIndex;
 };
 
@@ -97,6 +96,7 @@ PassthroughRendererDX11::PassthroughRendererDX11(ID3D11Device* device, HMODULE d
 	, m_disparityMapWidth(0)
 	, m_fovScale(0.0f)
 {
+	memset(m_temportaryRenderTargets, 0, sizeof(m_temportaryRenderTargets));
 }
 
 
@@ -565,47 +565,62 @@ void PassthroughRendererDX11::SetupUVDistortionMap(std::shared_ptr<std::vector<f
 }
 
 
-void PassthroughRendererDX11::SetupTemporaryRenderTarget(ID3D11Texture2D** texture, ID3D11ShaderResourceView** srv, ID3D11RenderTargetView** rtv, uint32_t width, uint32_t height)
+DX11TemporaryRenderTarget& PassthroughRendererDX11::GetTemporaryRenderTarget(uint32_t bufferIndex)
 {
+	assert(m_renderTargets[bufferIndex].Get());
+
+	if (m_temportaryRenderTargets[bufferIndex].AssociatedRenderTarget == m_renderTargets[bufferIndex].Get())
+	{
+		return m_temportaryRenderTargets[bufferIndex];
+	}
+
+	m_temportaryRenderTargets[bufferIndex].AssociatedRenderTarget = m_renderTargets[bufferIndex].Get();
+
+	D3D11_TEXTURE2D_DESC finalRTDesc;
+	((ID3D11Texture2D*)m_renderTargets[bufferIndex].Get())->GetDesc(&finalRTDesc);
 
 	D3D11_TEXTURE2D_DESC textureDesc = {};
 	textureDesc.MipLevels = 1;
 	textureDesc.Format = DXGI_FORMAT_R8_UNORM;
-	textureDesc.Width = width;
-	textureDesc.Height = height;
-	textureDesc.ArraySize = 1;
+	textureDesc.Width = finalRTDesc.Width;
+	textureDesc.Height = finalRTDesc.Height;
+	textureDesc.ArraySize = finalRTDesc.ArraySize;
 	textureDesc.SampleDesc.Count = 1;
 	textureDesc.SampleDesc.Quality = 0;
 	textureDesc.BindFlags = D3D11_BIND_SHADER_RESOURCE | D3D11_BIND_RENDER_TARGET;
 	textureDesc.Usage = D3D11_USAGE_DEFAULT;
 	textureDesc.CPUAccessFlags = 0;
 
-	if (FAILED(m_d3dDevice->CreateTexture2D(&textureDesc, nullptr, texture)))
+	ID3D11Texture2D* texture;
+
+	if (FAILED(m_d3dDevice->CreateTexture2D(&textureDesc, nullptr, &texture)))
 	{
 		ErrorLog("Temporary Render Target CreateTexture2D error!\n");
-		return;
+		return m_temportaryRenderTargets[bufferIndex];
 	}
+
+	m_temportaryRenderTargets[bufferIndex].Texture = texture;
 
 	D3D11_SHADER_RESOURCE_VIEW_DESC srvDesc = {};
 	srvDesc.ViewDimension = D3D11_SRV_DIMENSION_TEXTURE2D;
 	srvDesc.Format = textureDesc.Format;
 	srvDesc.Texture2D.MipLevels = 1;
 
-	if (FAILED(m_d3dDevice->CreateShaderResourceView(*texture, &srvDesc, srv)))
+	if (FAILED(m_d3dDevice->CreateShaderResourceView(texture, &srvDesc, &m_temportaryRenderTargets[bufferIndex].SRV)))
 	{
 		ErrorLog("Temporary Render Target CreateShaderResourceView error!\n");
-		return;
 	}
 
 	D3D11_RENDER_TARGET_VIEW_DESC rtvDesc{};
 	rtvDesc.Format = textureDesc.Format;
 	rtvDesc.ViewDimension = D3D11_RTV_DIMENSION_TEXTURE2D;
 
-	if (FAILED(m_d3dDevice->CreateRenderTargetView(*texture, &rtvDesc, rtv)))
+	if (FAILED(m_d3dDevice->CreateRenderTargetView(texture, &rtvDesc, &m_temportaryRenderTargets[bufferIndex].RTV)))
 	{
 		ErrorLog("Temporary Render Target CreateRenderTargetView error!\n");
-		return;
 	}
+
+	return m_temportaryRenderTargets[bufferIndex];
 }
 
 
@@ -1069,8 +1084,11 @@ void PassthroughRendererDX11::RenderPassthroughViewMasked(const ERenderEye eye, 
 
 	XrRect2Di rect = layer->views[viewIndex].subImage.imageRect;
 
-	D3D11_VIEWPORT viewport = { 0.0f, 0.0f, (float)rect.extent.width, (float)rect.extent.height, 0.0f, 1.0f };
-	D3D11_RECT scissor = { 0, 0, rect.extent.width, rect.extent.height };
+	//D3D11_VIEWPORT viewport = { 0.0f, 0.0f, (float)rect.extent.width, (float)rect.extent.height, 0.0f, 1.0f };
+	//D3D11_RECT scissor = { 0, 0, rect.extent.width, rect.extent.height };
+
+	D3D11_VIEWPORT viewport = { (float)rect.offset.x, (float)rect.offset.y, (float)rect.extent.width, (float)rect.extent.height, 0.0f, 1.0f };
+	D3D11_RECT scissor = { rect.offset.x, rect.offset.y, rect.offset.x + rect.extent.width, rect.offset.y + rect.extent.height };
 
 	m_renderContext->RSSetViewports(1, &viewport);
 	m_renderContext->RSSetScissorRects(1, &scissor);
@@ -1091,37 +1109,38 @@ void PassthroughRendererDX11::RenderPassthroughViewMasked(const ERenderEye eye, 
 	ID3D11Buffer* vsBuffers[2] = { m_vsViewConstantBuffer[bufferIndex].Get(), m_vsPassConstantBuffer[m_frameIndex].Get() };
 	m_renderContext->VSSetConstantBuffers(0, 2, vsBuffers);
 
+	bool bSingleStereoRenderTarget = false;
+
+	PSViewConstantBuffer viewBuffer = {};
+	// Draw the correct half for single framebuffer views.
+	if (abs(layer->views[0].subImage.imageRect.offset.x - layer->views[1].subImage.imageRect.offset.x) > layer->views[0].subImage.imageRect.extent.width / 2)
 	{
-		PSViewConstantBuffer viewBuffer = {};
-		// Draw the correct half for single framebuffer views.
-		if (abs(layer->views[0].subImage.imageRect.offset.x - layer->views[1].subImage.imageRect.offset.x) > layer->views[0].subImage.imageRect.extent.width / 2)
-		{
-			viewBuffer.prepassUVOffset = { (eye == LEFT_EYE) ? 0.0f : 0.5f, 0.0f };
-			viewBuffer.prepassUVFactor = { 0.5f, 1.0f };
+		bSingleStereoRenderTarget = true;
 
-			//TODO: Output needs to be the same aspect as depth buffer
-			bCompositeDepth = false;
-		}
-		else
-		{
-			viewBuffer.prepassUVOffset = { 0.0f, 0.0f };
-			viewBuffer.prepassUVFactor = { 1.0f, 1.0f };
-		}
-		viewBuffer.frameUVBounds = GetFrameUVBounds(eye, frame->frameLayout);
-		viewBuffer.rtArrayIndex = layer->views[viewIndex].subImage.imageArrayIndex;
+		viewBuffer.prepassUVBounds = { (eye == LEFT_EYE) ? 0.0f : 0.5f, 0.0f,
+			(eye == LEFT_EYE) ? 0.5f : 1.0f, 1.0f };
+	}
+	else
+	{
+		viewBuffer.prepassUVBounds = { 0.0f, 0.0f, 1.0f, 1.0f };
+	}
+	viewBuffer.frameUVBounds = GetFrameUVBounds(eye, frame->frameLayout);
+	viewBuffer.rtArrayIndex = layer->views[viewIndex].subImage.imageArrayIndex;
 
-		m_renderContext->UpdateSubresource(m_psViewConstantBuffer.Get(), 0, nullptr, &viewBuffer, 0, 0);
+	m_renderContext->UpdateSubresource(m_psViewConstantBuffer.Get(), 0, nullptr, &viewBuffer, 0, 0);
+
+
+	DX11TemporaryRenderTarget& tempTarget = GetTemporaryRenderTarget(bSingleStereoRenderTarget ? swapchainIndex : bufferIndex);
+
+	if (eye == LEFT_EYE || !bSingleStereoRenderTarget)
+	{
+		float clearColor[4] = { m_configManager->GetConfig_Core().CoreForceMaskedUseCameraImage ? 1 : 0, 0, 0, 0 };
+		m_renderContext->ClearRenderTargetView(tempTarget.RTV.Get(), clearColor);
 	}
 
-	ComPtr<ID3D11Texture2D> tempTexture;
-	ComPtr<ID3D11ShaderResourceView> tempSRV;
-	ComPtr<ID3D11RenderTargetView> tempRTV;
-
-	SetupTemporaryRenderTarget(&tempTexture, &tempSRV, &tempRTV, (uint32_t)rect.extent.width, (uint32_t)rect.extent.height);
-
-	m_renderContext->OMSetRenderTargets(1, tempRTV.GetAddressOf(), depthStencil);
+	m_renderContext->OMSetRenderTargets(1, tempTarget.RTV.GetAddressOf(), depthStencil);
 	m_renderContext->OMSetBlendState(nullptr, nullptr, UINT_MAX);
-	m_renderContext->OMSetDepthStencilState(GET_DEPTH_STENCIL_STATE(bCompositeDepth, frame->bHasReversedDepth, false), 1);
+	m_renderContext->OMSetDepthStencilState(GET_DEPTH_STENCIL_STATE(bCompositeDepth, m_configManager->GetConfig_Core().CoreForceMaskedUseCameraImage == frame->bHasReversedDepth, depthConfig.DepthWriteOutput), 1);
 
 	ID3D11ShaderResourceView* cameraFrameSRV;
 
@@ -1167,13 +1186,13 @@ void PassthroughRendererDX11::RenderPassthroughViewMasked(const ERenderEye eye, 
 	m_renderContext->Draw(numVertices, 0);
 
 
-	{
-		D3D11_VIEWPORT viewport = { (float)rect.offset.x, (float)rect.offset.y, (float)rect.extent.width, (float)rect.extent.height, 0.0f, 1.0f };
-		D3D11_RECT scissor = { rect.offset.x, rect.offset.y, rect.offset.x + rect.extent.width, rect.offset.y + rect.extent.height };
+	//{
+	//	D3D11_VIEWPORT viewport = { (float)rect.offset.x, (float)rect.offset.y, (float)rect.extent.width, (float)rect.extent.height, 0.0f, 1.0f };
+	//	D3D11_RECT scissor = { rect.offset.x, rect.offset.y, rect.offset.x + rect.extent.width, rect.offset.y + rect.extent.height };
 
-		m_renderContext->RSSetViewports(1, &viewport);
-		m_renderContext->RSSetScissorRects(1, &scissor);
-	}
+	//	m_renderContext->RSSetViewports(1, &viewport);
+	//	m_renderContext->RSSetScissorRects(1, &scissor);
+	//}
 
 	// Clear rendertarget so we can swap the places of the RTV and SRV.
 	ID3D11RenderTargetView* nullRTV = nullptr;
@@ -1181,18 +1200,19 @@ void PassthroughRendererDX11::RenderPassthroughViewMasked(const ERenderEye eye, 
 
 	if (mainConf.ProjectionMode == ProjectionRoomView2D)
 	{
-		ID3D11ShaderResourceView* views[2] = { cameraFrameSRV, tempSRV.Get() };
+		ID3D11ShaderResourceView* views[2] = { cameraFrameSRV, tempTarget.SRV.Get() };
 		m_renderContext->PSSetShaderResources(0, 2, views);
 	}
 	else
 	{
-		ID3D11ShaderResourceView* views[3] = { cameraFrameSRV, m_uvDistortionMapSRV.Get(), tempSRV.Get() };
+		ID3D11ShaderResourceView* views[3] = { cameraFrameSRV, m_uvDistortionMapSRV.Get(), tempTarget.SRV.Get() };
 		m_renderContext->PSSetShaderResources(0, 3, views);
 	}
 	
 	m_renderContext->OMSetRenderTargets(1, &rendertarget, depthStencil);
 	m_renderContext->OMSetBlendState(m_blendStateSrcAlpha.Get(), nullptr, UINT_MAX);
-	m_renderContext->OMSetDepthStencilState(GET_DEPTH_STENCIL_STATE(bCompositeDepth, frame->bHasReversedDepth, depthConfig.DepthWriteOutput), 1);
+	m_renderContext->OMSetDepthStencilState(GET_DEPTH_STENCIL_STATE(false, frame->bHasReversedDepth, false), 1);
+	//m_renderContext->OMSetDepthStencilState(GET_DEPTH_STENCIL_STATE(bCompositeDepth, frame->bHasReversedDepth, false), 1);
 	m_renderContext->PSSetShader(m_maskedPixelShader.Get(), nullptr, 0);
 
 	m_renderContext->Draw(numVertices, 0);

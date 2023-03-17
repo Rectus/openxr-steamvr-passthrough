@@ -35,8 +35,7 @@ cbuffer psViewConstantBuffer
 	float g_floorHeightOffset;
 
 	float4 g_uvBounds;
-	float2 g_uvPrepassFactor;
-	float2 g_uvPrepassOffset;
+	float4 g_uvPrepassBounds;
 	uint g_arrayIndex;
 };
 
@@ -45,8 +44,7 @@ cbuffer psViewConstantBuffer
 cbuffer psViewConstantBuffer : register(b1)
 {
 	float4 g_uvBounds;
-	float2 g_uvPrepassFactor;
-	float2 g_uvPrepassOffset;
+    float4 g_uvPrepassBounds;
 	uint g_arrayIndex;
 };
 

@@ -59,6 +59,15 @@ inline XrVector4f GetFrameUVBounds(const ERenderEye eye, const EStereoFrameLayou
 }
 
 
+struct DX11TemporaryRenderTarget
+{
+	ID3D11Resource* AssociatedRenderTarget = nullptr; // Only for checking the assosiated target. May be invalid.
+	ComPtr<ID3D11Texture2D> Texture;
+	ComPtr<ID3D11RenderTargetView> RTV;
+	ComPtr<ID3D11ShaderResourceView> SRV;
+};
+
+
 
 class IPassthroughRenderer
 {
@@ -94,7 +103,7 @@ private:
 	void SetupFrameResource();
 	void SetupDisparityMap(uint32_t width, uint32_t height);
 	void SetupUVDistortionMap(std::shared_ptr<std::vector<float>> uvDistortionMap);
-	void SetupTemporaryRenderTarget(ID3D11Texture2D** texture, ID3D11ShaderResourceView** srv, ID3D11RenderTargetView** rtv, uint32_t width, uint32_t height);
+	DX11TemporaryRenderTarget& GetTemporaryRenderTarget(uint32_t bufferIndex);
 	void GenerateMesh();
 	void GenerateDepthMesh(uint32_t width, uint32_t height);
 
@@ -116,6 +125,8 @@ private:
 	ComPtr<ID3D11Resource> m_renderTargets[NUM_SWAPCHAINS * 2];
 	ComPtr<ID3D11RenderTargetView> m_renderTargetViews[NUM_SWAPCHAINS * 2];
 	ComPtr<ID3D11ShaderResourceView> m_renderTargetSRVs[NUM_SWAPCHAINS * 2];
+
+	DX11TemporaryRenderTarget m_temportaryRenderTargets[NUM_SWAPCHAINS * 2];
 
 	ComPtr<ID3D11Resource> m_depthStencils[NUM_SWAPCHAINS * 2];
 	ComPtr<ID3D11DepthStencilView> m_depthStencilViews[NUM_SWAPCHAINS * 2];

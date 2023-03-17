@@ -47,8 +47,7 @@ struct PSPassConstantBuffer
 struct PSViewConstantBuffer
 {
 	XrVector4f frameUVBounds;
-	XrVector2f prepassUVFactor;
-	XrVector2f prepassUVOffset;
+	XrVector4f prepassUVBounds;
 	uint32_t rtArrayIndex;
 };
 
@@ -1832,13 +1831,12 @@ void PassthroughRendererVulkan::RenderPassthroughViewMasked(const ERenderEye eye
 	// Draw the correct half for single framebuffer views.
 	if (abs(layer->views[0].subImage.imageRect.offset.x - layer->views[1].subImage.imageRect.offset.x) > layer->views[0].subImage.imageRect.extent.width / 2)
 	{
-		viewBuffer.prepassUVOffset = { (eye == LEFT_EYE) ? 0.0f : 0.5f, 0.0f };
-		viewBuffer.prepassUVFactor = { 0.5f, 1.0f };
+		viewBuffer.prepassUVBounds = { (eye == LEFT_EYE) ? 0.0f : 0.5f, 0.0f, 
+			(eye == LEFT_EYE) ? 0.5f : 1.0f, 1.0f };
 	}
 	else
 	{
-		viewBuffer.prepassUVOffset = { 0.0f, 0.0f };
-		viewBuffer.prepassUVFactor = { 1.0f, 1.0f };
+		viewBuffer.prepassUVBounds = { 0.0f, 0.0f, 1.0f, 1.0f };
 	}
 
 	vkCmdPushConstants(commandBuffer, m_pipelineLayout, VK_SHADER_STAGE_FRAGMENT_BIT, sizeof(VSConstantBuffer), sizeof(PSViewConstantBuffer), &viewBuffer);

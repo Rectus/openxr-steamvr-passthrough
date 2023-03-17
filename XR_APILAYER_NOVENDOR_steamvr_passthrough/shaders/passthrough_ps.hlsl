@@ -36,8 +36,7 @@ cbuffer psViewConstantBuffer
 	float g_floorHeightOffset;
 
 	float4 g_uvBounds;
-	float2 g_uvPrepassFactor;
-	float2 g_uvPrepassOffset;
+	float4 g_uvPrepassBounds;
 	uint g_arrayIndex;
 };
 
@@ -50,8 +49,7 @@ Texture2D<float2> g_fisheyeCorrectionTexture : register(t3);
 cbuffer psViewConstantBuffer : register(b1)
 {
 	float4 g_uvBounds;
-	float2 g_uvPrepassFactor;
-	float2 g_uvPrepassOffset;
+	float4 g_uvPrepassBounds;
 	uint g_arrayIndex;
 };
 

@@ -37,8 +37,7 @@ cbuffer psViewConstantBuffer
 	float g_floorHeightOffset;
 
 	float4 g_uvBounds;
-	float2 g_uvPrepassFactor;
-	float2 g_uvPrepassOffset;
+	float4 g_uvPrepassBounds;
 	uint g_arrayIndex;
 };
 
@@ -62,8 +61,7 @@ Texture2D<float2> g_fisheyeCorrectionTexture : register(t5);
 cbuffer psViewConstantBuffer : register(b1)
 {
 	float4 g_uvBounds;
-	float2 g_uvPrepassFactor;
-	float2 g_uvPrepassOffset;
+    float4 g_uvPrepassBounds;
 	uint g_arrayIndex;
 };
 
@@ -88,6 +86,16 @@ Texture2D g_blendMask : register(t2);
 
 float4 main(VS_OUTPUT input) : SV_TARGET
 {
+    float2 screenUvs = input.screenCoords.xy / input.screenCoords.z;
+    screenUvs = screenUvs * float2(0.5, -0.5) + float2(0.5, 0.5);
+    screenUvs = screenUvs * (g_uvPrepassBounds.zw - g_uvPrepassBounds.xy) + g_uvPrepassBounds.xy;
+    screenUvs = clamp(screenUvs, g_uvPrepassBounds.xy, g_uvPrepassBounds.zw);
+
+    float alpha = g_blendMask.Sample(g_samplerState, screenUvs).x;
+    alpha = saturate((1.0 - alpha) * g_opacity);
+	
+	clip(alpha <= 0 ? -1 : 1);
+	
 	// Divide to convert back from homogenous coordinates.
 	float2 outUvs = input.clipSpaceCoords.xy / input.clipSpaceCoords.z;
 
@@ -109,12 +117,6 @@ float4 main(VS_OUTPUT input) : SV_TARGET
     }	
 
 	float4 cameraColor = g_cameraFrameTexture.Sample(g_samplerState, outUvs.xy);
-
-	float2 screenUvs = input.screenCoords.xy / input.screenCoords.z;
-	screenUvs = screenUvs * float2(0.5, -0.5) + float2(0.5, 0.5);
-
-	float alpha = g_blendMask.Sample(g_samplerState, screenUvs).x;
-	alpha = saturate((1.0 - alpha) * g_opacity);
 
 	if (g_bDoColorAdjustment)
 	{

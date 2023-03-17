@@ -36,8 +36,7 @@ cbuffer psViewConstantBuffer
 	float g_floorHeightOffset;
 
 	float4 g_uvBounds;
-	float2 g_uvPrepassFactor;
-	float2 g_uvPrepassOffset;
+	float4 g_uvPrepassBounds;
 	uint g_arrayIndex;
 };
 
@@ -60,8 +59,7 @@ Texture2D<float2> g_fisheyeCorrectionTexture : register(t5);
 cbuffer psViewConstantBuffer : register(b1)
 {
 	float4 g_uvBounds;
-	float2 g_uvPrepassFactor;
-	float2 g_uvPrepassOffset;
+    float4 g_uvPrepassBounds;
 	uint g_arrayIndex;
 };
 
@@ -114,8 +112,9 @@ float main(VS_OUTPUT input) : SV_TARGET
 		float2 outUvs = input.screenCoords.xy / input.screenCoords.z;
 		outUvs = outUvs * float2(0.5, -0.5) + float2(0.5, 0.5);
 
-		color = g_texture.Sample(g_samplerState, float3((outUvs * g_uvPrepassFactor + g_uvPrepassOffset).xy, float(g_arrayIndex)));
-	}
+        color = g_texture.Sample(g_samplerState, 
+			float3((outUvs * (g_uvPrepassBounds.zw - g_uvPrepassBounds.xy) + g_uvPrepassBounds.xy), float(g_arrayIndex)));
+    }
 
 	float3 difference = LinearRGBtoLAB_D65(color.xyz) - LinearRGBtoLAB_D65(g_maskedKey);
 
@@ -125,12 +124,8 @@ float main(VS_OUTPUT input) : SV_TARGET
 	float distChroma = smoothstep(fracChromaSqr, fracChromaSqr + pow(g_maskedSmooth, 2), (distChromaSqr.x + distChromaSqr.y));
 	float distLuma = smoothstep(g_maskedFracLuma, g_maskedFracLuma + g_maskedSmooth, abs(difference.x));
 	
-    if (bInvertOutput)
-    {
-        return 1.0 - max(distChroma, distLuma);
-    }
-    else
-    {
-        return max(distChroma, distLuma);
-    }
+    float outAlpha = bInvertOutput ? 1.0 - max(distChroma, distLuma) : max(distChroma, distLuma);
+	
+    return outAlpha;
+
 }
