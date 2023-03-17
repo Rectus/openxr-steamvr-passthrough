@@ -75,6 +75,8 @@ struct CameraFrame
 		: readWriteMutex()
 		, header()
 		, frameTextureResource(nullptr)
+		, cameraViewToWorldLeft()
+		, cameraViewToWorldRight()
 		, cameraProjectionToWorldLeft()
 		, cameraProjectionToWorldRight()
 		, worldToCameraProjectionLeft()
@@ -95,6 +97,8 @@ struct CameraFrame
 	void* frameTextureResource;
 	std::shared_ptr<std::vector<uint8_t>> frameBuffer;
 	std::shared_ptr<std::vector<uint8_t>> rectifiedFrameBuffer;
+	XrMatrix4x4f cameraViewToWorldLeft;
+	XrMatrix4x4f cameraViewToWorldRight;
 	XrMatrix4x4f cameraProjectionToWorldLeft;
 	XrMatrix4x4f cameraProjectionToWorldRight;
 	XrMatrix4x4f worldToCameraProjectionLeft;

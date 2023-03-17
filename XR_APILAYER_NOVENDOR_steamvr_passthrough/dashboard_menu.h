@@ -69,6 +69,7 @@ private:
 	void SetupDX11();
 
 	void TextDescription(const char* fmt, ...);
+	void TextDescriptionSpaced(const char* fmt, ...);
 
 	std::shared_ptr<ConfigManager> m_configManager;
 	std::shared_ptr<OpenVRManager> m_openVRManager;

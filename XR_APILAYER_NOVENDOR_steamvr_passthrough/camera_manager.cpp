@@ -366,7 +366,7 @@ void CameraManager::ServeFrames()
         {
             startFrameRetrievalTime = StartPerfTimer();
 
-            vr::EVRTrackedCameraFrameType frameType = m_configManager->GetConfig_Main().ProjectionMode == ProjectionRoomView2D ? vr::VRTrackedCameraFrameType_MaximumUndistorted : vr::VRTrackedCameraFrameType_Distorted;
+            vr::EVRTrackedCameraFrameType frameType = m_configManager->GetConfig_Main().ProjectionMode == Projection_RoomView2D ? vr::VRTrackedCameraFrameType_MaximumUndistorted : vr::VRTrackedCameraFrameType_Distorted;
 
             vr::EVRTrackedCameraError error = trackedCamera->GetVideoStreamFrameBuffer(m_cameraHandle, frameType, nullptr, 0, &m_underConstructionFrame->header, sizeof(vr::CameraVideoStreamFrameHeader_t));
 
@@ -397,7 +397,7 @@ void CameraManager::ServeFrames()
 
         Config_Main& mainConf = m_configManager->GetConfig_Main();
 
-        vr::EVRTrackedCameraFrameType frameType = mainConf.ProjectionMode == ProjectionRoomView2D ? vr::VRTrackedCameraFrameType_MaximumUndistorted : vr::VRTrackedCameraFrameType_Distorted;
+        vr::EVRTrackedCameraFrameType frameType = mainConf.ProjectionMode == Projection_RoomView2D ? vr::VRTrackedCameraFrameType_MaximumUndistorted : vr::VRTrackedCameraFrameType_Distorted;
 
         if (m_renderAPI == DirectX11)
         {
@@ -437,7 +437,7 @@ void CameraManager::ServeFrames()
 
         // TODO: Getting the framebuffer crashes under Vulkan
         if(m_renderAPI == DirectX12 || 
-            (mainConf.ProjectionMode == ProjectionStereoReconstruction && m_renderAPI != Vulkan))
+            (mainConf.ProjectionMode == Projection_StereoReconstruction && m_renderAPI != Vulkan))
         {
             if (m_underConstructionFrame->frameBuffer.get() == nullptr)
             {
@@ -459,6 +459,24 @@ void CameraManager::ServeFrames()
 
         m_underConstructionFrame->bIsValid = true;
         m_underConstructionFrame->frameLayout = m_frameLayout;
+
+
+        // Apply offset calibration to camera positions.
+        XrMatrix4x4f origLeftCameraToTrackingPose = ToXRMatrix4x4(m_underConstructionFrame->header.trackedDevicePose.mDeviceToAbsoluteTracking);
+        XrMatrix4x4f headToTrackingPose, correctedLeftCameraToHMDPose;
+        XrMatrix4x4f_Multiply(&headToTrackingPose, &origLeftCameraToTrackingPose, &m_HMDToCameraLeft);
+        correctedLeftCameraToHMDPose = m_cameraToHMDLeft;
+        correctedLeftCameraToHMDPose.m[12] *= mainConf.DepthOffsetCalibration;
+        correctedLeftCameraToHMDPose.m[13] *= mainConf.DepthOffsetCalibration;
+        correctedLeftCameraToHMDPose.m[14] *= mainConf.DepthOffsetCalibration;
+        XrMatrix4x4f_Multiply(&m_underConstructionFrame->cameraViewToWorldLeft, &headToTrackingPose, &correctedLeftCameraToHMDPose);
+
+        XrMatrix4x4f rightToLeftPose = m_cameraRightToLeftPose;
+        rightToLeftPose.m[12] *= mainConf.DepthOffsetCalibration;
+        rightToLeftPose.m[13] *= mainConf.DepthOffsetCalibration;
+        rightToLeftPose.m[14] *= mainConf.DepthOffsetCalibration;
+
+        XrMatrix4x4f_Multiply(&m_underConstructionFrame->cameraViewToWorldRight, &m_underConstructionFrame->cameraViewToWorldLeft, &rightToLeftPose);
 
         {
             std::lock_guard<std::mutex> lock(m_serveMutex);
@@ -651,7 +669,7 @@ void CameraManager::CalculateFrameProjectionForEye(const ERenderEye eye, std::sh
 
 
 
-    if (mainConf.ProjectionMode == ProjectionRoomView2D)
+    if (mainConf.ProjectionMode == Projection_RoomView2D)
     {
         XrMatrix4x4f leftCameraToTrackingPose = ToXRMatrix4x4(frame->header.trackedDevicePose.mDeviceToAbsoluteTracking);
 
@@ -701,9 +719,8 @@ void CameraManager::CalculateFrameProjectionForEye(const ERenderEye eye, std::sh
         XrMatrix4x4f frameProjectionInverse;
         XrMatrix4x4f_Invert(&frameProjectionInverse, &frameProjection);
 
-        XrMatrix4x4f leftCameraToTrackingPose = ToXRMatrix4x4(frame->header.trackedDevicePose.mDeviceToAbsoluteTracking);
         XrMatrix4x4f leftCameraFromTrackingPose;
-        XrMatrix4x4f_Invert(&leftCameraFromTrackingPose, &leftCameraToTrackingPose);      
+        XrMatrix4x4f_Invert(&leftCameraFromTrackingPose, &frame->cameraViewToWorldLeft);
 
         if (eye == LEFT_EYE)
         {
@@ -715,7 +732,7 @@ void CameraManager::CalculateFrameProjectionForEye(const ERenderEye eye, std::sh
             XrMatrix4x4f_Multiply(&frame->worldToCameraProjectionLeft, &frameProjection, &tempMatrix);
 
             XrMatrix4x4f_Multiply(&tempMatrix, &distortionParams.rectifiedRotationLeft, &frameProjectionInverse);
-            XrMatrix4x4f_Multiply(&frame->cameraProjectionToWorldLeft, &leftCameraToTrackingPose, &tempMatrix);
+            XrMatrix4x4f_Multiply(&frame->cameraProjectionToWorldLeft, &frame->cameraViewToWorldLeft, &tempMatrix);
         }
         else
         {
@@ -738,14 +755,14 @@ void CameraManager::CalculateFrameProjectionForEye(const ERenderEye eye, std::sh
                 XrMatrix4x4f_Transpose(&rectifiedRotationInverse, &rectifiedRotation);
 
                 XrMatrix4x4f_Multiply(&tempMatrix, &rectifiedRotationInverse, &frameProjectionInverse);
-                XrMatrix4x4f_Multiply(&frame->cameraProjectionToWorldRight, &leftCameraToTrackingPose, &tempMatrix);
+                XrMatrix4x4f_Multiply(&frame->cameraProjectionToWorldRight, &frame->cameraViewToWorldLeft, &tempMatrix);
             }
             else
             {
                 XrMatrix4x4f_Transpose(&rectifiedRotationInverse, &distortionParams.rectifiedRotationLeft);
 
                 XrMatrix4x4f_Multiply(&tempMatrix, &rectifiedRotationInverse, &frameProjectionInverse);
-                XrMatrix4x4f_Multiply(&frame->cameraProjectionToWorldRight, &leftCameraToTrackingPose, &tempMatrix);
+                XrMatrix4x4f_Multiply(&frame->cameraProjectionToWorldRight, &frame->cameraViewToWorldLeft, &tempMatrix);
             }
         }
     }

@@ -6,28 +6,45 @@
 #include <xr_linear.h>
 #include "lodepng.h"
 
+#include "shaders\fullscreen_quad_vs.spv.h"
 #include "shaders\passthrough_vs.spv.h"
 
 #include "shaders\alpha_prepass_ps.spv.h"
 #include "shaders\alpha_prepass_masked_ps.spv.h"
 #include "shaders\passthrough_ps.spv.h"
-#include "shaders\passthrough_masked_ps.spv.h"
+#include "shaders\alpha_copy_masked_ps.spv.h"
 
 
 using namespace steamvr_passthrough;
 using namespace steamvr_passthrough::log;
 
 
-struct VSConstantBuffer
+struct VSPassConstantBuffer
+{
+	XrMatrix4x4f disparityViewToWorldLeft;
+	XrMatrix4x4f disparityViewToWorldRight;
+	XrMatrix4x4f disparityToDepth;
+	uint32_t disparityTextureSize[2];
+	float disparityDownscaleFactor;
+	float cutoutFactor;
+	float cutoutOffset;
+	float cutoutFilterWidth;
+	int32_t disparityFilterWidth;
+	uint32_t bProjectBorders;
+	uint32_t bFindDiscontinuities;
+};
+
+
+struct VSViewConstantBuffer
 {
 	XrMatrix4x4f cameraProjectionToWorld;
-	//XrMatrix4x4f worldToCameraProjection;
+	XrMatrix4x4f worldToCameraProjection;
 	XrMatrix4x4f worldToHMDProjection;
 	XrVector4f frameUVBounds;
 	XrVector3f hmdViewWorldPos;
 	float projectionDistance;
 	float floorHeightOffset;
-	uint8_t _padding[12];
+	uint32_t cameraViewIndex;
 };
 
 
@@ -38,6 +55,7 @@ struct PSPassConstantBuffer
 	float brightness;
 	float contrast;
 	float saturation;
+	float sharpness;
 	uint32_t bDoColorAdjustment;
 	uint32_t bDebugDepth;
 	uint32_t bDebugValidStereo;
@@ -47,9 +65,10 @@ struct PSPassConstantBuffer
 struct PSViewConstantBuffer
 {
 	XrVector4f frameUVBounds;
-	XrVector2f prepassUVFactor;
-	XrVector2f prepassUVOffset;
+	XrVector4f prepassUVBounds;
 	uint32_t rtArrayIndex;
+	uint32_t bDoCutout;
+	uint32_t bPremultiplyAlpha;
 };
 
 struct PSMaskedConstantBuffer
@@ -221,14 +240,16 @@ PassthroughRendererVulkan::PassthroughRendererVulkan(const XrGraphicsBindingVulk
 	, m_cameraTextureWidth(0)
 	, m_cameraTextureHeight(0)
 	, m_cameraFrameBufferSize(0)
-	, m_vertexBuffer(nullptr)
-	, m_vertexBufferMem(nullptr)
+	, m_cylinderMeshVertexBuffer(nullptr)
+	, m_cylinderMeshVertexBufferMem(nullptr)
+	, m_cylinderMeshIndexBuffer(nullptr)
+	, m_cylinderMeshIndexBufferMem(nullptr)
 	, m_descriptorLayout(nullptr)
 	, m_vertexShader(nullptr)
 	, m_pixelShader(nullptr)
 	, m_prepassShader(nullptr)
 	, m_maskedPrepassShader(nullptr)
-	, m_maskedPixelShader(nullptr)
+	, m_maskedAlphaCopyShader(nullptr)
 	, m_renderpass(nullptr)
 	, m_pipelineLayout(nullptr)
 	, m_pipelineDefault(nullptr)
@@ -236,7 +257,7 @@ PassthroughRendererVulkan::PassthroughRendererVulkan(const XrGraphicsBindingVulk
 	, m_pipelinePrepassUseAppAlpha(nullptr)
 	, m_pipelinePrepassIgnoreAppAlpha(nullptr)
 	, m_pipelineMaskedPrepass(nullptr)
-	, m_pipelineMaskedRender(nullptr)
+	, m_pipelineMaskedAlphaCopy(nullptr)
 	, m_testPattern(nullptr)
 	, m_testPatternMem(nullptr)
 	, m_testPatternBuffer(nullptr)
@@ -253,9 +274,19 @@ PassthroughRendererVulkan::PassthroughRendererVulkan(const XrGraphicsBindingVulk
 	m_queueFamilyIndex = binding.queueFamilyIndex;
 	m_queueIndex = binding.queueIndex;
 
+	memset(m_vsPassConstantBuffer, 0, sizeof(m_vsPassConstantBuffer));
+	memset(m_vsPassConstantBufferMem, 0, sizeof(m_vsPassConstantBufferMem));
+	memset(m_vsPassConstantBufferMappings, 0, sizeof(m_vsPassConstantBufferMappings));
+	memset(m_vsViewConstantBuffer, 0, sizeof(m_vsViewConstantBuffer));
+	memset(m_vsViewConstantBufferMem, 0, sizeof(m_vsViewConstantBufferMem));
+	memset(m_vsViewConstantBufferMappings, 0, sizeof(m_vsViewConstantBufferMappings));
+
 	memset(m_psPassConstantBuffer, 0, sizeof(m_psPassConstantBuffer));
 	memset(m_psPassConstantBufferMem, 0, sizeof(m_psPassConstantBufferMem));
 	memset(m_psPassConstantBufferMappings, 0, sizeof(m_psPassConstantBufferMappings));
+	memset(m_psViewConstantBuffer, 0, sizeof(m_psViewConstantBuffer));
+	memset(m_psViewConstantBufferMem, 0, sizeof(m_psViewConstantBufferMem));
+	memset(m_psViewConstantBufferMappings, 0, sizeof(m_psViewConstantBufferMappings));
 	memset(m_psMaskedConstantBuffer, 0, sizeof(m_psMaskedConstantBuffer));
 	memset(m_psMaskedConstantBufferMem, 0, sizeof(m_psMaskedConstantBufferMem));
 	memset(m_psMaskedConstantBufferMappings, 0, sizeof(m_psMaskedConstantBufferMappings));
@@ -334,6 +365,8 @@ bool PassthroughRendererVulkan::InitRenderer()
 		m_deletionQueue.push_back([=]() { vkDestroyCommandPool(m_device, m_commandPool, nullptr); });
 	}
 
+	m_fullscreenQuadShader = CreateShaderModule(g_FullscreenQuadShaderVS, ARRAYSIZE(g_FullscreenQuadShaderVS) * sizeof(g_FullscreenQuadShaderVS[0]));
+	m_deletionQueue.push_back([=]() { vkDestroyShaderModule(m_device, m_fullscreenQuadShader, nullptr); });
 
 	m_vertexShader = CreateShaderModule(g_PassthroughShaderVS, ARRAYSIZE(g_PassthroughShaderVS) * sizeof(g_PassthroughShaderVS[0]));
 	m_deletionQueue.push_back([=]() { vkDestroyShaderModule(m_device, m_vertexShader, nullptr); });
@@ -347,10 +380,10 @@ bool PassthroughRendererVulkan::InitRenderer()
 	m_maskedPrepassShader = CreateShaderModule(g_AlphaPrepassMaskedShaderPS, ARRAYSIZE(g_AlphaPrepassMaskedShaderPS) * sizeof(g_AlphaPrepassMaskedShaderPS[0]));
 	m_deletionQueue.push_back([=]() { vkDestroyShaderModule(m_device, m_maskedPrepassShader, nullptr); });
 
-	m_maskedPixelShader = CreateShaderModule(g_PassthroughMaskedShaderPS, ARRAYSIZE(g_PassthroughMaskedShaderPS) * sizeof(g_PassthroughMaskedShaderPS[0]));
-	m_deletionQueue.push_back([=]() { vkDestroyShaderModule(m_device, m_maskedPixelShader, nullptr); });
+	m_maskedAlphaCopyShader = CreateShaderModule(g_AlphaCopyMaskedShaderPS, ARRAYSIZE(g_AlphaCopyMaskedShaderPS) * sizeof(g_AlphaCopyMaskedShaderPS[0]));
+	m_deletionQueue.push_back([=]() { vkDestroyShaderModule(m_device, m_maskedAlphaCopyShader, nullptr); });
 
-	if (!m_vertexShader || !m_pixelShader || !m_prepassShader || !m_maskedPrepassShader || !m_maskedPixelShader)
+	if (!m_fullscreenQuadShader || !m_vertexShader || !m_pixelShader || !m_prepassShader || !m_maskedPrepassShader || !m_maskedAlphaCopyShader)
 	{
 		ErrorLog("Shader module creation failure!\n");
 		return false;
@@ -359,14 +392,14 @@ bool PassthroughRendererVulkan::InitRenderer()
 	{
 		VkDescriptorPoolSize poolSizes[2] =
 		{
-			{VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER, NUM_SWAPCHAINS * 4},
-			{VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER, NUM_SWAPCHAINS * 6}
+			{VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER, NUM_SWAPCHAINS * 2 * 5 * 2},
+			{VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER, NUM_SWAPCHAINS * 2 * 3 * 2}
 		};
 
 		VkDescriptorPoolCreateInfo poolInfo{ VK_STRUCTURE_TYPE_DESCRIPTOR_POOL_CREATE_INFO };
 		poolInfo.poolSizeCount = 2;
 		poolInfo.pPoolSizes = poolSizes;
-		poolInfo.maxSets = NUM_SWAPCHAINS * 2;
+		poolInfo.maxSets = NUM_SWAPCHAINS * 2 * 2;
 
 		if (vkCreateDescriptorPool(m_device, &poolInfo, nullptr, &m_descriptorPool) != VK_SUCCESS)
 		{
@@ -375,20 +408,23 @@ bool PassthroughRendererVulkan::InitRenderer()
 		}
 		m_deletionQueue.push_back([=]() { vkDestroyDescriptorPool(m_device, m_descriptorPool, nullptr); });
 
-		VkDescriptorSetLayoutBinding layoutBindings[6] =
+		VkDescriptorSetLayoutBinding layoutBindings[9] =
 		{
-			{0, VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER, 1, VK_SHADER_STAGE_FRAGMENT_BIT, nullptr},
-			{1, VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER, 1, VK_SHADER_STAGE_FRAGMENT_BIT, nullptr},
-			{2, VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER, 1, VK_SHADER_STAGE_FRAGMENT_BIT, nullptr},
-			{3, VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER, 1, VK_SHADER_STAGE_FRAGMENT_BIT, nullptr},
-			{4, VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER, 1, VK_SHADER_STAGE_FRAGMENT_BIT, nullptr},
-			{5, VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER, 1, VK_SHADER_STAGE_FRAGMENT_BIT, nullptr}
+			{0, VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER, 1, VK_SHADER_STAGE_VERTEX_BIT, nullptr},
+			{1, VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER, 1, VK_SHADER_STAGE_VERTEX_BIT, nullptr},
+			{2, VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER, 1, VK_SHADER_STAGE_FRAGMENT_BIT, nullptr},
+			{3, VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER, 1, VK_SHADER_STAGE_FRAGMENT_BIT, nullptr},
+			{4, VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER, 1, VK_SHADER_STAGE_FRAGMENT_BIT, nullptr},
+			{5, VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER, 1, VK_SHADER_STAGE_FRAGMENT_BIT, nullptr},
+			{6, VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER, 1, VK_SHADER_STAGE_FRAGMENT_BIT, nullptr},
+			{7, VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER, 1, VK_SHADER_STAGE_FRAGMENT_BIT, nullptr},
+			{8, VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER, 1, VK_SHADER_STAGE_FRAGMENT_BIT, nullptr}
 		};
 
 
 		VkDescriptorSetLayoutCreateInfo layoutInfo{};
 		layoutInfo.sType = VK_STRUCTURE_TYPE_DESCRIPTOR_SET_LAYOUT_CREATE_INFO;
-		layoutInfo.bindingCount = 6;
+		layoutInfo.bindingCount = 9;
 		layoutInfo.pBindings = layoutBindings;
 
 		if (vkCreateDescriptorSetLayout(m_device, &layoutInfo, nullptr, &m_descriptorLayout) != VK_SUCCESS)
@@ -399,9 +435,9 @@ bool PassthroughRendererVulkan::InitRenderer()
 		m_deletionQueue.push_back([=]() { vkDestroyDescriptorSetLayout(m_device, m_descriptorLayout, nullptr); });
 		
 
-		VkDescriptorSetLayout layouts[NUM_SWAPCHAINS * 2];
+		VkDescriptorSetLayout layouts[NUM_SWAPCHAINS * 2 * 2];
 
-		for (int i = 0; i < NUM_SWAPCHAINS * 2; i++)
+		for (int i = 0; i < NUM_SWAPCHAINS * 2 * 2; i++)
 		{
 			layouts[i] = m_descriptorLayout;
 		}
@@ -409,7 +445,7 @@ bool PassthroughRendererVulkan::InitRenderer()
 		VkDescriptorSetAllocateInfo allocInfo{};
 		allocInfo.sType = VK_STRUCTURE_TYPE_DESCRIPTOR_SET_ALLOCATE_INFO;
 		allocInfo.descriptorPool = m_descriptorPool;
-		allocInfo.descriptorSetCount = NUM_SWAPCHAINS * 2;
+		allocInfo.descriptorSetCount = NUM_SWAPCHAINS * 2 * 2;
 		allocInfo.pSetLayouts = layouts;
 
 		if (vkAllocateDescriptorSets(m_device, &allocInfo, m_descriptorSets) != VK_SUCCESS)
@@ -421,6 +457,20 @@ bool PassthroughRendererVulkan::InitRenderer()
 
 		for (int i = 0; i < NUM_SWAPCHAINS; i++)
 		{
+			if (!CreateBuffer(m_device, m_physDevice, m_vsPassConstantBuffer[i], m_vsPassConstantBufferMem[i], 256, VK_BUFFER_USAGE_UNIFORM_BUFFER_BIT, VK_MEMORY_PROPERTY_HOST_VISIBLE_BIT | VK_MEMORY_PROPERTY_HOST_COHERENT_BIT, &m_deletionQueue))
+			{
+				ErrorLog("m_vsPassConstantBuffer creation failure!\n");
+				return false;
+			}
+
+			vkMapMemory(m_device, m_vsPassConstantBufferMem[i], 0, sizeof(VSPassConstantBuffer), 0, &m_vsPassConstantBufferMappings[i]);
+
+			m_deletionQueue.push_back([=]() {
+				vkFreeMemory(m_device, m_vsPassConstantBufferMem[i], nullptr);
+			vkDestroyBuffer(m_device, m_vsPassConstantBuffer[i], nullptr);
+			});
+
+
 			if (!CreateBuffer(m_device, m_physDevice, m_psPassConstantBuffer[i], m_psPassConstantBufferMem[i], 256, VK_BUFFER_USAGE_UNIFORM_BUFFER_BIT, VK_MEMORY_PROPERTY_HOST_VISIBLE_BIT | VK_MEMORY_PROPERTY_HOST_COHERENT_BIT, &m_deletionQueue))
 			{
 				ErrorLog("m_psPassConstantBuffer creation failure!\n");
@@ -446,6 +496,37 @@ bool PassthroughRendererVulkan::InitRenderer()
 			m_deletionQueue.push_back([=]() {
 				vkFreeMemory(m_device, m_psMaskedConstantBufferMem[i], nullptr);
 				vkDestroyBuffer(m_device, m_psMaskedConstantBuffer[i], nullptr);
+			});
+		}
+
+
+		for (int i = 0; i < NUM_SWAPCHAINS * 2; i++)
+		{
+			if (!CreateBuffer(m_device, m_physDevice, m_vsViewConstantBuffer[i], m_vsViewConstantBufferMem[i], 256, VK_BUFFER_USAGE_UNIFORM_BUFFER_BIT, VK_MEMORY_PROPERTY_HOST_VISIBLE_BIT | VK_MEMORY_PROPERTY_HOST_COHERENT_BIT, &m_deletionQueue))
+			{
+				ErrorLog("m_vsViewConstantBuffer creation failure!\n");
+				return false;
+			}
+
+			vkMapMemory(m_device, m_vsViewConstantBufferMem[i], 0, sizeof(VSViewConstantBuffer), 0, &m_vsViewConstantBufferMappings[i]);
+
+			m_deletionQueue.push_back([=]() {
+				vkFreeMemory(m_device, m_vsViewConstantBufferMem[i], nullptr);
+			vkDestroyBuffer(m_device, m_vsViewConstantBuffer[i], nullptr);
+			});
+
+
+			if (!CreateBuffer(m_device, m_physDevice, m_psViewConstantBuffer[i], m_psViewConstantBufferMem[i], 256, VK_BUFFER_USAGE_UNIFORM_BUFFER_BIT, VK_MEMORY_PROPERTY_HOST_VISIBLE_BIT | VK_MEMORY_PROPERTY_HOST_COHERENT_BIT, &m_deletionQueue))
+			{
+				ErrorLog("m_psViewConstantBuffer creation failure!\n");
+				return false;
+			}
+
+			vkMapMemory(m_device, m_psViewConstantBufferMem[i], 0, sizeof(PSViewConstantBuffer), 0, &m_psViewConstantBufferMappings[i]);
+
+			m_deletionQueue.push_back([=]() {
+				vkFreeMemory(m_device, m_psViewConstantBufferMem[i], nullptr);
+			vkDestroyBuffer(m_device, m_psViewConstantBuffer[i], nullptr);
 			});
 		}
 	}
@@ -558,15 +639,9 @@ bool PassthroughRendererVulkan::SetupPipeline(VkFormat format)
 	m_deletionQueue.push_back([=]() { vkDestroyRenderPass(m_device, m_renderpassMaskedPrepass, nullptr); });
 
 
-	VkPushConstantRange pushRanges[2] =
-	{
-		 {VK_SHADER_STAGE_VERTEX_BIT, 0, sizeof(VSConstantBuffer)}
-		,{VK_SHADER_STAGE_FRAGMENT_BIT, sizeof(VSConstantBuffer), sizeof(PSViewConstantBuffer)}
-	};
-
 	VkPipelineLayoutCreateInfo pipelineLayoutInfo{ VK_STRUCTURE_TYPE_PIPELINE_LAYOUT_CREATE_INFO };
-	pipelineLayoutInfo.pushConstantRangeCount = 2;
-	pipelineLayoutInfo.pPushConstantRanges = pushRanges;
+	pipelineLayoutInfo.pushConstantRangeCount = 0;
+	pipelineLayoutInfo.pPushConstantRanges = nullptr;
 	pipelineLayoutInfo.setLayoutCount = 1;
 	pipelineLayoutInfo.pSetLayouts = &m_descriptorLayout;
 
@@ -590,7 +665,7 @@ bool PassthroughRendererVulkan::SetupPipeline(VkFormat format)
 
 	VkVertexInputBindingDescription bindDesc{};
 	bindDesc.binding = 0;
-	bindDesc.stride = sizeof(float) * 3;
+	bindDesc.stride = sizeof(VertexFormatBasic);
 	bindDesc.inputRate = VK_VERTEX_INPUT_RATE_VERTEX;
 
 	VkVertexInputAttributeDescription attrDesc{};
@@ -605,9 +680,13 @@ bool PassthroughRendererVulkan::SetupPipeline(VkFormat format)
 	vi.vertexAttributeDescriptionCount = 1;
 	vi.pVertexAttributeDescriptions = &attrDesc;
 
-	VkPipelineInputAssemblyStateCreateInfo ia{ VK_STRUCTURE_TYPE_PIPELINE_INPUT_ASSEMBLY_STATE_CREATE_INFO };
-	ia.primitiveRestartEnable = VK_FALSE;
-	ia.topology = VK_PRIMITIVE_TOPOLOGY_TRIANGLE_STRIP;
+	VkPipelineInputAssemblyStateCreateInfo iaList{ VK_STRUCTURE_TYPE_PIPELINE_INPUT_ASSEMBLY_STATE_CREATE_INFO };
+	iaList.primitiveRestartEnable = VK_FALSE;
+	iaList.topology = VK_PRIMITIVE_TOPOLOGY_TRIANGLE_LIST;
+
+	VkPipelineInputAssemblyStateCreateInfo iaStrip{ VK_STRUCTURE_TYPE_PIPELINE_INPUT_ASSEMBLY_STATE_CREATE_INFO };
+	iaStrip.primitiveRestartEnable = VK_FALSE;
+	iaStrip.topology = VK_PRIMITIVE_TOPOLOGY_TRIANGLE_STRIP;
 
 	VkPipelineRasterizationStateCreateInfo rs{ VK_STRUCTURE_TYPE_PIPELINE_RASTERIZATION_STATE_CREATE_INFO };
 	rs.polygonMode = VK_POLYGON_MODE_FILL;
@@ -670,8 +749,11 @@ bool PassthroughRendererVulkan::SetupPipeline(VkFormat format)
 	blendStateAlphaPremultiplied.pAttachments = &attachStateAlphaPremultiplied;
 
 	VkPipelineColorBlendAttachmentState attachStateSrcAlpha = attachStateBase;
-	attachStateSrcAlpha.srcColorBlendFactor = VK_BLEND_FACTOR_SRC_ALPHA;
-	attachStateSrcAlpha.dstColorBlendFactor = VK_BLEND_FACTOR_ONE_MINUS_SRC_ALPHA;
+	attachStateSrcAlpha.colorWriteMask = VK_COLOR_COMPONENT_A_BIT;
+	attachStateSrcAlpha.srcColorBlendFactor = VK_BLEND_FACTOR_ZERO;
+	attachStateSrcAlpha.dstColorBlendFactor = VK_BLEND_FACTOR_ONE;
+	attachStateSrcAlpha.srcAlphaBlendFactor = VK_BLEND_FACTOR_ONE;
+	attachStateSrcAlpha.dstAlphaBlendFactor = VK_BLEND_FACTOR_ZERO;
 	VkPipelineColorBlendStateCreateInfo blendStateSrcAlpha = blendStateBase;
 	blendStateSrcAlpha.pAttachments = &attachStateSrcAlpha;
 
@@ -715,10 +797,15 @@ bool PassthroughRendererVulkan::SetupPipeline(VkFormat format)
 	VkPipelineMultisampleStateCreateInfo ms{ VK_STRUCTURE_TYPE_PIPELINE_MULTISAMPLE_STATE_CREATE_INFO };
 	ms.rasterizationSamples = VK_SAMPLE_COUNT_1_BIT;
 
-	VkPipelineShaderStageCreateInfo shaderInfoVertex{ VK_STRUCTURE_TYPE_PIPELINE_SHADER_STAGE_CREATE_INFO };
-	shaderInfoVertex.module = m_vertexShader;
-	shaderInfoVertex.stage = VK_SHADER_STAGE_VERTEX_BIT;
-	shaderInfoVertex.pName = "main";
+	VkPipelineShaderStageCreateInfo shaderInfoFullscreenVS{ VK_STRUCTURE_TYPE_PIPELINE_SHADER_STAGE_CREATE_INFO };
+	shaderInfoFullscreenVS.module = m_fullscreenQuadShader;
+	shaderInfoFullscreenVS.stage = VK_SHADER_STAGE_VERTEX_BIT;
+	shaderInfoFullscreenVS.pName = "main";
+
+	VkPipelineShaderStageCreateInfo shaderInfoPassthroughVS{ VK_STRUCTURE_TYPE_PIPELINE_SHADER_STAGE_CREATE_INFO };
+	shaderInfoPassthroughVS.module = m_vertexShader;
+	shaderInfoPassthroughVS.stage = VK_SHADER_STAGE_VERTEX_BIT;
+	shaderInfoPassthroughVS.pName = "main";
 
 	VkPipelineShaderStageCreateInfo shaderInfoPassthroughFS{ VK_STRUCTURE_TYPE_PIPELINE_SHADER_STAGE_CREATE_INFO };
 	shaderInfoPassthroughFS.module = m_pixelShader;
@@ -736,20 +823,21 @@ bool PassthroughRendererVulkan::SetupPipeline(VkFormat format)
 	shaderInfoMaskedPrepassFS.pName = "main";
 
 	VkPipelineShaderStageCreateInfo shaderInfoMaskedPassthroughFS{ VK_STRUCTURE_TYPE_PIPELINE_SHADER_STAGE_CREATE_INFO };
-	shaderInfoMaskedPassthroughFS.module = m_maskedPixelShader;
+	shaderInfoMaskedPassthroughFS.module = m_maskedAlphaCopyShader;
 	shaderInfoMaskedPassthroughFS.stage = VK_SHADER_STAGE_FRAGMENT_BIT;
 	shaderInfoMaskedPassthroughFS.pName = "main";
 
-	std::vector<VkPipelineShaderStageCreateInfo> shaderInfoBase{ shaderInfoVertex, shaderInfoPassthroughFS };
-	std::vector<VkPipelineShaderStageCreateInfo> shaderInfoPrepass{ shaderInfoVertex, shaderInfoPrepassFS };
-	std::vector<VkPipelineShaderStageCreateInfo> shaderInfoMaskedPrepass{ shaderInfoVertex, shaderInfoMaskedPrepassFS };
-	std::vector<VkPipelineShaderStageCreateInfo> shaderInfoMasked{ shaderInfoVertex, shaderInfoMaskedPassthroughFS };
+	std::vector<VkPipelineShaderStageCreateInfo> shaderInfoBase{ shaderInfoPassthroughVS, shaderInfoPassthroughFS };
+	std::vector<VkPipelineShaderStageCreateInfo> shaderInfoPrepass{ shaderInfoPassthroughVS, shaderInfoPrepassFS };
+	std::vector<VkPipelineShaderStageCreateInfo> shaderInfoMaskedPrepass{ shaderInfoPassthroughVS, shaderInfoMaskedPrepassFS };
+	std::vector<VkPipelineShaderStageCreateInfo> shaderInfoMaskedPrepassFullscreen{ shaderInfoFullscreenVS, shaderInfoMaskedPrepassFS };
+	std::vector<VkPipelineShaderStageCreateInfo> shaderInfoMasked{ shaderInfoFullscreenVS, shaderInfoMaskedPassthroughFS };
 
 	VkGraphicsPipelineCreateInfo pipelineInfoBase{ VK_STRUCTURE_TYPE_GRAPHICS_PIPELINE_CREATE_INFO };
 	pipelineInfoBase.stageCount = (uint32_t)shaderInfoBase.size();
 	pipelineInfoBase.pStages = shaderInfoBase.data();
 	pipelineInfoBase.pVertexInputState = &vi;
-	pipelineInfoBase.pInputAssemblyState = &ia;
+	pipelineInfoBase.pInputAssemblyState = &iaList;
 	pipelineInfoBase.pTessellationState = nullptr;
 	pipelineInfoBase.pViewportState = &vp;
 	pipelineInfoBase.pRasterizationState = &rs;
@@ -786,13 +874,22 @@ bool PassthroughRendererVulkan::SetupPipeline(VkFormat format)
 	piMaskedPrepass.pColorBlendState = &blendStateNoBlend;
 	piMaskedPrepass.renderPass = m_renderpassMaskedPrepass;
 
-	VkGraphicsPipelineCreateInfo piMaskedRender{ VK_STRUCTURE_TYPE_GRAPHICS_PIPELINE_CREATE_INFO };
-	piMaskedRender = pipelineInfoBase;
-	piMaskedRender.stageCount = (uint32_t)shaderInfoMasked.size();
-	piMaskedRender.pStages = shaderInfoMasked.data();
-	piMaskedRender.pColorBlendState = &blendStateSrcAlpha;
+	VkGraphicsPipelineCreateInfo piMaskedPrepassFullscreen{ VK_STRUCTURE_TYPE_GRAPHICS_PIPELINE_CREATE_INFO };
+	piMaskedPrepassFullscreen = pipelineInfoBase;
+	piMaskedPrepassFullscreen.pInputAssemblyState = &iaStrip;
+	piMaskedPrepassFullscreen.stageCount = (uint32_t)shaderInfoMaskedPrepassFullscreen.size();
+	piMaskedPrepassFullscreen.pStages = shaderInfoMaskedPrepassFullscreen.data();
+	piMaskedPrepassFullscreen.pColorBlendState = &blendStateNoBlend;
+	piMaskedPrepassFullscreen.renderPass = m_renderpassMaskedPrepass;
+
+	VkGraphicsPipelineCreateInfo piMaskedAlphaCopy{ VK_STRUCTURE_TYPE_GRAPHICS_PIPELINE_CREATE_INFO };
+	piMaskedAlphaCopy = pipelineInfoBase;
+	piMaskedAlphaCopy.pInputAssemblyState = &iaStrip;
+	piMaskedAlphaCopy.stageCount = (uint32_t)shaderInfoMasked.size();
+	piMaskedAlphaCopy.pStages = shaderInfoMasked.data();
+	piMaskedAlphaCopy.pColorBlendState = &blendStateSrcAlpha;
 	
-	std::vector<VkGraphicsPipelineCreateInfo> pipelineInfos{ pipelineInfoBase, piAlphaPremultiplied, piPrepassUseAppAlpha, piPrepassIgnoreAppAlpha, piMaskedPrepass, piMaskedRender };
+	std::vector<VkGraphicsPipelineCreateInfo> pipelineInfos{ pipelineInfoBase, piAlphaPremultiplied, piPrepassUseAppAlpha, piPrepassIgnoreAppAlpha, piMaskedPrepass, piMaskedPrepassFullscreen, piMaskedAlphaCopy };
 
 	std::vector<VkPipeline> pipelines;
 	pipelines.resize(pipelineInfos.size());
@@ -808,14 +905,16 @@ bool PassthroughRendererVulkan::SetupPipeline(VkFormat format)
 	m_pipelinePrepassUseAppAlpha = pipelines[2];
 	m_pipelinePrepassIgnoreAppAlpha = pipelines[3];
 	m_pipelineMaskedPrepass = pipelines[4];
-	m_pipelineMaskedRender = pipelines[5];
+	m_pipelineMaskedPrepassFullscreen = pipelines[5];
+	m_pipelineMaskedAlphaCopy = pipelines[6];
 
 	m_deletionQueue.push_back([=]() { vkDestroyPipeline(m_device, m_pipelineDefault, nullptr); });
 	m_deletionQueue.push_back([=]() { vkDestroyPipeline(m_device, m_pipelineAlphaPremultiplied, nullptr); });
 	m_deletionQueue.push_back([=]() { vkDestroyPipeline(m_device, m_pipelinePrepassUseAppAlpha, nullptr); });
 	m_deletionQueue.push_back([=]() { vkDestroyPipeline(m_device, m_pipelinePrepassIgnoreAppAlpha, nullptr); });
 	m_deletionQueue.push_back([=]() { vkDestroyPipeline(m_device, m_pipelineMaskedPrepass, nullptr); });
-	m_deletionQueue.push_back([=]() { vkDestroyPipeline(m_device, m_pipelineMaskedRender, nullptr); });
+	m_deletionQueue.push_back([=]() { vkDestroyPipeline(m_device, m_pipelineMaskedPrepassFullscreen, nullptr); });
+	m_deletionQueue.push_back([=]() { vkDestroyPipeline(m_device, m_pipelineMaskedAlphaCopy, nullptr); });
 
 	return true;
 }
@@ -1025,57 +1124,32 @@ void PassthroughRendererVulkan::SetFrameSize(const uint32_t width, const uint32_
 
 bool PassthroughRendererVulkan::GenerateMesh(VkCommandBuffer commandBuffer)
 {
-	m_vertices.reserve(NUM_MESH_BOUNDARY_VERTICES * 4 * 6);
+	MeshCreateCylinder(m_cylinderMesh, NUM_MESH_BOUNDARY_VERTICES);
 
-	// Grenerate a triangle strip cylinder with radius and height 1.
+	uint32_t bufferSize = (uint32_t)(m_cylinderMesh.vertices.size() * sizeof(VertexFormatBasic));
 
-	float radianStep = -2.0f * MATH_PI / (float)NUM_MESH_BOUNDARY_VERTICES;
-
-	for (int i = 0; i <= NUM_MESH_BOUNDARY_VERTICES; i++)
-	{
-		m_vertices.push_back(0.0f);
-		m_vertices.push_back(1.0f);
-		m_vertices.push_back(0.0f);
-
-		m_vertices.push_back(cosf(radianStep * i));
-		m_vertices.push_back(1.0f);
-		m_vertices.push_back(sinf(radianStep * i));
-	}
-
-	for (int i = 0; i <= NUM_MESH_BOUNDARY_VERTICES; i++)
-	{
-		m_vertices.push_back(cosf(radianStep * i));
-		m_vertices.push_back(1.0f);
-		m_vertices.push_back(sinf(radianStep * i));
-
-		m_vertices.push_back(cosf(radianStep * i));
-		m_vertices.push_back(0.0f);
-		m_vertices.push_back(sinf(radianStep * i));
-	}
-
-	for (int i = 0; i <= NUM_MESH_BOUNDARY_VERTICES; i++)
-	{
-		m_vertices.push_back(cosf(radianStep * i));
-		m_vertices.push_back(0.0f);
-		m_vertices.push_back(sinf(radianStep * i));
-
-		m_vertices.push_back(0.0f);
-		m_vertices.push_back(0.0f);
-		m_vertices.push_back(0.0f);
-	}
-
-	uint32_t bufferSize = (uint32_t)(m_vertices.size() * sizeof(float));
-
-	if (!CreateBuffer(m_device, m_physDevice, m_vertexBuffer, m_vertexBufferMem, bufferSize, VK_BUFFER_USAGE_VERTEX_BUFFER_BIT, VK_MEMORY_PROPERTY_HOST_VISIBLE_BIT, &m_deletionQueue))
+	if (!CreateBuffer(m_device, m_physDevice, m_cylinderMeshVertexBuffer, m_cylinderMeshVertexBufferMem, bufferSize, VK_BUFFER_USAGE_VERTEX_BUFFER_BIT, VK_MEMORY_PROPERTY_HOST_VISIBLE_BIT, &m_deletionQueue))
 	{
 		ErrorLog("Mesh vertex buffer creation failure!\n");
 		return false;
 	}
 
 	void* mappedData;
-	vkMapMemory(m_device, m_vertexBufferMem, 0, bufferSize, 0, &mappedData);
-	memcpy(mappedData, m_vertices.data(), bufferSize);
-	vkUnmapMemory(m_device, m_vertexBufferMem);
+	vkMapMemory(m_device, m_cylinderMeshVertexBufferMem, 0, bufferSize, 0, &mappedData);
+	memcpy(mappedData, m_cylinderMesh.vertices.data(), bufferSize);
+	vkUnmapMemory(m_device, m_cylinderMeshVertexBufferMem);
+
+	bufferSize = (uint32_t)(m_cylinderMesh.triangles.size() * sizeof(MeshTriangle));
+
+	if (!CreateBuffer(m_device, m_physDevice, m_cylinderMeshIndexBuffer, m_cylinderMeshIndexBufferMem, bufferSize, VK_BUFFER_USAGE_INDEX_BUFFER_BIT, VK_MEMORY_PROPERTY_HOST_VISIBLE_BIT, &m_deletionQueue))
+	{
+		ErrorLog("Mesh index buffer creation failure!\n");
+		return false;
+	}
+
+	vkMapMemory(m_device, m_cylinderMeshIndexBufferMem, 0, bufferSize, 0, &mappedData);
+	memcpy(mappedData, m_cylinderMesh.triangles.data(), bufferSize);
+	vkUnmapMemory(m_device, m_cylinderMeshIndexBufferMem);
 
 	return true;
 }
@@ -1415,7 +1489,26 @@ bool PassthroughRendererVulkan::UpdateCameraFrameResource(VkCommandBuffer comman
 
 void PassthroughRendererVulkan::UpdateDescriptorSets(VkCommandBuffer commandBuffer, int swapchainIndex, const XrCompositionLayerProjection* layer, EPassthroughBlendMode blendMode)
 {
+
+	VkDescriptorSet& desc = m_descriptorSets[(blendMode == Masked) ? NUM_SWAPCHAINS * 2 + swapchainIndex : swapchainIndex];
+
 	int viewIndex = swapchainIndex >= (NUM_SWAPCHAINS - 1) ? 1 : 0;
+
+	VkDescriptorBufferInfo vsViewBufferInfo{};
+	vsViewBufferInfo.buffer = m_vsViewConstantBuffer[swapchainIndex];
+	vsViewBufferInfo.offset = 0;
+	vsViewBufferInfo.range = sizeof(VSViewConstantBuffer);
+
+	VkDescriptorBufferInfo vsPassBufferInfo{};
+	vsPassBufferInfo.buffer = m_vsPassConstantBuffer[m_frameIndex];
+	vsPassBufferInfo.offset = 0;
+	vsPassBufferInfo.range = sizeof(VSPassConstantBuffer);
+
+
+	VkDescriptorBufferInfo psViewBufferInfo{};
+	psViewBufferInfo.buffer = m_psViewConstantBuffer[swapchainIndex];
+	psViewBufferInfo.offset = 0;
+	psViewBufferInfo.range = sizeof(PSViewConstantBuffer);
 
 	VkDescriptorBufferInfo psPassBufferInfo{};
 	psPassBufferInfo.buffer = m_psPassConstantBuffer[m_frameIndex];
@@ -1430,7 +1523,7 @@ void PassthroughRendererVulkan::UpdateDescriptorSets(VkCommandBuffer commandBuff
 	VkDescriptorImageInfo cameraImageInfo{};
 	cameraImageInfo.imageLayout = VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL;
 
-	if (m_configManager->GetConfig_Main().ShowTestImage)
+	if (m_configManager->GetConfig_Main().DebugTexture != DebugTexture_None)
 	{
 		cameraImageInfo.imageView = m_testPatternView;
 		cameraImageInfo.sampler = m_cameraSampler;
@@ -1446,30 +1539,56 @@ void PassthroughRendererVulkan::UpdateDescriptorSets(VkCommandBuffer commandBuff
 	cameraImageArrayInfo.imageView = m_cameraFrameResArrayView[m_frameIndex];
 	cameraImageArrayInfo.sampler = m_cameraSampler;
 
-	VkWriteDescriptorSet descriptorWrite[6]{};
+
+	VkWriteDescriptorSet descriptorWrite[9]{};
+
 	descriptorWrite[0].sType = VK_STRUCTURE_TYPE_WRITE_DESCRIPTOR_SET;
-	descriptorWrite[0].dstSet = m_descriptorSets[swapchainIndex];
+	descriptorWrite[0].dstSet = desc;
 	descriptorWrite[0].dstBinding = 0;
 	descriptorWrite[0].dstArrayElement = 0;
 	descriptorWrite[0].descriptorType = VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER;
 	descriptorWrite[0].descriptorCount = 1;
-	descriptorWrite[0].pBufferInfo = &psPassBufferInfo;
+	descriptorWrite[0].pBufferInfo = &vsViewBufferInfo;
 
 	descriptorWrite[1].sType = VK_STRUCTURE_TYPE_WRITE_DESCRIPTOR_SET;
-	descriptorWrite[1].dstSet = m_descriptorSets[swapchainIndex];
+	descriptorWrite[1].dstSet = desc;
 	descriptorWrite[1].dstBinding = 1;
 	descriptorWrite[1].dstArrayElement = 0;
 	descriptorWrite[1].descriptorType = VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER;
 	descriptorWrite[1].descriptorCount = 1;
-	descriptorWrite[1].pBufferInfo = &psMaskedBufferInfo;
+	descriptorWrite[1].pBufferInfo = &vsPassBufferInfo;
 
 	descriptorWrite[2].sType = VK_STRUCTURE_TYPE_WRITE_DESCRIPTOR_SET;
-	descriptorWrite[2].dstSet = m_descriptorSets[swapchainIndex];
+	descriptorWrite[2].dstSet = desc;
 	descriptorWrite[2].dstBinding = 2;
 	descriptorWrite[2].dstArrayElement = 0;
-	descriptorWrite[2].descriptorType = VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER;
+	descriptorWrite[2].descriptorType = VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER;
 	descriptorWrite[2].descriptorCount = 1;
-	descriptorWrite[2].pImageInfo = &cameraImageInfo;
+	descriptorWrite[2].pBufferInfo = &psViewBufferInfo;
+
+	descriptorWrite[3].sType = VK_STRUCTURE_TYPE_WRITE_DESCRIPTOR_SET;
+	descriptorWrite[3].dstSet = desc;
+	descriptorWrite[3].dstBinding = 3;
+	descriptorWrite[3].dstArrayElement = 0;
+	descriptorWrite[3].descriptorType = VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER;
+	descriptorWrite[3].descriptorCount = 1;
+	descriptorWrite[3].pBufferInfo = &psPassBufferInfo;
+
+	descriptorWrite[4].sType = VK_STRUCTURE_TYPE_WRITE_DESCRIPTOR_SET;
+	descriptorWrite[4].dstSet = desc;
+	descriptorWrite[4].dstBinding = 4;
+	descriptorWrite[4].dstArrayElement = 0;
+	descriptorWrite[4].descriptorType = VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER;
+	descriptorWrite[4].descriptorCount = 1;
+	descriptorWrite[4].pBufferInfo = &psMaskedBufferInfo;
+
+	descriptorWrite[5].sType = VK_STRUCTURE_TYPE_WRITE_DESCRIPTOR_SET;
+	descriptorWrite[5].dstSet = desc;
+	descriptorWrite[5].dstBinding = 5;
+	descriptorWrite[5].dstArrayElement = 0;
+	descriptorWrite[5].descriptorType = VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER;
+	descriptorWrite[5].descriptorCount = 1;
+	descriptorWrite[5].pImageInfo = &cameraImageInfo;
 
 	int numdescriptors = 3;
 
@@ -1504,73 +1623,73 @@ void PassthroughRendererVulkan::UpdateDescriptorSets(VkCommandBuffer commandBuff
 		originalRTImageInfo.imageView = m_renderTargetViews[swapchainIndex];
 		originalRTImageInfo.sampler = m_cameraSampler;
 
-		descriptorWrite[3].sType = VK_STRUCTURE_TYPE_WRITE_DESCRIPTOR_SET;
-		descriptorWrite[3].dstSet = m_descriptorSets[swapchainIndex];
-		descriptorWrite[3].dstBinding = 3;
-		descriptorWrite[3].dstArrayElement = 0;
-		descriptorWrite[3].descriptorType = VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER;
-		descriptorWrite[3].descriptorCount = 1;
-		descriptorWrite[3].pImageInfo = &intermediateImageInfo;
+		descriptorWrite[6].sType = VK_STRUCTURE_TYPE_WRITE_DESCRIPTOR_SET;
+		descriptorWrite[6].dstSet = desc;
+		descriptorWrite[6].dstBinding = 6;
+		descriptorWrite[6].dstArrayElement = 0;
+		descriptorWrite[6].descriptorType = VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER;
+		descriptorWrite[6].descriptorCount = 1;
+		descriptorWrite[6].pImageInfo = &intermediateImageInfo;
 
-		descriptorWrite[4].sType = VK_STRUCTURE_TYPE_WRITE_DESCRIPTOR_SET;
-		descriptorWrite[4].dstSet = m_descriptorSets[swapchainIndex];
-		descriptorWrite[4].dstBinding = 4;
-		descriptorWrite[4].dstArrayElement = 0;
-		descriptorWrite[4].descriptorType = VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER;
-		descriptorWrite[4].descriptorCount = 1;
-		descriptorWrite[4].pImageInfo = m_configManager->GetConfig_Core().CoreForceMaskedUseCameraImage ? &cameraImageArrayInfo : &originalRTImageInfo;
+		descriptorWrite[7].sType = VK_STRUCTURE_TYPE_WRITE_DESCRIPTOR_SET;
+		descriptorWrite[7].dstSet = desc;
+		descriptorWrite[7].dstBinding = 7;
+		descriptorWrite[7].dstArrayElement = 0;
+		descriptorWrite[7].descriptorType = VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER;
+		descriptorWrite[7].descriptorCount = 1;
+		descriptorWrite[7].pImageInfo = m_configManager->GetConfig_Core().CoreForceMaskedUseCameraImage ? &cameraImageArrayInfo : &originalRTImageInfo;
 
-		numdescriptors = 5;
+		numdescriptors = 8;
 
-		if (m_configManager->GetConfig_Main().ProjectionMode != ProjectionRoomView2D)
+		if (m_configManager->GetConfig_Main().ProjectionMode != Projection_RoomView2D)
 		{
 			uvDistortionImageInfo.imageLayout = VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL;
 			uvDistortionImageInfo.imageView = m_uvDistortionMapView;
 			uvDistortionImageInfo.sampler = m_cameraSampler;
 
-			descriptorWrite[5].sType = VK_STRUCTURE_TYPE_WRITE_DESCRIPTOR_SET;
-			descriptorWrite[5].dstSet = m_descriptorSets[swapchainIndex];
-			descriptorWrite[5].dstBinding = 5;
-			descriptorWrite[5].dstArrayElement = 0;
-			descriptorWrite[5].descriptorType = VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER;
-			descriptorWrite[5].descriptorCount = 1;
-			descriptorWrite[5].pImageInfo = &uvDistortionImageInfo;
+			descriptorWrite[8].sType = VK_STRUCTURE_TYPE_WRITE_DESCRIPTOR_SET;
+			descriptorWrite[8].dstSet = desc;
+			descriptorWrite[8].dstBinding = 8;
+			descriptorWrite[8].dstArrayElement = 0;
+			descriptorWrite[8].descriptorType = VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER;
+			descriptorWrite[8].descriptorCount = 1;
+			descriptorWrite[8].pImageInfo = &uvDistortionImageInfo;
 
-			numdescriptors = 6;
+			numdescriptors = 9;
 		}
 	}
-	else if (m_configManager->GetConfig_Main().ProjectionMode != ProjectionRoomView2D)
+	else if (m_configManager->GetConfig_Main().ProjectionMode != Projection_RoomView2D)
 	{
 		uvDistortionImageInfo.imageLayout = VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL;
 		uvDistortionImageInfo.imageView = m_uvDistortionMapView;
 		uvDistortionImageInfo.sampler = m_cameraSampler;
 
-		descriptorWrite[3].sType = VK_STRUCTURE_TYPE_WRITE_DESCRIPTOR_SET;
-		descriptorWrite[3].dstSet = m_descriptorSets[swapchainIndex];
-		descriptorWrite[3].dstBinding = 3;
-		descriptorWrite[3].dstArrayElement = 0;
-		descriptorWrite[3].descriptorType = VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER;
-		descriptorWrite[3].descriptorCount = 1;
-		descriptorWrite[3].pImageInfo = &uvDistortionImageInfo;
+		descriptorWrite[6].sType = VK_STRUCTURE_TYPE_WRITE_DESCRIPTOR_SET;
+		descriptorWrite[6].dstSet = desc;
+		descriptorWrite[6].dstBinding = 6;
+		descriptorWrite[6].dstArrayElement = 0;
+		descriptorWrite[6].descriptorType = VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER;
+		descriptorWrite[6].descriptorCount = 1;
+		descriptorWrite[6].pImageInfo = &uvDistortionImageInfo;
 
-		numdescriptors = 4;
+		numdescriptors = 7;
 	}
 	else
 	{
-		descriptorWrite[3].sType = VK_STRUCTURE_TYPE_WRITE_DESCRIPTOR_SET;
-		descriptorWrite[3].dstSet = m_descriptorSets[swapchainIndex];
-		descriptorWrite[3].dstBinding = 3;
-		descriptorWrite[3].dstArrayElement = 0;
-		descriptorWrite[3].descriptorType = VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER;
-		descriptorWrite[3].descriptorCount = 1;
-		descriptorWrite[3].pImageInfo = &cameraImageInfo;
+		descriptorWrite[6].sType = VK_STRUCTURE_TYPE_WRITE_DESCRIPTOR_SET;
+		descriptorWrite[6].dstSet = desc;
+		descriptorWrite[6].dstBinding = 6;
+		descriptorWrite[6].dstArrayElement = 0;
+		descriptorWrite[6].descriptorType = VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER;
+		descriptorWrite[6].descriptorCount = 1;
+		descriptorWrite[6].pImageInfo = &cameraImageInfo;
 
-		numdescriptors = 4;
+		numdescriptors = 7;
 	}
 
 	vkUpdateDescriptorSets(m_device, numdescriptors, descriptorWrite, 0, nullptr);
 
-	vkCmdBindDescriptorSets(m_commandBuffer[m_frameIndex], VK_PIPELINE_BIND_POINT_GRAPHICS, m_pipelineLayout, 0, 1, &m_descriptorSets[swapchainIndex], 0, nullptr);
+	vkCmdBindDescriptorSets(m_commandBuffer[m_frameIndex], VK_PIPELINE_BIND_POINT_GRAPHICS, m_pipelineLayout, 0, 1, &desc, 0, nullptr);
 }
 
 
@@ -1587,7 +1706,7 @@ void PassthroughRendererVulkan::RenderPassthroughFrame(const XrCompositionLayerP
 	beginInfo.flags = 0;
 
 	// TODO: Can't support stereo in Vulkan as long as SteamVR hangs when reading the camera frame buffer under it.
-	if (mainConf.ProjectionMode == ProjectionStereoReconstruction)
+	if (mainConf.ProjectionMode == Projection_StereoReconstruction)
 	{
 		if (!g_bVulkanStereoErrorShown)
 		{
@@ -1600,7 +1719,7 @@ void PassthroughRendererVulkan::RenderPassthroughFrame(const XrCompositionLayerP
 	vkBeginCommandBuffer(m_commandBuffer[m_frameIndex], &beginInfo);
 
 
-	if (!mainConf.ShowTestImage && frame->frameTextureResource != nullptr)
+	if (!mainConf.DebugTexture != DebugTexture_None && frame->frameTextureResource != nullptr)
 	{
 		if (!UpdateCameraFrameResource(m_commandBuffer[m_frameIndex], m_frameIndex, frame->frameTextureResource))
 		{
@@ -1608,7 +1727,7 @@ void PassthroughRendererVulkan::RenderPassthroughFrame(const XrCompositionLayerP
 			return;
 		}
 	}
-	else if(!mainConf.ShowTestImage)
+	else if(!mainConf.DebugTexture != DebugTexture_None)
 	{
 		m_frameIndex = (m_frameIndex + 1) % NUM_SWAPCHAINS;
 		return;
@@ -1617,7 +1736,7 @@ void PassthroughRendererVulkan::RenderPassthroughFrame(const XrCompositionLayerP
 	{
 		std::shared_lock readLock(distortionParams.readWriteMutex);
 
-		if (mainConf.ProjectionMode != ProjectionRoomView2D &&
+		if (mainConf.ProjectionMode != Projection_RoomView2D &&
 			(!m_uvDistortionMap || m_fovScale != distortionParams.fovScale))
 		{
 			m_fovScale = distortionParams.fovScale;
@@ -1626,18 +1745,19 @@ void PassthroughRendererVulkan::RenderPassthroughFrame(const XrCompositionLayerP
 	}
 
 	{
-		PSPassConstantBuffer buffer = {};
-		buffer.depthRange = XrVector2f(NEAR_PROJECTION_DISTANCE, mainConf.ProjectionDistanceFar);
-		buffer.opacity = mainConf.PassthroughOpacity;
-		buffer.brightness = mainConf.Brightness;
-		buffer.contrast = mainConf.Contrast;
-		buffer.saturation = mainConf.Saturation;
-		buffer.bDoColorAdjustment = fabsf(mainConf.Brightness) > 0.01f || fabsf(mainConf.Contrast - 1.0f) > 0.01f || fabsf(mainConf.Saturation - 1.0f) > 0.01f;
-		buffer.bDebugDepth = mainConf.DebugDepth;
-		buffer.bDebugValidStereo = mainConf.DebugStereoValid;
-		buffer.bUseFisheyeCorrection = mainConf.ProjectionMode != ProjectionRoomView2D;
+		PSPassConstantBuffer psPassBuffer = {};
+		psPassBuffer.depthRange = XrVector2f(NEAR_PROJECTION_DISTANCE, mainConf.ProjectionDistanceFar);
+		psPassBuffer.opacity = mainConf.PassthroughOpacity;
+		psPassBuffer.brightness = mainConf.Brightness;
+		psPassBuffer.contrast = mainConf.Contrast;
+		psPassBuffer.saturation = mainConf.Saturation;
+		psPassBuffer.sharpness = mainConf.Sharpness;
+		psPassBuffer.bDoColorAdjustment = fabsf(mainConf.Brightness) > 0.01f || fabsf(mainConf.Contrast - 1.0f) > 0.01f || fabsf(mainConf.Saturation - 1.0f) > 0.01f;
+		psPassBuffer.bDebugDepth = mainConf.DebugDepth;
+		psPassBuffer.bDebugValidStereo = mainConf.DebugStereoValid;
+		psPassBuffer.bUseFisheyeCorrection = mainConf.ProjectionMode != Projection_RoomView2D;
 
-		memcpy(m_psPassConstantBufferMappings[m_frameIndex], &buffer, sizeof(PSPassConstantBuffer));
+		memcpy(m_psPassConstantBufferMappings[m_frameIndex], &psPassBuffer, sizeof(PSPassConstantBuffer));
 	}
 
 	if (blendMode == Masked)
@@ -1654,14 +1774,13 @@ void PassthroughRendererVulkan::RenderPassthroughFrame(const XrCompositionLayerP
 
 		memcpy(m_psMaskedConstantBufferMappings[m_frameIndex], &maskedBuffer, sizeof(PSMaskedConstantBuffer));
 
-		RenderPassthroughViewMasked(LEFT_EYE, leftSwapchainIndex, layer, frame);
-		RenderPassthroughViewMasked(RIGHT_EYE, rightSwapchainIndex, layer, frame);
+		RenderMaskedPrepassView(LEFT_EYE, leftSwapchainIndex, layer, frame);
+		RenderPassthroughView(LEFT_EYE, leftSwapchainIndex, layer, frame, blendMode);
+		RenderMaskedPrepassView(RIGHT_EYE, rightSwapchainIndex, layer, frame);
+		RenderPassthroughView(RIGHT_EYE, rightSwapchainIndex, layer, frame, blendMode);
 	}
 	else
 	{
-		// Descriptor sets are identical for both views except in masked mode.
-		UpdateDescriptorSets(m_commandBuffer[m_frameIndex], leftSwapchainIndex, layer, blendMode);
-
 		RenderPassthroughView(LEFT_EYE, leftSwapchainIndex, layer, frame, blendMode);
 		RenderPassthroughView(RIGHT_EYE, rightSwapchainIndex, layer, frame, blendMode);
 	}
@@ -1696,41 +1815,52 @@ void PassthroughRendererVulkan::RenderPassthroughView(const ERenderEye eye, cons
 	VkViewport viewport = { (float)rect.offset.x, (float)rect.offset.y, (float)rect.extent.width, (float)rect.extent.height, 0.0f, 1.0f };
 	VkRect2D scissor = { {rect.offset.x, rect.offset.y}, {(uint32_t)rect.offset.x + rect.extent.width, (uint32_t)rect.offset.y + rect.extent.height} };
 
-	VkRenderPassBeginInfo renderPassInfo{ VK_STRUCTURE_TYPE_RENDER_PASS_BEGIN_INFO };
-	renderPassInfo.renderPass = m_renderpass;
-	renderPassInfo.framebuffer = rendertarget;
-	renderPassInfo.renderArea = scissor;
+	UpdateDescriptorSets(commandBuffer, bufferIndex, layer, (blendMode == Masked) ? AlphaBlendUnpremultiplied : blendMode);
 
-	vkCmdBeginRenderPass(commandBuffer, &renderPassInfo, VK_SUBPASS_CONTENTS_INLINE);
 
-	vkCmdSetViewport(commandBuffer, 0, 1, &viewport);
-	vkCmdSetScissor(commandBuffer, 0, 1, &scissor);
+	if (blendMode != Masked)
+	{
+		VkRenderPassBeginInfo renderPassInfo{ VK_STRUCTURE_TYPE_RENDER_PASS_BEGIN_INFO };
+		renderPassInfo.renderPass = m_renderpass;
+		renderPassInfo.framebuffer = rendertarget;
+		renderPassInfo.renderArea = scissor;
 
-	VkDeviceSize vertOffset = 0;
-	vkCmdBindVertexBuffers(commandBuffer, 0, 1, &m_vertexBuffer, &vertOffset);
+		vkCmdBeginRenderPass(commandBuffer, &renderPassInfo, VK_SUBPASS_CONTENTS_INLINE);
+	
+		vkCmdSetViewport(commandBuffer, 0, 1, &viewport);
+		vkCmdSetScissor(commandBuffer, 0, 1, &scissor);
 
-	Config_Main& mainConf = m_configManager->GetConfig_Main();
+		VkDeviceSize vertOffset = 0;
+		vkCmdBindVertexBuffers(commandBuffer, 0, 1, &m_cylinderMeshVertexBuffer, &vertOffset);
+		vkCmdBindIndexBuffer(commandBuffer, m_cylinderMeshIndexBuffer, 0, VK_INDEX_TYPE_UINT32);
 
-	VSConstantBuffer buffer = {};
-	buffer.cameraProjectionToWorld = (eye == LEFT_EYE) ? frame->cameraProjectionToWorldLeft : frame->cameraProjectionToWorldRight;
-	//buffer.worldToCameraProjection = (eye == LEFT_EYE) ? frame->worldToCameraProjectionLeft : frame->worldToCameraProjectionRight;
-	buffer.worldToHMDProjection = (eye == LEFT_EYE) ? frame->worldToHMDProjectionLeft : frame->worldToHMDProjectionRight;
-	buffer.frameUVBounds = GetFrameUVBounds(eye, frame->frameLayout);
-	buffer.hmdViewWorldPos = (eye == LEFT_EYE) ? frame->hmdViewPosWorldLeft : frame->hmdViewPosWorldRight;
-	buffer.projectionDistance = mainConf.ProjectionDistanceFar;
-	buffer.floorHeightOffset = mainConf.FloorHeightOffset;
+		Config_Main& mainConf = m_configManager->GetConfig_Main();
 
-	vkCmdPushConstants(commandBuffer, m_pipelineLayout, VK_SHADER_STAGE_VERTEX_BIT, 0, sizeof(VSConstantBuffer), &buffer);
+		VSViewConstantBuffer vsViewBuffer = {};
+		vsViewBuffer.cameraProjectionToWorld = (eye == LEFT_EYE) ? frame->cameraProjectionToWorldLeft : frame->cameraProjectionToWorldRight;
+		vsViewBuffer.worldToCameraProjection = (eye == LEFT_EYE) ? frame->worldToCameraProjectionLeft : frame->worldToCameraProjectionRight;
+		vsViewBuffer.worldToHMDProjection = (eye == LEFT_EYE) ? frame->worldToHMDProjectionLeft : frame->worldToHMDProjectionRight;
+		vsViewBuffer.frameUVBounds = GetFrameUVBounds(eye, frame->frameLayout);
+		vsViewBuffer.hmdViewWorldPos = (eye == LEFT_EYE) ? frame->hmdViewPosWorldLeft : frame->hmdViewPosWorldRight;
+		vsViewBuffer.projectionDistance = mainConf.ProjectionDistanceFar;
+		vsViewBuffer.floorHeightOffset = mainConf.FloorHeightOffset;
+		vsViewBuffer.cameraViewIndex = viewIndex;
 
-	PSViewConstantBuffer viewBuffer = {};
-	viewBuffer.frameUVBounds = GetFrameUVBounds(eye, frame->frameLayout);
-	viewBuffer.rtArrayIndex = layer->views[viewIndex].subImage.imageArrayIndex;
+		memcpy(m_vsViewConstantBufferMappings[bufferIndex], &vsViewBuffer, sizeof(VSViewConstantBuffer));
 
-	vkCmdPushConstants(commandBuffer, m_pipelineLayout, VK_SHADER_STAGE_FRAGMENT_BIT, sizeof(VSConstantBuffer), sizeof(PSViewConstantBuffer), &viewBuffer);
+		PSViewConstantBuffer psViewBuffer = {};
+		psViewBuffer.frameUVBounds = GetFrameUVBounds(eye, frame->frameLayout);
+		psViewBuffer.prepassUVBounds = psViewBuffer.frameUVBounds;
+		psViewBuffer.rtArrayIndex = layer->views[viewIndex].subImage.imageArrayIndex;
+		psViewBuffer.bDoCutout = false;
+		psViewBuffer.bPremultiplyAlpha = (blendMode == AlphaBlendPremultiplied);
+
+		memcpy(m_psViewConstantBufferMappings[bufferIndex], &psViewBuffer, sizeof(PSViewConstantBuffer));
+	}
 
 
 	// Extra draw if we need to preadjust the alpha.
-	if ((blendMode != AlphaBlendPremultiplied && blendMode != AlphaBlendUnpremultiplied) || m_configManager->GetConfig_Main().PassthroughOpacity < 1.0f)
+	if (blendMode != Masked && ((blendMode != AlphaBlendPremultiplied && blendMode != AlphaBlendUnpremultiplied) || m_configManager->GetConfig_Main().PassthroughOpacity < 1.0f))
 	{
 		VkPipeline prepassPipeline;
 
@@ -1745,7 +1875,7 @@ void PassthroughRendererVulkan::RenderPassthroughView(const ERenderEye eye, cons
 
 		vkCmdBindPipeline(commandBuffer, VK_PIPELINE_BIND_POINT_GRAPHICS, prepassPipeline);
 
-		vkCmdDraw(commandBuffer, (uint32_t)m_vertices.size() / 3, 1, 0, 0);
+		vkCmdDrawIndexed(commandBuffer, (uint32_t)m_cylinderMesh.triangles.size() * 3, 1, 0, 0, 0);
 	}
 
 
@@ -1770,14 +1900,14 @@ void PassthroughRendererVulkan::RenderPassthroughView(const ERenderEye eye, cons
 
 	vkCmdBindPipeline(commandBuffer, VK_PIPELINE_BIND_POINT_GRAPHICS, mainpassPipeline);
 
-	vkCmdDraw(commandBuffer, (uint32_t)m_vertices.size() / 3, 1, 0, 0);
+	vkCmdDrawIndexed(commandBuffer, (uint32_t)m_cylinderMesh.triangles.size() * 3, 1, 0, 0, 0);
 
 
 	vkCmdEndRenderPass(commandBuffer);
 }
 
 
-void PassthroughRendererVulkan::RenderPassthroughViewMasked(const ERenderEye eye, const int32_t swapchainIndex, const XrCompositionLayerProjection* layer, CameraFrame* frame)
+void PassthroughRendererVulkan::RenderMaskedPrepassView(const ERenderEye eye, const int32_t swapchainIndex, const XrCompositionLayerProjection* layer, CameraFrame* frame)
 {
 	if (swapchainIndex < 0) { return; }
 
@@ -1791,8 +1921,10 @@ void PassthroughRendererVulkan::RenderPassthroughViewMasked(const ERenderEye eye
 
 	XrRect2Di rect = layer->views[viewIndex].subImage.imageRect;
 
-	VkViewport viewport = { 0.0f, 0.0f, (float)rect.extent.width, (float)rect.extent.height, 0.0f, 1.0f };
-	VkRect2D scissor = { {0, 0}, {(uint32_t)rect.extent.width, (uint32_t)rect.extent.height} };
+	VkViewport viewport = { (float)rect.offset.x, (float)rect.offset.y, (float)rect.extent.width, (float)rect.extent.height, 0.0f, 1.0f };
+	VkRect2D scissor = { (uint32_t)rect.offset.x, (uint32_t)rect.offset.y, (uint32_t)(rect.offset.x + rect.extent.width), (uint32_t)(rect.offset.y + rect.extent.height) };
+	//VkViewport viewport = { 0.0f, 0.0f, (float)rect.extent.width, (float)rect.extent.height, 0.0f, 1.0f };
+	//VkRect2D scissor = { {0, 0}, {(uint32_t)rect.extent.width, (uint32_t)rect.extent.height} };
 
 	UpdateDescriptorSets(commandBuffer, bufferIndex, layer, Masked);
 
@@ -1809,44 +1941,52 @@ void PassthroughRendererVulkan::RenderPassthroughViewMasked(const ERenderEye eye
 	vkCmdSetScissor(commandBuffer, 0, 1, &scissor);
 
 	VkDeviceSize vertOffset = 0;
-	vkCmdBindVertexBuffers(commandBuffer, 0, 1, &m_vertexBuffer, &vertOffset);
+	vkCmdBindVertexBuffers(commandBuffer, 0, 1, &m_cylinderMeshVertexBuffer, &vertOffset);
+	vkCmdBindIndexBuffer(commandBuffer, m_cylinderMeshIndexBuffer, 0, VK_INDEX_TYPE_UINT32);
 
 	Config_Main& mainConf = m_configManager->GetConfig_Main();
 
-	VSConstantBuffer buffer = {};
-	buffer.cameraProjectionToWorld = (eye == LEFT_EYE) ? frame->cameraProjectionToWorldLeft : frame->cameraProjectionToWorldRight;
-	//buffer.worldToCameraProjection = (eye == LEFT_EYE) ? frame->worldToCameraProjectionLeft : frame->worldToCameraProjectionRight;
-	buffer.frameUVBounds = GetFrameUVBounds(eye, frame->frameLayout);
-	buffer.worldToHMDProjection = (eye == LEFT_EYE) ? frame->worldToHMDProjectionLeft : frame->worldToHMDProjectionRight;
-	buffer.hmdViewWorldPos = (eye == LEFT_EYE) ? frame->hmdViewPosWorldLeft : frame->hmdViewPosWorldRight;
-	buffer.projectionDistance = mainConf.ProjectionDistanceFar;
-	buffer.floorHeightOffset = mainConf.FloorHeightOffset;
+	VSViewConstantBuffer vsViewBuffer = {};
+	vsViewBuffer.cameraProjectionToWorld = (eye == LEFT_EYE) ? frame->cameraProjectionToWorldLeft : frame->cameraProjectionToWorldRight;
+	vsViewBuffer.worldToCameraProjection = (eye == LEFT_EYE) ? frame->worldToCameraProjectionLeft : frame->worldToCameraProjectionRight;
+	vsViewBuffer.worldToHMDProjection = (eye == LEFT_EYE) ? frame->worldToHMDProjectionLeft : frame->worldToHMDProjectionRight;
+	vsViewBuffer.frameUVBounds = GetFrameUVBounds(eye, frame->frameLayout);
+	vsViewBuffer.hmdViewWorldPos = (eye == LEFT_EYE) ? frame->hmdViewPosWorldLeft : frame->hmdViewPosWorldRight;
+	vsViewBuffer.projectionDistance = mainConf.ProjectionDistanceFar;
+	vsViewBuffer.floorHeightOffset = mainConf.FloorHeightOffset;
+	vsViewBuffer.cameraViewIndex = viewIndex;
 
-	vkCmdPushConstants(commandBuffer, m_pipelineLayout, VK_SHADER_STAGE_VERTEX_BIT, 0, sizeof(VSConstantBuffer), &buffer);
+	memcpy(m_vsViewConstantBufferMappings[bufferIndex], &vsViewBuffer, sizeof(VSViewConstantBuffer));
 
-	PSViewConstantBuffer viewBuffer = {};
-	viewBuffer.frameUVBounds = GetFrameUVBounds(eye, frame->frameLayout);
-	viewBuffer.rtArrayIndex = layer->views[viewIndex].subImage.imageArrayIndex;
-
+	PSViewConstantBuffer psViewBuffer = {};
+	psViewBuffer.frameUVBounds = GetFrameUVBounds(eye, frame->frameLayout);
+	psViewBuffer.rtArrayIndex = layer->views[viewIndex].subImage.imageArrayIndex;
+	psViewBuffer.bDoCutout = false;
+	psViewBuffer.bPremultiplyAlpha = false;
 
 	// Draw the correct half for single framebuffer views.
 	if (abs(layer->views[0].subImage.imageRect.offset.x - layer->views[1].subImage.imageRect.offset.x) > layer->views[0].subImage.imageRect.extent.width / 2)
 	{
-		viewBuffer.prepassUVOffset = { (eye == LEFT_EYE) ? 0.0f : 0.5f, 0.0f };
-		viewBuffer.prepassUVFactor = { 0.5f, 1.0f };
+		psViewBuffer.prepassUVBounds = { (eye == LEFT_EYE) ? 0.0f : 0.5f, 0.0f,
+			(eye == LEFT_EYE) ? 0.5f : 1.0f, 1.0f };
 	}
 	else
 	{
-		viewBuffer.prepassUVOffset = { 0.0f, 0.0f };
-		viewBuffer.prepassUVFactor = { 1.0f, 1.0f };
+		psViewBuffer.prepassUVBounds = { 0.0f, 0.0f, 1.0f, 1.0f };
 	}
 
-	vkCmdPushConstants(commandBuffer, m_pipelineLayout, VK_SHADER_STAGE_FRAGMENT_BIT, sizeof(VSConstantBuffer), sizeof(PSViewConstantBuffer), &viewBuffer);
+	memcpy(m_psViewConstantBufferMappings[bufferIndex], &psViewBuffer, sizeof(PSViewConstantBuffer));
 
-
-	vkCmdBindPipeline(commandBuffer, VK_PIPELINE_BIND_POINT_GRAPHICS, m_pipelineMaskedPrepass);
-
-	vkCmdDraw(commandBuffer, (uint32_t)m_vertices.size() / 3, 1, 0, 0);
+	if (m_configManager->GetConfig_Core().CoreForceMaskedUseCameraImage)
+	{
+		vkCmdBindPipeline(commandBuffer, VK_PIPELINE_BIND_POINT_GRAPHICS, m_pipelineMaskedPrepass);
+		vkCmdDrawIndexed(commandBuffer, (uint32_t)m_cylinderMesh.triangles.size() * 3, 1, 0, 0, 0);
+	}
+	else
+	{
+		vkCmdBindPipeline(commandBuffer, VK_PIPELINE_BIND_POINT_GRAPHICS, m_pipelineMaskedPrepassFullscreen);
+		vkCmdDraw(commandBuffer, 3, 1, 0, 0);
+	}
 
 	vkCmdEndRenderPass(commandBuffer);
 
@@ -1866,11 +2006,9 @@ void PassthroughRendererVulkan::RenderPassthroughViewMasked(const ERenderEye eye
 	vkCmdSetViewport(commandBuffer, 0, 1, &viewport);
 	vkCmdSetScissor(commandBuffer, 0, 1, &scissor);
 
-	vkCmdBindPipeline(commandBuffer, VK_PIPELINE_BIND_POINT_GRAPHICS, m_pipelineMaskedRender);
+	vkCmdBindPipeline(commandBuffer, VK_PIPELINE_BIND_POINT_GRAPHICS, m_pipelineMaskedAlphaCopy);
 
-	vkCmdDraw(commandBuffer, (uint32_t)m_vertices.size() / 3, 1, 0, 0);
-
-	vkCmdEndRenderPass(commandBuffer);
+	vkCmdDraw(commandBuffer, 3, 1, 0, 0);
 }
 
 

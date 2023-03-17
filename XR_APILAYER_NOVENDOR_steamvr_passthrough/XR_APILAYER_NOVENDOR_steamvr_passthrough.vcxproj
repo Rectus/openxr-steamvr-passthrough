@@ -130,7 +130,7 @@ copy $(ProjectDir)\passthrough_icon.png $(OutDir)
       <ConformanceMode>true</ConformanceMode>
       <PrecompiledHeader>Use</PrecompiledHeader>
       <PrecompiledHeaderFile>pch.h</PrecompiledHeaderFile>
-      <AdditionalIncludeDirectories>$(ProjectDir);$(ProjectDir)framework;$(SolutionDir)\external\OpenXR-SDK\include;$(SolutionDir)\external\OpenXR-SDK\src\common;$(SolutionDir)\external\openvr\headers;$(SolutionDir)\external\lodepng;$(SolutionDir)\external\imgui;$(SolutionDir)\external\imgui\backends;$(SolutionDir)\external\simpleini;$(SolutionDir)\external\opencv\build\include;$(VULKAN_SDK)\Include</AdditionalIncludeDirectories>
+      <AdditionalIncludeDirectories>$(ProjectDir);$(ProjectDir)shaders;$(ProjectDir)framework;$(SolutionDir)\external\OpenXR-SDK\include;$(SolutionDir)\external\OpenXR-SDK\src\common;$(SolutionDir)\external\openvr\headers;$(SolutionDir)\external\lodepng;$(SolutionDir)\external\imgui;$(SolutionDir)\external\imgui\backends;$(SolutionDir)\external\simpleini;$(SolutionDir)\external\opencv\build\include;$(VULKAN_SDK)\Include</AdditionalIncludeDirectories>
       <LanguageStandard>stdcpp20</LanguageStandard>
       <InlineFunctionExpansion>AnySuitable</InlineFunctionExpansion>
       <FavorSizeOrSpeed>Speed</FavorSizeOrSpeed>
@@ -139,7 +139,7 @@ copy $(ProjectDir)\passthrough_icon.png $(OutDir)
       <SubSystem>Windows</SubSystem>
       <EnableCOMDATFolding>true</EnableCOMDATFolding>
       <OptimizeReferences>true</OptimizeReferences>
-      <GenerateDebugInformation>false</GenerateDebugInformation>
+      <GenerateDebugInformation>true</GenerateDebugInformation>
       <EnableUAC>false</EnableUAC>
       <AdditionalDependencies>kernel32.lib;user32.lib;gdi32.lib;winspool.lib;d3d11.lib;d3d12.lib;dxgi.lib;vulkan-1.lib;openvr_api.lib;comdlg32.lib;advapi32.lib;shell32.lib;ole32.lib;oleaut32.lib;uuid.lib;odbc32.lib;odbccp32.lib;pathcch.lib;opencv_world470.lib;%(AdditionalDependencies)</AdditionalDependencies>
       <AdditionalLibraryDirectories>$(SolutionDir)\external\openvr\lib\win64;$(SolutionDir)\external\opencv\build\x64\vc16\lib;$(VULKAN_SDK)\Lib;%(AdditionalLibraryDirectories)</AdditionalLibraryDirectories>
@@ -193,6 +193,7 @@ copy $(SolutionDir)\external\openvr\bin\win64\openvr_api.dll $(OutDir)
     <ClInclude Include="framework\dispatch.h" />
     <ClInclude Include="framework\log.h" />
     <ClInclude Include="framework\util.h" />
+    <ClInclude Include="mesh.h" />
     <ClInclude Include="openvr_manager.h" />
     <ClInclude Include="passthrough_renderer.h" />
     <ClInclude Include="layer.h" />
@@ -236,6 +237,7 @@ copy $(SolutionDir)\external\openvr\bin\win64\openvr_api.dll $(OutDir)
     <ClCompile Include="framework\dispatch.gen.cpp" />
     <ClCompile Include="framework\entry.cpp" />
     <ClCompile Include="framework\log.cpp" />
+    <ClCompile Include="mesh.cpp" />
     <ClCompile Include="openvr_manager.cpp" />
     <ClCompile Include="passthrough_renderer_dx11.cpp" />
     <ClCompile Include="passthrough_renderer_dx12.cpp" />
@@ -282,16 +284,30 @@ copy $(SolutionDir)\external\openvr\bin\win64\openvr_api.dll $(OutDir)
       <ShaderType Condition="'$(Configuration)|$(Platform)'=='Release|x64'">Pixel</ShaderType>
       <HeaderFileOutput Condition="'$(Configuration)|$(Platform)'=='Release|x64'">shaders\alpha_prepass_ps.h</HeaderFileOutput>
     </FxCompile>
-    <FxCompile Include="shaders\passthrough_masked_ps.hlsl">
+    <None Include="shaders\common_vs.hlsl">
+      <ShaderType Condition="'$(Configuration)|$(Platform)'=='Release|x64'">Vertex</ShaderType>
+      <ShaderType Condition="'$(Configuration)|$(Platform)'=='Debug|x64'">Vertex</ShaderType>
+      <FileType>Document</FileType>
+    </None>
+    <None Include="shaders\common_ps.hlsl">
+      <FileType>Document</FileType>
+    </None>
+    <FxCompile Include="shaders\alpha_copy_masked_ps.hlsl">
       <ShaderType Condition="'$(Configuration)|$(Platform)'=='Debug|x64'">Pixel</ShaderType>
       <ShaderModel Condition="'$(Configuration)|$(Platform)'=='Debug|x64'">5.0</ShaderModel>
       <HeaderFileOutput Condition="'$(Configuration)|$(Platform)'=='Debug|x64'">shaders\passthrough_masked_ps.h</HeaderFileOutput>
       <ObjectFileOutput Condition="'$(Configuration)|$(Platform)'=='Debug|x64'">
       </ObjectFileOutput>
       <VariableName Condition="'$(Configuration)|$(Platform)'=='Debug|x64'">g_PassthroughMaskedShaderPS</VariableName>
-      <HeaderFileOutput Condition="'$(Configuration)|$(Platform)'=='Release|x64'">shaders\passthrough_masked_ps.h</HeaderFileOutput>
+      <HeaderFileOutput Condition="'$(Configuration)|$(Platform)'=='Release|x64'">shaders\alpha_copy_masked_ps.h</HeaderFileOutput>
       <ShaderType Condition="'$(Configuration)|$(Platform)'=='Release|x64'">Pixel</ShaderType>
-      <VariableName Condition="'$(Configuration)|$(Platform)'=='Release|x64'">g_PassthroughMaskedShaderPS</VariableName>
+      <VariableName Condition="'$(Configuration)|$(Platform)'=='Release|x64'">g_AlphaCopyMaskedShaderPS</VariableName>
+    </FxCompile>
+    <FxCompile Include="shaders\fullscreen_quad_vs.hlsl">
+      <ShaderType Condition="'$(Configuration)|$(Platform)'=='Release|x64'">Vertex</ShaderType>
+      <ShaderType Condition="'$(Configuration)|$(Platform)'=='Debug|x64'">Vertex</ShaderType>
+      <VariableName Condition="'$(Configuration)|$(Platform)'=='Release|x64'">g_FullscreenQuadShaderVS</VariableName>
+      <HeaderFileOutput Condition="'$(Configuration)|$(Platform)'=='Release|x64'">shaders\fullscreen_quad_vs.h</HeaderFileOutput>
     </FxCompile>
     <FxCompile Include="shaders\passthrough_ps.hlsl">
       <VariableName Condition="'$(Configuration)|$(Platform)'=='Debug|x64'">g_PassthroughShaderPS</VariableName>

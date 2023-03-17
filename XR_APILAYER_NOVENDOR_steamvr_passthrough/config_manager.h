@@ -4,15 +4,65 @@
 
 enum EProjectionMode
 {
-	ProjectionRoomView2D = 0,
-	ProjectionCustom2D = 1,
-	ProjectionStereoReconstruction = 2,
+	Projection_RoomView2D = 0,
+	Projection_Custom2D = 1,
+	Projection_StereoReconstruction = 2,
+};
+
+enum ESelectedDebugTexture
+{
+	DebugTexture_None = 0,
+	DebugTexture_TestImage,
+	DebugTexture_Disparity,
+	DebugTexture_Confidence
+};
+
+enum EDebugTextureFormat
+{
+	DebugTextureFormat_RGBA8,
+	DebugTextureFormat_R8,
+	DebugTextureFormat_R16U,
+	DebugTextureFormat_R16S,
+	DebugTextureFormat_R32F
+};
+
+struct DebugTexture
+{
+	DebugTexture()
+		: Texture()
+		, Width(0)
+		, Height(0)
+		, PixelSize(0)
+		, Format(DebugTextureFormat_RGBA8)
+		, bDimensionsUpdated(false)
+		, RWMutex()
+		, CurrentTexture(DebugTexture_None)
+	{}
+
+	std::vector<uint8_t> Texture;
+	uint32_t Width;
+	uint32_t Height;
+	uint32_t PixelSize;
+	EDebugTextureFormat Format;
+	ESelectedDebugTexture CurrentTexture;
+	bool bDimensionsUpdated;
+	std::mutex RWMutex;
+};
+
+enum EStereoPreset
+{
+	StereoPreset_Custom = 0,
+	StereoPreset_VeryLow = 1,
+	StereoPreset_Low = 2,
+	StereoPreset_Medium = 3,
+	StereoPreset_High = 4,
+	StereoPreset_VeryHigh = 5
 };
 
 struct Config_Main
 {
 	bool EnablePassthrough = true;
-	EProjectionMode ProjectionMode = ProjectionCustom2D;
+	EProjectionMode ProjectionMode = Projection_Custom2D;
 
 	float PassthroughOpacity = 1.0f;
 	float ProjectionDistanceFar = 10.0f;
@@ -23,13 +73,18 @@ struct Config_Main
 	float Brightness = 0.0f;
 	float Contrast = 1.0f;
 	float Saturation = 1.0f;
+	float Sharpness = 0.0f;
 
 	bool RequireSteamVRRuntime = true;
 
+	bool ShowSettingDescriptions = true;
+
+	EStereoPreset StereoPreset = StereoPreset_Medium;
+
 	// Transient settings not written to file
-	bool ShowTestImage = false;
 	bool DebugDepth = false;
 	bool DebugStereoValid = false;
+	ESelectedDebugTexture DebugTexture = DebugTexture_None;
 };
 
 // Configuration for core-spec passthrough
@@ -49,12 +104,6 @@ struct Config_Core
 	bool CoreForceMaskedInvertMask = false;
 };
 
-enum EStereoAlgorithm
-{
-	StereoAlgorithm_BM = 0,
-	StereoAlgorithm_SGBM = 1,
-};
-
 enum EStereoSGBM_Mode
 {
 	StereoMode_SGBM = 0,
@@ -68,6 +117,7 @@ enum EStereoFiltering
 	StereoFiltering_None = 0,
 	StereoFiltering_WLS = 1,
 	StereoFiltering_WLS_FBS = 2,
+	StereoFiltering_FBS = 3
 };
 
 // Configuration for stereo reconstruction
@@ -77,10 +127,19 @@ struct Config_Stereo
 	bool StereoReconstructionFreeze = false;
 	bool StereoRectificationFiltering = false;
 	bool StereoUseColor = false;
+	bool StereoUseBWInputAlpha= false;
+	bool StereoUseHexagonGridMesh = true;
+	bool StereoFillHoles = true;
 	int StereoFrameSkip = 0;
 	int StereoDownscaleFactor = 2;
-	EStereoAlgorithm StereoAlgorithm = StereoAlgorithm_SGBM;
-	//int StereoAlgorithmQuality = 0;
+
+	bool StereoDisparityBothEyes = true;
+	int StereoDisparityFilterWidth = 3;
+	bool StereoCutoutEnabled = false;
+	float StereoCutoutFactor = 0.75f;
+	float StereoCutoutOffset = 1.5f;
+	float StereoCutoutFilterWidth = 0.9f;
+
 	int StereoBlockSize = 1;
 	int StereoMinDisparity = 0;
 	int StereoMaxDisparity = 96;
@@ -96,6 +155,7 @@ struct Config_Stereo
 	EStereoFiltering StereoFiltering = StereoFiltering_WLS;
 	float StereoWLS_Lambda = 8000.0f;
 	float StereoWLS_Sigma = 1.8f;
+	float StereoWLS_ConfidenceRadius = 0.5f;
 	float StereoFBS_Spatial = 6.0f;
 	float StereoFBS_Luma = 8.0f;
 	float StereoFBS_Chroma = 8.0f;
@@ -124,13 +184,16 @@ public:
 
 	Config_Main& GetConfig_Main() { return m_configMain; }
 	Config_Core& GetConfig_Core() { return m_configCore; }
-	Config_Stereo& GetConfig_Stereo() { return m_configStereo; }
+	Config_Stereo& GetConfig_Stereo() { return m_stereoPresets[m_configMain.StereoPreset]; }
 	Config_Stereo& GetConfig_CustomStereo() { return m_configCustomStereo; }
 	Config_Depth& GetConfig_Depth() { return m_configDepth; }
 
+	DebugTexture& GetDebugTexture() { return m_debugTexture; }
 
 private:
 	void UpdateConfigFile();
+
+	void SetupStereoPresets();
 
 	void ParseConfig_Main();
 	void ParseConfig_Core();
@@ -148,8 +211,10 @@ private:
 
 	Config_Main m_configMain;
 	Config_Core m_configCore;
-	Config_Stereo m_configStereo;
 	Config_Stereo m_configCustomStereo;
+	Config_Stereo m_stereoPresets[6];
 	Config_Depth m_configDepth;
+
+	DebugTexture m_debugTexture;
 };
 
