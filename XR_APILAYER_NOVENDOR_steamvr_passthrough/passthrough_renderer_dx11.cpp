@@ -1084,9 +1084,6 @@ void PassthroughRendererDX11::RenderPassthroughViewMasked(const ERenderEye eye, 
 
 	XrRect2Di rect = layer->views[viewIndex].subImage.imageRect;
 
-	//D3D11_VIEWPORT viewport = { 0.0f, 0.0f, (float)rect.extent.width, (float)rect.extent.height, 0.0f, 1.0f };
-	//D3D11_RECT scissor = { 0, 0, rect.extent.width, rect.extent.height };
-
 	D3D11_VIEWPORT viewport = { (float)rect.offset.x, (float)rect.offset.y, (float)rect.extent.width, (float)rect.extent.height, 0.0f, 1.0f };
 	D3D11_RECT scissor = { rect.offset.x, rect.offset.y, rect.offset.x + rect.extent.width, rect.offset.y + rect.extent.height };
 
@@ -1186,22 +1183,14 @@ void PassthroughRendererDX11::RenderPassthroughViewMasked(const ERenderEye eye, 
 	m_renderContext->Draw(numVertices, 0);
 
 
-	//{
-	//	D3D11_VIEWPORT viewport = { (float)rect.offset.x, (float)rect.offset.y, (float)rect.extent.width, (float)rect.extent.height, 0.0f, 1.0f };
-	//	D3D11_RECT scissor = { rect.offset.x, rect.offset.y, rect.offset.x + rect.extent.width, rect.offset.y + rect.extent.height };
-
-	//	m_renderContext->RSSetViewports(1, &viewport);
-	//	m_renderContext->RSSetScissorRects(1, &scissor);
-	//}
-
 	// Clear rendertarget so we can swap the places of the RTV and SRV.
 	ID3D11RenderTargetView* nullRTV = nullptr;
 	m_renderContext->OMSetRenderTargets(1, &nullRTV, nullptr);
 
 	if (mainConf.ProjectionMode == ProjectionRoomView2D)
 	{
-		ID3D11ShaderResourceView* views[2] = { cameraFrameSRV, tempTarget.SRV.Get() };
-		m_renderContext->PSSetShaderResources(0, 2, views);
+		ID3D11ShaderResourceView* views[3] = { cameraFrameSRV, nullptr, tempTarget.SRV.Get() };
+		m_renderContext->PSSetShaderResources(0, 3, views);
 	}
 	else
 	{
@@ -1212,7 +1201,6 @@ void PassthroughRendererDX11::RenderPassthroughViewMasked(const ERenderEye eye, 
 	m_renderContext->OMSetRenderTargets(1, &rendertarget, depthStencil);
 	m_renderContext->OMSetBlendState(m_blendStateSrcAlpha.Get(), nullptr, UINT_MAX);
 	m_renderContext->OMSetDepthStencilState(GET_DEPTH_STENCIL_STATE(false, frame->bHasReversedDepth, false), 1);
-	//m_renderContext->OMSetDepthStencilState(GET_DEPTH_STENCIL_STATE(bCompositeDepth, frame->bHasReversedDepth, false), 1);
 	m_renderContext->PSSetShader(m_maskedPixelShader.Get(), nullptr, 0);
 
 	m_renderContext->Draw(numVertices, 0);

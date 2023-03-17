@@ -701,7 +701,17 @@ void CameraManager::CalculateFrameProjectionForEye(const ERenderEye eye, std::sh
         XrMatrix4x4f frameProjectionInverse;
         XrMatrix4x4f_Invert(&frameProjectionInverse, &frameProjection);
 
-        XrMatrix4x4f leftCameraToTrackingPose = ToXRMatrix4x4(frame->header.trackedDevicePose.mDeviceToAbsoluteTracking);
+        XrMatrix4x4f origLeftCameraToTrackingPose = ToXRMatrix4x4(frame->header.trackedDevicePose.mDeviceToAbsoluteTracking);
+
+        // Apply offset calibration to left camera position too.
+        XrMatrix4x4f headToTrackingPose, correctedLeftCameraToHMDPose, leftCameraToTrackingPose;
+        XrMatrix4x4f_Multiply(&headToTrackingPose, &origLeftCameraToTrackingPose, &m_HMDToCameraLeft);
+        correctedLeftCameraToHMDPose = m_cameraToHMDLeft;
+        correctedLeftCameraToHMDPose.m[12] *= mainConf.DepthOffsetCalibration;
+        correctedLeftCameraToHMDPose.m[13] *= mainConf.DepthOffsetCalibration;
+        correctedLeftCameraToHMDPose.m[14] *= mainConf.DepthOffsetCalibration;
+        XrMatrix4x4f_Multiply(&leftCameraToTrackingPose, &headToTrackingPose, &correctedLeftCameraToHMDPose);
+
         XrMatrix4x4f leftCameraFromTrackingPose;
         XrMatrix4x4f_Invert(&leftCameraFromTrackingPose, &leftCameraToTrackingPose);      
 
