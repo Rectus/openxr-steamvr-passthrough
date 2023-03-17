@@ -1131,7 +1131,7 @@ void PassthroughRendererDX11::RenderPassthroughViewMasked(const ERenderEye eye, 
 
 	if (eye == LEFT_EYE || !bSingleStereoRenderTarget)
 	{
-		float clearColor[4] = { m_configManager->GetConfig_Core().CoreForceMaskedUseCameraImage ? 1 : 0, 0, 0, 0 };
+		float clearColor[4] = { m_configManager->GetConfig_Core().CoreForceMaskedUseCameraImage ? 1.0f : 0, 0, 0, 0 };
 		m_renderContext->ClearRenderTargetView(tempTarget.RTV.Get(), clearColor);
 	}
 

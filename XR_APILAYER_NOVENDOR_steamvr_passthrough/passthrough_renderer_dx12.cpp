@@ -745,13 +745,14 @@ bool PassthroughRendererDX12::InitPipeline()
 
 	D3D12_DEPTH_STENCIL_DESC depthStencilPrepass{};
 	depthStencilPrepass.DepthEnable = m_bUsingDepth;
-	depthStencilPrepass.DepthFunc = m_bUsingReversedDepth ? D3D12_COMPARISON_FUNC_GREATER_EQUAL : D3D12_COMPARISON_FUNC_LESS_EQUAL;
-	depthStencilPrepass.DepthWriteMask = D3D12_DEPTH_WRITE_MASK_ZERO;
+	depthStencilPrepass.DepthFunc = m_bUsingReversedDepth ? D3D12_COMPARISON_FUNC_GREATER_EQUAL :
+			D3D12_COMPARISON_FUNC_LESS_EQUAL;
+	depthStencilPrepass.DepthWriteMask = (m_blendMode == Masked && m_bWriteDepth) ? D3D12_DEPTH_WRITE_MASK_ALL : D3D12_DEPTH_WRITE_MASK_ZERO;
 
 	D3D12_DEPTH_STENCIL_DESC depthStencilMain{};
-	depthStencilPrepass.DepthEnable = m_bUsingDepth;
-	depthStencilPrepass.DepthFunc = m_bUsingReversedDepth ? D3D12_COMPARISON_FUNC_GREATER_EQUAL : D3D12_COMPARISON_FUNC_LESS_EQUAL;
-	depthStencilPrepass.DepthWriteMask = D3D12_DEPTH_WRITE_MASK_ALL;
+	depthStencilMain.DepthEnable = (m_blendMode == Masked) ? false : m_bUsingDepth;
+	depthStencilMain.DepthFunc = m_bUsingReversedDepth ? D3D12_COMPARISON_FUNC_GREATER_EQUAL : D3D12_COMPARISON_FUNC_LESS_EQUAL;
+	depthStencilMain.DepthWriteMask = m_bWriteDepth ? D3D12_DEPTH_WRITE_MASK_ALL : D3D12_DEPTH_WRITE_MASK_ZERO;
 
 
 	D3D12_GRAPHICS_PIPELINE_STATE_DESC psoDesc = {};
@@ -1013,21 +1014,23 @@ void PassthroughRendererDX12::RenderPassthroughFrame(const XrCompositionLayerPro
 	Config_Main& mainConf = m_configManager->GetConfig_Main();
 	Config_Core& coreConf = m_configManager->GetConfig_Core();
 	Config_Stereo& stereoConf = m_configManager->GetConfig_Stereo();
-	Config_Depth& depthConfig = m_configManager->GetConfig_Depth();
-
-	bool bCompositeDepth = depthConfig.DepthForceComposition && depthConfig.DepthReadFromApplication;
+	Config_Depth& depthConf = m_configManager->GetConfig_Depth();
 
 	if (mainConf.ProjectionMode == ProjectionStereoReconstruction && !depthFrame->bIsValid)
 	{
 		return;
 	}
 
-	if (!m_psoMainPass.Get() || m_blendMode != blendMode || m_bUsingStereo != (mainConf.ProjectionMode == ProjectionStereoReconstruction) || m_bUsingDepth != bCompositeDepth || m_bUsingReversedDepth != frame->bHasReversedDepth)
+	bool bCompositeDepth = depthConf.DepthForceComposition && depthConf.DepthReadFromApplication;
+	bool bUseReversedDepth = (m_blendMode == Masked) ? coreConf.CoreForceMaskedUseCameraImage == frame->bHasReversedDepth : frame->bHasReversedDepth;
+
+	if (!m_psoMainPass.Get() || m_blendMode != blendMode || m_bUsingStereo != (mainConf.ProjectionMode == ProjectionStereoReconstruction) || m_bUsingDepth != bCompositeDepth || m_bUsingReversedDepth != bUseReversedDepth || m_bWriteDepth != depthConf.DepthWriteOutput)
 	{
 		m_blendMode = blendMode;
 		m_bUsingStereo = (mainConf.ProjectionMode == ProjectionStereoReconstruction);
 		m_bUsingDepth = bCompositeDepth;
-		m_bUsingReversedDepth = frame->bHasReversedDepth;
+		m_bUsingReversedDepth = bUseReversedDepth;
+		m_bWriteDepth = depthConf.DepthWriteOutput;
 
 		if (!InitPipeline())
 		{
@@ -1265,19 +1268,11 @@ void PassthroughRendererDX12::RenderPassthroughViewMasked(const ERenderEye eye, 
 
 	XrRect2Di rect = layer->views[viewIndex].subImage.imageRect;
 
-	D3D12_VIEWPORT viewport = { 0.0f, 0.0f, (float)rect.extent.width, (float)rect.extent.height, 0.0f, 1.0f };
-	D3D12_RECT scissor = { 0, 0, rect.extent.width, rect.extent.height };
+	D3D12_VIEWPORT viewport = { (float)rect.offset.x, (float)rect.offset.y, (float)rect.extent.width, (float)rect.extent.height, 0.0f, 1.0f };
+	D3D12_RECT scissor = { rect.offset.x, rect.offset.y, rect.offset.x + rect.extent.width, rect.offset.y + rect.extent.height };
 
 	m_commandList->RSSetViewports(1, &viewport);
 	m_commandList->RSSetScissorRects(1, &scissor);
-
-	// Recreate the intermediate rendertarget if it can't hold the entire viewport.
-	if (!m_intermediateRenderTargets[bufferIndex].Get() 
-		|| m_intermediateRenderTargets[bufferIndex].Get()->GetDesc().Width < (uint64_t)rect.extent.width
-		|| m_intermediateRenderTargets[bufferIndex].Get()->GetDesc().Height < (uint64_t)rect.extent.height)
-	{		
-		SetupIntermediateRenderTarget(bufferIndex, rect.extent.width, rect.extent.height);
-	}
 
 	Config_Main& mainConf = m_configManager->GetConfig_Main();
 
@@ -1294,6 +1289,7 @@ void PassthroughRendererDX12::RenderPassthroughViewMasked(const ERenderEye eye, 
 	cbvVSHandle.ptr += (INDEX_CBV_VS_VIEW_0 + bufferIndex) * m_CBVSRVHeapDescSize;
 	m_commandList->SetGraphicsRootDescriptorTable(6, cbvVSHandle);
 
+	bool bSingleStereoRenderTarget = false;
 
 	PSViewConstantBuffer* psViewBuffer = (PSViewConstantBuffer*)m_psViewConstantBufferCPUData[bufferIndex];
 	// Draw the correct half for single framebuffer views.
@@ -1301,6 +1297,7 @@ void PassthroughRendererDX12::RenderPassthroughViewMasked(const ERenderEye eye, 
 	{
 		psViewBuffer->prepassUVBounds = { (eye == LEFT_EYE) ? 0.0f : 0.5f, 0.0f,
 			(eye == LEFT_EYE) ? 0.5f : 1.0f, 1.0f };
+		bSingleStereoRenderTarget = true;
 	}
 	else
 	{
@@ -1312,6 +1309,27 @@ void PassthroughRendererDX12::RenderPassthroughViewMasked(const ERenderEye eye, 
 	D3D12_GPU_DESCRIPTOR_HANDLE cbvPSHandle = m_CBVSRVHeap->GetGPUDescriptorHandleForHeapStart();
 	cbvPSHandle.ptr += (INDEX_CBV_PS_VIEW_0 + bufferIndex) * m_CBVSRVHeapDescSize;
 	m_commandList->SetGraphicsRootDescriptorTable(1, cbvPSHandle);
+
+	int32_t intermediateRTIndex = bSingleStereoRenderTarget ? imageIndex : bufferIndex;
+	int32_t rtWidth = bSingleStereoRenderTarget ? rect.extent.width * 2 : rect.extent.width;
+
+	// Recreate the intermediate rendertarget if it can't hold the entire viewport.
+	if ((!bSingleStereoRenderTarget || eye == LEFT_EYE) &&
+		(!m_intermediateRenderTargets[intermediateRTIndex].Get()
+		|| (int32_t)m_intermediateRenderTargets[intermediateRTIndex].Get()->GetDesc().Width < rtWidth
+		|| (int32_t)m_intermediateRenderTargets[intermediateRTIndex].Get()->GetDesc().Height < rect.extent.height))
+	{
+		SetupIntermediateRenderTarget(intermediateRTIndex, rtWidth, rect.extent.height);
+	}
+
+	D3D12_CPU_DESCRIPTOR_HANDLE rtvHandle = m_intermediateRTVHeap->GetCPUDescriptorHandleForHeapStart();
+	rtvHandle.ptr += intermediateRTIndex * m_RTVHeapDescSize;
+
+	if (eye == LEFT_EYE || !bSingleStereoRenderTarget)
+	{
+		float clearColor[4] = { m_configManager->GetConfig_Core().CoreForceMaskedUseCameraImage ? 1.0f : 0, 0, 0, 0 };
+		m_commandList->ClearRenderTargetView(rtvHandle, clearColor, 0, NULL);
+	}
 
 	D3D12_GPU_DESCRIPTOR_HANDLE cameraFrameSRVHandle = m_CBVSRVHeap->GetGPUDescriptorHandleForHeapStart();
 
@@ -1335,8 +1353,7 @@ void PassthroughRendererDX12::RenderPassthroughViewMasked(const ERenderEye eye, 
 		m_commandList->SetGraphicsRootDescriptorTable(3, inputRTSRVHandle);
 	}
 
-	D3D12_CPU_DESCRIPTOR_HANDLE rtvHandle = m_intermediateRTVHeap->GetCPUDescriptorHandleForHeapStart();
-	rtvHandle.ptr += bufferIndex * m_RTVHeapDescSize;
+	
 
 	D3D12_CPU_DESCRIPTOR_HANDLE dsvHandle = m_DSVHeap->GetCPUDescriptorHandleForHeapStart();
 	dsvHandle.ptr += bufferIndex * m_DSVHeapDescSize;
@@ -1350,29 +1367,24 @@ void PassthroughRendererDX12::RenderPassthroughViewMasked(const ERenderEye eye, 
 
 
 
-	viewport = { (float)rect.offset.x, (float)rect.offset.y, (float)rect.extent.width, (float)rect.extent.height, 0.0f, 1.0f };
-	scissor = { rect.offset.x, rect.offset.y, rect.offset.x + rect.extent.width, rect.offset.y + rect.extent.height };
-
-	m_commandList->RSSetViewports(1, &viewport);
-	m_commandList->RSSetScissorRects(1, &scissor);
 
 	rtvHandle = m_RTVHeap->GetCPUDescriptorHandleForHeapStart();
 	rtvHandle.ptr += bufferIndex * m_RTVHeapDescSize;
 	m_commandList->OMSetRenderTargets(1, &rtvHandle, FALSE, &dsvHandle);
 
-	TransitionResource(m_commandList.Get(), m_intermediateRenderTargets[bufferIndex].Get(), D3D12_RESOURCE_STATE_RENDER_TARGET, D3D12_RESOURCE_STATE_PIXEL_SHADER_RESOURCE);
+	TransitionResource(m_commandList.Get(), m_intermediateRenderTargets[intermediateRTIndex].Get(), D3D12_RESOURCE_STATE_RENDER_TARGET, D3D12_RESOURCE_STATE_PIXEL_SHADER_RESOURCE);
 
 	m_commandList->SetGraphicsRootDescriptorTable(3, cameraFrameSRVHandle);
 
 	D3D12_GPU_DESCRIPTOR_HANDLE srvHandle = m_CBVSRVHeap->GetGPUDescriptorHandleForHeapStart();
-	srvHandle.ptr += (INDEX_SRV_MASKED_INTERMEDIATE_0 + bufferIndex) * m_CBVSRVHeapDescSize;
+	srvHandle.ptr += (INDEX_SRV_MASKED_INTERMEDIATE_0 + intermediateRTIndex) * m_CBVSRVHeapDescSize;
 	m_commandList->SetGraphicsRootDescriptorTable(5, srvHandle);
 
 	m_commandList->SetPipelineState(m_psoMainPass.Get());
 	m_commandList->DrawInstanced(numVertices, 1, 0, 0);
 
 
-	TransitionResource(m_commandList.Get(), m_intermediateRenderTargets[bufferIndex].Get(), D3D12_RESOURCE_STATE_PIXEL_SHADER_RESOURCE, D3D12_RESOURCE_STATE_RENDER_TARGET);
+	TransitionResource(m_commandList.Get(), m_intermediateRenderTargets[intermediateRTIndex].Get(), D3D12_RESOURCE_STATE_PIXEL_SHADER_RESOURCE, D3D12_RESOURCE_STATE_RENDER_TARGET);
 }
 
 

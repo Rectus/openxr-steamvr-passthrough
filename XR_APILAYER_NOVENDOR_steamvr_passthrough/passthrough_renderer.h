@@ -250,6 +250,7 @@ private:
 	bool m_bUsingStereo;
 	bool m_bUsingDepth;
 	bool m_bUsingReversedDepth;
+	bool m_bWriteDepth;
 	
 	ComPtr<ID3D12Resource> m_vsPassConstantBuffer;
 	UINT8* m_vsPassConstantBufferCPUData[NUM_SWAPCHAINS];
