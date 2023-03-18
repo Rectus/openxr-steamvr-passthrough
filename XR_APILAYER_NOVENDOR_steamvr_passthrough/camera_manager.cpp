@@ -366,7 +366,7 @@ void CameraManager::ServeFrames()
         {
             startFrameRetrievalTime = StartPerfTimer();
 
-            vr::EVRTrackedCameraFrameType frameType = m_configManager->GetConfig_Main().ProjectionMode == ProjectionRoomView2D ? vr::VRTrackedCameraFrameType_MaximumUndistorted : vr::VRTrackedCameraFrameType_Distorted;
+            vr::EVRTrackedCameraFrameType frameType = m_configManager->GetConfig_Main().ProjectionMode == Projection_RoomView2D ? vr::VRTrackedCameraFrameType_MaximumUndistorted : vr::VRTrackedCameraFrameType_Distorted;
 
             vr::EVRTrackedCameraError error = trackedCamera->GetVideoStreamFrameBuffer(m_cameraHandle, frameType, nullptr, 0, &m_underConstructionFrame->header, sizeof(vr::CameraVideoStreamFrameHeader_t));
 
@@ -397,7 +397,7 @@ void CameraManager::ServeFrames()
 
         Config_Main& mainConf = m_configManager->GetConfig_Main();
 
-        vr::EVRTrackedCameraFrameType frameType = mainConf.ProjectionMode == ProjectionRoomView2D ? vr::VRTrackedCameraFrameType_MaximumUndistorted : vr::VRTrackedCameraFrameType_Distorted;
+        vr::EVRTrackedCameraFrameType frameType = mainConf.ProjectionMode == Projection_RoomView2D ? vr::VRTrackedCameraFrameType_MaximumUndistorted : vr::VRTrackedCameraFrameType_Distorted;
 
         if (m_renderAPI == DirectX11)
         {
@@ -437,7 +437,7 @@ void CameraManager::ServeFrames()
 
         // TODO: Getting the framebuffer crashes under Vulkan
         if(m_renderAPI == DirectX12 || 
-            (mainConf.ProjectionMode == ProjectionStereoReconstruction && m_renderAPI != Vulkan))
+            (mainConf.ProjectionMode == Projection_StereoReconstruction && m_renderAPI != Vulkan))
         {
             if (m_underConstructionFrame->frameBuffer.get() == nullptr)
             {
@@ -651,7 +651,7 @@ void CameraManager::CalculateFrameProjectionForEye(const ERenderEye eye, std::sh
 
 
 
-    if (mainConf.ProjectionMode == ProjectionRoomView2D)
+    if (mainConf.ProjectionMode == Projection_RoomView2D)
     {
         XrMatrix4x4f leftCameraToTrackingPose = ToXRMatrix4x4(frame->header.trackedDevicePose.mDeviceToAbsoluteTracking);
 

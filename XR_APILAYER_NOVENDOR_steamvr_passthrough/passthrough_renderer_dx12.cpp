@@ -1027,7 +1027,7 @@ void PassthroughRendererDX12::RenderPassthroughFrame(const XrCompositionLayerPro
 	Config_Stereo& stereoConf = m_configManager->GetConfig_Stereo();
 	Config_Depth& depthConf = m_configManager->GetConfig_Depth();
 
-	if (mainConf.ProjectionMode == ProjectionStereoReconstruction && !depthFrame->bIsValid)
+	if (mainConf.ProjectionMode == Projection_StereoReconstruction && !depthFrame->bIsValid)
 	{
 		return;
 	}
@@ -1035,10 +1035,10 @@ void PassthroughRendererDX12::RenderPassthroughFrame(const XrCompositionLayerPro
 	bool bCompositeDepth = depthConf.DepthForceComposition && depthConf.DepthReadFromApplication;
 	bool bUseReversedDepth = (m_blendMode == Masked) ? coreConf.CoreForceMaskedUseCameraImage == frame->bHasReversedDepth : frame->bHasReversedDepth;
 
-	if (!m_psoMainPass.Get() || m_blendMode != blendMode || m_bUsingStereo != (mainConf.ProjectionMode == ProjectionStereoReconstruction) || m_bUsingDepth != bCompositeDepth || m_bUsingReversedDepth != bUseReversedDepth || m_bWriteDepth != depthConf.DepthWriteOutput)
+	if (!m_psoMainPass.Get() || m_blendMode != blendMode || m_bUsingStereo != (mainConf.ProjectionMode == Projection_StereoReconstruction) || m_bUsingDepth != bCompositeDepth || m_bUsingReversedDepth != bUseReversedDepth || m_bWriteDepth != depthConf.DepthWriteOutput)
 	{
 		m_blendMode = blendMode;
-		m_bUsingStereo = (mainConf.ProjectionMode == ProjectionStereoReconstruction);
+		m_bUsingStereo = (mainConf.ProjectionMode == Projection_StereoReconstruction);
 		m_bUsingDepth = bCompositeDepth;
 		m_bUsingReversedDepth = bUseReversedDepth;
 		m_bWriteDepth = depthConf.DepthWriteOutput;
@@ -1059,7 +1059,7 @@ void PassthroughRendererDX12::RenderPassthroughFrame(const XrCompositionLayerPro
 	{
 		std::shared_lock readLock(distortionParams.readWriteMutex);
 
-		if (mainConf.ProjectionMode != ProjectionRoomView2D &&
+		if (mainConf.ProjectionMode != Projection_RoomView2D &&
 			(!m_uvDistortionMap.Get() || m_fovScale != distortionParams.fovScale))
 		{
 			m_fovScale = distortionParams.fovScale;
@@ -1067,14 +1067,14 @@ void PassthroughRendererDX12::RenderPassthroughFrame(const XrCompositionLayerPro
 		}
 	}
 
-	if (mainConf.ProjectionMode != ProjectionRoomView2D)
+	if (mainConf.ProjectionMode != Projection_RoomView2D)
 	{
 		D3D12_GPU_DESCRIPTOR_HANDLE uvDistortionSRVHandle = m_CBVSRVHeap->GetGPUDescriptorHandleForHeapStart();
 		uvDistortionSRVHandle.ptr += INDEX_SRV_UV_DISTORTION * m_CBVSRVHeapDescSize;
 		m_commandList->SetGraphicsRootDescriptorTable(4, uvDistortionSRVHandle);
 	}
 
-	if (mainConf.ProjectionMode == ProjectionStereoReconstruction)
+	if (mainConf.ProjectionMode == Projection_StereoReconstruction)
 	{
 		std::shared_lock readLock(depthFrame->readWriteMutex);
 
@@ -1115,7 +1115,7 @@ void PassthroughRendererDX12::RenderPassthroughFrame(const XrCompositionLayerPro
 	UINT numVertices;
 	D3D12_VERTEX_BUFFER_VIEW vertexBufferView{};
 
-	if (mainConf.ProjectionMode == ProjectionStereoReconstruction)
+	if (mainConf.ProjectionMode == Projection_StereoReconstruction)
 	{
 		numVertices = (UINT)m_stereoVertices.size() / 3;
 
@@ -1135,7 +1135,7 @@ void PassthroughRendererDX12::RenderPassthroughFrame(const XrCompositionLayerPro
 	m_commandList->IASetPrimitiveTopology(D3D_PRIMITIVE_TOPOLOGY_TRIANGLESTRIP);
 	m_commandList->IASetVertexBuffers(0, 1, &vertexBufferView);
 	
-	if (mainConf.ShowTestImage)
+	if (mainConf.DebugTexture != DebugTexture_None)
 	{
 		D3D12_GPU_DESCRIPTOR_HANDLE testImageSRVHandle = m_CBVSRVHeap->GetGPUDescriptorHandleForHeapStart();
 		testImageSRVHandle.ptr += INDEX_SRV_TESTIMAGE * m_CBVSRVHeapDescSize;
@@ -1164,7 +1164,7 @@ void PassthroughRendererDX12::RenderPassthroughFrame(const XrCompositionLayerPro
 	psPassBuffer->bDoColorAdjustment = fabsf(mainConf.Brightness) > 0.01f || fabsf(mainConf.Contrast - 1.0f) > 0.01f || fabsf(mainConf.Saturation - 1.0f) > 0.01f;
 	psPassBuffer->bDebugDepth = mainConf.DebugDepth;
 	psPassBuffer->bDebugValidStereo = mainConf.DebugStereoValid;
-	psPassBuffer->bUseFisheyeCorrection = mainConf.ProjectionMode != ProjectionRoomView2D;
+	psPassBuffer->bUseFisheyeCorrection = mainConf.ProjectionMode != Projection_RoomView2D;
 
 	D3D12_GPU_DESCRIPTOR_HANDLE passCBVHandle = m_CBVSRVHeap->GetGPUDescriptorHandleForHeapStart();
 	passCBVHandle.ptr += (INDEX_CBV_PS_PASS_0 + m_frameIndex) * m_CBVSRVHeapDescSize;
@@ -1252,7 +1252,7 @@ void PassthroughRendererDX12::RenderPassthroughView(const ERenderEye eye, const 
 	cbvPSHandle.ptr += (INDEX_CBV_PS_VIEW_0 + bufferIndex) * m_CBVSRVHeapDescSize;
 	m_commandList->SetGraphicsRootDescriptorTable(1, cbvPSHandle);
 
-	bool bUseStereo = mainConf.ProjectionMode == ProjectionStereoReconstruction;
+	bool bUseStereo = mainConf.ProjectionMode == Projection_StereoReconstruction;
 
 	// Extra draw if we need to preadjust the alpha.
 	if ((blendMode != AlphaBlendPremultiplied && blendMode != AlphaBlendUnpremultiplied) || m_configManager->GetConfig_Main().PassthroughOpacity < 1.0f || bCompositeDepth)
@@ -1344,7 +1344,7 @@ void PassthroughRendererDX12::RenderPassthroughViewMasked(const ERenderEye eye, 
 
 	D3D12_GPU_DESCRIPTOR_HANDLE cameraFrameSRVHandle = m_CBVSRVHeap->GetGPUDescriptorHandleForHeapStart();
 
-	if (m_configManager->GetConfig_Main().ShowTestImage)
+	if (m_configManager->GetConfig_Main().DebugTexture != DebugTexture_None)
 	{
 		cameraFrameSRVHandle.ptr += INDEX_SRV_TESTIMAGE * m_CBVSRVHeapDescSize;
 	}
@@ -1371,7 +1371,7 @@ void PassthroughRendererDX12::RenderPassthroughViewMasked(const ERenderEye eye, 
 
 	m_commandList->OMSetRenderTargets(1, &rtvHandle, FALSE, &dsvHandle);
 
-	bool bUseStereo = mainConf.ProjectionMode == ProjectionStereoReconstruction;
+	bool bUseStereo = mainConf.ProjectionMode == Projection_StereoReconstruction;
 
 	m_commandList->SetPipelineState(m_psoPrepass.Get());
 	m_commandList->DrawInstanced(numVertices, 1, 0, 0);

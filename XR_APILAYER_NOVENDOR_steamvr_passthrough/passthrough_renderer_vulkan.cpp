@@ -1429,7 +1429,7 @@ void PassthroughRendererVulkan::UpdateDescriptorSets(VkCommandBuffer commandBuff
 	VkDescriptorImageInfo cameraImageInfo{};
 	cameraImageInfo.imageLayout = VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL;
 
-	if (m_configManager->GetConfig_Main().ShowTestImage)
+	if (m_configManager->GetConfig_Main().DebugTexture != DebugTexture_None)
 	{
 		cameraImageInfo.imageView = m_testPatternView;
 		cameraImageInfo.sampler = m_cameraSampler;
@@ -1521,7 +1521,7 @@ void PassthroughRendererVulkan::UpdateDescriptorSets(VkCommandBuffer commandBuff
 
 		numdescriptors = 5;
 
-		if (m_configManager->GetConfig_Main().ProjectionMode != ProjectionRoomView2D)
+		if (m_configManager->GetConfig_Main().ProjectionMode != Projection_RoomView2D)
 		{
 			uvDistortionImageInfo.imageLayout = VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL;
 			uvDistortionImageInfo.imageView = m_uvDistortionMapView;
@@ -1538,7 +1538,7 @@ void PassthroughRendererVulkan::UpdateDescriptorSets(VkCommandBuffer commandBuff
 			numdescriptors = 6;
 		}
 	}
-	else if (m_configManager->GetConfig_Main().ProjectionMode != ProjectionRoomView2D)
+	else if (m_configManager->GetConfig_Main().ProjectionMode != Projection_RoomView2D)
 	{
 		uvDistortionImageInfo.imageLayout = VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL;
 		uvDistortionImageInfo.imageView = m_uvDistortionMapView;
@@ -1586,7 +1586,7 @@ void PassthroughRendererVulkan::RenderPassthroughFrame(const XrCompositionLayerP
 	beginInfo.flags = 0;
 
 	// TODO: Can't support stereo in Vulkan as long as SteamVR hangs when reading the camera frame buffer under it.
-	if (mainConf.ProjectionMode == ProjectionStereoReconstruction)
+	if (mainConf.ProjectionMode == Projection_StereoReconstruction)
 	{
 		if (!g_bVulkanStereoErrorShown)
 		{
@@ -1599,7 +1599,7 @@ void PassthroughRendererVulkan::RenderPassthroughFrame(const XrCompositionLayerP
 	vkBeginCommandBuffer(m_commandBuffer[m_frameIndex], &beginInfo);
 
 
-	if (!mainConf.ShowTestImage && frame->frameTextureResource != nullptr)
+	if (!mainConf.DebugTexture != DebugTexture_None && frame->frameTextureResource != nullptr)
 	{
 		if (!UpdateCameraFrameResource(m_commandBuffer[m_frameIndex], m_frameIndex, frame->frameTextureResource))
 		{
@@ -1607,7 +1607,7 @@ void PassthroughRendererVulkan::RenderPassthroughFrame(const XrCompositionLayerP
 			return;
 		}
 	}
-	else if(!mainConf.ShowTestImage)
+	else if(!mainConf.DebugTexture != DebugTexture_None)
 	{
 		m_frameIndex = (m_frameIndex + 1) % NUM_SWAPCHAINS;
 		return;
@@ -1616,7 +1616,7 @@ void PassthroughRendererVulkan::RenderPassthroughFrame(const XrCompositionLayerP
 	{
 		std::shared_lock readLock(distortionParams.readWriteMutex);
 
-		if (mainConf.ProjectionMode != ProjectionRoomView2D &&
+		if (mainConf.ProjectionMode != Projection_RoomView2D &&
 			(!m_uvDistortionMap || m_fovScale != distortionParams.fovScale))
 		{
 			m_fovScale = distortionParams.fovScale;
@@ -1634,7 +1634,7 @@ void PassthroughRendererVulkan::RenderPassthroughFrame(const XrCompositionLayerP
 		buffer.bDoColorAdjustment = fabsf(mainConf.Brightness) > 0.01f || fabsf(mainConf.Contrast - 1.0f) > 0.01f || fabsf(mainConf.Saturation - 1.0f) > 0.01f;
 		buffer.bDebugDepth = mainConf.DebugDepth;
 		buffer.bDebugValidStereo = mainConf.DebugStereoValid;
-		buffer.bUseFisheyeCorrection = mainConf.ProjectionMode != ProjectionRoomView2D;
+		buffer.bUseFisheyeCorrection = mainConf.ProjectionMode != Projection_RoomView2D;
 
 		memcpy(m_psPassConstantBufferMappings[m_frameIndex], &buffer, sizeof(PSPassConstantBuffer));
 	}

@@ -320,7 +320,7 @@ void DepthReconstruction::RunThread()
 
         std::shared_ptr<CameraFrame> frame;
 
-        if (mainConfig.ProjectionMode != ProjectionStereoReconstruction || stereoConfig.StereoReconstructionFreeze || !m_cameraManager->GetCameraFrame(frame) || !frame->bHasFrameBuffer || frame->frameLayout == Mono)
+        if (mainConfig.ProjectionMode != Projection_StereoReconstruction || stereoConfig.StereoReconstructionFreeze || !m_cameraManager->GetCameraFrame(frame) || !frame->bHasFrameBuffer || frame->frameLayout == Mono)
         {
             continue;
         }
@@ -472,6 +472,45 @@ void DepthReconstruction::RunThread()
             std::lock_guard<std::mutex> lock(m_serveMutex);
 
             m_underConstructionDepthFrame.swap(m_servedDepthFrame);
+        }
+
+        if(mainConfig.DebugTexture == DebugTexture_Disparity)
+        {
+            DebugTexture& texture = m_configManager->GetDebugTexture();
+            std::lock_guard<std::mutex> writelock(texture.RWMutex);
+
+            if (mainConfig.DebugTexture == DebugTexture_Disparity)
+            {
+                if (texture.CurrentTexture != DebugTexture_Disparity)
+                {
+                    texture.Texture = std::vector<uint8_t>();
+                    texture.Texture.resize(m_cvImageWidth * 2 * m_cvImageHeight * sizeof(uint16_t));
+                }
+                cv::Mat debugTextureMat(m_cvImageHeight, m_cvImageWidth * 2, CV_16U, texture.Texture.data());
+
+                cv::Mat left = debugTextureMat(cv::Rect(0, 0, m_cvImageWidth, m_cvImageHeight));
+                cv::Mat right = debugTextureMat(cv::Rect(m_cvImageWidth, 0, m_cvImageWidth, m_cvImageHeight));
+
+                (*outputMatrix)(cv::Rect(m_maxDisparity, 0, m_cvImageWidth, m_cvImageHeight)).convertTo(left, CV_16U);
+
+                cv::Mat rightFlip;
+                m_rightDisparity(cv::Rect(m_maxDisparity, 0, m_cvImageWidth, m_cvImageHeight)).copyTo(rightFlip);
+                rightFlip *= -1;
+                rightFlip.convertTo(right, CV_16U);
+
+                debugTextureMat *= 50;
+
+                if (texture.Width != m_cvImageWidth || texture.Height != m_cvImageHeight)
+                {
+                    texture.bDimensionsUpdated = true;
+                }
+
+                texture.Width = m_cvImageWidth * 2;
+                texture.Height = m_cvImageHeight;
+                texture.PixelSize = sizeof(uint16_t);
+                texture.Format = DebugTextureFormat_R16U;
+                texture.CurrentTexture = DebugTexture_Disparity;
+            }
         }
         
         m_averageReconstructionTime = UpdateAveragePerfTime(m_reconstructionTimes, EndPerfTimer(startReconstructionTime), 20);

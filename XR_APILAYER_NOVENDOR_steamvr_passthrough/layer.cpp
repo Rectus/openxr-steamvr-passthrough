@@ -35,6 +35,7 @@
 #include <map>
 #include <shlobj_core.h>
 #include <pathcch.h>
+#include "lodepng.h"
 
 HMODULE g_dllModule = NULL;
 
@@ -726,6 +727,45 @@ namespace
 			return false;
 		}
 
+		void GetTestPattern(DebugTexture& texture)
+		{
+			char path[MAX_PATH];
+
+			if (FAILED(GetModuleFileNameA(g_dllModule, path, sizeof(path))))
+			{
+				ErrorLog("Error opening test pattern.\n");
+				return;
+			}
+
+			std::string pathStr = path;
+			std::string imgPath = pathStr.substr(0, pathStr.find_last_of("/\\")) + "\\testpattern.png";
+
+			std::lock_guard<std::mutex> writelock(texture.RWMutex);
+			
+			if (texture.CurrentTexture != DebugTexture_TestImage)
+			{
+				texture.Texture = std::vector<uint8_t>();
+			}
+
+			unsigned width, height;
+			unsigned error = lodepng::decode(texture.Texture, width, height, imgPath.c_str());
+			if (error)
+			{
+				ErrorLog("Error decoding test pattern.\n");
+				return;
+			}
+
+			texture.Texture.resize(width * height * 4);
+
+			texture.Height = height;
+			texture.Width = width;
+			texture.PixelSize = 4;
+			texture.Format = DebugTextureFormat_RGBA8;
+			texture.CurrentTexture = DebugTexture_TestImage;
+			texture.bDimensionsUpdated = true;
+
+			return;
+		}
 
 		void RenderPassthroughOnAppLayer(const XrFrameEndInfo* frameEndInfo, uint32_t layerNum)
 		{
@@ -774,12 +814,16 @@ namespace
 			{
 				blendMode = AlphaBlendUnpremultiplied;
 			}
+
+			if (m_configManager->GetConfig_Main().DebugTexture == DebugTexture_TestImage &&
+				m_configManager->GetDebugTexture().CurrentTexture != DebugTexture_TestImage)
+			{
+				GetTestPattern(m_configManager->GetDebugTexture());
+			}
 			
 			std::shared_ptr<DepthFrame> depthFrame = m_depthReconstruction->GetDepthFrame();
 
 			m_Renderer->RenderPassthroughFrame(layer, frame.get(), blendMode, leftIndex, rightIndex, depthFrame, m_depthReconstruction->GetDistortionParameters());
-
-
 
 
 			float renderTime = EndPerfTimer(preRenderTime.QuadPart);

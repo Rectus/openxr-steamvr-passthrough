@@ -4,15 +4,54 @@
 
 enum EProjectionMode
 {
-	ProjectionRoomView2D = 0,
-	ProjectionCustom2D = 1,
-	ProjectionStereoReconstruction = 2,
+	Projection_RoomView2D = 0,
+	Projection_Custom2D = 1,
+	Projection_StereoReconstruction = 2,
+};
+
+enum ESelectedDebugTexture
+{
+	DebugTexture_None = 0,
+	DebugTexture_TestImage,
+	DebugTexture_Disparity
+};
+
+enum EDebugTextureFormat
+{
+	DebugTextureFormat_RGBA8,
+	DebugTextureFormat_R8,
+	DebugTextureFormat_R16U,
+	DebugTextureFormat_R16S,
+	DebugTextureFormat_R32F
+};
+
+struct DebugTexture
+{
+	DebugTexture()
+		: Texture()
+		, Width(0)
+		, Height(0)
+		, PixelSize(0)
+		, Format(DebugTextureFormat_RGBA8)
+		, bDimensionsUpdated(false)
+		, RWMutex()
+		, CurrentTexture(DebugTexture_None)
+	{}
+
+	std::vector<uint8_t> Texture;
+	uint32_t Width;
+	uint32_t Height;
+	uint32_t PixelSize;
+	EDebugTextureFormat Format;
+	ESelectedDebugTexture CurrentTexture;
+	bool bDimensionsUpdated;
+	std::mutex RWMutex;
 };
 
 struct Config_Main
 {
 	bool EnablePassthrough = true;
-	EProjectionMode ProjectionMode = ProjectionCustom2D;
+	EProjectionMode ProjectionMode = Projection_Custom2D;
 
 	float PassthroughOpacity = 1.0f;
 	float ProjectionDistanceFar = 10.0f;
@@ -27,9 +66,9 @@ struct Config_Main
 	bool RequireSteamVRRuntime = true;
 
 	// Transient settings not written to file
-	bool ShowTestImage = false;
 	bool DebugDepth = false;
 	bool DebugStereoValid = false;
+	ESelectedDebugTexture DebugTexture = DebugTexture_None;
 };
 
 // Configuration for core-spec passthrough
@@ -128,6 +167,7 @@ public:
 	Config_Stereo& GetConfig_CustomStereo() { return m_configCustomStereo; }
 	Config_Depth& GetConfig_Depth() { return m_configDepth; }
 
+	DebugTexture& GetDebugTexture() { return m_debugTexture; }
 
 private:
 	void UpdateConfigFile();
@@ -151,5 +191,7 @@ private:
 	Config_Stereo m_configStereo;
 	Config_Stereo m_configCustomStereo;
 	Config_Depth m_configDepth;
+
+	DebugTexture m_debugTexture;
 };
 

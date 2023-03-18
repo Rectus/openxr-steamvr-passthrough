@@ -312,21 +312,21 @@ if (bIsActiveTab) { ImGui::PopStyleColor(1); bIsActiveTab = false; }
 
 			ImGui::Text("Projection Mode");
 			TextDescription("Method for projecting the passthrough cameras to the VR view.");
-			if (ImGui::RadioButton("2D Room View", mainConfig.ProjectionMode == ProjectionRoomView2D))
+			if (ImGui::RadioButton("2D Room View", mainConfig.ProjectionMode == Projection_RoomView2D))
 			{
-				mainConfig.ProjectionMode = ProjectionRoomView2D;
+				mainConfig.ProjectionMode = Projection_RoomView2D;
 			}
 			TextDescription("Cylindrical projection with floor. Matches the projection in the SteamVR Room View 2D mode.");
 
-			if (ImGui::RadioButton("2D Custom", mainConfig.ProjectionMode == ProjectionCustom2D))
+			if (ImGui::RadioButton("2D Custom", mainConfig.ProjectionMode == Projection_Custom2D))
 			{
-				mainConfig.ProjectionMode = ProjectionCustom2D;
+				mainConfig.ProjectionMode = Projection_Custom2D;
 			}
 			TextDescription("Cylindrical projection with floor. Custom distortion correction and projection calculation.");
 
-			if (ImGui::RadioButton("3D Stereo (Experimental)", mainConfig.ProjectionMode == ProjectionStereoReconstruction))
+			if (ImGui::RadioButton("3D Stereo (Experimental)", mainConfig.ProjectionMode == Projection_StereoReconstruction))
 			{
-				mainConfig.ProjectionMode = ProjectionStereoReconstruction;
+				mainConfig.ProjectionMode = Projection_StereoReconstruction;
 			}
 			TextDescription("Full depth estimation.");
 			IMGUI_BIG_SPACING;
@@ -460,7 +460,7 @@ if (bIsActiveTab) { ImGui::PopStyleColor(1); bIsActiveTab = false; }
 			{
 				ImGui::TextColored(colorTextRed, "Stereo reconstruction not supported under Vulkan!");
 			}
-			else if (mainConfig.ProjectionMode == ProjectionStereoReconstruction)
+			else if (mainConfig.ProjectionMode == Projection_StereoReconstruction)
 			{
 				ImGui::TextColored(colorTextGreen, "Stereo reconstruction enabled");
 			}
@@ -727,7 +727,23 @@ if (bIsActiveTab) { ImGui::PopStyleColor(1); bIsActiveTab = false; }
 			ImGui::Checkbox("Freeze Stereo Projection", &stereoConfig.StereoReconstructionFreeze);
 			ImGui::Checkbox("Debug Depth", &mainConfig.DebugDepth);
 			ImGui::Checkbox("Debug Valid Stereo", &mainConfig.DebugStereoValid);
-			ImGui::Checkbox("Show Test Image", &mainConfig.ShowTestImage);
+
+			ImGui::BeginGroup();
+			ImGui::Text("Debug Texture");
+			if (ImGui::RadioButton("None", mainConfig.DebugTexture == DebugTexture_None))
+			{
+				mainConfig.DebugTexture = DebugTexture_None;
+			}
+			if (ImGui::RadioButton("Test Image", mainConfig.DebugTexture == DebugTexture_TestImage))
+			{
+				mainConfig.DebugTexture = DebugTexture_TestImage;
+			}
+			if (ImGui::RadioButton("Disparity Map", mainConfig.DebugTexture == DebugTexture_Disparity))
+			{
+				mainConfig.DebugTexture = DebugTexture_Disparity;
+			}
+			ImGui::EndGroup();
+
 			ImGui::EndGroup();
 
 			ImGui::SameLine();

@@ -9,6 +9,7 @@ ConfigManager::ConfigManager(std::wstring configFile)
 	: m_configFile(configFile)
 	, m_bConfigUpdated(false)
 	, m_iniData()
+	, m_debugTexture()
 {
 	m_iniData.SetUnicode(true);
 }

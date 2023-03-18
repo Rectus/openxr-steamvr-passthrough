@@ -99,7 +99,7 @@ public:
 
 private:
 
-	void SetupTestImage();
+	void SetupDebugTexture(DebugTexture& texture);
 	void SetupFrameResource();
 	void SetupDisparityMap(uint32_t width, uint32_t height);
 	void SetupUVDistortionMap(std::shared_ptr<std::vector<float>> uvDistortionMap);
@@ -158,8 +158,10 @@ private:
 	ComPtr<ID3D11BlendState> m_blendStatePrepassUseAppAlpha;
 	ComPtr<ID3D11BlendState> m_blendStatePrepassIgnoreAppAlpha;
 
-	ComPtr<ID3D11Texture2D> m_testPatternTexture;
-	ComPtr<ID3D11ShaderResourceView> m_testPatternSRV;
+	ComPtr<ID3D11Texture2D> m_debugTexture;
+	ComPtr<ID3D11Texture2D> m_debugTextureUpload;
+	ComPtr<ID3D11ShaderResourceView> m_debugTextureSRV;
+	ESelectedDebugTexture m_selectedDebugTexture;
 
 	ComPtr<ID3D11Texture2D> m_cameraFrameTexture[NUM_SWAPCHAINS];
 	ComPtr<ID3D11Texture2D> m_cameraFrameUploadTexture;

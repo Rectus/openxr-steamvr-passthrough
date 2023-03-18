@@ -3,9 +3,8 @@
 #include "pch.h"
 #include "passthrough_renderer.h"
 #include <log.h>
-#include <PathCch.h>
 #include <xr_linear.h>
-#include "lodepng.h"
+
 
 #include "shaders\passthrough_vs.h"
 #include "shaders\passthrough_stereo_vs.h"
@@ -95,6 +94,7 @@ PassthroughRendererDX11::PassthroughRendererDX11(ID3D11Device* device, HMODULE d
 	, m_cameraFrameBufferSize(0)
 	, m_disparityMapWidth(0)
 	, m_fovScale(0.0f)
+	, m_selectedDebugTexture(DebugTexture_None)
 {
 	memset(m_temportaryRenderTargets, 0, sizeof(m_temportaryRenderTargets));
 }
@@ -335,7 +335,6 @@ bool PassthroughRendererDX11::InitRenderer()
 		return false;
 	}
 
-	SetupTestImage();
 	SetupFrameResource();
 	GenerateMesh();
 
@@ -343,34 +342,36 @@ bool PassthroughRendererDX11::InitRenderer()
 }
 
 
-void PassthroughRendererDX11::SetupTestImage()
+void PassthroughRendererDX11::SetupDebugTexture(DebugTexture& texture)
 {
-	char path[MAX_PATH];
+	DXGI_FORMAT format;
 
-	if (FAILED(GetModuleFileNameA(m_dllModule, path, sizeof(path))))
+	switch (texture.Format)
 	{
-		ErrorLog("Error opening test pattern.\n");
-		return;
-	}
-
-	std::string pathStr = path;
-	std::string imgPath = pathStr.substr(0, pathStr.find_last_of("/\\")) + "\\testpattern.png";
-
-	std::vector<unsigned char> image;
-	unsigned width, height;
-
-	unsigned error = lodepng::decode(image, width, height, imgPath.c_str());
-	if (error)
-	{
-		ErrorLog("Error decoding test pattern.\n");
-		return;
+	case DebugTextureFormat_RGBA8:
+		format = DXGI_FORMAT_R8G8B8A8_UNORM_SRGB;
+		break;
+	case DebugTextureFormat_R8:
+		format = DXGI_FORMAT_R8_UNORM;
+		break;
+	case DebugTextureFormat_R16S:
+		format = DXGI_FORMAT_R16_SNORM;
+		break;
+	case DebugTextureFormat_R16U:
+		format = DXGI_FORMAT_R16_UNORM;
+		break;
+	case DebugTextureFormat_R32F:
+		format = DXGI_FORMAT_R32_FLOAT;
+		break;
+	default:
+		format = DXGI_FORMAT_R8G8B8A8_UNORM_SRGB;
 	}
 
 	D3D11_TEXTURE2D_DESC textureDesc = {};
 	textureDesc.MipLevels = 1;
-	textureDesc.Format = DXGI_FORMAT_R8G8B8A8_UNORM_SRGB;
-	textureDesc.Width = width;
-	textureDesc.Height = height;
+	textureDesc.Format = format;
+	textureDesc.Width = texture.Width;
+	textureDesc.Height = texture.Height;
 	textureDesc.ArraySize = 1;
 	textureDesc.SampleDesc.Count = 1;
 	textureDesc.SampleDesc.Quality = 0;
@@ -378,9 +379,9 @@ void PassthroughRendererDX11::SetupTestImage()
 	textureDesc.Usage = D3D11_USAGE_DEFAULT;
 	textureDesc.CPUAccessFlags = 0;
 
-	if (FAILED(m_d3dDevice->CreateTexture2D(&textureDesc, nullptr, &m_testPatternTexture)))
+	if (FAILED(m_d3dDevice->CreateTexture2D(&textureDesc, nullptr, &m_debugTexture)))
 	{
-		ErrorLog("Test pattern CreateTexture2D error!\n");
+		ErrorLog("Debug Texture CreateTexture2D error!\n");
 		return;
 	}
 
@@ -389,10 +390,9 @@ void PassthroughRendererDX11::SetupTestImage()
 	uploadTextureDesc.Usage = D3D11_USAGE_STAGING;
 	uploadTextureDesc.CPUAccessFlags = D3D11_CPU_ACCESS_WRITE;
 
-	ComPtr<ID3D11Texture2D> uploadTexture;
-	if (FAILED(m_d3dDevice->CreateTexture2D(&uploadTextureDesc, nullptr, &uploadTexture)))
+	if (FAILED(m_d3dDevice->CreateTexture2D(&uploadTextureDesc, nullptr, &m_debugTextureUpload)))
 	{
-		ErrorLog("Test pattern CreateTexture2D error!\n");
+		ErrorLog("Debug Texture Upload CreateTexture2D error!\n");
 		return;
 	}
 
@@ -401,18 +401,11 @@ void PassthroughRendererDX11::SetupTestImage()
 	srvDesc.Format = textureDesc.Format;
 	srvDesc.Texture2D.MipLevels = 1;
 
-	if (FAILED(m_d3dDevice->CreateShaderResourceView(m_testPatternTexture.Get(), &srvDesc, &m_testPatternSRV)))
+	if (FAILED(m_d3dDevice->CreateShaderResourceView(m_debugTexture.Get(), &srvDesc, &m_debugTextureSRV)))
 	{
-		ErrorLog("Test pattern CreateShaderResourceView error!\n");
+		ErrorLog("Debug Texture CreateShaderResourceView error!\n");
 		return;
 	}
-
-	D3D11_MAPPED_SUBRESOURCE res = {};
-	m_deviceContext->Map(uploadTexture.Get(), 0, D3D11_MAP_WRITE, 0, &res);
-	memcpy(res.pData, image.data(), image.size());
-	m_deviceContext->Unmap(uploadTexture.Get(), 0);
-
-	m_deviceContext->CopyResource(m_testPatternTexture.Get(), uploadTexture.Get());
 }
 
 
@@ -831,7 +824,7 @@ void PassthroughRendererDX11::RenderPassthroughFrame(const XrCompositionLayerPro
 		m_renderContext = m_deviceContext;
 	}
 
-	if (mainConf.ProjectionMode == ProjectionStereoReconstruction && !depthFrame->bIsValid)
+	if (mainConf.ProjectionMode == Projection_StereoReconstruction && !depthFrame->bIsValid)
 	{
 		return;
 	}
@@ -839,7 +832,7 @@ void PassthroughRendererDX11::RenderPassthroughFrame(const XrCompositionLayerPro
 	{
 		std::shared_lock readLock(distortionParams.readWriteMutex);
 
-		if (mainConf.ProjectionMode != ProjectionRoomView2D &&
+		if (mainConf.ProjectionMode != Projection_RoomView2D &&
 			(!m_uvDistortionMap.Get() || m_fovScale != distortionParams.fovScale))
 		{
 			m_fovScale = distortionParams.fovScale;
@@ -847,7 +840,7 @@ void PassthroughRendererDX11::RenderPassthroughFrame(const XrCompositionLayerPro
 		}
 	}
 
-	if (mainConf.ProjectionMode == ProjectionStereoReconstruction)
+	if (mainConf.ProjectionMode == Projection_StereoReconstruction)
 	{
 		std::shared_lock readLock(depthFrame->readWriteMutex);
 
@@ -877,18 +870,41 @@ void PassthroughRendererDX11::RenderPassthroughFrame(const XrCompositionLayerPro
 
 	ID3D11ShaderResourceView* psSRVs[2];
 	psSRVs[1] = m_uvDistortionMapSRV.Get();
+	bool bGotDebugTexture = false;
 
-	if (mainConf.ShowTestImage)
+	if (mainConf.DebugTexture != DebugTexture_None)
 	{
-		psSRVs[0] = m_testPatternSRV.Get();
-		
+		DebugTexture& texture = m_configManager->GetDebugTexture();
+		std::lock_guard<std::mutex> readlock(texture.RWMutex);
+
+		if (texture.CurrentTexture == mainConf.DebugTexture)
+		{
+			if (!m_debugTextureSRV.Get() || texture.CurrentTexture != m_selectedDebugTexture || texture.bDimensionsUpdated)
+			{
+				SetupDebugTexture(texture);
+
+				m_selectedDebugTexture = texture.CurrentTexture;
+				texture.bDimensionsUpdated = false;
+			}
+
+			if (m_debugTextureUpload.Get())
+			{
+				UploadTexture(m_deviceContext, m_debugTextureUpload, texture.Texture.data(), texture.Height, texture.Width * texture.PixelSize);
+
+				m_deviceContext->CopyResource(m_debugTexture.Get(), m_debugTextureUpload.Get());
+
+				psSRVs[0] = m_debugTextureSRV.Get();
+				bGotDebugTexture = true;
+			}
+		}	
 	}
-	else if (frame->frameTextureResource != nullptr)
+
+	if (!bGotDebugTexture && frame->frameTextureResource != nullptr)
 	{
 		// Use shared texture
 		psSRVs[0] = (ID3D11ShaderResourceView*)frame->frameTextureResource;
 	}
-	else
+	else if(!bGotDebugTexture)
 	{
 		// Upload camera frame from CPU
 		UploadTexture(m_deviceContext, m_cameraFrameUploadTexture, (uint8_t*)frame->frameBuffer->data(), m_cameraTextureHeight, m_cameraTextureWidth * 4);
@@ -914,7 +930,7 @@ void PassthroughRendererDX11::RenderPassthroughFrame(const XrCompositionLayerPro
 
 	UINT numVertices;
 
-	if (mainConf.ProjectionMode == ProjectionStereoReconstruction)
+	if (mainConf.ProjectionMode == Projection_StereoReconstruction)
 	{
 		numVertices = (UINT)m_stereoVertices.size() / 3;
 		m_renderContext->IASetVertexBuffers(0, 1, m_stereoVertexBuffer.GetAddressOf(), strides, offsets);
@@ -936,7 +952,7 @@ void PassthroughRendererDX11::RenderPassthroughFrame(const XrCompositionLayerPro
 	buffer.bDoColorAdjustment = fabsf(mainConf.Brightness) > 0.01f || fabsf(mainConf.Contrast - 1.0f) > 0.01f || fabsf(mainConf.Saturation - 1.0f) > 0.01f;
 	buffer.bDebugDepth = mainConf.DebugDepth;
 	buffer.bDebugValidStereo = mainConf.DebugStereoValid;
-	buffer.bUseFisheyeCorrection = mainConf.ProjectionMode != ProjectionRoomView2D;
+	buffer.bUseFisheyeCorrection = mainConf.ProjectionMode != Projection_RoomView2D;
 
 	m_renderContext->UpdateSubresource(m_psPassConstantBuffer.Get(), 0, nullptr, &buffer, 0, 0);
 
@@ -1141,9 +1157,9 @@ void PassthroughRendererDX11::RenderPassthroughViewMasked(const ERenderEye eye, 
 
 	ID3D11ShaderResourceView* cameraFrameSRV;
 
-	if (mainConf.ShowTestImage)
+	if (mainConf.DebugTexture != DebugTexture_None)
 	{
-		cameraFrameSRV = m_testPatternSRV.Get();
+		cameraFrameSRV = m_debugTextureSRV.Get();
 	}
 	else if (frame->frameTextureResource != nullptr)
 	{
@@ -1165,7 +1181,7 @@ void PassthroughRendererDX11::RenderPassthroughViewMasked(const ERenderEye eye, 
 		prepassSourceTexture = m_renderTargetSRVs[bufferIndex].Get();
 	}
 
-	if (mainConf.ProjectionMode == ProjectionRoomView2D)
+	if (mainConf.ProjectionMode == Projection_RoomView2D)
 	{
 		m_renderContext->PSSetShaderResources(0, 1, &prepassSourceTexture);
 	}
@@ -1187,7 +1203,7 @@ void PassthroughRendererDX11::RenderPassthroughViewMasked(const ERenderEye eye, 
 	ID3D11RenderTargetView* nullRTV = nullptr;
 	m_renderContext->OMSetRenderTargets(1, &nullRTV, nullptr);
 
-	if (mainConf.ProjectionMode == ProjectionRoomView2D)
+	if (mainConf.ProjectionMode == Projection_RoomView2D)
 	{
 		ID3D11ShaderResourceView* views[3] = { cameraFrameSRV, nullptr, tempTarget.SRV.Get() };
 		m_renderContext->PSSetShaderResources(0, 3, views);
