@@ -460,6 +460,24 @@ void CameraManager::ServeFrames()
         m_underConstructionFrame->bIsValid = true;
         m_underConstructionFrame->frameLayout = m_frameLayout;
 
+
+        // Apply offset calibration to camera positions.
+        XrMatrix4x4f origLeftCameraToTrackingPose = ToXRMatrix4x4(m_underConstructionFrame->header.trackedDevicePose.mDeviceToAbsoluteTracking);
+        XrMatrix4x4f headToTrackingPose, correctedLeftCameraToHMDPose;
+        XrMatrix4x4f_Multiply(&headToTrackingPose, &origLeftCameraToTrackingPose, &m_HMDToCameraLeft);
+        correctedLeftCameraToHMDPose = m_cameraToHMDLeft;
+        correctedLeftCameraToHMDPose.m[12] *= mainConf.DepthOffsetCalibration;
+        correctedLeftCameraToHMDPose.m[13] *= mainConf.DepthOffsetCalibration;
+        correctedLeftCameraToHMDPose.m[14] *= mainConf.DepthOffsetCalibration;
+        XrMatrix4x4f_Multiply(&m_underConstructionFrame->cameraViewToWorldLeft, &headToTrackingPose, &correctedLeftCameraToHMDPose);
+
+        XrMatrix4x4f rightToLeftPose = m_cameraRightToLeftPose;
+        rightToLeftPose.m[12] *= mainConf.DepthOffsetCalibration;
+        rightToLeftPose.m[13] *= mainConf.DepthOffsetCalibration;
+        rightToLeftPose.m[14] *= mainConf.DepthOffsetCalibration;
+
+        XrMatrix4x4f_Multiply(&m_underConstructionFrame->cameraViewToWorldRight, &m_underConstructionFrame->cameraViewToWorldLeft, &rightToLeftPose);
+
         {
             std::lock_guard<std::mutex> lock(m_serveMutex);
 
@@ -701,19 +719,8 @@ void CameraManager::CalculateFrameProjectionForEye(const ERenderEye eye, std::sh
         XrMatrix4x4f frameProjectionInverse;
         XrMatrix4x4f_Invert(&frameProjectionInverse, &frameProjection);
 
-        XrMatrix4x4f origLeftCameraToTrackingPose = ToXRMatrix4x4(frame->header.trackedDevicePose.mDeviceToAbsoluteTracking);
-
-        // Apply offset calibration to left camera position too.
-        XrMatrix4x4f headToTrackingPose, correctedLeftCameraToHMDPose, leftCameraToTrackingPose;
-        XrMatrix4x4f_Multiply(&headToTrackingPose, &origLeftCameraToTrackingPose, &m_HMDToCameraLeft);
-        correctedLeftCameraToHMDPose = m_cameraToHMDLeft;
-        correctedLeftCameraToHMDPose.m[12] *= mainConf.DepthOffsetCalibration;
-        correctedLeftCameraToHMDPose.m[13] *= mainConf.DepthOffsetCalibration;
-        correctedLeftCameraToHMDPose.m[14] *= mainConf.DepthOffsetCalibration;
-        XrMatrix4x4f_Multiply(&leftCameraToTrackingPose, &headToTrackingPose, &correctedLeftCameraToHMDPose);
-
         XrMatrix4x4f leftCameraFromTrackingPose;
-        XrMatrix4x4f_Invert(&leftCameraFromTrackingPose, &leftCameraToTrackingPose);      
+        XrMatrix4x4f_Invert(&leftCameraFromTrackingPose, &frame->cameraViewToWorldLeft);
 
         if (eye == LEFT_EYE)
         {
@@ -725,7 +732,7 @@ void CameraManager::CalculateFrameProjectionForEye(const ERenderEye eye, std::sh
             XrMatrix4x4f_Multiply(&frame->worldToCameraProjectionLeft, &frameProjection, &tempMatrix);
 
             XrMatrix4x4f_Multiply(&tempMatrix, &distortionParams.rectifiedRotationLeft, &frameProjectionInverse);
-            XrMatrix4x4f_Multiply(&frame->cameraProjectionToWorldLeft, &leftCameraToTrackingPose, &tempMatrix);
+            XrMatrix4x4f_Multiply(&frame->cameraProjectionToWorldLeft, &frame->cameraViewToWorldLeft, &tempMatrix);
         }
         else
         {
@@ -748,14 +755,14 @@ void CameraManager::CalculateFrameProjectionForEye(const ERenderEye eye, std::sh
                 XrMatrix4x4f_Transpose(&rectifiedRotationInverse, &rectifiedRotation);
 
                 XrMatrix4x4f_Multiply(&tempMatrix, &rectifiedRotationInverse, &frameProjectionInverse);
-                XrMatrix4x4f_Multiply(&frame->cameraProjectionToWorldRight, &leftCameraToTrackingPose, &tempMatrix);
+                XrMatrix4x4f_Multiply(&frame->cameraProjectionToWorldRight, &frame->cameraViewToWorldLeft, &tempMatrix);
             }
             else
             {
                 XrMatrix4x4f_Transpose(&rectifiedRotationInverse, &distortionParams.rectifiedRotationLeft);
 
                 XrMatrix4x4f_Multiply(&tempMatrix, &rectifiedRotationInverse, &frameProjectionInverse);
-                XrMatrix4x4f_Multiply(&frame->cameraProjectionToWorldRight, &leftCameraToTrackingPose, &tempMatrix);
+                XrMatrix4x4f_Multiply(&frame->cameraProjectionToWorldRight, &frame->cameraViewToWorldLeft, &tempMatrix);
             }
         }
     }

@@ -20,7 +20,8 @@ using namespace steamvr_passthrough::log;
 
 struct VSPassConstantBuffer
 {
-	XrMatrix4x4f disparityViewToWorld;
+	XrMatrix4x4f disparityViewToWorldLeft;
+	XrMatrix4x4f disparityViewToWorldRight;
 	XrMatrix4x4f disparityToDepth;
 	uint32_t disparityTextureSize[2];
 	float disparityDownscaleFactor;
@@ -153,7 +154,7 @@ bool PassthroughRendererDX11::InitRenderer()
 		}
 	}
 
-	bufferDesc.ByteWidth = 160;
+	bufferDesc.ByteWidth = 208;
 	for (int i = 0; i < NUM_SWAPCHAINS; i++)
 	{
 		if (FAILED(m_d3dDevice->CreateBuffer(&bufferDesc, nullptr, &m_vsPassConstantBuffer[i])))
@@ -467,7 +468,7 @@ void PassthroughRendererDX11::SetupDisparityMap(uint32_t width, uint32_t height)
 {
 	D3D11_TEXTURE2D_DESC textureDesc = {};
 	textureDesc.MipLevels = 1;
-	textureDesc.Format = DXGI_FORMAT_R16_UNORM;
+	textureDesc.Format = DXGI_FORMAT_R16_SNORM;
 	textureDesc.Width = width;
 	textureDesc.Height = height;
 	textureDesc.ArraySize = 1;
@@ -848,7 +849,7 @@ void PassthroughRendererDX11::RenderPassthroughFrame(const XrCompositionLayerPro
 		{
 			m_disparityMapWidth = depthFrame->disparityTextureSize[0];
 			SetupDisparityMap(depthFrame->disparityTextureSize[0], depthFrame->disparityTextureSize[1]);
-			GenerateDepthMesh(depthFrame->disparityTextureSize[0], depthFrame->disparityTextureSize[1]);
+			GenerateDepthMesh(depthFrame->disparityTextureSize[0] / 2, depthFrame->disparityTextureSize[1]);
 		}
 
 		UploadTexture(m_deviceContext, m_disparityMapUploadTexture, (uint8_t*)depthFrame->disparityMap->data(), depthFrame->disparityTextureSize[1], depthFrame->disparityTextureSize[0] * sizeof(uint16_t));
@@ -860,7 +861,8 @@ void PassthroughRendererDX11::RenderPassthroughFrame(const XrCompositionLayerPro
 
 
 		VSPassConstantBuffer vsBuffer{};
-		vsBuffer.disparityViewToWorld = depthFrame->disparityViewToWorldLeft;
+		vsBuffer.disparityViewToWorldLeft = depthFrame->disparityViewToWorldLeft;
+		vsBuffer.disparityViewToWorldRight = depthFrame->disparityViewToWorldRight;
 		vsBuffer.disparityToDepth = depthFrame->disparityToDepth;
 		vsBuffer.disparityDownscaleFactor = depthFrame->disparityDownscaleFactor;
 		vsBuffer.disparityTextureSize[0] = depthFrame->disparityTextureSize[0];

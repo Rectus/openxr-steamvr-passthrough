@@ -85,6 +85,7 @@ private:
 	cv::Ptr<cv::StereoMatcher> m_rightMatcher;
 
 	cv::Ptr<cv::ximgproc::DisparityWLSFilter> m_wlsFilter;
+	cv::Ptr<cv::ximgproc::DisparityWLSFilter> m_wlsFilterRight;
 
 	cv::Mat m_inputFrame;
 	cv::Mat m_inputFrameLeft;
@@ -103,10 +104,13 @@ private:
 	cv::Mat m_rawDisparity;
 	cv::Mat m_rightDisparity;
 	cv::Mat m_filteredDisparity;
+	cv::Mat m_filteredDisparityRight;
 	cv::Mat m_disparityMatrix;
 
 	cv::Mat m_confidence;
+	cv::Mat m_confidenceRight;
 	cv::Mat m_bilateralDisparity;
+	cv::Mat m_bilateralDisparityRight;
 
 	std::deque<float> m_reconstructionTimes;
 	float m_averageReconstructionTime;

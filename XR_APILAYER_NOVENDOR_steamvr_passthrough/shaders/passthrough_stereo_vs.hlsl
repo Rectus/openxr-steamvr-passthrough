@@ -38,7 +38,8 @@ cbuffer vsConstantBuffer : register(b0)
 
 cbuffer vsPassConstantBuffer : register(b1)
 {
-    float4x4 g_disparityViewToWorld;
+    float4x4 g_disparityViewToWorldLeft;
+    float4x4 g_disparityViewToWorldRight;
 	float4x4 g_disparityToDepth;
 	uint2 g_disparityTextureSize;
 	float g_disparityDownscaleFactor;
@@ -51,40 +52,41 @@ Texture2D<float> g_disparityTexture : register(t0);
 VS_OUTPUT main(float3 inPosition : POSITION, uint vertexID : SV_VertexID)
 {
 	VS_OUTPUT output;
-	inPosition.xy = inPosition.xy * float2(1, 1) + float2(0, 0);
-
-    float disparity = g_disparityTexture.Load(uint3(inPosition.xy * g_disparityTextureSize, 0));
+    float2 disparityUVs = inPosition.xy * (g_uvBounds.zw - g_uvBounds.xy) + g_uvBounds.xy;
+	
+    float disparity = g_disparityTexture.Load(uint3(disparityUVs * g_disparityTextureSize, 0));
 
 	output.projectionValidity = 0.0;
 
 	// Disparity at the max projection distance
     float minDisparity = g_disparityToDepth[3][2] /
-    (g_projectionDistance * 4096.0 * g_disparityDownscaleFactor * g_disparityToDepth[2][3]);
+    (g_projectionDistance * 2048.0 * g_disparityDownscaleFactor * g_disparityToDepth[2][3]);
 	
     if (disparity < minDisparity) 
 	{
 		// Hack that causes some artifacting. Ideally patch any holes or discard and render behind instead.
-        disparity = 0.001;
+        disparity = 0.002;
         output.projectionValidity = -1.0;
     }
-	else if (disparity > 0.9) 
+    else if (disparity > 0.04) 
 	{
-		disparity = 0.0001; 
+		disparity = 0.002; 
 		output.projectionValidity = -1.0;
 	}
 
 
-    float2 texturePos = inPosition.xy * g_disparityTextureSize * g_disparityDownscaleFactor;
+    float2 texturePos = inPosition.xy * g_disparityTextureSize * float2(0.5, 1) * g_disparityDownscaleFactor;
 
-	// Convert to uint16 range with 4 bit fixed decimal: 65536 / 16
-	disparity *= 4096.0 * g_disparityDownscaleFactor;
+	// Convert to int16 range with 4 bit fixed decimal: 65536 / 2 / 16
+	disparity *= 2048.0 * g_disparityDownscaleFactor;
     float4 viewSpaceCoords = mul(g_disparityToDepth, float4(texturePos, disparity, 1.0));
 	viewSpaceCoords.y = 1 - viewSpaceCoords.y;
 	viewSpaceCoords.z *= -1;
 	viewSpaceCoords /= viewSpaceCoords.w;
     viewSpaceCoords.z = sign(viewSpaceCoords.z) * min(abs(viewSpaceCoords.z), g_projectionDistance);
 
-    float4 worldSpacePoint = mul(g_disparityViewToWorld, viewSpaceCoords);
+    float4 worldSpacePoint = 
+		mul((g_uvBounds.x < 0.5) ? g_disparityViewToWorldLeft : g_disparityViewToWorldRight, viewSpaceCoords);
 	
 #ifndef VULKAN
     float4 outCoords = mul(g_worldToCameraProjection, worldSpacePoint);
@@ -93,7 +95,7 @@ VS_OUTPUT main(float3 inPosition : POSITION, uint vertexID : SV_VertexID)
 	
     output.position = mul(g_worldToHMDProjection, worldSpacePoint);
 	output.screenCoords = output.position.xyw;
-
+	
 #ifdef VULKAN
 	output.position.y *= -1.0;
 #endif
