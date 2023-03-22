@@ -13,7 +13,8 @@ enum ESelectedDebugTexture
 {
 	DebugTexture_None = 0,
 	DebugTexture_TestImage,
-	DebugTexture_Disparity
+	DebugTexture_Disparity,
+	DebugTexture_Confidence
 };
 
 enum EDebugTextureFormat

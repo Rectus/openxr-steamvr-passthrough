@@ -61,10 +61,15 @@ Texture2D<float2> g_fisheyeCorrectionTexture : register(t1);
 
 
 
-
+[earlydepthstencil]
 float4 main(VS_OUTPUT input) : SV_TARGET
 {
-    clip(input.projectionValidity);
+    //clip(input.projectionValidity);
+	
+  //  if (abs(ddx(input.screenCoords.z)) + abs(ddy(input.screenCoords.z)) > 0.001 * (g_depthRange.y - g_depthRange.x))
+  //  {
+		//clip(-1);
+  //  }
 	
 	// Convert from homogenous clip space coordinates to 0-1.
 	float2 outUvs = (input.clipSpaceCoords.xy / input.clipSpaceCoords.z) * float2(0.5, 0.5) + float2(0.5, 0.5);
@@ -113,5 +118,14 @@ float4 main(VS_OUTPUT input) : SV_TARGET
         }
     }
 	
-    return float4(rgbColor.xyz, g_opacity);
+    float viewSign = g_uvBounds.x < 0.5 ? 1 : -1;
+	
+    float cutoutFrac = 1 - (input.screenCoords.x / input.screenCoords.z * 4 * viewSign + 0.25);
+    //float cutout = 1 - saturate(abs(ddx(input.screenCoords.z)) + abs(ddy(input.screenCoords.z)) / (0.0005 * (g_depthRange.y - g_depthRange.x)));
+    float cutout = 1 - saturate((ddx(input.screenCoords.z)
+    * viewSign - 0.002) / 0.0001 / (g_depthRange.y - g_depthRange.x));
+	
+    float alpha = max(input.projectionValidity, max(cutout, cutoutFrac));
+	
+    return float4(rgbColor.xyz, g_opacity * alpha);
 }

@@ -199,7 +199,7 @@ bool PassthroughRendererDX11::InitRenderer()
 
 	depth.DepthEnable = true;
 	depth.DepthWriteMask = D3D11_DEPTH_WRITE_MASK_ZERO;
-	depth.DepthFunc = D3D11_COMPARISON_LESS_EQUAL;
+	depth.DepthFunc = D3D11_COMPARISON_LESS;
 	if (FAILED(m_d3dDevice->CreateDepthStencilState(&depth, m_depthStencilStateLess.GetAddressOf())))
 	{
 		ErrorLog("CreateDepthStencilState failure!\n");
@@ -207,7 +207,7 @@ bool PassthroughRendererDX11::InitRenderer()
 	}
 
 	depth.DepthWriteMask = D3D11_DEPTH_WRITE_MASK_ALL;
-	depth.DepthFunc = D3D11_COMPARISON_LESS_EQUAL;
+	depth.DepthFunc = D3D11_COMPARISON_LESS;
 	if (FAILED(m_d3dDevice->CreateDepthStencilState(&depth, m_depthStencilStateLessWrite.GetAddressOf())))
 	{
 		ErrorLog("CreateDepthStencilState failure!\n");
@@ -215,7 +215,7 @@ bool PassthroughRendererDX11::InitRenderer()
 	}
 
 	depth.DepthWriteMask = D3D11_DEPTH_WRITE_MASK_ZERO;
-	depth.DepthFunc = D3D11_COMPARISON_GREATER_EQUAL;
+	depth.DepthFunc = D3D11_COMPARISON_GREATER;
 	if (FAILED(m_d3dDevice->CreateDepthStencilState(&depth, m_depthStencilStateGreater.GetAddressOf())))
 	{
 		ErrorLog("CreateDepthStencilState failure!\n");
@@ -223,7 +223,7 @@ bool PassthroughRendererDX11::InitRenderer()
 	}
 
 	depth.DepthWriteMask = D3D11_DEPTH_WRITE_MASK_ALL;
-	depth.DepthFunc = D3D11_COMPARISON_GREATER_EQUAL;
+	depth.DepthFunc = D3D11_COMPARISON_GREATER;
 	if (FAILED(m_d3dDevice->CreateDepthStencilState(&depth, m_depthStencilStateGreaterWrite.GetAddressOf())))
 	{
 		ErrorLog("CreateDepthStencilState failure!\n");
@@ -468,7 +468,7 @@ void PassthroughRendererDX11::SetupDisparityMap(uint32_t width, uint32_t height)
 {
 	D3D11_TEXTURE2D_DESC textureDesc = {};
 	textureDesc.MipLevels = 1;
-	textureDesc.Format = DXGI_FORMAT_R16_SNORM;
+	textureDesc.Format = DXGI_FORMAT_R16G16_SNORM;
 	textureDesc.Width = width;
 	textureDesc.Height = height;
 	textureDesc.ArraySize = 1;
@@ -852,7 +852,7 @@ void PassthroughRendererDX11::RenderPassthroughFrame(const XrCompositionLayerPro
 			GenerateDepthMesh(depthFrame->disparityTextureSize[0] / 2, depthFrame->disparityTextureSize[1]);
 		}
 
-		UploadTexture(m_deviceContext, m_disparityMapUploadTexture, (uint8_t*)depthFrame->disparityMap->data(), depthFrame->disparityTextureSize[1], depthFrame->disparityTextureSize[0] * sizeof(uint16_t));
+		UploadTexture(m_deviceContext, m_disparityMapUploadTexture, (uint8_t*)depthFrame->disparityMap->data(), depthFrame->disparityTextureSize[1], depthFrame->disparityTextureSize[0] * sizeof(uint16_t) * 2);
 
 		m_deviceContext->CopyResource(m_disparityMap[m_frameIndex].Get(), m_disparityMapUploadTexture.Get());
 
@@ -1081,6 +1081,67 @@ void PassthroughRendererDX11::RenderPassthroughView(const ERenderEye eye, const 
 
 	m_renderContext->PSSetShader(m_pixelShader.Get(), nullptr, 0);
 	
+	m_renderContext->Draw(numVertices, 0);
+
+
+
+
+	buffer.frameUVBounds = GetFrameUVBounds(eye == LEFT_EYE ? RIGHT_EYE : LEFT_EYE, frame->frameLayout);
+	buffer.cameraProjectionToWorld = (eye != LEFT_EYE) ? frame->cameraProjectionToWorldLeft : frame->cameraProjectionToWorldRight;
+	buffer.worldToCameraProjection = (eye != LEFT_EYE) ? frame->worldToCameraProjectionLeft : frame->worldToCameraProjectionRight;
+	buffer.hmdViewWorldPos = (eye != LEFT_EYE) ? frame->hmdViewPosWorldLeft : frame->hmdViewPosWorldRight;
+	m_renderContext->UpdateSubresource(m_vsViewConstantBuffer[bufferIndex].Get(), 0, nullptr, &buffer, 0, 0);
+	
+
+	/*if ((blendMode != AlphaBlendPremultiplied && blendMode != AlphaBlendUnpremultiplied) || m_configManager->GetConfig_Main().PassthroughOpacity < 1.0f || bCompositeDepth)
+	{*/
+		/*m_renderContext->PSSetShader(m_prepassShader.Get(), nullptr, 0);
+
+		if (bCompositeDepth)
+		{
+			m_renderContext->OMSetBlendState(m_blendStatePrepassInverseAppAlpha.Get(), nullptr, UINT_MAX);
+		}
+		else if (blendMode == AlphaBlendPremultiplied || blendMode == AlphaBlendUnpremultiplied)
+		{
+			m_renderContext->OMSetBlendState(m_blendStatePrepassUseAppAlpha.Get(), nullptr, UINT_MAX);
+		}
+		else
+		{
+			m_renderContext->OMSetBlendState(m_blendStatePrepassIgnoreAppAlpha.Get(), nullptr, UINT_MAX);
+		}
+
+		m_renderContext->OMSetDepthStencilState(GET_DEPTH_STENCIL_STATE(bCompositeDepth, frame->bHasReversedDepth, false), 1);
+
+		m_renderContext->Draw(numVertices, 0);*/
+
+
+
+		/*if (blendMode == AlphaBlendPremultiplied && !bCompositeDepth)
+		{
+			m_renderContext->OMSetBlendState(m_blendStateAlphaPremultiplied.Get(), nullptr, UINT_MAX);
+		}
+		else if (blendMode == AlphaBlendUnpremultiplied)
+		{
+			m_renderContext->OMSetBlendState(m_blendStateBase.Get(), nullptr, UINT_MAX);
+		}
+		else if (blendMode == Additive && !bCompositeDepth)
+		{
+			m_renderContext->OMSetBlendState(m_blendStateAlphaPremultiplied.Get(), nullptr, UINT_MAX);
+		}
+		else
+		{
+			m_renderContext->OMSetBlendState(m_blendStateBase.Get(), nullptr, UINT_MAX);
+		}*/
+
+	viewBuffer.frameUVBounds = GetFrameUVBounds(eye == LEFT_EYE ? RIGHT_EYE : LEFT_EYE, frame->frameLayout);
+
+	m_renderContext->UpdateSubresource(m_psViewConstantBuffer.Get(), 0, nullptr, &viewBuffer, 0, 0);
+
+		m_renderContext->OMSetDepthStencilState(GET_DEPTH_STENCIL_STATE(false, frame->bHasReversedDepth, depthConfig.DepthWriteOutput), 1);
+
+		m_renderContext->PSSetShader(m_pixelShader.Get(), nullptr, 0);
+	//}
+
 	m_renderContext->Draw(numVertices, 0);
 }
 

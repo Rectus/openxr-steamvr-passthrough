@@ -211,9 +211,9 @@ void DepthReconstruction::InitReconstruction()
     std::unique_lock writeLock2(m_servedDepthFrame->readWriteMutex);
     std::unique_lock writeLock3(m_underConstructionDepthFrame->readWriteMutex);
 
-    m_depthFrame->disparityMap->resize(m_cvImageWidth * m_cvImageHeight * 2);
-    m_servedDepthFrame->disparityMap->resize(m_cvImageWidth * m_cvImageHeight * 2);
-    m_underConstructionDepthFrame->disparityMap->resize(m_cvImageWidth * m_cvImageHeight * 2);
+    m_depthFrame->disparityMap->resize(m_cvImageWidth * m_cvImageHeight * 2 * 2);
+    m_servedDepthFrame->disparityMap->resize(m_cvImageWidth * m_cvImageHeight * 2 * 2);
+    m_underConstructionDepthFrame->disparityMap->resize(m_cvImageWidth * m_cvImageHeight * 2 * 2);
 }
 
 
@@ -451,7 +451,7 @@ void DepthReconstruction::RunThread()
             m_wlsFilter->setLambda(stereoConfig.StereoWLS_Lambda);
             m_wlsFilter->setSigmaColor(stereoConfig.StereoWLS_Sigma);
 
-            m_wlsFilter->filter(m_rawDisparity, m_scaledExtFrameLeft, m_filteredDisparity, m_rightDisparity, cv::Rect(m_maxDisparity, 0, m_cvImageWidth, m_cvImageHeight), m_scaledExtFrameRight);
+            m_wlsFilter->filter(m_rawDisparity, m_scaledExtFrameLeft, m_filteredDisparity, m_rightDisparity, cv::Rect(0, 0, m_cvImageWidth + m_maxDisparity, m_cvImageHeight), m_scaledExtFrameRight);
 
 
             m_wlsFilterRight = cv::ximgproc::createDisparityWLSFilter(m_rightMatcher);
@@ -459,8 +459,9 @@ void DepthReconstruction::RunThread()
             m_wlsFilterRight->setLambda(stereoConfig.StereoWLS_Lambda);
             m_wlsFilterRight->setSigmaColor(stereoConfig.StereoWLS_Sigma);
 
+            cv::Rect rightROI(0, 0, m_cvImageWidth + m_maxDisparity, m_cvImageHeight);
 
-            m_wlsFilterRight->filter(m_rightDisparity, m_scaledExtFrameRight, m_filteredDisparityRight, m_rawDisparity, cv::Rect(m_maxDisparity, 0, m_cvImageWidth, m_cvImageHeight), m_scaledExtFrameLeft);
+            m_wlsFilterRight->filter(m_rightDisparity, m_scaledExtFrameRight, m_filteredDisparityRight, m_rawDisparity, cv::Rect(0, 0, m_cvImageWidth + m_maxDisparity, m_cvImageHeight), m_scaledExtFrameLeft);
 
             if (stereoConfig.StereoFiltering == StereoFiltering_WLS_FBS)
             {
@@ -485,16 +486,44 @@ void DepthReconstruction::RunThread()
         {
             std::unique_lock writeLock(m_underConstructionDepthFrame->readWriteMutex);
 
-            m_disparityMatrix = cv::Mat(m_cvImageHeight, m_cvImageWidth * 2, CV_16S, m_underConstructionDepthFrame->disparityMap->data());
+            if (stereoConfig.StereoFiltering == StereoFiltering_WLS)
+            {
+                m_confidence = m_wlsFilter->getConfidenceMap();
+                m_confidenceRight = m_wlsFilterRight->getConfidenceMap();
+            }
+
+            m_disparityMatrix = cv::Mat(m_cvImageHeight, m_cvImageWidth * 2, CV_16SC2, m_underConstructionDepthFrame->disparityMap->data());
+
+            cv::Mat leftIn[2];
+            cv::Mat rightIn[2];
+
+            leftIn[0] = (*outputMatrix)(cv::Rect(m_maxDisparity, 0, m_cvImageWidth, m_cvImageHeight));
+            rightIn[0] = (*outputMatrixRight)(cv::Rect(m_maxDisparity, 0, m_cvImageWidth, m_cvImageHeight));
+
+            rightIn[0] *= -1;
+
+            if (m_confidence.size().width >= m_cvImageWidth + m_maxDisparity)
+            {
+                //leftIn[1] = m_confidence(cv::Rect(m_maxDisparity, 0, m_cvImageWidth, m_cvImageHeight));
+                m_confidence(cv::Rect(m_maxDisparity, 0, m_cvImageWidth, m_cvImageHeight)).convertTo(leftIn[1], CV_16S, 32768.0 / 255.0);
+            }
+            if (m_confidenceRight.size().width >= m_cvImageWidth + m_maxDisparity)
+            {
+                //rightIn[1] = m_confidenceRight(cv::Rect(m_maxDisparity, 0, m_cvImageWidth, m_cvImageHeight));
+                m_confidenceRight(cv::Rect(m_maxDisparity, 0, m_cvImageWidth, m_cvImageHeight)).convertTo(rightIn[1], CV_16S, 32768.0 / 255.0);
+            }           
 
             cv::Mat left = m_disparityMatrix(cv::Rect(0, 0, m_cvImageWidth, m_cvImageHeight));
             cv::Mat right = m_disparityMatrix(cv::Rect(m_cvImageWidth, 0, m_cvImageWidth, m_cvImageHeight));
 
-            (*outputMatrix)(cv::Rect(m_maxDisparity, 0, m_cvImageWidth, m_cvImageHeight)).convertTo(left, CV_16S);
+            int fromTo[4] = { 0,0 , 1,1 };
+            cv::mixChannels(leftIn, 2, &left, 1, fromTo, 2);
+            cv::mixChannels(rightIn, 2, &right, 1, fromTo, 2);
 
-            (*outputMatrixRight)(cv::Rect(m_maxDisparity, 0, m_cvImageWidth, m_cvImageHeight)).convertTo(right, CV_16S);
+            //(*outputMatrix)(cv::Rect(m_maxDisparity, 0, m_cvImageWidth, m_cvImageHeight)).convertTo(left, CV_16S);
+            //(*outputMatrixRight)(cv::Rect(m_maxDisparity, 0, m_cvImageWidth, m_cvImageHeight)).convertTo(right, CV_16S);
 
-            right *= -1;
+            
 
             XrMatrix4x4f_Multiply(&m_underConstructionDepthFrame->disparityViewToWorldLeft, &viewToWorldLeft, &m_rectifiedRotationLeft);
             XrMatrix4x4f_Multiply(&m_underConstructionDepthFrame->disparityViewToWorldRight, &viewToWorldRight, &m_rectifiedRotationRight);
@@ -509,7 +538,7 @@ void DepthReconstruction::RunThread()
             m_underConstructionDepthFrame.swap(m_servedDepthFrame);
         }
 
-        if(mainConfig.DebugTexture == DebugTexture_Disparity)
+        if (mainConfig.DebugTexture != DebugTexture_None)
         {
             DebugTexture& texture = m_configManager->GetDebugTexture();
             std::lock_guard<std::mutex> writelock(texture.RWMutex);
@@ -530,7 +559,7 @@ void DepthReconstruction::RunThread()
 
                 cv::Mat rightFlip;
                 (*outputMatrixRight)(cv::Rect(m_maxDisparity, 0, m_cvImageWidth, m_cvImageHeight)).copyTo(rightFlip);
-                rightFlip *= -1;
+                //rightFlip *= -1;
                 rightFlip.convertTo(right, CV_16S);
 
                 debugTextureMat *= 4;
@@ -545,6 +574,47 @@ void DepthReconstruction::RunThread()
                 texture.PixelSize = sizeof(uint16_t);
                 texture.Format = DebugTextureFormat_R16S;
                 texture.CurrentTexture = DebugTexture_Disparity;
+
+            }
+            else if (mainConfig.DebugTexture == DebugTexture_Confidence)
+            {
+                if (texture.CurrentTexture != DebugTexture_Confidence)
+                {
+                    texture.Texture = std::vector<uint8_t>();
+                    texture.Texture.resize(m_cvImageWidth * 2 * m_cvImageHeight * sizeof(uint16_t));
+                }
+                cv::Mat debugTextureMat(m_cvImageHeight, m_cvImageWidth * 2, CV_8U, texture.Texture.data());
+
+                cv::Mat left = debugTextureMat(cv::Rect(0, 0, m_cvImageWidth, m_cvImageHeight));
+                cv::Mat right = debugTextureMat(cv::Rect(m_cvImageWidth, 0, m_cvImageWidth, m_cvImageHeight));
+
+                if (stereoConfig.StereoFiltering == StereoFiltering_WLS)
+                {
+                    m_confidence = m_wlsFilter->getConfidenceMap();
+                    m_confidenceRight = m_wlsFilterRight->getConfidenceMap();
+                }
+
+                if (m_confidence.size().width >= m_cvImageWidth + m_maxDisparity)
+                {
+                    m_confidence(cv::Rect(m_maxDisparity, 0, m_cvImageWidth, m_cvImageHeight)).convertTo(left, CV_8U);
+                }
+                if (m_confidenceRight.size().width >= m_cvImageWidth + m_maxDisparity)
+                {
+                    m_confidenceRight(cv::Rect(m_maxDisparity, 0, m_cvImageWidth, m_cvImageHeight)).convertTo(right, CV_8U);
+                }
+                //debugTextureMat *= 4;
+
+                if (texture.Width != m_cvImageWidth || texture.Height != m_cvImageHeight)
+                {
+                    texture.bDimensionsUpdated = true;
+                }
+
+                texture.Width = m_cvImageWidth * 2;
+                texture.Height = m_cvImageHeight;
+                texture.PixelSize = sizeof(uint8_t);
+                texture.Format = DebugTextureFormat_R8;
+                texture.CurrentTexture = DebugTexture_Confidence;
+
             }
         }
         

@@ -742,6 +742,10 @@ if (bIsActiveTab) { ImGui::PopStyleColor(1); bIsActiveTab = false; }
 			{
 				mainConfig.DebugTexture = DebugTexture_Disparity;
 			}
+			if (ImGui::RadioButton("Confidence Map", mainConfig.DebugTexture == DebugTexture_Confidence))
+			{
+				mainConfig.DebugTexture = DebugTexture_Confidence;
+			}
 			ImGui::EndGroup();
 
 			ImGui::EndGroup();
