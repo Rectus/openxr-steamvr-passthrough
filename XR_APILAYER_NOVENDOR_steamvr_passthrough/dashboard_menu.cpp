@@ -517,6 +517,22 @@ if (bIsActiveTab) { ImGui::PopStyleColor(1); bIsActiveTab = false; }
 			ScrollableSliderInt("Image Downscale Factor", &stereoCustomConfig.StereoDownscaleFactor, 1, 16, "%d", 1);
 			TextDescription("Ratio of the stereo processed image to the camera frame. Larger values will improve performance.");
 			IMGUI_BIG_SPACING;
+
+			ImGui::Checkbox("Calculate Disparity for Both Cameras", &stereoCustomConfig.StereoDisparityBothEyes);
+			TextDescription("Calculates a separate disparity map for each camera, instead of using the left one for both.");
+			IMGUI_BIG_SPACING;
+
+			if (!stereoCustomConfig.StereoDisparityBothEyes) { ImGui::BeginDisabled(true); }
+			ImGui::Indent();
+			ImGui::Checkbox("Composite Both Cameras for Each Eye", &stereoCustomConfig.StereoCutoutEnabled);
+			TextDescription("Detects areas occluded to the main camera and renders them with the other camera where possible.");
+			IMGUI_BIG_SPACING;
+
+			ScrollableSlider("Composition Cutout Factor", &stereoCustomConfig.StereoCutoutFactor, 0.0f, 10.0f, "%.1f", 0.1f);
+			ScrollableSlider("Composition Cutout Offset", &stereoCustomConfig.StereoCutoutOffset, 0.0f, 1.0f, "%.2f", 0.01f);
+			ImGui::Unindent();
+			if (!stereoCustomConfig.StereoDisparityBothEyes) { ImGui::EndDisabled(); }
+			IMGUI_BIG_SPACING;
 		}
 
 		ImGui::SetNextItemOpen(true, ImGuiCond_Once);
@@ -599,6 +615,7 @@ if (bIsActiveTab) { ImGui::PopStyleColor(1); bIsActiveTab = false; }
 				ImGui::PushItemWidth(ImGui::GetContentRegionAvail().x * 0.45f);
 				ScrollableSlider("WLS Lambda", &stereoCustomConfig.StereoWLS_Lambda, 1.0f, 10000.0f, "%.0f", 100.0f);
 				ScrollableSlider("WLS Sigma", &stereoCustomConfig.StereoWLS_Sigma, 0.5f, 2.0f, "%.1f", 0.1f);
+				ScrollableSlider("WLS Confidence Radius", &stereoCustomConfig.StereoWLS_ConfidenceRadius, 0.1f, 2.0f, "%.1f", 0.1f);
 				IMGUI_BIG_SPACING;
 
 				ScrollableSlider("FBS Spatial", &stereoCustomConfig.StereoFBS_Spatial, 0.0f, 50.0f, "%.0f", 1.0f);

@@ -16,6 +16,8 @@ cbuffer psPassConstantBuffer : register(b0)
 	float g_brightness;
 	float g_contrast;
 	float g_saturation;
+    float g_cutoutFactor;
+    float g_cutoutOffset;
 	bool g_bDoColorAdjustment;
     bool g_bDebugDepth;
     bool g_bDebugValidStereo;
@@ -38,6 +40,7 @@ cbuffer psViewConstantBuffer
 	float4 g_uvBounds;
 	float4 g_uvPrepassBounds;
 	uint g_arrayIndex;
+	bool g_doCutout;
 };
 
 SamplerState g_samplerState : register(s2);
@@ -51,6 +54,7 @@ cbuffer psViewConstantBuffer : register(b1)
 	float4 g_uvBounds;
 	float4 g_uvPrepassBounds;
 	uint g_arrayIndex;
+    bool g_doCutout;
 };
 
 SamplerState g_samplerState : register(s0);
@@ -64,6 +68,19 @@ Texture2D<float2> g_fisheyeCorrectionTexture : register(t1);
 [earlydepthstencil]
 float4 main(VS_OUTPUT input) : SV_TARGET
 {
+    if (g_doCutout)
+    {
+        //float uvDensitySqr = pow(ddx(input.clipSpaceCoords.x / input.clipSpaceCoords.z), 2) +
+			//pow(ddy(input.clipSpaceCoords.y / input.clipSpaceCoords.z), 2);
+        //float cutout = step(uvDensitySqr * g_cutoutFactor * 1000000, 1 - g_cutoutOffset);
+        //float cutout = step(input.projectionValidity * 100, 1 - g_cutoutOffset);
+		
+        //clip(max(input.projectionValidity, 0.5 - cutout));
+        //clip(0.5 - cutout);
+        clip(input.projectionValidity);
+        //clip(input.screenCoords.z < 1.2 ? -1 : 1);
+    }
+	
     //clip(input.projectionValidity);
 	
   //  if (abs(ddx(input.screenCoords.z)) + abs(ddy(input.screenCoords.z)) > 0.001 * (g_depthRange.y - g_depthRange.x))
@@ -118,14 +135,19 @@ float4 main(VS_OUTPUT input) : SV_TARGET
         }
     }
 	
-    float viewSign = g_uvBounds.x < 0.5 ? 1 : -1;
+ //   float viewSign = g_uvBounds.x < 0.5 ? 1 : -1;
 	
-    float cutoutFrac = 1 - (input.screenCoords.x / input.screenCoords.z * 4 * viewSign + 0.25);
-    //float cutout = 1 - saturate(abs(ddx(input.screenCoords.z)) + abs(ddy(input.screenCoords.z)) / (0.0005 * (g_depthRange.y - g_depthRange.x)));
-    float cutout = 1 - saturate((ddx(input.screenCoords.z)
-    * viewSign - 0.002) / 0.0001 / (g_depthRange.y - g_depthRange.x));
+ //   float cutoutFrac = 1 - (input.screenCoords.x / input.screenCoords.z * 4 * viewSign + 0.25);
+ //   //float cutout = 1 - saturate(abs(ddx(input.screenCoords.z)) + abs(ddy(input.screenCoords.z)) / (0.0005 * (g_depthRange.y - g_depthRange.x)));
+ //   //float cutout = 1 - saturate((ddx(input.screenCoords.z) * viewSign - 0.002) / 0.0001 / (g_depthRange.y - g_depthRange.x));
+ //   float derivative = min(abs(ddx(input.clipSpaceCoords.x / input.clipSpaceCoords.z)), 
+	//	abs(ddy(input.clipSpaceCoords.y / input.clipSpaceCoords.z)));
+ //   float cutout = step(derivative * 3000, 0.9);
 	
-    float alpha = max(input.projectionValidity, max(cutout, cutoutFrac));
+	//clip(0.5 - cutout);
 	
-    return float4(rgbColor.xyz, g_opacity * alpha);
+ //   //float alpha = max(input.projectionValidity, max(cutout, cutoutFrac));
+ //   float alpha = max(input.projectionValidity, cutout);
+	
+    return float4(rgbColor.xyz, g_opacity);
 }

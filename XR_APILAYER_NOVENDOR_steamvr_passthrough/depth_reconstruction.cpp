@@ -207,13 +207,15 @@ void DepthReconstruction::InitReconstruction()
     m_filteredDisparityRight = cv::Mat(m_cvImageHeight, m_cvImageWidth + m_maxDisparity * 2, CV_16S);
     m_bilateralDisparityRight = cv::Mat(m_cvImageHeight, m_cvImageWidth + m_maxDisparity * 2, CV_16S);
 
-    std::unique_lock writeLock(m_depthFrame->readWriteMutex);
-    std::unique_lock writeLock2(m_servedDepthFrame->readWriteMutex);
-    std::unique_lock writeLock3(m_underConstructionDepthFrame->readWriteMutex);
+    {
+        std::unique_lock writeLock(m_depthFrame->readWriteMutex);
+        std::unique_lock writeLock2(m_servedDepthFrame->readWriteMutex);
+        std::unique_lock writeLock3(m_underConstructionDepthFrame->readWriteMutex);
 
-    m_depthFrame->disparityMap->resize(m_cvImageWidth * m_cvImageHeight * 2 * 2);
-    m_servedDepthFrame->disparityMap->resize(m_cvImageWidth * m_cvImageHeight * 2 * 2);
-    m_underConstructionDepthFrame->disparityMap->resize(m_cvImageWidth * m_cvImageHeight * 2 * 2);
+        m_depthFrame->disparityMap->resize(m_cvImageWidth * m_cvImageHeight * 2 * 2);
+        m_servedDepthFrame->disparityMap->resize(m_cvImageWidth * m_cvImageHeight * 2 * 2);
+        m_underConstructionDepthFrame->disparityMap->resize(m_cvImageWidth * m_cvImageHeight * 2 * 2);
+    }
 }
 
 
@@ -301,8 +303,11 @@ void DepthReconstruction::RunThread()
     {
         std::this_thread::sleep_for(std::chrono::microseconds(100));
 
-        Config_Main& mainConfig = m_configManager->GetConfig_Main();
-        Config_Stereo& stereoConfig = m_configManager->GetConfig_Stereo();
+        LARGE_INTEGER startReconstructionTime = StartPerfTimer();
+
+        // Make local copies for consistency
+        Config_Main mainConfig = m_configManager->GetConfig_Main();
+        Config_Stereo stereoConfig = m_configManager->GetConfig_Stereo();
 
 
         if (m_maxDisparity != stereoConfig.StereoMaxDisparity ||
@@ -320,31 +325,30 @@ void DepthReconstruction::RunThread()
             InitReconstruction();
         }
 
-        std::shared_ptr<CameraFrame> frame;
+        if (m_bUseMulticore != stereoConfig.StereoUseMulticore)
+        {
+            m_bUseMulticore = stereoConfig.StereoUseMulticore;
+            cv::setNumThreads(m_bUseMulticore ? -1 : 0);
+        }
 
-        if (mainConfig.ProjectionMode != Projection_StereoReconstruction || stereoConfig.StereoReconstructionFreeze || !m_cameraManager->GetCameraFrame(frame) || !frame->bHasFrameBuffer || frame->frameLayout == Mono)
+        int filterMultiplier = stereoConfig.StereoBlockSize * stereoConfig.StereoBlockSize;
+
+        std::shared_ptr<CameraFrame> frame;
+        XrMatrix4x4f viewToWorldLeft, viewToWorldRight;
+
+        if (mainConfig.ProjectionMode != Projection_StereoReconstruction || stereoConfig.StereoReconstructionFreeze || !m_cameraManager->GetCameraFrame(frame))
         {
             continue;
         }
 
-        if (m_bUseMulticore != stereoConfig.StereoUseMulticore)
-        {
-            m_bUseMulticore = stereoConfig.StereoUseMulticore;
-            cv::setNumThreads(m_bUseMulticore ? -1: 0);
-        }
-
-        LARGE_INTEGER startReconstructionTime = StartPerfTimer();
-
-        XrMatrix4x4f viewToWorldLeft, viewToWorldRight;
-
-        int filterMultiplier = stereoConfig.StereoBlockSize * stereoConfig.StereoBlockSize;
-
         {
             std::shared_lock readLock(frame->readWriteMutex);
 
-            int frameSkipMod = stereoConfig.StereoFrameSkip + 1;
-
-            if (frame->header.nFrameSequence == m_lastFrameSequence || frame->header.nFrameSequence % frameSkipMod != 0)
+            if(!frame->bHasFrameBuffer || 
+                frame->frameLayout == Mono || 
+                frame->frameBuffer->size() < m_cameraTextureHeight * m_cameraTextureWidth * 4 || 
+                frame->header.nFrameSequence == m_lastFrameSequence || 
+                frame->header.nFrameSequence % (stereoConfig.StereoFrameSkip + 1) != 0)
             {
                 continue;
             }
@@ -450,6 +454,7 @@ void DepthReconstruction::RunThread()
 
             m_wlsFilter->setLambda(stereoConfig.StereoWLS_Lambda);
             m_wlsFilter->setSigmaColor(stereoConfig.StereoWLS_Sigma);
+            m_wlsFilter->setDepthDiscontinuityRadius((int)ceil(stereoConfig.StereoWLS_ConfidenceRadius * stereoConfig.StereoBlockSize));
 
             m_wlsFilter->filter(m_rawDisparity, m_scaledExtFrameLeft, m_filteredDisparity, m_rightDisparity, cv::Rect(0, 0, m_cvImageWidth + m_maxDisparity, m_cvImageHeight), m_scaledExtFrameRight);
 
@@ -458,6 +463,7 @@ void DepthReconstruction::RunThread()
 
             m_wlsFilterRight->setLambda(stereoConfig.StereoWLS_Lambda);
             m_wlsFilterRight->setSigmaColor(stereoConfig.StereoWLS_Sigma);
+            m_wlsFilterRight->setDepthDiscontinuityRadius((int)ceil(stereoConfig.StereoWLS_ConfidenceRadius * stereoConfig.StereoBlockSize));
 
             cv::Rect rightROI(0, 0, m_cvImageWidth + m_maxDisparity, m_cvImageHeight);
 
@@ -505,7 +511,11 @@ void DepthReconstruction::RunThread()
             if (m_confidence.size().width >= m_cvImageWidth + m_maxDisparity)
             {
                 //leftIn[1] = m_confidence(cv::Rect(m_maxDisparity, 0, m_cvImageWidth, m_cvImageHeight));
+                
                 m_confidence(cv::Rect(m_maxDisparity, 0, m_cvImageWidth, m_cvImageHeight)).convertTo(leftIn[1], CV_16S, 32768.0 / 255.0);
+
+                //m_rawDisparity(cv::Rect(m_maxDisparity, 0, m_cvImageWidth, m_cvImageHeight)) *= 4096;
+                //leftIn[1] = leftIn[1] | m_rawDisparity(cv::Rect(m_maxDisparity, 0, m_cvImageWidth, m_cvImageHeight));
             }
             if (m_confidenceRight.size().width >= m_cvImageWidth + m_maxDisparity)
             {
@@ -516,10 +526,18 @@ void DepthReconstruction::RunThread()
             cv::Mat left = m_disparityMatrix(cv::Rect(0, 0, m_cvImageWidth, m_cvImageHeight));
             cv::Mat right = m_disparityMatrix(cv::Rect(m_cvImageWidth, 0, m_cvImageWidth, m_cvImageHeight));
 
-            int fromTo[4] = { 0,0 , 1,1 };
-            cv::mixChannels(leftIn, 2, &left, 1, fromTo, 2);
-            cv::mixChannels(rightIn, 2, &right, 1, fromTo, 2);
-
+            if (stereoConfig.StereoFiltering != StereoFiltering_None)
+            {
+                int fromTo[4] = { 0,0 , 1,1 };
+                cv::mixChannels(leftIn, 2, &left, 1, fromTo, 2);
+                cv::mixChannels(rightIn, 2, &right, 1, fromTo, 2);
+            }
+            else
+            {
+                int fromTo[4] = { 0,0 , 0,1 };
+                cv::mixChannels(leftIn, 1, &left, 1, fromTo, 2);
+                cv::mixChannels(rightIn, 1, &right, 1, fromTo, 2);
+            }
             //(*outputMatrix)(cv::Rect(m_maxDisparity, 0, m_cvImageWidth, m_cvImageHeight)).convertTo(left, CV_16S);
             //(*outputMatrixRight)(cv::Rect(m_maxDisparity, 0, m_cvImageWidth, m_cvImageHeight)).convertTo(right, CV_16S);
 
@@ -533,9 +551,10 @@ void DepthReconstruction::RunThread()
             m_underConstructionDepthFrame->disparityDownscaleFactor = (float)m_downscaleFactor;
             m_underConstructionDepthFrame->bIsValid = true;
 
-            std::lock_guard<std::mutex> lock(m_serveMutex);
-
-            m_underConstructionDepthFrame.swap(m_servedDepthFrame);
+            {
+                std::lock_guard<std::mutex> lock(m_serveMutex);
+                m_underConstructionDepthFrame.swap(m_servedDepthFrame);
+            }
         }
 
         if (mainConfig.DebugTexture != DebugTexture_None)

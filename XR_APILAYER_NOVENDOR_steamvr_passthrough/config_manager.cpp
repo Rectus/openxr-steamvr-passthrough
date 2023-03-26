@@ -131,6 +131,13 @@ void ConfigManager::ParseConfig_Stereo()
 
 	m_configCustomStereo.StereoFrameSkip = m_iniData.GetLongValue("StereoCustom", "StereoFrameSkip", m_configCustomStereo.StereoFrameSkip);
 	m_configCustomStereo.StereoDownscaleFactor = m_iniData.GetLongValue("StereoCustom", "StereoDownscaleFactor", m_configCustomStereo.StereoDownscaleFactor);
+
+	m_configCustomStereo.StereoDisparityBothEyes = m_iniData.GetBoolValue("StereoCustom", "StereoDisparityBothEyes", m_configCustomStereo.StereoDisparityBothEyes);
+	m_configCustomStereo.StereoCutoutEnabled = m_iniData.GetBoolValue("StereoCustom", "StereoCutoutEnabled", m_configCustomStereo.StereoCutoutEnabled);
+	m_configCustomStereo.StereoCutoutFactor = (float)m_iniData.GetDoubleValue("StereoCustom", "StereoCutoutFactor", m_configCustomStereo.StereoCutoutFactor);
+	m_configCustomStereo.StereoCutoutOffset = (float)m_iniData.GetDoubleValue("StereoCustom", "StereoCutoutOffset", m_configCustomStereo.StereoCutoutOffset);
+
+
 	m_configCustomStereo.StereoAlgorithm = (EStereoAlgorithm)m_iniData.GetLongValue("StereoCustom", "StereoAlgorithm", m_configCustomStereo.StereoAlgorithm);
 	m_configCustomStereo.StereoBlockSize = m_iniData.GetLongValue("StereoCustom", "StereoBlockSize", m_configCustomStereo.StereoBlockSize);
 	m_configCustomStereo.StereoMinDisparity = m_iniData.GetLongValue("StereoCustom", "StereoMinDisparity", m_configCustomStereo.StereoMinDisparity);
@@ -147,6 +154,7 @@ void ConfigManager::ParseConfig_Stereo()
 	m_configCustomStereo.StereoFiltering = (EStereoFiltering)m_iniData.GetLongValue("StereoCustom", "StereoFiltering", m_configCustomStereo.StereoFiltering);
 	m_configCustomStereo.StereoWLS_Lambda = (float)m_iniData.GetDoubleValue("StereoCustom", "StereoWLS_Lambda", m_configCustomStereo.StereoWLS_Lambda);
 	m_configCustomStereo.StereoWLS_Sigma = (float)m_iniData.GetDoubleValue("StereoCustom", "StereoWLS_Sigma", m_configCustomStereo.StereoWLS_Sigma);
+	m_configCustomStereo.StereoWLS_ConfidenceRadius = (float)m_iniData.GetDoubleValue("StereoCustom", "StereoWLS_ConfidenceRadius", m_configCustomStereo.StereoWLS_ConfidenceRadius);
 	m_configCustomStereo.StereoFBS_Spatial = (float)m_iniData.GetDoubleValue("StereoCustom", "StereoFBS_Spatial", m_configCustomStereo.StereoFBS_Spatial);
 	m_configCustomStereo.StereoFBS_Luma = (float)m_iniData.GetDoubleValue("StereoCustom", "StereoFBS_Luma", m_configCustomStereo.StereoFBS_Luma);
 	m_configCustomStereo.StereoFBS_Chroma = (float)m_iniData.GetDoubleValue("StereoCustom", "StereoFBS_Chroma", m_configCustomStereo.StereoFBS_Chroma);
@@ -210,6 +218,12 @@ void ConfigManager::UpdateConfig_Stereo()
 	m_iniData.SetBoolValue("StereoCustom", "StereoUseColor", m_configCustomStereo.StereoUseColor);
 	m_iniData.SetLongValue("StereoCustom", "StereoFrameSkip", m_configCustomStereo.StereoFrameSkip);
 	m_iniData.SetLongValue("StereoCustom", "StereoDownscaleFactor", m_configCustomStereo.StereoDownscaleFactor);
+
+	m_iniData.SetBoolValue("StereoCustom", "StereoDisparityBothEyes", m_configCustomStereo.StereoDisparityBothEyes);
+	m_iniData.SetBoolValue("StereoCustom", "StereoCutoutEnabled", m_configCustomStereo.StereoCutoutEnabled);
+	m_iniData.SetDoubleValue("StereoCustom", "StereoCutoutFactor", m_configCustomStereo.StereoCutoutFactor);
+	m_iniData.SetDoubleValue("StereoCustom", "StereoCutoutOffset", m_configCustomStereo.StereoCutoutOffset);
+
 	m_iniData.SetLongValue("StereoCustom", "StereoAlgorithm", m_configCustomStereo.StereoAlgorithm);
 	m_iniData.SetLongValue("StereoCustom", "StereoBlockSize", m_configCustomStereo.StereoBlockSize);
 	m_iniData.SetLongValue("StereoCustom", "StereoMinDisparity", m_configCustomStereo.StereoMinDisparity);
@@ -226,6 +240,7 @@ void ConfigManager::UpdateConfig_Stereo()
 	m_iniData.SetLongValue("StereoCustom", "StereoFiltering", m_configCustomStereo.StereoFiltering);
 	m_iniData.SetDoubleValue("StereoCustom", "StereoWLS_Lambda", m_configCustomStereo.StereoWLS_Lambda);
 	m_iniData.SetDoubleValue("StereoCustom", "StereoWLS_Sigma", m_configCustomStereo.StereoWLS_Sigma);
+	m_iniData.SetDoubleValue("StereoCustom", "StereoWLS_ConfidenceRadius", m_configCustomStereo.StereoWLS_ConfidenceRadius);
 	m_iniData.SetDoubleValue("StereoCustom", "StereoFBS_Spatial", m_configCustomStereo.StereoFBS_Spatial);
 	m_iniData.SetDoubleValue("StereoCustom", "StereoFBS_Luma", m_configCustomStereo.StereoFBS_Luma);
 	m_iniData.SetDoubleValue("StereoCustom", "StereoFBS_Chroma", m_configCustomStereo.StereoFBS_Chroma);

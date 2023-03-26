@@ -43,6 +43,8 @@ cbuffer vsPassConstantBuffer : register(b1)
 	float4x4 g_disparityToDepth;
 	uint2 g_disparityTextureSize;
 	float g_disparityDownscaleFactor;
+    float g_cutoutFactor;
+    float g_cutoutOffset;
 };
 
 SamplerState g_samplerState : register(s0);
@@ -54,11 +56,12 @@ VS_OUTPUT main(float3 inPosition : POSITION, uint vertexID : SV_VertexID)
 	VS_OUTPUT output;
     float2 disparityUVs = inPosition.xy * (g_uvBounds.zw - g_uvBounds.xy) + g_uvBounds.xy;
 	
-    float2 dispConf = g_disparityTexture.Load(uint3(disparityUVs * g_disparityTextureSize, 0));
+    float2 dispConf = g_disparityTexture.Load(uint3(round(disparityUVs * g_disparityTextureSize), 0));
     float disparity = dispConf.x;
     float confidence = dispConf.y;
 
-    output.projectionValidity = confidence;
+    output.projectionValidity = 1;
+    //output.projectionValidity = confidence;
 
 	// Disparity at the max projection distance
     float minDisparity = g_disparityToDepth[3][2] /
@@ -67,6 +70,7 @@ VS_OUTPUT main(float3 inPosition : POSITION, uint vertexID : SV_VertexID)
     if (disparity < minDisparity)
     {
 		// Hack that causes some artifacting. Ideally patch any holes or discard and render behind instead.
+        //disparity = minDisparity;
         disparity = 0.002;
         output.projectionValidity = -1.0;
     }
@@ -74,6 +78,24 @@ VS_OUTPUT main(float3 inPosition : POSITION, uint vertexID : SV_VertexID)
     {
         disparity = 0.002;
         output.projectionValidity = -1.0;
+    }
+	else if(confidence < 0.8)
+    {
+        uint3 uvPos = uint3(round(disparityUVs * g_disparityTextureSize), 0);
+        
+        float dispL = g_disparityTexture.Load(uvPos + uint3(-1, 0, 0)).x;
+        float dispR = g_disparityTexture.Load(uvPos + uint3(1, 0, 0)).x;
+        float dispU = g_disparityTexture.Load(uvPos + uint3(0, -1, 0)).x;
+        float dispD = g_disparityTexture.Load(uvPos + uint3(0, 1, 0)).x;
+        
+        float dispUL = g_disparityTexture.Load(uvPos + uint3(-1, -1, 0)).x;
+        float dispUR = g_disparityTexture.Load(uvPos + uint3(1, -1, 0)).x;
+        float dispDL = g_disparityTexture.Load(uvPos + uint3(-1, 1, 0)).x;
+        float dispDR = g_disparityTexture.Load(uvPos + uint3(1, 1, 0)).x;
+        
+        float maxNeighborDisp = max(dispL, max(dispR, max(dispU, max(dispD, max(dispUL, max(dispUR, max(dispDL, dispDR)))))));
+        
+        output.projectionValidity = 1 + g_cutoutOffset + 1000 * g_cutoutFactor * (disparity - maxNeighborDisp);
     }
 
     float2 texturePos = inPosition.xy * g_disparityTextureSize * float2(0.5, 1) * g_disparityDownscaleFactor;
@@ -88,6 +110,19 @@ VS_OUTPUT main(float3 inPosition : POSITION, uint vertexID : SV_VertexID)
 
     float4 worldSpacePoint = 
 		mul((g_uvBounds.x < 0.5) ? g_disparityViewToWorldLeft : g_disparityViewToWorldRight, viewSpaceCoords);
+    
+    
+    // Clamp positions to floor height
+    if ((worldSpacePoint.y / worldSpacePoint.w) < g_floorHeightOffset)
+    {
+        float3 ray = normalize(worldSpacePoint.xyz / worldSpacePoint.w - g_hmdViewWorldPos);
+        
+        float num = (dot(float3(0, 1, 0), float3(0, g_floorHeightOffset, 0)) - dot(float3(0, 1, 0), g_hmdViewWorldPos));
+        float denom = dot(float3(0, 1, 0), ray);
+
+        worldSpacePoint = float4(g_hmdViewWorldPos + ray * num / denom, 1);
+    }
+    
 	
 #ifndef VULKAN
     float4 outCoords = mul(g_worldToCameraProjection, worldSpacePoint);
@@ -96,6 +131,7 @@ VS_OUTPUT main(float3 inPosition : POSITION, uint vertexID : SV_VertexID)
 	
     output.position = mul(g_worldToHMDProjection, worldSpacePoint);
 	output.screenCoords = output.position.xyw;
+    
 	
 #ifdef VULKAN
 	output.position.y *= -1.0;

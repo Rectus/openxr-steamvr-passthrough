@@ -119,6 +119,12 @@ struct Config_Stereo
 	bool StereoUseColor = false;
 	int StereoFrameSkip = 0;
 	int StereoDownscaleFactor = 2;
+
+	bool StereoDisparityBothEyes = true;
+	bool StereoCutoutEnabled = true;
+	float StereoCutoutFactor = 3.0f;
+	float StereoCutoutOffset = 0.1f;
+
 	EStereoAlgorithm StereoAlgorithm = StereoAlgorithm_SGBM;
 	//int StereoAlgorithmQuality = 0;
 	int StereoBlockSize = 1;
@@ -136,6 +142,7 @@ struct Config_Stereo
 	EStereoFiltering StereoFiltering = StereoFiltering_WLS;
 	float StereoWLS_Lambda = 8000.0f;
 	float StereoWLS_Sigma = 1.8f;
+	float StereoWLS_ConfidenceRadius = 0.5f;
 	float StereoFBS_Spatial = 6.0f;
 	float StereoFBS_Luma = 8.0f;
 	float StereoFBS_Chroma = 8.0f;
