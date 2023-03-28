@@ -89,12 +89,6 @@ struct Config_Core
 	bool CoreForceMaskedInvertMask = false;
 };
 
-enum EStereoAlgorithm
-{
-	StereoAlgorithm_BM = 0,
-	StereoAlgorithm_SGBM = 1,
-};
-
 enum EStereoSGBM_Mode
 {
 	StereoMode_SGBM = 0,
@@ -125,7 +119,6 @@ struct Config_Stereo
 	float StereoCutoutFactor = 3.0f;
 	float StereoCutoutOffset = 0.1f;
 
-	EStereoAlgorithm StereoAlgorithm = StereoAlgorithm_SGBM;
 	//int StereoAlgorithmQuality = 0;
 	int StereoBlockSize = 1;
 	int StereoMinDisparity = 0;

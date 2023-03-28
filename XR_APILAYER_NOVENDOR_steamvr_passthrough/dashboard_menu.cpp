@@ -550,20 +550,6 @@ if (bIsActiveTab) { ImGui::PopStyleColor(1); bIsActiveTab = false; }
 			{
 				ImGui::Spacing();
 
-				/*ImGui::BeginGroup();
-				ImGui::Text("Algorithm");
-				if (ImGui::RadioButton("BM###AlgBM", sterestereoCustomConfigoConfig.StereoAlgorithm == StereoAlgorithm_BM))
-				{
-					stereoCustomConfig.StereoAlgorithm = StereoAlgorithm_BM;
-				}
-				if (ImGui::RadioButton("SGBM###AlgSGBM", stereoCustomConfig.StereoAlgorithm == StereoAlgorithm_SGBM))
-				{
-					stereoCustomConfig.StereoAlgorithm = StereoAlgorithm_SGBM;
-				}
-				ImGui::EndGroup();
-
-				IMGUI_BIG_SPACING;*/
-
 				ImGui::BeginGroup();
 				ImGui::Text("SGBM Algorithm");
 				if (ImGui::RadioButton("Single Pass: 3 Samples", stereoCustomConfig.StereoSGBM_Mode == StereoMode_SGBM3Way))

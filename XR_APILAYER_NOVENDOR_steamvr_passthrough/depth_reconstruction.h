@@ -81,7 +81,6 @@ private:
 	XrMatrix4x4f m_fishEyeProjectionRight;
 	
 	cv::Ptr<cv::StereoSGBM> m_stereoSGBM;
-	cv::Ptr<cv::StereoBM> m_stereoBM;
 	cv::Ptr<cv::StereoMatcher> m_rightMatcher;
 
 	cv::Ptr<cv::ximgproc::DisparityWLSFilter> m_wlsFilter;

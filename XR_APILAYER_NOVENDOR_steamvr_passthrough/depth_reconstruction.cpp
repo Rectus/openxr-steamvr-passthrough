@@ -332,6 +332,7 @@ void DepthReconstruction::RunThread()
         }
 
         int filterMultiplier = stereoConfig.StereoBlockSize * stereoConfig.StereoBlockSize;
+        int speckleRange = stereoConfig.StereoSGBM_SpeckleWindowSize > 0 ? stereoConfig.StereoSGBM_SpeckleRange : 0;
 
         std::shared_ptr<CameraFrame> frame;
         XrMatrix4x4f viewToWorldLeft, viewToWorldRight;
@@ -358,26 +359,12 @@ void DepthReconstruction::RunThread()
             viewToWorldLeft = frame->cameraViewToWorldLeft;
             viewToWorldRight = frame->cameraViewToWorldRight;
 
-            int speckleRange = stereoConfig.StereoSGBM_SpeckleWindowSize > 0 ? stereoConfig.StereoSGBM_SpeckleRange : 0;
+            m_stereoSGBM = cv::StereoSGBM::create(stereoConfig.StereoMinDisparity - m_maxDisparity + 1, m_maxDisparity * 2 - stereoConfig.StereoMinDisparity, stereoConfig.StereoBlockSize,
+                stereoConfig.StereoSGBM_P1 * filterMultiplier, stereoConfig.StereoSGBM_P2 * filterMultiplier, stereoConfig.StereoSGBM_DispMaxDiff,
+                stereoConfig.StereoSGBM_PreFilterCap, stereoConfig.StereoSGBM_UniquenessRatio,
+                stereoConfig.StereoSGBM_SpeckleWindowSize, speckleRange,
+                (int)stereoConfig.StereoSGBM_Mode);
 
-            if (stereoConfig.StereoAlgorithm == StereoAlgorithm_SGBM)
-            {
-                m_stereoSGBM = cv::StereoSGBM::create(stereoConfig.StereoMinDisparity - m_maxDisparity + 1, m_maxDisparity * 2 - stereoConfig.StereoMinDisparity, stereoConfig.StereoBlockSize,
-                    stereoConfig.StereoSGBM_P1 * filterMultiplier, stereoConfig.StereoSGBM_P2 * filterMultiplier, stereoConfig.StereoSGBM_DispMaxDiff,
-                    stereoConfig.StereoSGBM_PreFilterCap, stereoConfig.StereoSGBM_UniquenessRatio,
-                    stereoConfig.StereoSGBM_SpeckleWindowSize, speckleRange,
-                    (int)stereoConfig.StereoSGBM_Mode);
-            }
-            else if (stereoConfig.StereoAlgorithm == StereoAlgorithm_BM)
-            {
-                m_stereoBM = cv::StereoBM::create(m_maxDisparity - stereoConfig.StereoMinDisparity, stereoConfig.StereoBlockSize);
-                m_stereoBM->setDisp12MaxDiff(stereoConfig.StereoSGBM_DispMaxDiff);
-                m_stereoBM->setMinDisparity(stereoConfig.StereoMinDisparity);
-                m_stereoBM->setPreFilterCap(stereoConfig.StereoSGBM_PreFilterCap);
-                m_stereoBM->setSpeckleWindowSize(stereoConfig.StereoSGBM_SpeckleWindowSize);
-                m_stereoBM->setSpeckleRange(speckleRange);
-                m_stereoBM->setUniquenessRatio(stereoConfig.StereoSGBM_UniquenessRatio);
-            }
 
             m_inputFrame = cv::Mat(m_cameraTextureHeight, m_cameraTextureWidth, CV_8UC4, frame->frameBuffer->data());
             
@@ -425,17 +412,10 @@ void DepthReconstruction::RunThread()
         m_scaledFrameRight.copyTo(m_scaledExtFrameRight(cv::Rect(m_maxDisparity, 0, m_cvImageWidth, m_cvImageHeight)));
 
         
-        if (stereoConfig.StereoAlgorithm == StereoAlgorithm_SGBM)
-        {
-            m_stereoSGBM->compute(m_scaledExtFrameLeft, m_scaledExtFrameRight, m_rawDisparity);
-        }
-        else if (stereoConfig.StereoAlgorithm == StereoAlgorithm_BM)
-        {
-            m_stereoBM->compute(m_scaledExtFrameLeft, m_scaledExtFrameRight, m_rawDisparity);
-        }
+        m_stereoSGBM->compute(m_scaledExtFrameLeft, m_scaledExtFrameRight, m_rawDisparity);
         
         //m_rightMatcher = cv::ximgproc::createRightMatcher(m_stereoSGBM);
-        int speckleRange = stereoConfig.StereoSGBM_SpeckleWindowSize > 0 ? stereoConfig.StereoSGBM_SpeckleRange : 0;
+
         m_rightMatcher = cv::StereoSGBM::create(-m_maxDisparity + 1, m_maxDisparity * 2, stereoConfig.StereoBlockSize,
             stereoConfig.StereoSGBM_P1 * filterMultiplier, stereoConfig.StereoSGBM_P2 * filterMultiplier, stereoConfig.StereoSGBM_DispMaxDiff,
             stereoConfig.StereoSGBM_PreFilterCap, stereoConfig.StereoSGBM_UniquenessRatio,
@@ -581,7 +561,7 @@ void DepthReconstruction::RunThread()
                 //rightFlip *= -1;
                 rightFlip.convertTo(right, CV_16S);
 
-                debugTextureMat *= 4;
+                debugTextureMat *= 8;
 
                 if (texture.Width != m_cvImageWidth || texture.Height != m_cvImageHeight)
                 {
