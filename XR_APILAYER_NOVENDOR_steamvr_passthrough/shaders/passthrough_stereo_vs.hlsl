@@ -20,6 +20,7 @@ cbuffer vsConstantBuffer
 	float3 g_hmdViewWorldPos;
 	float g_projectionDistance;
 	float g_floorHeightOffset;
+    uint g_viewIndex;
 };
 
 #else
@@ -33,6 +34,7 @@ cbuffer vsConstantBuffer : register(b0)
 	float3 g_hmdViewWorldPos;
 	float g_projectionDistance;
 	float g_floorHeightOffset;
+    uint g_viewIndex;
 };
 #endif
 
@@ -72,29 +74,40 @@ VS_OUTPUT main(float3 inPosition : POSITION, uint vertexID : SV_VertexID)
 		// Hack that causes some artifacting. Ideally patch any holes or discard and render behind instead.
         //disparity = minDisparity;
         disparity = 0.002;
-        output.projectionValidity = -1.0;
+        output.projectionValidity = -10000.0;
     }
     else if (disparity > 0.04)
     {
         disparity = 0.002;
-        output.projectionValidity = -1.0;
+        output.projectionValidity = -10000.0;
     }
-	else if(confidence < 0.8)
+	else //if(confidence < 0.8)
     {
         uint3 uvPos = uint3(round(disparityUVs * g_disparityTextureSize), 0);
+        float maxNeighborDisp;
         
-        float dispL = g_disparityTexture.Load(uvPos + uint3(-1, 0, 0)).x;
-        float dispR = g_disparityTexture.Load(uvPos + uint3(1, 0, 0)).x;
-        float dispU = g_disparityTexture.Load(uvPos + uint3(0, -1, 0)).x;
-        float dispD = g_disparityTexture.Load(uvPos + uint3(0, 1, 0)).x;
+        if (g_viewIndex == 1)
+        {
+            float dispR = g_disparityTexture.Load(uvPos + uint3(1, 0, 0)).x;
+            float dispU = g_disparityTexture.Load(uvPos + uint3(0, -1, 0)).x;
+            float dispD = g_disparityTexture.Load(uvPos + uint3(0, 1, 0)).x;        
+            float dispUR = g_disparityTexture.Load(uvPos + uint3(1, -1, 0)).x;
+            float dispDR = g_disparityTexture.Load(uvPos + uint3(1, 1, 0)).x;
         
-        float dispUL = g_disparityTexture.Load(uvPos + uint3(-1, -1, 0)).x;
-        float dispUR = g_disparityTexture.Load(uvPos + uint3(1, -1, 0)).x;
-        float dispDL = g_disparityTexture.Load(uvPos + uint3(-1, 1, 0)).x;
-        float dispDR = g_disparityTexture.Load(uvPos + uint3(1, 1, 0)).x;
+            maxNeighborDisp = max(dispR, max(dispU, max(dispD, max(dispUR, dispDR))));
+            //maxNeighborDisp = max(dispR, max(dispUR, dispDR));
+        }
+        else
+        {
+            float dispL = g_disparityTexture.Load(uvPos + uint3(-1, 0, 0)).x;
+            float dispU = g_disparityTexture.Load(uvPos + uint3(0, -1, 0)).x;
+            float dispD = g_disparityTexture.Load(uvPos + uint3(0, 1, 0)).x;      
+            float dispUL = g_disparityTexture.Load(uvPos + uint3(-1, -1, 0)).x;
+            float dispDL = g_disparityTexture.Load(uvPos + uint3(-1, 1, 0)).x;
         
-        float maxNeighborDisp = max(dispL, max(dispR, max(dispU, max(dispD, max(dispUL, max(dispUR, max(dispDL, dispDR)))))));
-        
+            maxNeighborDisp = max(dispL, max(dispU, max(dispD, max(dispUL, dispDL))));
+            //maxNeighborDisp = max(dispL, max(dispUL, dispDL));
+        }
         output.projectionValidity = 1 + g_cutoutOffset + 1000 * g_cutoutFactor * (disparity - maxNeighborDisp);
     }
 

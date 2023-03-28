@@ -36,6 +36,7 @@ cbuffer psViewConstantBuffer
 	float3 g_hmdViewWorldPos;
 	float g_projectionDistance;
 	float g_floorHeightOffset;
+	uint g_viewIndex;
 
 	float4 g_uvBounds;
 	float4 g_uvPrepassBounds;
@@ -68,25 +69,14 @@ Texture2D<float2> g_fisheyeCorrectionTexture : register(t1);
 [earlydepthstencil]
 float4 main(VS_OUTPUT input) : SV_TARGET
 {
+	float alpha = 1;
+	
     if (g_doCutout)
     {
-        //float uvDensitySqr = pow(ddx(input.clipSpaceCoords.x / input.clipSpaceCoords.z), 2) +
-			//pow(ddy(input.clipSpaceCoords.y / input.clipSpaceCoords.z), 2);
-        //float cutout = step(uvDensitySqr * g_cutoutFactor * 1000000, 1 - g_cutoutOffset);
-        //float cutout = step(input.projectionValidity * 100, 1 - g_cutoutOffset);
-		
-        //clip(max(input.projectionValidity, 0.5 - cutout));
-        //clip(0.5 - cutout);
         clip(input.projectionValidity);
-        //clip(input.screenCoords.z < 1.2 ? -1 : 1);
     }
-	
-    //clip(input.projectionValidity);
-	
-  //  if (abs(ddx(input.screenCoords.z)) + abs(ddy(input.screenCoords.z)) > 0.001 * (g_depthRange.y - g_depthRange.x))
-  //  {
-		//clip(-1);
-  //  }
+
+    alpha = saturate(input.projectionValidity);
 	
 	// Convert from homogenous clip space coordinates to 0-1.
 	float2 outUvs = (input.clipSpaceCoords.xy / input.clipSpaceCoords.z) * float2(0.5, 0.5) + float2(0.5, 0.5);
@@ -133,21 +123,11 @@ float4 main(VS_OUTPUT input) : SV_TARGET
         {
             rgbColor.x += 0.5;
         }
+		else
+        {
+            rgbColor.y += input.projectionValidity;
+        }
     }
 	
- //   float viewSign = g_uvBounds.x < 0.5 ? 1 : -1;
-	
- //   float cutoutFrac = 1 - (input.screenCoords.x / input.screenCoords.z * 4 * viewSign + 0.25);
- //   //float cutout = 1 - saturate(abs(ddx(input.screenCoords.z)) + abs(ddy(input.screenCoords.z)) / (0.0005 * (g_depthRange.y - g_depthRange.x)));
- //   //float cutout = 1 - saturate((ddx(input.screenCoords.z) * viewSign - 0.002) / 0.0001 / (g_depthRange.y - g_depthRange.x));
- //   float derivative = min(abs(ddx(input.clipSpaceCoords.x / input.clipSpaceCoords.z)), 
-	//	abs(ddy(input.clipSpaceCoords.y / input.clipSpaceCoords.z)));
- //   float cutout = step(derivative * 3000, 0.9);
-	
-	//clip(0.5 - cutout);
-	
- //   //float alpha = max(input.projectionValidity, max(cutout, cutoutFrac));
- //   float alpha = max(input.projectionValidity, cutout);
-	
-    return float4(rgbColor.xyz, g_opacity);
+    return float4(rgbColor.xyz, g_opacity * alpha);
 }

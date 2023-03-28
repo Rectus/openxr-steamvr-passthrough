@@ -38,6 +38,7 @@ struct VSViewConstantBuffer
 	XrVector3f hmdViewWorldPos;
 	float projectionDistance;
 	float floorHeightOffset;
+	uint32_t viewIndex;
 };
 
 struct PSPassConstantBuffer
@@ -204,7 +205,7 @@ bool PassthroughRendererDX11::InitRenderer()
 
 	depth.DepthEnable = true;
 	depth.DepthWriteMask = D3D11_DEPTH_WRITE_MASK_ZERO;
-	depth.DepthFunc = D3D11_COMPARISON_LESS;
+	depth.DepthFunc = D3D11_COMPARISON_LESS_EQUAL;
 	if (FAILED(m_d3dDevice->CreateDepthStencilState(&depth, m_depthStencilStateLess.GetAddressOf())))
 	{
 		ErrorLog("CreateDepthStencilState failure!\n");
@@ -212,7 +213,7 @@ bool PassthroughRendererDX11::InitRenderer()
 	}
 
 	depth.DepthWriteMask = D3D11_DEPTH_WRITE_MASK_ALL;
-	depth.DepthFunc = D3D11_COMPARISON_LESS;
+	depth.DepthFunc = D3D11_COMPARISON_LESS_EQUAL;
 	if (FAILED(m_d3dDevice->CreateDepthStencilState(&depth, m_depthStencilStateLessWrite.GetAddressOf())))
 	{
 		ErrorLog("CreateDepthStencilState failure!\n");
@@ -220,7 +221,7 @@ bool PassthroughRendererDX11::InitRenderer()
 	}
 
 	depth.DepthWriteMask = D3D11_DEPTH_WRITE_MASK_ZERO;
-	depth.DepthFunc = D3D11_COMPARISON_GREATER;
+	depth.DepthFunc = D3D11_COMPARISON_GREATER_EQUAL;
 	if (FAILED(m_d3dDevice->CreateDepthStencilState(&depth, m_depthStencilStateGreater.GetAddressOf())))
 	{
 		ErrorLog("CreateDepthStencilState failure!\n");
@@ -228,7 +229,7 @@ bool PassthroughRendererDX11::InitRenderer()
 	}
 
 	depth.DepthWriteMask = D3D11_DEPTH_WRITE_MASK_ALL;
-	depth.DepthFunc = D3D11_COMPARISON_GREATER;
+	depth.DepthFunc = D3D11_COMPARISON_GREATER_EQUAL;
 	if (FAILED(m_d3dDevice->CreateDepthStencilState(&depth, m_depthStencilStateGreaterWrite.GetAddressOf())))
 	{
 		ErrorLog("CreateDepthStencilState failure!\n");
@@ -1023,26 +1024,27 @@ void PassthroughRendererDX11::RenderPassthroughView(const ERenderEye eye, const 
 	Config_Main& mainConf = m_configManager->GetConfig_Main();
 	Config_Stereo& stereoConf = m_configManager->GetConfig_Stereo();
 
-	VSViewConstantBuffer buffer = {};
-	buffer.cameraProjectionToWorld = (eye == LEFT_EYE) ? frame->cameraProjectionToWorldLeft : frame->cameraProjectionToWorldRight;
-	buffer.worldToCameraProjection = (eye == LEFT_EYE) ? frame->worldToCameraProjectionLeft : frame->worldToCameraProjectionRight;
-	buffer.worldToHMDProjection = (eye == LEFT_EYE) ? frame->worldToHMDProjectionLeft : frame->worldToHMDProjectionRight;
-	buffer.frameUVBounds = GetFrameUVBounds(eye, frame->frameLayout);
-	buffer.hmdViewWorldPos = (eye == LEFT_EYE) ? frame->hmdViewPosWorldLeft : frame->hmdViewPosWorldRight;
-	buffer.projectionDistance = mainConf.ProjectionDistanceFar;
-	buffer.floorHeightOffset = mainConf.FloorHeightOffset;
+	VSViewConstantBuffer vsViewBuffer = {};
+	vsViewBuffer.cameraProjectionToWorld = (eye == LEFT_EYE) ? frame->cameraProjectionToWorldLeft : frame->cameraProjectionToWorldRight;
+	vsViewBuffer.worldToCameraProjection = (eye == LEFT_EYE) ? frame->worldToCameraProjectionLeft : frame->worldToCameraProjectionRight;
+	vsViewBuffer.worldToHMDProjection = (eye == LEFT_EYE) ? frame->worldToHMDProjectionLeft : frame->worldToHMDProjectionRight;
+	vsViewBuffer.frameUVBounds = GetFrameUVBounds(eye, frame->frameLayout);
+	vsViewBuffer.hmdViewWorldPos = (eye == LEFT_EYE) ? frame->hmdViewPosWorldLeft : frame->hmdViewPosWorldRight;
+	vsViewBuffer.projectionDistance = mainConf.ProjectionDistanceFar;
+	vsViewBuffer.floorHeightOffset = mainConf.FloorHeightOffset;
+	vsViewBuffer.viewIndex = (eye == LEFT_EYE) ? 0 : 1;
 	
-	m_renderContext->UpdateSubresource(m_vsViewConstantBuffer[bufferIndex].Get(), 0, nullptr, &buffer, 0, 0);
+	m_renderContext->UpdateSubresource(m_vsViewConstantBuffer[bufferIndex].Get(), 0, nullptr, &vsViewBuffer, 0, 0);
 	
 	ID3D11Buffer* vsBuffers[2] = { m_vsViewConstantBuffer[bufferIndex].Get(), m_vsPassConstantBuffer[m_frameIndex].Get() };
 	m_renderContext->VSSetConstantBuffers(0, 2, vsBuffers);
 	
-	PSViewConstantBuffer viewBuffer = {};
-	viewBuffer.frameUVBounds = GetFrameUVBounds(eye, frame->frameLayout);
-	viewBuffer.rtArrayIndex = layer->views[viewIndex].subImage.imageArrayIndex;
-	viewBuffer.bDoCutout = stereoConf.StereoCutoutEnabled;
+	PSViewConstantBuffer psViewBuffer = {};
+	psViewBuffer.frameUVBounds = GetFrameUVBounds(eye, frame->frameLayout);
+	psViewBuffer.rtArrayIndex = layer->views[viewIndex].subImage.imageArrayIndex;
+	psViewBuffer.bDoCutout = false;
 
-	m_renderContext->UpdateSubresource(m_psViewConstantBuffer.Get(), 0, nullptr, &viewBuffer, 0, 0);
+	m_renderContext->UpdateSubresource(m_psViewConstantBuffer.Get(), 0, nullptr, &psViewBuffer, 0, 0);
 
 	ID3D11Buffer* psBuffers[2] = { m_psPassConstantBuffer.Get(), m_psViewConstantBuffer.Get() };
 	m_renderContext->PSSetConstantBuffers(0, 2, psBuffers);
@@ -1065,7 +1067,7 @@ void PassthroughRendererDX11::RenderPassthroughView(const ERenderEye eye, const 
 			m_renderContext->OMSetBlendState(m_blendStatePrepassIgnoreAppAlpha.Get(), nullptr, UINT_MAX);
 		}
 
-		m_renderContext->OMSetDepthStencilState(GET_DEPTH_STENCIL_STATE(bCompositeDepth, frame->bHasReversedDepth, false), 1);
+		m_renderContext->OMSetDepthStencilState(GET_DEPTH_STENCIL_STATE(bCompositeDepth, frame->bHasReversedDepth, true), 1);
 
 		m_renderContext->Draw(numVertices, 0);
 	}
@@ -1088,7 +1090,7 @@ void PassthroughRendererDX11::RenderPassthroughView(const ERenderEye eye, const 
 		m_renderContext->OMSetBlendState(m_blendStateBase.Get(), nullptr, UINT_MAX);
 	}
 
-	m_renderContext->OMSetDepthStencilState(GET_DEPTH_STENCIL_STATE(bCompositeDepth, frame->bHasReversedDepth, depthConfig.DepthWriteOutput), 1);
+	m_renderContext->OMSetDepthStencilState(GET_DEPTH_STENCIL_STATE(bCompositeDepth, frame->bHasReversedDepth, false), 1);
 
 	m_renderContext->PSSetShader(m_pixelShader.Get(), nullptr, 0);
 	
@@ -1098,17 +1100,23 @@ void PassthroughRendererDX11::RenderPassthroughView(const ERenderEye eye, const 
 
 	if (stereoConf.StereoCutoutEnabled)
 	{
-		buffer.frameUVBounds = GetFrameUVBounds(eye == LEFT_EYE ? RIGHT_EYE : LEFT_EYE, frame->frameLayout);
-		buffer.cameraProjectionToWorld = (eye != LEFT_EYE) ? frame->cameraProjectionToWorldLeft : frame->cameraProjectionToWorldRight;
-		buffer.worldToCameraProjection = (eye != LEFT_EYE) ? frame->worldToCameraProjectionLeft : frame->worldToCameraProjectionRight;
-		buffer.hmdViewWorldPos = (eye != LEFT_EYE) ? frame->hmdViewPosWorldLeft : frame->hmdViewPosWorldRight;
-		m_renderContext->UpdateSubresource(m_vsViewConstantBuffer[bufferIndex].Get(), 0, nullptr, &buffer, 0, 0);
+		float secondaryWidthFactor = 0.55f;
+		int scissorStart = (eye == LEFT_EYE) ? (int)(rect.extent.width * (1.0f - secondaryWidthFactor)) : 0;
+		int scissorEnd = (eye == LEFT_EYE) ? rect.extent.width : (int)(rect.extent.width * secondaryWidthFactor);
+		scissor = { rect.offset.x + scissorStart, rect.offset.y, rect.offset.x + scissorEnd, rect.offset.y + rect.extent.height };
+		m_renderContext->RSSetScissorRects(1, &scissor);
 
-		viewBuffer.frameUVBounds = GetFrameUVBounds(eye == LEFT_EYE ? RIGHT_EYE : LEFT_EYE, frame->frameLayout);
-		viewBuffer.bDoCutout = false;
-		m_renderContext->UpdateSubresource(m_psViewConstantBuffer.Get(), 0, nullptr, &viewBuffer, 0, 0);
+		vsViewBuffer.frameUVBounds = GetFrameUVBounds(eye == LEFT_EYE ? RIGHT_EYE : LEFT_EYE, frame->frameLayout);
+		vsViewBuffer.cameraProjectionToWorld = (eye != LEFT_EYE) ? frame->cameraProjectionToWorldLeft : frame->cameraProjectionToWorldRight;
+		vsViewBuffer.worldToCameraProjection = (eye != LEFT_EYE) ? frame->worldToCameraProjectionLeft : frame->worldToCameraProjectionRight;
+		vsViewBuffer.hmdViewWorldPos = (eye != LEFT_EYE) ? frame->hmdViewPosWorldLeft : frame->hmdViewPosWorldRight;
+		m_renderContext->UpdateSubresource(m_vsViewConstantBuffer[bufferIndex].Get(), 0, nullptr, &vsViewBuffer, 0, 0);
 
-		m_renderContext->OMSetDepthStencilState(GET_DEPTH_STENCIL_STATE(false, frame->bHasReversedDepth, depthConfig.DepthWriteOutput), 1);
+		psViewBuffer.frameUVBounds = GetFrameUVBounds(eye == LEFT_EYE ? RIGHT_EYE : LEFT_EYE, frame->frameLayout);
+		psViewBuffer.bDoCutout = true;
+		m_renderContext->UpdateSubresource(m_psViewConstantBuffer.Get(), 0, nullptr, &psViewBuffer, 0, 0);
+
+		m_renderContext->OMSetDepthStencilState(GET_DEPTH_STENCIL_STATE(bCompositeDepth, frame->bHasReversedDepth, false), 1);
 
 		m_renderContext->Draw(numVertices, 0);
 	}

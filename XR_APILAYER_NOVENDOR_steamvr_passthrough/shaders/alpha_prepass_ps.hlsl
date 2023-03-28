@@ -35,6 +35,7 @@ cbuffer psViewConstantBuffer
 	float3 g_hmdViewWorldPos;
 	float g_projectionDistance;
 	float g_floorHeightOffset;
+	uint g_viewIndex;
 
 	float4 g_uvBounds;
 	float4 g_uvPrepassBounds;
@@ -58,14 +59,12 @@ cbuffer psViewConstantBuffer : register(b1)
 
 float4 main(VS_OUTPUT input) : SV_TARGET
 {
+    float alpha = 1;
     if (g_doCutout)
     {
-        //float uvDensitySqr = pow(ddx(input.clipSpaceCoords.x / input.clipSpaceCoords.z), 2) +
-		//	pow(ddy(input.clipSpaceCoords.y / input.clipSpaceCoords.z), 2);
-        //float cutout = step(uvDensitySqr * g_cutoutFactor * 1000000, 1 - g_cutoutOffset);
-        //float cutout = step(input.projectionValidity * 100, 1 - g_cutoutOffset);
-        clip(input.projectionValidity);
+        //alpha = saturate(input.projectionValidity);
     }
+    clip(input.projectionValidity);
 	
-	return float4(0, 0, 0, 1.0 - g_opacity);
+    return float4(0, 0, 0, 1.0 - g_opacity);
 }
