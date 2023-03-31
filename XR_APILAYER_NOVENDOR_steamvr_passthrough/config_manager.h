@@ -115,6 +115,7 @@ struct Config_Stereo
 	int StereoDownscaleFactor = 2;
 
 	bool StereoDisparityBothEyes = true;
+	int StereoDisparityFilterWidth = 1;
 	bool StereoCutoutEnabled = true;
 	float StereoCutoutFactor = 3.0f;
 	float StereoCutoutOffset = 0.1f;

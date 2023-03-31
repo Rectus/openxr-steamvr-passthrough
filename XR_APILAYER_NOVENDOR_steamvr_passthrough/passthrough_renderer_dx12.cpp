@@ -909,6 +909,7 @@ void PassthroughRendererDX12::SetFrameSize(const uint32_t width, const uint32_t 
 
 void PassthroughRendererDX12::GenerateMesh()
 {
+	m_vertices.resize(0);
 	m_vertices.reserve(NUM_MESH_BOUNDARY_VERTICES * 4 * 6);
 
 	// Grenerate a triangle strip cylinder with radius and height 1.
@@ -967,6 +968,7 @@ void PassthroughRendererDX12::GenerateMesh()
 
 void PassthroughRendererDX12::GenerateDepthMesh(uint32_t width, uint32_t height)
 {
+	m_stereoVertices.resize(0);
 	m_stereoVertices.reserve((width + 1) * (height + 1) * 2);
 
 	float step = 1.0f / (float)height;

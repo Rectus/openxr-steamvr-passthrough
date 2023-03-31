@@ -80,10 +80,10 @@ private:
 	XrMatrix4x4f m_fishEyeProjectionLeft;
 	XrMatrix4x4f m_fishEyeProjectionRight;
 	
-	cv::Ptr<cv::StereoSGBM> m_stereoSGBM;
-	cv::Ptr<cv::StereoMatcher> m_rightMatcher;
+	cv::Ptr<cv::StereoMatcher> m_stereoLeftMatcher;
+	cv::Ptr<cv::StereoMatcher> m_stereoRightMatcher;
 
-	cv::Ptr<cv::ximgproc::DisparityWLSFilter> m_wlsFilter;
+	cv::Ptr<cv::ximgproc::DisparityWLSFilter> m_wlsFilterLeft;
 	cv::Ptr<cv::ximgproc::DisparityWLSFilter> m_wlsFilterRight;
 
 	cv::Mat m_inputFrame;
@@ -100,16 +100,19 @@ private:
 	cv::Mat m_scaledExtFrameLeft;
 	cv::Mat m_scaledExtFrameRight;
 
-	cv::Mat m_rawDisparity;
-	cv::Mat m_rightDisparity;
-	cv::Mat m_filteredDisparity;
+	cv::Mat m_rawDisparityLeft;
+	cv::Mat m_rawDisparityRight;
+	cv::Mat m_filteredDisparityLeft;
 	cv::Mat m_filteredDisparityRight;
-	cv::Mat m_disparityMatrix;
 
-	cv::Mat m_confidence;
+	cv::Mat m_confidenceLeft;
 	cv::Mat m_confidenceRight;
-	cv::Mat m_bilateralDisparity;
+	cv::Mat m_bilateralDisparityLeft;
 	cv::Mat m_bilateralDisparityRight;
+
+	cv::Mat m_outputDisparity;
+	cv::Mat m_outputDisparityLeft;
+	cv::Mat m_outputDisparityRight;
 
 	std::deque<float> m_reconstructionTimes;
 	float m_averageReconstructionTime;

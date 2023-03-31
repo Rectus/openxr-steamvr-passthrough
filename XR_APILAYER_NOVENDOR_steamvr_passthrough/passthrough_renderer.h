@@ -185,6 +185,7 @@ private:
 	std::vector<float> m_vertices;
 
 	ComPtr<ID3D11Buffer> m_stereoVertexBuffer;
+	ComPtr<ID3D11Buffer> m_stereoVertexUploadBuffer;
 	std::vector<float> m_stereoVertices;
 
 	uint32_t m_cameraTextureWidth;

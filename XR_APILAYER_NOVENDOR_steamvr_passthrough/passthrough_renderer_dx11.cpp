@@ -27,6 +27,7 @@ struct VSPassConstantBuffer
 	float disparityDownscaleFactor;
 	float cutoutFactor;
 	float cutoutOffset;
+	int32_t disparityFilterWidth;
 };
 
 struct VSViewConstantBuffer
@@ -702,6 +703,7 @@ void PassthroughRendererDX11::SetFrameSize(const uint32_t width, const uint32_t 
 
 void PassthroughRendererDX11::GenerateMesh()
 {
+	m_vertices.resize(0);
 	m_vertices.reserve(NUM_MESH_BOUNDARY_VERTICES * 4 * 6);
 
 	// Generate a triangle strip cylinder with radius and height 1.
@@ -755,6 +757,7 @@ void PassthroughRendererDX11::GenerateMesh()
 
 void PassthroughRendererDX11::GenerateDepthMesh(uint32_t width, uint32_t height)
 {
+	m_stereoVertices.resize(0);
 	m_stereoVertices.reserve((width + 1) * (height + 1) * 2);
 
 	float step = 1.0f / (float)height;
@@ -875,6 +878,7 @@ void PassthroughRendererDX11::RenderPassthroughFrame(const XrCompositionLayerPro
 		vsBuffer.disparityTextureSize[1] = depthFrame->disparityTextureSize[1];
 		vsBuffer.cutoutFactor = stereoConf.StereoCutoutFactor;
 		vsBuffer.cutoutOffset = stereoConf.StereoCutoutOffset;
+		vsBuffer.disparityFilterWidth = stereoConf.StereoDisparityFilterWidth;
 		m_renderContext->UpdateSubresource(m_vsPassConstantBuffer[m_frameIndex].Get(), 0, nullptr, &vsBuffer, 0, 0);
 	}
 
@@ -1116,7 +1120,7 @@ void PassthroughRendererDX11::RenderPassthroughView(const ERenderEye eye, const 
 		psViewBuffer.bDoCutout = true;
 		m_renderContext->UpdateSubresource(m_psViewConstantBuffer.Get(), 0, nullptr, &psViewBuffer, 0, 0);
 
-		m_renderContext->OMSetDepthStencilState(GET_DEPTH_STENCIL_STATE(bCompositeDepth, frame->bHasReversedDepth, false), 1);
+		m_renderContext->OMSetDepthStencilState(GET_DEPTH_STENCIL_STATE(false, frame->bHasReversedDepth, false), 1);
 
 		m_renderContext->Draw(numVertices, 0);
 	}

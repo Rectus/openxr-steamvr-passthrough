@@ -69,15 +69,13 @@ Texture2D<float2> g_fisheyeCorrectionTexture : register(t1);
 [earlydepthstencil]
 float4 main(VS_OUTPUT input) : SV_TARGET
 {
-	float alpha = 1;
+    float alpha = saturate(input.projectionValidity);
 	
     if (g_doCutout)
     {
         clip(input.projectionValidity);
     }
 
-    alpha = saturate(input.projectionValidity);
-	
 	// Convert from homogenous clip space coordinates to 0-1.
 	float2 outUvs = (input.clipSpaceCoords.xy / input.clipSpaceCoords.z) * float2(0.5, 0.5) + float2(0.5, 0.5);
 	

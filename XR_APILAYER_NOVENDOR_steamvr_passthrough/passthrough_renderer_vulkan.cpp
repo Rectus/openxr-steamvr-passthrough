@@ -1024,6 +1024,7 @@ void PassthroughRendererVulkan::SetFrameSize(const uint32_t width, const uint32_
 
 bool PassthroughRendererVulkan::GenerateMesh(VkCommandBuffer commandBuffer)
 {
+	m_vertices.resize(0);
 	m_vertices.reserve(NUM_MESH_BOUNDARY_VERTICES * 4 * 6);
 
 	// Grenerate a triangle strip cylinder with radius and height 1.

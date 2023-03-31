@@ -59,11 +59,6 @@ cbuffer psViewConstantBuffer : register(b1)
 
 float4 main(VS_OUTPUT input) : SV_TARGET
 {
-    float alpha = 1;
-    if (g_doCutout)
-    {
-        //alpha = saturate(input.projectionValidity);
-    }
     clip(input.projectionValidity);
 	
     return float4(0, 0, 0, 1.0 - g_opacity);

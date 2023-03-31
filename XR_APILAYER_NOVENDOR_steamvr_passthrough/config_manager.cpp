@@ -136,6 +136,7 @@ void ConfigManager::ParseConfig_Stereo()
 	m_configCustomStereo.StereoCutoutEnabled = m_iniData.GetBoolValue("StereoCustom", "StereoCutoutEnabled", m_configCustomStereo.StereoCutoutEnabled);
 	m_configCustomStereo.StereoCutoutFactor = (float)m_iniData.GetDoubleValue("StereoCustom", "StereoCutoutFactor", m_configCustomStereo.StereoCutoutFactor);
 	m_configCustomStereo.StereoCutoutOffset = (float)m_iniData.GetDoubleValue("StereoCustom", "StereoCutoutOffset", m_configCustomStereo.StereoCutoutOffset);
+	m_configCustomStereo.StereoDisparityFilterWidth = (int)m_iniData.GetLongValue("StereoCustom", "StereoDisparityFilterWidth", m_configCustomStereo.StereoDisparityFilterWidth);
 
 	m_configCustomStereo.StereoBlockSize = m_iniData.GetLongValue("StereoCustom", "StereoBlockSize", m_configCustomStereo.StereoBlockSize);
 	m_configCustomStereo.StereoMinDisparity = m_iniData.GetLongValue("StereoCustom", "StereoMinDisparity", m_configCustomStereo.StereoMinDisparity);
@@ -221,6 +222,7 @@ void ConfigManager::UpdateConfig_Stereo()
 	m_iniData.SetBoolValue("StereoCustom", "StereoCutoutEnabled", m_configCustomStereo.StereoCutoutEnabled);
 	m_iniData.SetDoubleValue("StereoCustom", "StereoCutoutFactor", m_configCustomStereo.StereoCutoutFactor);
 	m_iniData.SetDoubleValue("StereoCustom", "StereoCutoutOffset", m_configCustomStereo.StereoCutoutOffset);
+	m_iniData.SetLongValue("StereoCustom", "StereoDisparityFilterWidth", m_configCustomStereo.StereoDisparityFilterWidth);
 
 	m_iniData.SetLongValue("StereoCustom", "StereoBlockSize", m_configCustomStereo.StereoBlockSize);
 	m_iniData.SetLongValue("StereoCustom", "StereoMinDisparity", m_configCustomStereo.StereoMinDisparity);
