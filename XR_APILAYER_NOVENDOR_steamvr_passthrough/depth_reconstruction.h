@@ -61,6 +61,7 @@ private:
 	int m_maxDisparity;
 	bool m_bUseMulticore;
 	bool m_bUseColor;
+	bool m_bDisparityBothEyes;
 
 	cv::Mat m_intrinsicsLeft;
 	cv::Mat m_intrinsicsRight;

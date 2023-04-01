@@ -123,7 +123,12 @@ float4 main(VS_OUTPUT input) : SV_TARGET
         }
 		else
         {
-            rgbColor.y += input.projectionValidity * 0.5;
+            rgbColor.y += input.projectionValidity * 0.25;
+			
+            if (input.projectionValidity > 1.0)
+            {
+                rgbColor.z += input.projectionValidity * 0.25;
+            }
         }
     }
 	

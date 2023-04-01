@@ -49,6 +49,7 @@ cbuffer vsPassConstantBuffer : register(b1)
     float g_cutoutOffset;
     int g_disparityFilterWidth;
     bool g_bProjectBorders;
+    bool g_bFindDiscontinuities;
 };
 
 SamplerState g_samplerState : register(s0);
@@ -125,31 +126,41 @@ VS_OUTPUT main(float3 inPosition : POSITION, uint vertexID : SV_VertexID)
     else if (confidence < 0.5)
     {
         
-        // Sample neighboring pixels and cut out any areas with discontinuities.
-        float maxNeighborDisp = 0;
-                
-        float dispU = g_disparityTexture.Load(uvPos + uint3(0, -1, 0)).x;
-        float dispD = g_disparityTexture.Load(uvPos + uint3(0, 1, 0)).x;
+        // Sample neighboring pixels using clamped Sobel filter, and cut out any areas with discontinuities.
+        if (g_bFindDiscontinuities)
+        {          
+            //float dispU = g_disparityTexture.Load(uvPos + uint3(0, -1, 0)).x;
+            //float dispD = g_disparityTexture.Load(uvPos + uint3(0, 1, 0)).x;
+            //float dispR = g_disparityTexture.Load(uvPos + uint3(1, 0, 0)).x;
+            //float dispUR = g_disparityTexture.Load(uvPos + uint3(1, -1, 0)).x;
+            //float dispDR = g_disparityTexture.Load(uvPos + uint3(1, 1, 0)).x;
+            //float dispL = g_disparityTexture.Load(uvPos + uint3(-1, 0, 0)).x;
+            //float dispUL = g_disparityTexture.Load(uvPos + uint3(-1, -1, 0)).x;
+            //float dispDL = g_disparityTexture.Load(uvPos + uint3(-1, 1, 0)).x;
+            
+            float2 fac = 0.5 / g_disparityTextureSize;
+            
+            float dispU = g_disparityTexture.SampleLevel(g_samplerState, disparityUVs + float2(0, -1) * fac, 0).x;
+            float dispD = g_disparityTexture.SampleLevel(g_samplerState, disparityUVs + float2(0, 1) * fac, 0).x;
+            float dispL = g_disparityTexture.SampleLevel(g_samplerState, disparityUVs + float2(-1, 0) * fac, 0).x;
+            float dispR = g_disparityTexture.SampleLevel(g_samplerState, disparityUVs + float2(1, 0) * fac, 0).x;
+            
+            float dispUL = g_disparityTexture.SampleLevel(g_samplerState, disparityUVs + float2(-1, -1) * fac, 0).x;
+            float dispDL = g_disparityTexture.SampleLevel(g_samplerState, disparityUVs + float2(-1, 1) * fac, 0).x;
+            float dispUR = g_disparityTexture.SampleLevel(g_samplerState, disparityUVs + float2(1, -1) * fac, 0).x;
+            float dispDR = g_disparityTexture.SampleLevel(g_samplerState, disparityUVs + float2(1, 1) * fac, 0).x;
 
-        if (g_viewIndex == 1)
-        {
-            float dispR = g_disparityTexture.Load(uvPos + uint3(1, 0, 0)).x;
-            float dispUR = g_disparityTexture.Load(uvPos + uint3(1, -1, 0)).x;
-            float dispDR = g_disparityTexture.Load(uvPos + uint3(1, 1, 0)).x;
-        
-            maxNeighborDisp = max(dispR, max(dispU, max(dispD, max(dispUR, dispDR))));   
+            //float filterX = dispUL + dispL * 2 + dispDL - dispUR - dispR * 2 - dispDR;
+            
+            float filterX = (g_viewIndex == 0) ? max(0, dispUL + dispL * 2 + dispDL - dispUR - dispR * 2 - dispDR) :
+                max(0, -dispUL - dispL * 2 - dispDL + dispUR + dispR * 2 + dispDR);
+            
+            float filterY = dispUL + dispU * 2 + dispUR - dispDL - dispD * 2 - dispDR;
+            
+            float filter = sqrt(pow(filterX, 2) + pow(filterY, 2));          
+
+            output.projectionValidity = 1 + g_cutoutOffset - 100 * g_cutoutFactor * filter;
         }
-        else
-        {
-            float dispL = g_disparityTexture.Load(uvPos + uint3(-1, 0, 0)).x;
-            float dispUL = g_disparityTexture.Load(uvPos + uint3(-1, -1, 0)).x;
-            float dispDL = g_disparityTexture.Load(uvPos + uint3(-1, 1, 0)).x;
-        
-            maxNeighborDisp = max(dispL, max(dispU, max(dispD, max(dispUL, dispDL))));
-        }
-        
-        output.projectionValidity = 1 + g_cutoutOffset + 1000 * g_cutoutFactor * (disparity - maxNeighborDisp);
-        
         
         // Filter any uncertain areas with a gaussian blur.
         if (g_disparityFilterWidth > 0)

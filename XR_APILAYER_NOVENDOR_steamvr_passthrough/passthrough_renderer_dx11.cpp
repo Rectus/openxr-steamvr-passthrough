@@ -29,6 +29,7 @@ struct VSPassConstantBuffer
 	float cutoutOffset;
 	int32_t disparityFilterWidth;
 	uint32_t bProjectBorders;
+	uint32_t bFindDiscontinuities;
 };
 
 struct VSViewConstantBuffer
@@ -881,6 +882,7 @@ void PassthroughRendererDX11::RenderPassthroughFrame(const XrCompositionLayerPro
 		vsBuffer.cutoutOffset = stereoConf.StereoCutoutOffset;
 		vsBuffer.disparityFilterWidth = stereoConf.StereoDisparityFilterWidth;
 		vsBuffer.bProjectBorders = !stereoConf.StereoReconstructionFreeze;
+		vsBuffer.bFindDiscontinuities = stereoConf.StereoCutoutEnabled && stereoConf.StereoDisparityBothEyes;
 		m_renderContext->UpdateSubresource(m_vsPassConstantBuffer[m_frameIndex].Get(), 0, nullptr, &vsBuffer, 0, 0);
 	}
 
@@ -1107,7 +1109,7 @@ void PassthroughRendererDX11::RenderPassthroughView(const ERenderEye eye, const 
 
 
 
-	if (stereoConf.StereoCutoutEnabled)
+	if (stereoConf.StereoCutoutEnabled && stereoConf.StereoDisparityBothEyes)
 	{
 		float secondaryWidthFactor = 0.6f;
 		int scissorStart = (eye == LEFT_EYE) ? (int)(rect.extent.width * (1.0f - secondaryWidthFactor)) : 0;
