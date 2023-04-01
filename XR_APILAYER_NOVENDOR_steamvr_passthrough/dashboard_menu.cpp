@@ -528,9 +528,9 @@ if (bIsActiveTab) { ImGui::PopStyleColor(1); bIsActiveTab = false; }
 			TextDescription("Detects areas occluded to the main camera and renders them with the other camera where possible.");
 			IMGUI_BIG_SPACING;
 
-			ScrollableSliderInt("Disparity Filter Width", &stereoCustomConfig.StereoDisparityFilterWidth, 1, 20, "%d", 1);
-			ScrollableSlider("Composition Cutout Factor", &stereoCustomConfig.StereoCutoutFactor, 0.0f, 10.0f, "%.1f", 0.1f);
-			ScrollableSlider("Composition Cutout Offset", &stereoCustomConfig.StereoCutoutOffset, 0.0f, 1.0f, "%.2f", 0.01f);
+			ScrollableSliderInt("Disparity Filter Width", &stereoCustomConfig.StereoDisparityFilterWidth, 0, 20, "%d", 1);
+			ScrollableSlider("Composition Cutout Factor", &stereoCustomConfig.StereoCutoutFactor, 0.0f, 10.0f, "%.2f", 0.01f);
+			ScrollableSlider("Composition Cutout Offset", &stereoCustomConfig.StereoCutoutOffset, -1.0f, 1.0f, "%.2f", 0.01f);
 			ImGui::Unindent();
 			if (!stereoCustomConfig.StereoDisparityBothEyes) { ImGui::EndDisabled(); }
 			IMGUI_BIG_SPACING;

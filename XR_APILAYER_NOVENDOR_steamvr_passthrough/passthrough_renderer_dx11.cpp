@@ -28,6 +28,7 @@ struct VSPassConstantBuffer
 	float cutoutFactor;
 	float cutoutOffset;
 	int32_t disparityFilterWidth;
+	uint32_t bProjectBorders;
 };
 
 struct VSViewConstantBuffer
@@ -879,6 +880,7 @@ void PassthroughRendererDX11::RenderPassthroughFrame(const XrCompositionLayerPro
 		vsBuffer.cutoutFactor = stereoConf.StereoCutoutFactor;
 		vsBuffer.cutoutOffset = stereoConf.StereoCutoutOffset;
 		vsBuffer.disparityFilterWidth = stereoConf.StereoDisparityFilterWidth;
+		vsBuffer.bProjectBorders = !stereoConf.StereoReconstructionFreeze;
 		m_renderContext->UpdateSubresource(m_vsPassConstantBuffer[m_frameIndex].Get(), 0, nullptr, &vsBuffer, 0, 0);
 	}
 
@@ -1013,6 +1015,7 @@ void PassthroughRendererDX11::RenderPassthroughView(const ERenderEye eye, const 
 
 	Config_Depth& depthConfig = m_configManager->GetConfig_Depth();
 	bool bCompositeDepth = depthConfig.DepthForceComposition && depthConfig.DepthReadFromApplication;
+	bool bWriteDepth = depthConfig.DepthWriteOutput;
 
 	m_renderContext->OMSetRenderTargets(1, &rendertarget, depthStencil);
 
@@ -1071,9 +1074,11 @@ void PassthroughRendererDX11::RenderPassthroughView(const ERenderEye eye, const 
 			m_renderContext->OMSetBlendState(m_blendStatePrepassIgnoreAppAlpha.Get(), nullptr, UINT_MAX);
 		}
 
-		m_renderContext->OMSetDepthStencilState(GET_DEPTH_STENCIL_STATE(bCompositeDepth, frame->bHasReversedDepth, true), 1);
+		m_renderContext->OMSetDepthStencilState(GET_DEPTH_STENCIL_STATE(bCompositeDepth, frame->bHasReversedDepth, bWriteDepth), 1);
 
 		m_renderContext->Draw(numVertices, 0);
+
+		bWriteDepth = false;
 	}
 
 
@@ -1094,7 +1099,7 @@ void PassthroughRendererDX11::RenderPassthroughView(const ERenderEye eye, const 
 		m_renderContext->OMSetBlendState(m_blendStateBase.Get(), nullptr, UINT_MAX);
 	}
 
-	m_renderContext->OMSetDepthStencilState(GET_DEPTH_STENCIL_STATE(bCompositeDepth, frame->bHasReversedDepth, false), 1);
+	m_renderContext->OMSetDepthStencilState(GET_DEPTH_STENCIL_STATE(bCompositeDepth, frame->bHasReversedDepth, bWriteDepth), 1);
 
 	m_renderContext->PSSetShader(m_pixelShader.Get(), nullptr, 0);
 	
@@ -1104,7 +1109,7 @@ void PassthroughRendererDX11::RenderPassthroughView(const ERenderEye eye, const 
 
 	if (stereoConf.StereoCutoutEnabled)
 	{
-		float secondaryWidthFactor = 0.55f;
+		float secondaryWidthFactor = 0.6f;
 		int scissorStart = (eye == LEFT_EYE) ? (int)(rect.extent.width * (1.0f - secondaryWidthFactor)) : 0;
 		int scissorEnd = (eye == LEFT_EYE) ? rect.extent.width : (int)(rect.extent.width * secondaryWidthFactor);
 		scissor = { rect.offset.x + scissorStart, rect.offset.y, rect.offset.x + scissorEnd, rect.offset.y + rect.extent.height };
