@@ -70,12 +70,12 @@ VS_OUTPUT main(float3 inPosition : POSITION, uint vertexID : SV_VertexID)
     
 
     // Project the border vertices to the edges of the screen to cover any gaps from reprojection.
-    if (g_bProjectBorders && (inPosition.x == 0 || inPosition.x == 1 || inPosition.y == 0 || inPosition.y == 1))
+    if (g_bProjectBorders && inPosition.z == 1)
     {
-        output.position = float4(inPosition.xy * float2(2, -2) + float2(-1, 1), 1, 0);
+        output.position = float4(inPosition.xy * float2(2, -2) + float2(-1, 1), 1, 1);
         output.screenCoords = output.position.xyw;
 #ifndef VULKAN
-        float4 worldPos = mul(g_cameraProjectionToWorld, float4(inPosition.xy * 2 - 1, 1, 0));
+        float4 worldPos = mul(g_cameraProjectionToWorld, float4(inPosition.xy * 2 - 1, 1, 1));
         output.clipSpaceCoords = mul(g_worldToCameraProjection, worldPos).xyw;
 #endif
         output.projectionValidity = -1;
@@ -128,16 +128,7 @@ VS_OUTPUT main(float3 inPosition : POSITION, uint vertexID : SV_VertexID)
         
         // Sample neighboring pixels using clamped Sobel filter, and cut out any areas with discontinuities.
         if (g_bFindDiscontinuities)
-        {          
-            //float dispU = g_disparityTexture.Load(uvPos + uint3(0, -1, 0)).x;
-            //float dispD = g_disparityTexture.Load(uvPos + uint3(0, 1, 0)).x;
-            //float dispR = g_disparityTexture.Load(uvPos + uint3(1, 0, 0)).x;
-            //float dispUR = g_disparityTexture.Load(uvPos + uint3(1, -1, 0)).x;
-            //float dispDR = g_disparityTexture.Load(uvPos + uint3(1, 1, 0)).x;
-            //float dispL = g_disparityTexture.Load(uvPos + uint3(-1, 0, 0)).x;
-            //float dispUL = g_disparityTexture.Load(uvPos + uint3(-1, -1, 0)).x;
-            //float dispDL = g_disparityTexture.Load(uvPos + uint3(-1, 1, 0)).x;
-            
+        {                      
             float2 fac = 0.5 / g_disparityTextureSize;
             
             float dispU = g_disparityTexture.SampleLevel(g_samplerState, disparityUVs + float2(0, -1) * fac, 0).x;
@@ -149,8 +140,6 @@ VS_OUTPUT main(float3 inPosition : POSITION, uint vertexID : SV_VertexID)
             float dispDL = g_disparityTexture.SampleLevel(g_samplerState, disparityUVs + float2(-1, 1) * fac, 0).x;
             float dispUR = g_disparityTexture.SampleLevel(g_samplerState, disparityUVs + float2(1, -1) * fac, 0).x;
             float dispDR = g_disparityTexture.SampleLevel(g_samplerState, disparityUVs + float2(1, 1) * fac, 0).x;
-
-            //float filterX = dispUL + dispL * 2 + dispDL - dispUR - dispR * 2 - dispDR;
             
             float filterX = (g_viewIndex == 0) ? max(0, dispUL + dispL * 2 + dispDL - dispUR - dispR * 2 - dispDR) :
                 max(0, -dispUL - dispL * 2 - dispDL + dispUR + dispR * 2 + dispDR);

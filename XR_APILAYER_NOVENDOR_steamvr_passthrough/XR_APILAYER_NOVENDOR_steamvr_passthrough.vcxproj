@@ -139,7 +139,7 @@ copy $(ProjectDir)\passthrough_icon.png $(OutDir)
       <SubSystem>Windows</SubSystem>
       <EnableCOMDATFolding>true</EnableCOMDATFolding>
       <OptimizeReferences>true</OptimizeReferences>
-      <GenerateDebugInformation>false</GenerateDebugInformation>
+      <GenerateDebugInformation>true</GenerateDebugInformation>
       <EnableUAC>false</EnableUAC>
       <AdditionalDependencies>kernel32.lib;user32.lib;gdi32.lib;winspool.lib;d3d11.lib;d3d12.lib;dxgi.lib;vulkan-1.lib;openvr_api.lib;comdlg32.lib;advapi32.lib;shell32.lib;ole32.lib;oleaut32.lib;uuid.lib;odbc32.lib;odbccp32.lib;pathcch.lib;opencv_world470.lib;%(AdditionalDependencies)</AdditionalDependencies>
       <AdditionalLibraryDirectories>$(SolutionDir)\external\openvr\lib\win64;$(SolutionDir)\external\opencv\build\x64\vc16\lib;$(VULKAN_SDK)\Lib;%(AdditionalLibraryDirectories)</AdditionalLibraryDirectories>
@@ -193,6 +193,7 @@ copy $(SolutionDir)\external\openvr\bin\win64\openvr_api.dll $(OutDir)
     <ClInclude Include="framework\dispatch.h" />
     <ClInclude Include="framework\log.h" />
     <ClInclude Include="framework\util.h" />
+    <ClInclude Include="mesh.h" />
     <ClInclude Include="openvr_manager.h" />
     <ClInclude Include="passthrough_renderer.h" />
     <ClInclude Include="layer.h" />
@@ -236,6 +237,7 @@ copy $(SolutionDir)\external\openvr\bin\win64\openvr_api.dll $(OutDir)
     <ClCompile Include="framework\dispatch.gen.cpp" />
     <ClCompile Include="framework\entry.cpp" />
     <ClCompile Include="framework\log.cpp" />
+    <ClCompile Include="mesh.cpp" />
     <ClCompile Include="openvr_manager.cpp" />
     <ClCompile Include="passthrough_renderer_dx11.cpp" />
     <ClCompile Include="passthrough_renderer_dx12.cpp" />

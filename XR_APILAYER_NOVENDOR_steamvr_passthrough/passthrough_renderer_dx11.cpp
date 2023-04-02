@@ -705,53 +705,25 @@ void PassthroughRendererDX11::SetFrameSize(const uint32_t width, const uint32_t 
 
 void PassthroughRendererDX11::GenerateMesh()
 {
-	m_vertices.resize(0);
-	m_vertices.reserve(NUM_MESH_BOUNDARY_VERTICES * 4 * 6);
-
-	// Generate a triangle strip cylinder with radius and height 1.
-
-	float radianStep = -2.0f * MATH_PI / (float)NUM_MESH_BOUNDARY_VERTICES;
-
-	for (int i = 0; i <= NUM_MESH_BOUNDARY_VERTICES; i++)
-	{
-		m_vertices.push_back(0.0f);
-		m_vertices.push_back(1.0f);
-		m_vertices.push_back(0.0f);
-
-		m_vertices.push_back(cosf(radianStep * i));
-		m_vertices.push_back(1.0f);
-		m_vertices.push_back(sinf(radianStep * i));
-	}
-
-	for (int i = 0; i <= NUM_MESH_BOUNDARY_VERTICES; i++)
-	{
-		m_vertices.push_back(cosf(radianStep * i));
-		m_vertices.push_back(1.0f);
-		m_vertices.push_back(sinf(radianStep * i));
-
-		m_vertices.push_back(cosf(radianStep * i));
-		m_vertices.push_back(0.0f);
-		m_vertices.push_back(sinf(radianStep * i));
-	}
-
-	for (int i = 0; i <= NUM_MESH_BOUNDARY_VERTICES; i++)
-	{
-		m_vertices.push_back(cosf(radianStep * i));
-		m_vertices.push_back(0.0f);
-		m_vertices.push_back(sinf(radianStep * i));
-
-		m_vertices.push_back(0.0f);
-		m_vertices.push_back(0.0f);
-		m_vertices.push_back(0.0f);
-	}
+	MeshCreateCylinder(m_cylinderMesh, NUM_MESH_BOUNDARY_VERTICES);
 
 	D3D11_SUBRESOURCE_DATA vertexBufferData{};
-	vertexBufferData.pSysMem = m_vertices.data();
+	vertexBufferData.pSysMem = m_cylinderMesh.vertices.data();
 
-	CD3D11_BUFFER_DESC vertexBufferDesc((UINT)m_vertices.size() * sizeof(float), D3D11_BIND_VERTEX_BUFFER);
-	if (FAILED(m_d3dDevice->CreateBuffer(&vertexBufferDesc, &vertexBufferData, &m_vertexBuffer)))
+	CD3D11_BUFFER_DESC vertexBufferDesc((UINT)m_cylinderMesh.vertices.size() * sizeof(VertexFormatBasic), D3D11_BIND_VERTEX_BUFFER);
+	if (FAILED(m_d3dDevice->CreateBuffer(&vertexBufferDesc, &vertexBufferData, &m_cylinderMeshVertexBuffer)))
 	{
-		ErrorLog("Mesh CreateBuffer error!\n");
+		ErrorLog("Mesh vertex buffer creation error!\n");
+		return;
+	}
+
+	D3D11_SUBRESOURCE_DATA indexBufferData{};
+	indexBufferData.pSysMem = m_cylinderMesh.triangles.data();
+
+	CD3D11_BUFFER_DESC indexBufferDesc((UINT)m_cylinderMesh.triangles.size() * sizeof(MeshTriangle), D3D11_BIND_INDEX_BUFFER);
+	if (FAILED(m_d3dDevice->CreateBuffer(&indexBufferDesc, &indexBufferData, &m_cylinderMeshIndexBuffer)))
+	{
+		ErrorLog("Mesh index buffer creation error!\n");
 		return;
 	}
 }
@@ -759,52 +731,25 @@ void PassthroughRendererDX11::GenerateMesh()
 
 void PassthroughRendererDX11::GenerateDepthMesh(uint32_t width, uint32_t height)
 {
-	m_stereoVertices.resize(0);
-	m_stereoVertices.reserve((width + 1) * (height + 1) * 2);
+	MeshCreateGrid(m_gridMesh, width, height);
 
-	float step = 1.0f / (float)height;
-
-	for (int y = 0; y < (int)height; y += 2)
-	{
-		float y_pos = y * step;
-		float y_pos1 = (y + 1) * step;
-		float y_pos2 = (y + 2) * step;
-
-		for (int x = 0; x <= (int)width; x++)
-		{
-			float x_pos = x * step;
-			
-
-			m_stereoVertices.push_back(x_pos);
-			m_stereoVertices.push_back(y_pos1);
-			m_stereoVertices.push_back(1.0f);
-
-			m_stereoVertices.push_back(x_pos);
-			m_stereoVertices.push_back(y_pos);
-			m_stereoVertices.push_back(1.0f);
-		}
-
-		for (int x = (int)width; x >= 0; x--)
-		{
-			float x_pos = x * step;
-
-			m_stereoVertices.push_back(x_pos);
-			m_stereoVertices.push_back(y_pos1);
-			m_stereoVertices.push_back(1.0f);
-
-			m_stereoVertices.push_back(x_pos);
-			m_stereoVertices.push_back(y_pos2);
-			m_stereoVertices.push_back(1.0f);
-		}
-	}
-	
 	D3D11_SUBRESOURCE_DATA vertexBufferData{};
-	vertexBufferData.pSysMem = m_stereoVertices.data();
+	vertexBufferData.pSysMem = m_gridMesh.vertices.data();
 
-	CD3D11_BUFFER_DESC vertexBufferDesc((UINT)m_stereoVertices.size() * sizeof(float), D3D11_BIND_VERTEX_BUFFER);
-	if (FAILED(m_d3dDevice->CreateBuffer(&vertexBufferDesc, &vertexBufferData, &m_stereoVertexBuffer)))
+	CD3D11_BUFFER_DESC vertexBufferDesc((UINT)m_gridMesh.vertices.size() * sizeof(VertexFormatBasic), D3D11_BIND_VERTEX_BUFFER);
+	if (FAILED(m_d3dDevice->CreateBuffer(&vertexBufferDesc, &vertexBufferData, &m_gridMeshVertexBuffer)))
 	{
-		ErrorLog("Stereo Mesh CreateBuffer error!\n");
+		ErrorLog("Depth mesh vertex buffer creation error!\n");
+		return;
+	}
+
+	D3D11_SUBRESOURCE_DATA indexBufferData{};
+	indexBufferData.pSysMem = m_gridMesh.triangles.data();
+
+	CD3D11_BUFFER_DESC indexBufferDesc((UINT)m_gridMesh.triangles.size() * sizeof(MeshTriangle), D3D11_BIND_INDEX_BUFFER);
+	if (FAILED(m_d3dDevice->CreateBuffer(&indexBufferDesc, &indexBufferData, &m_gridMeshIndexBuffer)))
+	{
+		ErrorLog("Depth mesh index buffer creation error!\n");
 		return;
 	}
 }
@@ -937,27 +882,28 @@ void PassthroughRendererDX11::RenderPassthroughFrame(const XrCompositionLayerPro
 	m_renderContext->IASetInputLayout(m_inputLayout.Get());
 	const UINT strides[] = { sizeof(float) * 3 };
 	const UINT offsets[] = { 0 };
-	
-	m_renderContext->IASetIndexBuffer(nullptr, DXGI_FORMAT_UNKNOWN, 0);
-	m_renderContext->IASetPrimitiveTopology(D3D11_PRIMITIVE_TOPOLOGY_TRIANGLESTRIP);
 
 	m_renderContext->RSSetState(m_rasterizerState.Get());
 
 	m_renderContext->VSSetSamplers(0, 1, m_defaultSampler.GetAddressOf());
 	m_renderContext->PSSetSamplers(0, 1, m_defaultSampler.GetAddressOf());
 
-	UINT numVertices;
+	UINT numIndices;
 
 	if (mainConf.ProjectionMode == Projection_StereoReconstruction)
 	{
-		numVertices = (UINT)m_stereoVertices.size() / 3;
-		m_renderContext->IASetVertexBuffers(0, 1, m_stereoVertexBuffer.GetAddressOf(), strides, offsets);
+		numIndices = (UINT)m_gridMesh.triangles.size() * 3;
+		m_renderContext->IASetVertexBuffers(0, 1, m_gridMeshVertexBuffer.GetAddressOf(), strides, offsets);
+		m_renderContext->IASetIndexBuffer(m_gridMeshIndexBuffer.Get(), DXGI_FORMAT_R32_UINT, 0);
+		m_renderContext->IASetPrimitiveTopology(D3D11_PRIMITIVE_TOPOLOGY_TRIANGLELIST);
 		m_renderContext->VSSetShader(m_stereoVertexShader.Get(), nullptr, 0);
 	}
 	else
 	{
-		numVertices = (UINT)m_vertices.size() / 3;
-		m_renderContext->IASetVertexBuffers(0, 1, m_vertexBuffer.GetAddressOf(), strides, offsets);
+		numIndices = (UINT)m_cylinderMesh.triangles.size() * 3;
+		m_renderContext->IASetVertexBuffers(0, 1, m_cylinderMeshVertexBuffer.GetAddressOf(), strides, offsets);
+		m_renderContext->IASetIndexBuffer(m_cylinderMeshIndexBuffer.Get(), DXGI_FORMAT_R32_UINT, 0);
+		m_renderContext->IASetPrimitiveTopology(D3D11_PRIMITIVE_TOPOLOGY_TRIANGLELIST);
 		m_renderContext->VSSetShader(m_vertexShader.Get(), nullptr, 0);
 	}
 
@@ -990,20 +936,20 @@ void PassthroughRendererDX11::RenderPassthroughFrame(const XrCompositionLayerPro
 
 		m_renderContext->UpdateSubresource(m_psMaskedConstantBuffer.Get(), 0, nullptr, &maskedBuffer, 0, 0);
 
-		RenderPassthroughViewMasked(LEFT_EYE, leftSwapchainIndex, layer, frame, numVertices);
-		RenderPassthroughViewMasked(RIGHT_EYE, rightSwapchainIndex, layer, frame, numVertices);
+		RenderPassthroughViewMasked(LEFT_EYE, leftSwapchainIndex, layer, frame, numIndices);
+		RenderPassthroughViewMasked(RIGHT_EYE, rightSwapchainIndex, layer, frame, numIndices);
 	}
 	else
 	{
-		RenderPassthroughView(LEFT_EYE, leftSwapchainIndex, layer, frame, blendMode, numVertices);
-		RenderPassthroughView(RIGHT_EYE, rightSwapchainIndex, layer, frame, blendMode, numVertices);
+		RenderPassthroughView(LEFT_EYE, leftSwapchainIndex, layer, frame, blendMode, numIndices);
+		RenderPassthroughView(RIGHT_EYE, rightSwapchainIndex, layer, frame, blendMode, numIndices);
 	}
 
 	RenderFrameFinish();
 }
 
 
-void PassthroughRendererDX11::RenderPassthroughView(const ERenderEye eye, const int32_t swapchainIndex, const XrCompositionLayerProjection* layer, CameraFrame* frame, EPassthroughBlendMode blendMode, UINT numVertices)
+void PassthroughRendererDX11::RenderPassthroughView(const ERenderEye eye, const int32_t swapchainIndex, const XrCompositionLayerProjection* layer, CameraFrame* frame, EPassthroughBlendMode blendMode, UINT numIndices)
 {
 	if (swapchainIndex < 0) { return; }
 
@@ -1078,7 +1024,7 @@ void PassthroughRendererDX11::RenderPassthroughView(const ERenderEye eye, const 
 
 		m_renderContext->OMSetDepthStencilState(GET_DEPTH_STENCIL_STATE(bCompositeDepth, frame->bHasReversedDepth, bWriteDepth), 1);
 
-		m_renderContext->Draw(numVertices, 0);
+		m_renderContext->DrawIndexed(numIndices, 0, 0);
 
 		bWriteDepth = false;
 	}
@@ -1105,7 +1051,7 @@ void PassthroughRendererDX11::RenderPassthroughView(const ERenderEye eye, const 
 
 	m_renderContext->PSSetShader(m_pixelShader.Get(), nullptr, 0);
 	
-	m_renderContext->Draw(numVertices, 0);
+	m_renderContext->DrawIndexed(numIndices, 0, 0);
 
 
 
@@ -1129,12 +1075,12 @@ void PassthroughRendererDX11::RenderPassthroughView(const ERenderEye eye, const 
 
 		m_renderContext->OMSetDepthStencilState(GET_DEPTH_STENCIL_STATE(false, frame->bHasReversedDepth, false), 1);
 
-		m_renderContext->Draw(numVertices, 0);
+		m_renderContext->DrawIndexed(numIndices, 0, 0);
 	}
 }
 
 
-void PassthroughRendererDX11::RenderPassthroughViewMasked(const ERenderEye eye, const int32_t swapchainIndex, const XrCompositionLayerProjection* layer, CameraFrame* frame, UINT numVertices)
+void PassthroughRendererDX11::RenderPassthroughViewMasked(const ERenderEye eye, const int32_t swapchainIndex, const XrCompositionLayerProjection* layer, CameraFrame* frame, UINT numIndices)
 {
 	if (swapchainIndex < 0) { return; }
 
@@ -1247,7 +1193,7 @@ void PassthroughRendererDX11::RenderPassthroughViewMasked(const ERenderEye eye, 
 
 	m_renderContext->PSSetShader(m_maskedPrepassShader.Get(), nullptr, 0);
 
-	m_renderContext->Draw(numVertices, 0);
+	m_renderContext->DrawIndexed(numIndices, 0, 0);
 
 
 	// Clear rendertarget so we can swap the places of the RTV and SRV.
@@ -1270,7 +1216,7 @@ void PassthroughRendererDX11::RenderPassthroughViewMasked(const ERenderEye eye, 
 	m_renderContext->OMSetDepthStencilState(GET_DEPTH_STENCIL_STATE(false, frame->bHasReversedDepth, false), 1);
 	m_renderContext->PSSetShader(m_maskedPixelShader.Get(), nullptr, 0);
 
-	m_renderContext->Draw(numVertices, 0);
+	m_renderContext->DrawIndexed(numIndices, 0, 0);
 }
 
 

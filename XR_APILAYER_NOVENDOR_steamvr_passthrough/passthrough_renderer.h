@@ -8,6 +8,7 @@
 #include <functional>
 #include "config_manager.h"
 #include "layer.h"
+#include "mesh.h"
 
 using Microsoft::WRL::ComPtr;
 
@@ -181,12 +182,14 @@ private:
 	ComPtr<ID3D11ShaderResourceView> m_testFrameSRV;
 
 	ComPtr<ID3D11InputLayout> m_inputLayout;
-	ComPtr<ID3D11Buffer> m_vertexBuffer;
-	std::vector<float> m_vertices;
+	
+	Mesh<VertexFormatBasic> m_cylinderMesh;
+	ComPtr<ID3D11Buffer> m_cylinderMeshVertexBuffer;
+	ComPtr<ID3D11Buffer> m_cylinderMeshIndexBuffer;
 
-	ComPtr<ID3D11Buffer> m_stereoVertexBuffer;
-	ComPtr<ID3D11Buffer> m_stereoVertexUploadBuffer;
-	std::vector<float> m_stereoVertices;
+	Mesh<VertexFormatBasic> m_gridMesh;
+	ComPtr<ID3D11Buffer> m_gridMeshVertexBuffer;
+	ComPtr<ID3D11Buffer> m_gridMeshIndexBuffer;
 
 	uint32_t m_cameraTextureWidth;
 	uint32_t m_cameraTextureHeight;
