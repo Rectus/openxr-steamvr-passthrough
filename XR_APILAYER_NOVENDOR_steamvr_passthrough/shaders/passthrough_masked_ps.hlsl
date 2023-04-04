@@ -1,4 +1,5 @@
 
+#include "common_ps.hlsl"
 #include "util.hlsl"
 
 struct VS_OUTPUT
@@ -9,46 +10,8 @@ struct VS_OUTPUT
 	float projectionValidity : TEXCOORD2;
 };
 
-cbuffer psPassConstantBuffer : register(b0)
-{
-    float2 g_depthRange;
-    float g_opacity;
-    float g_brightness;
-    float g_contrast;
-    float g_saturation;
-    bool g_bDoColorAdjustment;
-    bool g_bDebugDepth;
-    bool g_bDebugValidStereo;
-    bool g_bUseFisheyeCorrection;
-};
-
 
 #ifdef VULKAN
-
-[[vk::push_constant]]
-cbuffer psViewConstantBuffer
-{
-	float4x4 g_cameraProjectionToWorld;
-	//float4x4 g_worldToCameraProjection;
-	float4x4 g_worldToHMDProjection;
-	float4 g_vsUVBounds;
-	float3 g_hmdViewWorldPos;
-	float g_projectionDistance;
-	float g_floorHeightOffset;
-
-	float4 g_uvBounds;
-	float4 g_uvPrepassBounds;
-	uint g_arrayIndex;
-};
-
-cbuffer psMaskedConstantBuffer : register(b1)
-{
-	float3 g_maskedKey;
-	float g_maskedFracChroma;
-	float g_maskedFracLuma;
-	float g_maskedSmooth;
-	bool g_bMaskedUseCamera;
-};
 
 SamplerState g_samplerState : register(s2);
 Texture2D g_cameraFrameTexture : register(t2);
@@ -58,22 +21,6 @@ Texture2D<float2> g_fisheyeCorrectionTexture : register(t5);
 
 #else
 
-cbuffer psViewConstantBuffer : register(b1)
-{
-	float4 g_uvBounds;
-    float4 g_uvPrepassBounds;
-	uint g_arrayIndex;
-};
-
-cbuffer psMaskedConstantBuffer : register(b2)
-{
-	float3 g_maskedKey;
-	float g_maskedFracChroma;
-	float g_maskedFracLuma;
-	float g_maskedSmooth;
-	bool g_bMaskedUseCamera;
-};
-
 SamplerState g_samplerState : register(s0);
 Texture2D g_cameraFrameTexture : register(t0);
 Texture2D<float2> g_fisheyeCorrectionTexture : register(t1);
@@ -82,10 +29,15 @@ Texture2D g_blendMask : register(t2);
 #endif
 
 
-
-
+[earlydepthstencil]
 float4 main(VS_OUTPUT input) : SV_TARGET
 {
+    
+    //if (g_doCutout)
+    //{
+    //    clip(input.projectionValidity);
+    //}
+    
     float2 screenUvs = input.screenCoords.xy / input.screenCoords.z;
     screenUvs = screenUvs * float2(0.5, -0.5) + float2(0.5, 0.5);
     screenUvs = screenUvs * (g_uvPrepassBounds.zw - g_uvPrepassBounds.xy) + g_uvPrepassBounds.xy;
@@ -94,7 +46,14 @@ float4 main(VS_OUTPUT input) : SV_TARGET
     float alpha = g_blendMask.Sample(g_samplerState, screenUvs).x;
     alpha = saturate((1.0 - alpha) * g_opacity);
 	
-	clip(alpha <= 0 ? -1 : 1);
+    if (g_doCutout)
+    {
+        clip(alpha <= 0 ? -1 : 1);
+    }
+    else
+    {
+        alpha *= saturate(input.projectionValidity);
+    }
 	
 	// Divide to convert back from homogenous coordinates.
 	float2 outUvs = input.clipSpaceCoords.xy / input.clipSpaceCoords.z;
@@ -116,8 +75,19 @@ float4 main(VS_OUTPUT input) : SV_TARGET
         outUvs.y = 1 - outUvs.y;
     }	
 
-	float4 cameraColor = g_cameraFrameTexture.Sample(g_samplerState, outUvs.xy);
-
+    float3 cameraColor = g_cameraFrameTexture.Sample(g_samplerState, outUvs).xyz;
+    
+    if (g_sharpness != 0.0)
+    {
+        float3 textureSize;
+        g_cameraFrameTexture.GetDimensions(0, textureSize.x, textureSize.y, textureSize.z);
+        cameraColor *= 1 + g_sharpness * 4;
+        cameraColor -= g_cameraFrameTexture.Sample(g_samplerState, outUvs + float2(-1, 0) / textureSize.xy).xyz * g_sharpness;
+        cameraColor -= g_cameraFrameTexture.Sample(g_samplerState, outUvs + float2(1, 0) / textureSize.xy).xyz * g_sharpness;
+        cameraColor -= g_cameraFrameTexture.Sample(g_samplerState, outUvs + float2(0, -1) / textureSize.xy).xyz * g_sharpness;
+        cameraColor -= g_cameraFrameTexture.Sample(g_samplerState, outUvs + float2(0, 1) / textureSize.xy).xyz * g_sharpness;
+    }
+    
 	if (g_bDoColorAdjustment)
 	{
 		// Using CIELAB D65 to match the EXT_FB_passthrough adjustments.
@@ -126,16 +96,16 @@ float4 main(VS_OUTPUT input) : SV_TARGET
 		float LBis = clamp(LPrime + g_brightness, 0.0, 100.0);
 		float2 ab = labColor.yz * g_saturation;
 
-		cameraColor = float4(LABtoLinearRGB_D65(float3(LBis, ab.xy)).xyz, cameraColor.a);
+		cameraColor = float3(LABtoLinearRGB_D65(float3(LBis, ab.xy)).xyz);
 	}
 	
     if (g_bDebugDepth)
     {
         float depth = saturate(input.screenCoords.z / (g_depthRange.y - g_depthRange.x) - g_depthRange.x);
-        cameraColor = float4(depth, depth, depth, 1);
+        cameraColor = float3(depth, depth, depth);
         if (g_bDebugValidStereo && input.projectionValidity < 0.0)
         {
-            cameraColor = float4(0.5, 0, 0, 1);
+            cameraColor = float3(0.5, 0, 0);
         }
     }
     else if (g_bDebugValidStereo)
@@ -144,7 +114,16 @@ float4 main(VS_OUTPUT input) : SV_TARGET
         {
             cameraColor.x += 0.5;
         }
+        else
+        {
+            cameraColor.y += input.projectionValidity * 0.25;
+			
+            if (input.projectionValidity > 1.0)
+            {
+                cameraColor.z += input.projectionValidity * 0.25;
+            }
+        }
     }
 
-	return float4(cameraColor.xyz, alpha);
+	return float4(cameraColor, alpha);
 }

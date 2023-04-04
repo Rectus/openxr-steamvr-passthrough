@@ -1,4 +1,5 @@
 
+#include "common_vs.hlsl"
 
 struct VS_OUTPUT
 {
@@ -8,54 +9,8 @@ struct VS_OUTPUT
 	float projectionValidity : TEXCOORD2;
 };
 
-#ifdef VULKAN
-
-[[vk::push_constant]]
-cbuffer vsConstantBuffer
-{
-	float4x4 g_cameraProjectionToWorld;
-    //float4x4 g_worldToCameraProjection;
-    float4x4 g_worldToHMDProjection;
-	float4 g_uvBounds;
-	float3 g_hmdViewWorldPos;
-	float g_projectionDistance;
-	float g_floorHeightOffset;
-    uint g_viewIndex;
-};
-
-#else
-
-cbuffer vsConstantBuffer : register(b0)
-{
-    float4x4 g_cameraProjectionToWorld;
-    float4x4 g_worldToCameraProjection;
-    float4x4 g_worldToHMDProjection;
-	float4 g_uvBounds;
-	float3 g_hmdViewWorldPos;
-	float g_projectionDistance;
-	float g_floorHeightOffset;
-    uint g_viewIndex;
-};
-#endif
-
-cbuffer vsPassConstantBuffer : register(b1)
-{
-    float4x4 g_disparityViewToWorldLeft;
-    float4x4 g_disparityViewToWorldRight;
-	float4x4 g_disparityToDepth;
-	uint2 g_disparityTextureSize;
-	float g_disparityDownscaleFactor;
-    float g_cutoutFactor;
-    float g_cutoutOffset;
-    float g_cutoutFilterWidth;
-    int g_disparityFilterWidth;
-    bool g_bProjectBorders;
-    bool g_bFindDiscontinuities;
-};
-
 SamplerState g_samplerState : register(s0);
 Texture2D<float2> g_disparityTexture : register(t0);
-
 
 
 float gaussian(float2 value)
@@ -88,7 +43,7 @@ VS_OUTPUT main(float3 inPosition : POSITION, uint vertexID : SV_VertexID)
     }
     
     
-    float2 disparityUVs = inPosition.xy * (g_uvBounds.zw - g_uvBounds.xy) + g_uvBounds.xy;
+    float2 disparityUVs = inPosition.xy * (g_vsUVBounds.zw - g_vsUVBounds.xy) + g_vsUVBounds.xy;
     uint3 uvPos = uint3(round(disparityUVs * g_disparityTextureSize), 0);
     
     // Load unfiltered value so that invalid values are not filtered into the texture.
@@ -186,7 +141,7 @@ VS_OUTPUT main(float3 inPosition : POSITION, uint vertexID : SV_VertexID)
     viewSpaceCoords.z = sign(viewSpaceCoords.z) * min(abs(viewSpaceCoords.z), g_projectionDistance);
 
     float4 worldSpacePoint = 
-		mul((g_uvBounds.x < 0.5) ? g_disparityViewToWorldLeft : g_disparityViewToWorldRight, viewSpaceCoords);
+		mul((g_vsUVBounds.x < 0.5) ? g_disparityViewToWorldLeft : g_disparityViewToWorldRight, viewSpaceCoords);
     
     
     // Clamp positions to floor height

@@ -118,9 +118,9 @@ struct Config_Stereo
 	bool StereoDisparityBothEyes = true;
 	int StereoDisparityFilterWidth = 3;
 	bool StereoCutoutEnabled = false;
-	float StereoCutoutFactor = 1.5f;
-	float StereoCutoutOffset = 0.75f;
-	float StereoCutoutFilterWidth = 0.5f;
+	float StereoCutoutFactor = 0.75f;
+	float StereoCutoutOffset = 1.5f;
+	float StereoCutoutFilterWidth = 0.9f;
 
 	//int StereoAlgorithmQuality = 0;
 	int StereoBlockSize = 1;

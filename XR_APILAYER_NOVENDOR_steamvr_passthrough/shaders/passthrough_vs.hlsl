@@ -1,4 +1,5 @@
 
+#include "common_vs.hlsl"
 
 struct VS_OUTPUT
 {
@@ -8,42 +9,6 @@ struct VS_OUTPUT
 	float projectionValidity : TEXCOORD2;
 };
 
-#ifdef VULKAN
-
-[[vk::push_constant]]
-cbuffer vsConstantBuffer
-{
-	float4x4 g_cameraProjectionToWorld;
-	//float4x4 g_worldToCameraProjection;
-	float4x4 g_worldToHMDProjection;
-	float4 g_uvBounds;
-	float3 g_hmdViewWorldPos;
-	float g_projectionDistance;
-	float g_floorHeightOffset;
-};
-
-#else
-
-cbuffer vsConstantBuffer : register(b0)
-{
-    float4x4 g_cameraProjectionToWorld;
-    float4x4 g_worldToCameraProjection;
-    float4x4 g_worldToHMDProjection;
-	float4 g_uvBounds;
-	float3 g_hmdViewWorldPos;
-	float g_projectionDistance;
-	float g_floorHeightOffset;
-};
-#endif
-
-//cbuffer vsPassConstantBuffer : register(b1)
-//{
-//	float4x4 g_depthProjectionToWorld;
-//	float4x4 g_disparityToDepth;
-//	uint2 g_disparityTextureSize;
-//	float g_disparityDownscaleFactor;
-//};
-//
 //SamplerState g_samplerState : register(s0);
 //Texture2D<float> g_DepthTexture : register(t0);
 

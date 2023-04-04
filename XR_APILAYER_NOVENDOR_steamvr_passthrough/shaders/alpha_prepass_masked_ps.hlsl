@@ -1,4 +1,5 @@
 
+#include "common_ps.hlsl"
 #include "util.hlsl"
 
 struct VS_OUTPUT
@@ -9,69 +10,13 @@ struct VS_OUTPUT
 	float projectionValidity : TEXCOORD2;
 };
 
-cbuffer psPassConstantBuffer : register(b0)
-{
-    float2 g_depthRange;
-    float g_opacity;
-    float g_brightness;
-    float g_contrast;
-    float g_saturation;
-    bool g_bDoColorAdjustment;
-    bool g_bDebugDepth;
-    bool g_bDebugValidStereo;
-    bool g_bUseFisheyeCorrection;
-};
-
 #ifdef VULKAN
-
-[[vk::push_constant]]
-cbuffer psViewConstantBuffer
-{
-	float4x4 g_cameraProjectionToWorld;
-	//float4x4 g_worldToCameraProjection;
-	float4x4 g_worldToHMDProjection;
-	float4 g_vsUVBounds;
-	float3 g_hmdViewWorldPos;
-	float g_projectionDistance;
-	float g_floorHeightOffset;
-
-	float4 g_uvBounds;
-	float4 g_uvPrepassBounds;
-	uint g_arrayIndex;
-};
-
-cbuffer psMaskedConstantBuffer : register(b1)
-{
-	float3 g_maskedKey;
-	float g_maskedFracChroma;
-	float g_maskedFracLuma;
-	float g_maskedSmooth;
-	bool g_bMaskedUseCamera;
-	bool g_bMaskedInvert;
-};
 
 SamplerState g_samplerState : register(s4);
 Texture2DArray g_texture : register(t4);
 Texture2D<float2> g_fisheyeCorrectionTexture : register(t5);
 
 #else
-
-cbuffer psViewConstantBuffer : register(b1)
-{
-	float4 g_uvBounds;
-    float4 g_uvPrepassBounds;
-	uint g_arrayIndex;
-};
-
-cbuffer psMaskedConstantBuffer : register(b2)
-{
-	float3 g_maskedKey;
-	float g_maskedFracChroma;
-	float g_maskedFracLuma;
-	float g_maskedSmooth;
-	bool g_bMaskedUseCamera;
-	bool g_bMaskedInvert;
-};
 
 SamplerState g_samplerState : register(s0);
 Texture2DArray g_texture : register(t0);
@@ -80,9 +25,9 @@ Texture2D<float2> g_fisheyeCorrectionTexture : register(t1);
 #endif
 
 
-
+[earlydepthstencil]
 float main(VS_OUTPUT input) : SV_TARGET
-{
+{	
 	float4 color;
 	
     bool bInvertOutput = g_bMaskedInvert;
@@ -125,6 +70,11 @@ float main(VS_OUTPUT input) : SV_TARGET
 	float distLuma = smoothstep(g_maskedFracLuma, g_maskedFracLuma + g_maskedSmooth, abs(difference.x));
 	
     float outAlpha = bInvertOutput ? 1.0 - max(distChroma, distLuma) : max(distChroma, distLuma);
+	
+    if (!g_bMaskedUseCamera)
+    {
+        outAlpha *= color.a;
+    }
 	
     return outAlpha;
 

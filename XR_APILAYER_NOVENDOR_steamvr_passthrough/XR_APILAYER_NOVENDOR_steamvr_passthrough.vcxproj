@@ -284,6 +284,14 @@ copy $(SolutionDir)\external\openvr\bin\win64\openvr_api.dll $(OutDir)
       <ShaderType Condition="'$(Configuration)|$(Platform)'=='Release|x64'">Pixel</ShaderType>
       <HeaderFileOutput Condition="'$(Configuration)|$(Platform)'=='Release|x64'">shaders\alpha_prepass_ps.h</HeaderFileOutput>
     </FxCompile>
+    <None Include="shaders\common_vs.hlsl">
+      <ShaderType Condition="'$(Configuration)|$(Platform)'=='Release|x64'">Vertex</ShaderType>
+      <ShaderType Condition="'$(Configuration)|$(Platform)'=='Debug|x64'">Vertex</ShaderType>
+      <FileType>Document</FileType>
+    </None>
+    <None Include="shaders\common_ps.hlsl">
+      <FileType>Document</FileType>
+    </None>
     <FxCompile Include="shaders\passthrough_masked_ps.hlsl">
       <ShaderType Condition="'$(Configuration)|$(Platform)'=='Debug|x64'">Pixel</ShaderType>
       <ShaderModel Condition="'$(Configuration)|$(Platform)'=='Debug|x64'">5.0</ShaderModel>
