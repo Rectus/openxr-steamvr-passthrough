@@ -425,6 +425,7 @@ void DepthReconstruction::RunThread()
         cv::Mat* outputMatrixRight = &m_rawDisparityLeft;
         cv::Rect filterROI(0, 0, m_cvImageWidth, m_cvImageHeight);
 
+
         if (m_bDisparityBothEyes)
         {
             m_stereoRightMatcher = cv::StereoSGBM::create(minDisparity, numDisparities, stereoConfig.StereoBlockSize,
@@ -439,6 +440,7 @@ void DepthReconstruction::RunThread()
 
             filterROI = cv::Rect(0, 0, m_cvImageWidth + m_maxDisparity, m_cvImageHeight);
         }
+
 
         if (stereoConfig.StereoFiltering != StereoFiltering_None)
         {
@@ -522,8 +524,13 @@ void DepthReconstruction::RunThread()
                 if ((uint32_t)m_confidenceLeft.size().width >= m_cvImageWidth + m_maxDisparity)
                 {
                     m_confidenceLeft(cv::Rect(m_maxDisparity, 0, m_cvImageWidth, m_cvImageHeight)).convertTo(leftIn[1], CV_16S, 32768.0 / 255.0);
+
+                    if (!m_bDisparityBothEyes)
+                    {
+                        m_confidenceLeft(cv::Rect(m_maxDisparity, 0, m_cvImageWidth, m_cvImageHeight)).convertTo(rightIn[1], CV_16S, 32768.0 / 255.0);
+                    }
                 }
-                if ((uint32_t)m_confidenceRight.size().width >= m_cvImageWidth + m_maxDisparity)
+                if (m_bDisparityBothEyes && (uint32_t)m_confidenceRight.size().width >= m_cvImageWidth + m_maxDisparity)
                 {
                     m_confidenceRight(cv::Rect(m_maxDisparity, 0, m_cvImageWidth, m_cvImageHeight)).convertTo(rightIn[1], CV_16S, 32768.0 / 255.0);
                 }
@@ -632,7 +639,6 @@ void DepthReconstruction::RunThread()
                 {
                     m_confidenceRight(cv::Rect(m_maxDisparity, 0, m_cvImageWidth, m_cvImageHeight)).convertTo(right, CV_8U);
                 }
-                //debugTextureMat *= 4;
 
                 if (texture.Width != m_cvImageWidth || texture.Height != m_cvImageHeight)
                 {

@@ -15,6 +15,7 @@ cbuffer psPassConstantBuffer : register(b0)
     float g_brightness;
     float g_contrast;
     float g_saturation;
+    float g_sharpness;
     float g_cutoutFactor;
 	float g_cutoutOffset;
     bool g_bDoColorAdjustment;

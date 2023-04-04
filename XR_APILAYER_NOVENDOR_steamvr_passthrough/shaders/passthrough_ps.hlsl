@@ -16,6 +16,7 @@ cbuffer psPassConstantBuffer : register(b0)
 	float g_brightness;
 	float g_contrast;
 	float g_saturation;
+    float g_sharpness;
     float g_cutoutFactor;
     float g_cutoutOffset;
 	bool g_bDoColorAdjustment;
@@ -93,26 +94,37 @@ float4 main(VS_OUTPUT input) : SV_TARGET
         outUvs.y = 1 - outUvs.y;
     }
 	
-    float4 rgbColor = g_cameraFrameTexture.Sample(g_samplerState, outUvs);
-
+    float3 rgbColor = g_cameraFrameTexture.Sample(g_samplerState, outUvs).xyz;
+    
+    if (g_sharpness != 0.0)
+    {
+        float3 textureSize;
+        g_cameraFrameTexture.GetDimensions(0, textureSize.x, textureSize.y, textureSize.z);
+        rgbColor *= 1 + g_sharpness * 4;
+        rgbColor -= g_cameraFrameTexture.Sample(g_samplerState, outUvs + float2(-1, 0) / textureSize.xy).xyz * g_sharpness;
+        rgbColor -= g_cameraFrameTexture.Sample(g_samplerState, outUvs + float2(1, 0) / textureSize.xy).xyz * g_sharpness;
+        rgbColor -= g_cameraFrameTexture.Sample(g_samplerState, outUvs + float2(0, -1) / textureSize.xy).xyz * g_sharpness;
+        rgbColor -= g_cameraFrameTexture.Sample(g_samplerState, outUvs + float2(0, 1) / textureSize.xy).xyz * g_sharpness;
+    }
+    
 	if (g_bDoColorAdjustment)
 	{
 		// Using CIELAB D65 to match the EXT_FB_passthrough adjustments.
-		float3 labColor = LinearRGBtoLAB_D65(rgbColor.xyz);
+		float3 labColor = LinearRGBtoLAB_D65(rgbColor);
 		float LPrime = clamp((labColor.x - 50.0) * g_contrast + 50.0, 0.0, 100.0);
 		float LBis = clamp(LPrime + g_brightness, 0.0, 100.0);
 		float2 ab = labColor.yz * g_saturation;
 
-		rgbColor.xyz = LABtoLinearRGB_D65(float3(LBis, ab.xy)).xyz;
+		rgbColor = LABtoLinearRGB_D65(float3(LBis, ab.xy));
 	}
 
     if (g_bDebugDepth)
     {
         float depth = saturate(input.screenCoords.z / (g_depthRange.y - g_depthRange.x) - g_depthRange.x);
-        rgbColor = float4(depth, depth, depth, 1);
+        rgbColor = float3(depth, depth, depth);
         if (g_bDebugValidStereo && input.projectionValidity < 0.0)
         {
-            rgbColor = float4(0.5, 0, 0, 1);
+            rgbColor = float3(0.5, 0, 0);
         }
     }
     else if (g_bDebugValidStereo)
@@ -132,5 +144,5 @@ float4 main(VS_OUTPUT input) : SV_TARGET
         }
     }
 	
-    return float4(rgbColor.xyz, g_opacity * alpha);
+    return float4(rgbColor, g_opacity * alpha);
 }

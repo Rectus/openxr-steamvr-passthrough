@@ -124,5 +124,7 @@ private:
 	cv::Mat m_colorRectifiedLeft;
 	cv::Mat m_colorRectifiedRight;
 	cv::Mat m_colorRectifiedOutput;
+
+	cv::Mat m_maskMat;
 };
 

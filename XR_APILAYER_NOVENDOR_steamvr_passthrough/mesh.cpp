@@ -71,3 +71,48 @@ void MeshCreateGrid(Mesh<VertexFormatBasic>& mesh, int width, int height)
 	}
 }
 
+
+void MeshCreateHexGrid(Mesh<VertexFormatBasic>& mesh, int width, int height)
+{
+	mesh.vertices.resize(0);
+	mesh.vertices.reserve((width + 1) * (height + 1));
+	mesh.triangles.resize(0);
+	mesh.triangles.reserve(width * height * 2);
+
+	float stepX = 1.0f / (float)width;
+	float stepY = 1.0f / (float)height;
+
+	uint32_t index = 0;
+
+	for (int y = 0; y < height; y++)
+	{
+		for (int x = 0; x < width; x++)
+		{
+			// Mark border vertices with z = 1
+			float z = (x == 0 || x == (width - 1) || y == 0 || y == (height - 1)) ? 1.0f : 0.0f;
+
+			if (y % 2 == 0)
+			{
+				mesh.vertices.emplace_back(x * stepX, y * stepY, z);
+
+				if (x < width - 1 && y < height - 1)
+				{
+					mesh.triangles.emplace_back(index, index + 1, index + width);
+					mesh.triangles.emplace_back(index + 1, index + width + 1, index + width);
+				}
+			}
+			else
+			{
+				mesh.vertices.emplace_back(x * stepX + 0.5 * stepX, y * stepY, z);
+
+				if (x < width - 1 && y < height - 1)
+				{
+					mesh.triangles.emplace_back(index, index + 1, index + width + 1);
+					mesh.triangles.emplace_back(index, index + width + 1, index + width);
+				}
+			}
+
+			index++;
+		}
+	}
+}

@@ -47,6 +47,7 @@ cbuffer vsPassConstantBuffer : register(b1)
 	float g_disparityDownscaleFactor;
     float g_cutoutFactor;
     float g_cutoutOffset;
+    float g_cutoutFilterWidth;
     int g_disparityFilterWidth;
     bool g_bProjectBorders;
     bool g_bFindDiscontinuities;
@@ -72,7 +73,7 @@ VS_OUTPUT main(float3 inPosition : POSITION, uint vertexID : SV_VertexID)
     // Project the border vertices to the edges of the screen to cover any gaps from reprojection.
     if (g_bProjectBorders && inPosition.z == 1)
     {
-        output.position = float4(inPosition.xy * float2(2, -2) + float2(-1, 1), 1, 1);
+        output.position = float4(inPosition.xy * float2(2, -2) + float2(-1, 1), 0.98, 1);
         output.screenCoords = output.position.xyw;
 #ifndef VULKAN
         float4 worldPos = mul(g_cameraProjectionToWorld, float4(inPosition.xy * 2 - 1, 1, 1));
@@ -90,14 +91,14 @@ VS_OUTPUT main(float3 inPosition : POSITION, uint vertexID : SV_VertexID)
     float2 disparityUVs = inPosition.xy * (g_uvBounds.zw - g_uvBounds.xy) + g_uvBounds.xy;
     uint3 uvPos = uint3(round(disparityUVs * g_disparityTextureSize), 0);
     
-    //float2 dispConf = g_disparityTexture.SampleLevel(g_samplerState, disparityUVs, 0);
+    // Load unfiltered value so that invalid values are not filtered into the texture.
     float2 dispConf = g_disparityTexture.Load(uvPos);
+    //float2 dispConf = g_disparityTexture.SampleLevel(g_samplerState, disparityUVs, 0);
+    
     float disparity = dispConf.x;
     float confidence = dispConf.y;
 
     output.projectionValidity = 1;
-
-    
     
 	// Disparity at the max projection distance
     float minDisparity = g_disparityToDepth[2][3] /
@@ -109,18 +110,17 @@ VS_OUTPUT main(float3 inPosition : POSITION, uint vertexID : SV_VertexID)
     (min(2.0, g_projectionDistance) * 2048.0 * g_disparityDownscaleFactor * g_disparityToDepth[3][2]);
 
     
-    
+    //if (inPosition.x < 0.01 || inPosition.x > 0.99 ||
+    //    inPosition.y < 0.01 || inPosition.y > 0.99)
+    //{
+    //    disparity = minDisparity;
+    //    output.projectionValidity = -10000.0;
+    //}
+    //else 
     if (disparity > maxDisparity || disparity < minDisparity)
     {
         // Hack that causes some artifacting. Ideally patch any holes or discard and render behind instead.
         disparity = defaultDisparity;
-        output.projectionValidity = -10000.0;
-    }
-    
-    if (inPosition.x < 0.01 || inPosition.x > 0.99 ||
-        inPosition.y < 0.01 || inPosition.y > 0.99)
-    {
-        disparity = minDisparity;
         output.projectionValidity = -10000.0;
     }
     else if (confidence < 0.5)
@@ -129,7 +129,7 @@ VS_OUTPUT main(float3 inPosition : POSITION, uint vertexID : SV_VertexID)
         // Sample neighboring pixels using clamped Sobel filter, and cut out any areas with discontinuities.
         if (g_bFindDiscontinuities)
         {                      
-            float2 fac = 0.5 / g_disparityTextureSize;
+            float2 fac = g_cutoutFilterWidth / g_disparityTextureSize;
             
             float dispU = g_disparityTexture.SampleLevel(g_samplerState, disparityUVs + float2(0, -1) * fac, 0).x;
             float dispD = g_disparityTexture.SampleLevel(g_samplerState, disparityUVs + float2(0, 1) * fac, 0).x;
@@ -162,7 +162,9 @@ VS_OUTPUT main(float3 inPosition : POSITION, uint vertexID : SV_VertexID)
             {
                 for (int y = -g_disparityFilterWidth; y <= g_disparityFilterWidth; y++)
                 {
-                    float sampleDisp = g_disparityTexture.Load(uvPos + uint3(x, y, 0)).x;
+                    float2 offset = float2(x, y) / (float)g_disparityTextureSize;
+                    float sampleDisp = g_disparityTexture.SampleLevel(g_samplerState, disparityUVs + offset, 0).x;
+                    //float sampleDisp = g_disparityTexture.Load(uvPos + uint3(x, y, 0)).x;
                     float weight = gaussian(float2(x, y));
                     totalWeight += weight;
                     outDisp += clamp(sampleDisp, minDisparity, maxDisparity) * weight;

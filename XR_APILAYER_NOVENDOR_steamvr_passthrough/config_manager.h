@@ -63,6 +63,7 @@ struct Config_Main
 	float Brightness = 0.0f;
 	float Contrast = 1.0f;
 	float Saturation = 1.0f;
+	float Sharpness = 0.0f;
 
 	bool RequireSteamVRRuntime = true;
 
@@ -115,10 +116,11 @@ struct Config_Stereo
 	int StereoDownscaleFactor = 2;
 
 	bool StereoDisparityBothEyes = true;
-	int StereoDisparityFilterWidth = 1;
-	bool StereoCutoutEnabled = true;
-	float StereoCutoutFactor = 3.0f;
-	float StereoCutoutOffset = 0.1f;
+	int StereoDisparityFilterWidth = 3;
+	bool StereoCutoutEnabled = false;
+	float StereoCutoutFactor = 1.5f;
+	float StereoCutoutOffset = 0.75f;
+	float StereoCutoutFilterWidth = 0.5f;
 
 	//int StereoAlgorithmQuality = 0;
 	int StereoBlockSize = 1;

@@ -27,6 +27,7 @@ struct VSPassConstantBuffer
 	float disparityDownscaleFactor;
 	float cutoutFactor;
 	float cutoutOffset;
+	float cutoutFilterWidth;
 	int32_t disparityFilterWidth;
 	uint32_t bProjectBorders;
 	uint32_t bFindDiscontinuities;
@@ -51,6 +52,7 @@ struct PSPassConstantBuffer
 	float brightness;
 	float contrast;
 	float saturation;
+	float sharpness;
 	float cutoutFactor;
 	float cutoutOffset;
 	uint32_t bDoColorAdjustment;
@@ -731,7 +733,7 @@ void PassthroughRendererDX11::GenerateMesh()
 
 void PassthroughRendererDX11::GenerateDepthMesh(uint32_t width, uint32_t height)
 {
-	MeshCreateGrid(m_gridMesh, width, height);
+	MeshCreateHexGrid(m_gridMesh, width, height);
 
 	D3D11_SUBRESOURCE_DATA vertexBufferData{};
 	vertexBufferData.pSysMem = m_gridMesh.vertices.data();
@@ -825,9 +827,10 @@ void PassthroughRendererDX11::RenderPassthroughFrame(const XrCompositionLayerPro
 		vsBuffer.disparityTextureSize[1] = depthFrame->disparityTextureSize[1];
 		vsBuffer.cutoutFactor = stereoConf.StereoCutoutFactor;
 		vsBuffer.cutoutOffset = stereoConf.StereoCutoutOffset;
+		vsBuffer.cutoutFilterWidth = stereoConf.StereoCutoutFilterWidth;
 		vsBuffer.disparityFilterWidth = stereoConf.StereoDisparityFilterWidth;
 		vsBuffer.bProjectBorders = !stereoConf.StereoReconstructionFreeze;
-		vsBuffer.bFindDiscontinuities = stereoConf.StereoCutoutEnabled && stereoConf.StereoDisparityBothEyes;
+		vsBuffer.bFindDiscontinuities = stereoConf.StereoCutoutEnabled;
 		m_renderContext->UpdateSubresource(m_vsPassConstantBuffer[m_frameIndex].Get(), 0, nullptr, &vsBuffer, 0, 0);
 	}
 
@@ -913,6 +916,7 @@ void PassthroughRendererDX11::RenderPassthroughFrame(const XrCompositionLayerPro
 	buffer.brightness = mainConf.Brightness;
 	buffer.contrast = mainConf.Contrast;
 	buffer.saturation = mainConf.Saturation;
+	buffer.sharpness = mainConf.Sharpness;
 	buffer.cutoutFactor = stereoConf.StereoCutoutFactor;
 	buffer.cutoutOffset = stereoConf.StereoCutoutOffset;
 	buffer.bDoColorAdjustment = fabsf(mainConf.Brightness) > 0.01f || fabsf(mainConf.Contrast - 1.0f) > 0.01f || fabsf(mainConf.Saturation - 1.0f) > 0.01f;
@@ -1055,7 +1059,7 @@ void PassthroughRendererDX11::RenderPassthroughView(const ERenderEye eye, const 
 
 
 
-	if (stereoConf.StereoCutoutEnabled && stereoConf.StereoDisparityBothEyes)
+	if (stereoConf.StereoCutoutEnabled)
 	{
 		float secondaryWidthFactor = 0.6f;
 		int scissorStart = (eye == LEFT_EYE) ? (int)(rect.extent.width * (1.0f - secondaryWidthFactor)) : 0;

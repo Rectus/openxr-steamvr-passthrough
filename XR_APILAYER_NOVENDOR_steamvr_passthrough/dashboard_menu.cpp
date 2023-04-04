@@ -214,6 +214,23 @@ inline void DashboardMenu::TextDescription(const char* fmt, ...)
 
 #define IMGUI_BIG_SPACING ImGui::Dummy(ImVec2(0.0f, 20.0f))
 
+inline void BeginSoftDisabled(bool bIsDisabled)
+{
+	if (bIsDisabled)
+	{
+		ImGui::PushStyleVar(ImGuiStyleVar_Alpha, ImGui::GetStyle().DisabledAlpha);
+	}
+}
+
+inline void EndSoftDisabled(bool bIsDisabled)
+{
+	if (bIsDisabled)
+	{
+		ImGui::PopStyleVar();
+	}
+}
+
+
 void DashboardMenu::TickMenu() 
 {
 	HandleEvents();
@@ -339,6 +356,7 @@ if (bIsActiveTab) { ImGui::PopStyleColor(1); bIsActiveTab = false; }
 				ScrollableSlider("Brightness", &mainConfig.Brightness, -50.0f, 50.0f, "%.0f", 1.0f);
 				ScrollableSlider("Contrast", &mainConfig.Contrast, 0.0f, 2.0f, "%.1f", 0.1f);
 				ScrollableSlider("Saturation", &mainConfig.Saturation, 0.0f, 2.0f, "%.1f", 0.1f);
+				ScrollableSlider("Sharpness", &mainConfig.Sharpness, -1.0f, 1.0f, "%.1f", 0.1f);
 				ImGui::PopItemWidth();
 				IMGUI_BIG_SPACING;
 
@@ -504,35 +522,50 @@ if (bIsActiveTab) { ImGui::PopStyleColor(1); bIsActiveTab = false; }
 
 			IMGUI_BIG_SPACING;
 
-			ImGui::Checkbox("Use Multiple Cores", &stereoCustomConfig.StereoUseMulticore);
-			TextDescription("Allows the stereo calculations to use multiple CPU cores. This can be turned off for CPU limited applications.");
-			IMGUI_BIG_SPACING;
-
-			ImGui::SetNextItemWidth(ImGui::GetContentRegionAvail().x * 0.45f);
-			ScrollableSliderInt("Frame Skip Ratio", &stereoCustomConfig.StereoFrameSkip, 0, 14, "%d", 1);
-			TextDescription("Skip stereo processing of this many frames for each frame processed. This does not affect the frame rate of viewed camera frames, every frame will still be reprojected on the latest stereo data.");
-			IMGUI_BIG_SPACING;
-
 			ImGui::SetNextItemWidth(ImGui::GetContentRegionAvail().x * 0.45f);
 			ScrollableSliderInt("Image Downscale Factor", &stereoCustomConfig.StereoDownscaleFactor, 1, 16, "%d", 1);
 			TextDescription("Ratio of the stereo processed image to the camera frame. Larger values will improve performance.");
+			IMGUI_BIG_SPACING;
+
+			ImGui::SetNextItemWidth(ImGui::GetContentRegionAvail().x * 0.45f);
+			ScrollableSliderInt("Disparity Smoothing", &stereoCustomConfig.StereoDisparityFilterWidth, 0, 20, "%d", 1);
+			TextDescription("Applies smoothing to areas with low projection confidence.");
+
 			IMGUI_BIG_SPACING;
 
 			ImGui::Checkbox("Calculate Disparity for Both Cameras", &stereoCustomConfig.StereoDisparityBothEyes);
 			TextDescription("Calculates a separate disparity map for each camera, instead of using the left one for both.");
 			IMGUI_BIG_SPACING;
 
-			if (!stereoCustomConfig.StereoDisparityBothEyes) { ImGui::BeginDisabled(true); }
-			ImGui::Indent();
 			ImGui::Checkbox("Composite Both Cameras for Each Eye", &stereoCustomConfig.StereoCutoutEnabled);
 			TextDescription("Detects areas occluded to the main camera and renders them with the other camera where possible.");
 			IMGUI_BIG_SPACING;
 
-			ScrollableSliderInt("Disparity Filter Width", &stereoCustomConfig.StereoDisparityFilterWidth, 0, 20, "%d", 1);
-			ScrollableSlider("Composition Cutout Factor", &stereoCustomConfig.StereoCutoutFactor, 0.0f, 10.0f, "%.2f", 0.01f);
-			ScrollableSlider("Composition Cutout Offset", &stereoCustomConfig.StereoCutoutOffset, -1.0f, 1.0f, "%.2f", 0.01f);
+			BeginSoftDisabled(!stereoCustomConfig.StereoCutoutEnabled);
+			ImGui::Indent();
+
+			ImGui::PushItemWidth(ImGui::GetContentRegionAvail().x * 0.45f);
+			ScrollableSlider("Composition Cutout Factor", &stereoCustomConfig.StereoCutoutFactor, 0.0f, 3.0f, "%.2f", 0.01f);
+			ScrollableSlider("Composition Cutout Offset", &stereoCustomConfig.StereoCutoutOffset, 0.0f, 2.0f, "%.2f", 0.01f);
+			ScrollableSlider("Composition Cutout Filter Distance", &stereoCustomConfig.StereoCutoutFilterWidth, 0.1f, 2.0f, "%.1f", 0.1f);
+			ImGui::PopItemWidth();
 			ImGui::Unindent();
-			if (!stereoCustomConfig.StereoDisparityBothEyes) { ImGui::EndDisabled(); }
+			EndSoftDisabled(!stereoCustomConfig.StereoCutoutEnabled);
+			IMGUI_BIG_SPACING;
+
+
+			ImGui::SetNextItemOpen(true, ImGuiCond_Once);
+			if (ImGui::TreeNode("Performance"))
+			{
+				ImGui::Checkbox("Use Multiple Cores", &stereoCustomConfig.StereoUseMulticore);
+				TextDescription("Allows the stereo calculations to use multiple CPU cores. This can be turned off for CPU limited applications.");
+				IMGUI_BIG_SPACING;
+
+				ImGui::SetNextItemWidth(ImGui::GetContentRegionAvail().x * 0.45f);
+				ScrollableSliderInt("Frame Skip Ratio", &stereoCustomConfig.StereoFrameSkip, 0, 14, "%d", 1);
+				TextDescription("Skip stereo processing of this many frames for each frame processed. This does not affect the frame rate of viewed camera frames, every frame will still be reprojected on the latest stereo data.");
+				ImGui::TreePop();
+			}
 			IMGUI_BIG_SPACING;
 		}
 
@@ -633,17 +666,21 @@ if (bIsActiveTab) { ImGui::PopStyleColor(1); bIsActiveTab = false; }
 		ImGui::SetNextItemOpen(true, ImGuiCond_Once);
 		if (ImGui::CollapsingHeader("Depth"))
 		{
+			BeginSoftDisabled(!depthConfig.DepthReadFromApplication);
 			ImGui::Checkbox("Force Depth Composition", &depthConfig.DepthForceComposition);
 			TextDescription("Enables composing the passthough by depth for applications that submit a depth buffer.");
-			
+			EndSoftDisabled(!depthConfig.DepthReadFromApplication);
+
 			//ImGui::SetNextItemOpen(true, ImGuiCond_Once);
 			if (ImGui::TreeNode("Advanced"))
 			{
 				ImGui::Checkbox("Read Depth Buffers", &depthConfig.DepthReadFromApplication);
 				TextDescription("Allow reading depth buffers submitted by the application.");
 
+				BeginSoftDisabled(!depthConfig.DepthReadFromApplication);
 				ImGui::Checkbox("Write Depth", &depthConfig.DepthWriteOutput);
 				TextDescription("Allows writing passthrough depth to depth buffers submitted to the runtime.");
+				EndSoftDisabled(!depthConfig.DepthReadFromApplication);
 
 				ImGui::TreePop();
 			}
@@ -655,6 +692,8 @@ if (bIsActiveTab) { ImGui::PopStyleColor(1); bIsActiveTab = false; }
 		{
 			ImGui::Checkbox("Force Passthrough Mode", &coreConfig.CoreForcePassthrough);
 			TextDescription("Forces passthrough on even if the application does not support it.");
+
+			BeginSoftDisabled(!coreConfig.CoreForcePassthrough);
 
 			ImGui::BeginGroup();
 			if (ImGui::RadioButton("Alpha Blend###CoreForce3", coreConfig.CoreForceMode == 3))
@@ -679,12 +718,15 @@ if (bIsActiveTab) { ImGui::PopStyleColor(1); bIsActiveTab = false; }
 			TextDescription("Blends passthrough with the application output using a chroma key mask.");
 			ImGui::EndGroup();
 			IMGUI_BIG_SPACING;
+
+			EndSoftDisabled(!coreConfig.CoreForcePassthrough);
 		}
+
+		BeginSoftDisabled(!coreConfig.CoreForcePassthrough);
 
 		ImGui::SetNextItemOpen(true, ImGuiCond_Once);
 		if (ImGui::CollapsingHeader("Masked Croma Key Settings"))
 		{
-			
 			ImGui::BeginGroup();
 			ImGui::PushItemWidth(ImGui::GetContentRegionAvail().x * 0.35f);
 			ScrollableSlider("Chroma Range", &coreConfig.CoreForceMaskedFractionChroma, 0.0f, 1.0f, "%.2f", 0.01f);
@@ -714,6 +756,8 @@ if (bIsActiveTab) { ImGui::PopStyleColor(1); bIsActiveTab = false; }
 			ImGui::ColorPicker3("Key", coreConfig.CoreForceMaskedKeyColor, ImGuiColorEditFlags_Uint8 | ImGuiColorEditFlags_DisplayRGB | ImGuiColorEditFlags_DisplayHSV | ImGuiColorEditFlags_PickerHueBar);
 			ImGui::EndGroup();
 		}
+
+		EndSoftDisabled(!coreConfig.CoreForcePassthrough);
 
 		ImGui::EndChild();
 	}

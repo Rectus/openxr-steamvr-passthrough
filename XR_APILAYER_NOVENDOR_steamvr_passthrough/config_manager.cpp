@@ -97,6 +97,7 @@ void ConfigManager::ParseConfig_Main()
 	m_configMain.Brightness = (float)m_iniData.GetDoubleValue("Main", "Brightness", m_configMain.Brightness);
 	m_configMain.Contrast = (float)m_iniData.GetDoubleValue("Main", "Contrast", m_configMain.Contrast);
 	m_configMain.Saturation = (float)m_iniData.GetDoubleValue("Main", "Saturation", m_configMain.Saturation);
+	m_configMain.Sharpness = (float)m_iniData.GetDoubleValue("Main", "Sharpness", m_configMain.Sharpness);
 
 	m_configMain.RequireSteamVRRuntime = m_iniData.GetBoolValue("Main", "RequireSteamVRRuntime", m_configMain.RequireSteamVRRuntime);
 	
@@ -137,6 +138,7 @@ void ConfigManager::ParseConfig_Stereo()
 	m_configCustomStereo.StereoCutoutFactor = (float)m_iniData.GetDoubleValue("StereoCustom", "StereoCutoutFactor", m_configCustomStereo.StereoCutoutFactor);
 	m_configCustomStereo.StereoCutoutOffset = (float)m_iniData.GetDoubleValue("StereoCustom", "StereoCutoutOffset", m_configCustomStereo.StereoCutoutOffset);
 	m_configCustomStereo.StereoDisparityFilterWidth = (int)m_iniData.GetLongValue("StereoCustom", "StereoDisparityFilterWidth", m_configCustomStereo.StereoDisparityFilterWidth);
+	m_configCustomStereo.StereoCutoutFilterWidth = (int)m_iniData.GetLongValue("StereoCustom", "StereoCutoutFilterWidth", m_configCustomStereo.StereoCutoutFilterWidth);
 
 	m_configCustomStereo.StereoBlockSize = m_iniData.GetLongValue("StereoCustom", "StereoBlockSize", m_configCustomStereo.StereoBlockSize);
 	m_configCustomStereo.StereoMinDisparity = m_iniData.GetLongValue("StereoCustom", "StereoMinDisparity", m_configCustomStereo.StereoMinDisparity);
@@ -184,6 +186,7 @@ void ConfigManager::UpdateConfig_Main()
 	m_iniData.SetDoubleValue("Main", "Brightness", m_configMain.Brightness);
 	m_iniData.SetDoubleValue("Main", "Contrast", m_configMain.Contrast);
 	m_iniData.SetDoubleValue("Main", "Saturation", m_configMain.Saturation);
+	m_iniData.SetDoubleValue("Main", "Sharpness", m_configMain.Sharpness);
 
 	m_iniData.SetBoolValue("Main", "RequireSteamVRRuntime", m_configMain.RequireSteamVRRuntime);
 	
@@ -223,6 +226,7 @@ void ConfigManager::UpdateConfig_Stereo()
 	m_iniData.SetDoubleValue("StereoCustom", "StereoCutoutFactor", m_configCustomStereo.StereoCutoutFactor);
 	m_iniData.SetDoubleValue("StereoCustom", "StereoCutoutOffset", m_configCustomStereo.StereoCutoutOffset);
 	m_iniData.SetLongValue("StereoCustom", "StereoDisparityFilterWidth", m_configCustomStereo.StereoDisparityFilterWidth);
+	m_iniData.SetLongValue("StereoCustom", "StereoCutoutFilterWidth", m_configCustomStereo.StereoCutoutFilterWidth);
 
 	m_iniData.SetLongValue("StereoCustom", "StereoBlockSize", m_configCustomStereo.StereoBlockSize);
 	m_iniData.SetLongValue("StereoCustom", "StereoMinDisparity", m_configCustomStereo.StereoMinDisparity);
