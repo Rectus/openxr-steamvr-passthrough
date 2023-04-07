@@ -108,8 +108,8 @@ private:
 	void GenerateMesh();
 	void GenerateDepthMesh(uint32_t width, uint32_t height);
 
-	void RenderPassthroughView(const ERenderEye eye, const int32_t imageIndex, const XrCompositionLayerProjection* layer, CameraFrame* frame, EPassthroughBlendMode blendMode, UINT numVertices);
-	void RenderPassthroughViewMasked(const ERenderEye eye, const int32_t imageIndex, const XrCompositionLayerProjection* layer, CameraFrame* frame, UINT numVertices);
+	void RenderPassthroughView(const ERenderEye eye, const int32_t imageIndex, const XrCompositionLayerProjection* layer, CameraFrame* frame, EPassthroughBlendMode blendMode, UINT numIndices);
+	void RenderPassthroughViewMasked(const ERenderEye eye, const int32_t imageIndex, const XrCompositionLayerProjection* layer, CameraFrame* frame, UINT numIndices);
 	void RenderFrameFinish();
 
 	std::shared_ptr<ConfigManager> m_configManager;
@@ -190,6 +190,7 @@ private:
 	Mesh<VertexFormatBasic> m_gridMesh;
 	ComPtr<ID3D11Buffer> m_gridMeshVertexBuffer;
 	ComPtr<ID3D11Buffer> m_gridMeshIndexBuffer;
+	bool m_bUseHexagonGridMesh;
 
 	uint32_t m_cameraTextureWidth;
 	uint32_t m_cameraTextureHeight;
@@ -212,7 +213,7 @@ public:
 	
 private:
 	ComPtr<ID3D12Resource> InitBuffer(UINT8** bufferCPUData, int numBuffers, int bufferSizePerAlign, int heapIndex);
-	void SetupTestImage();
+	void SetupDebugTexture(DebugTexture& texture);
 	void SetupFrameResource();
 	void SetupDisparityMap(uint32_t width, uint32_t height);
 	void SetupUVDistortionMap(std::shared_ptr<std::vector<float>> uvDistortionMap);
@@ -249,6 +250,7 @@ private:
 
 	ComPtr<ID3D12PipelineState> m_psoPrepass;
 	ComPtr<ID3D12PipelineState> m_psoMainPass;
+	ComPtr<ID3D12PipelineState> m_psoCutoutPass;
 
 	DXGI_FORMAT m_swapchainFormat;
 	DXGI_FORMAT m_depthStencilFormat;
@@ -262,19 +264,20 @@ private:
 	UINT8* m_vsPassConstantBufferCPUData[NUM_SWAPCHAINS];
 
 	ComPtr<ID3D12Resource> m_vsViewConstantBuffer;
-	UINT8* m_vsViewConstantBufferCPUData[NUM_SWAPCHAINS * 2];
+	UINT8* m_vsViewConstantBufferCPUData[NUM_SWAPCHAINS * 4];
 
 	ComPtr<ID3D12Resource> m_psPassConstantBuffer;
 	UINT8* m_psPassConstantBufferCPUData[NUM_SWAPCHAINS];
 
 	ComPtr<ID3D12Resource> m_psViewConstantBuffer;
-	UINT8* m_psViewConstantBufferCPUData[NUM_SWAPCHAINS * 2];
+	UINT8* m_psViewConstantBufferCPUData[NUM_SWAPCHAINS * 4];
 
 	ComPtr<ID3D12Resource> m_psMaskedConstantBuffer;
 	UINT8* m_psMaskedConstantBufferCPUData[NUM_SWAPCHAINS];
 
-	ComPtr<ID3D12Resource> m_testPattern;
-	ComPtr<ID3D12Resource> m_testPatternUploadHeap;
+	ComPtr<ID3D12Resource> m_debugTexture;
+	ComPtr<ID3D12Resource> m_debugTextureUploadHeap;
+	ESelectedDebugTexture m_selectedDebugTexture;
 
 	ComPtr<ID3D12Resource> m_cameraFrameRes[NUM_SWAPCHAINS];
 	ComPtr<ID3D12Resource> m_frameResUploadHeap;
@@ -289,14 +292,19 @@ private:
 	ComPtr<ID3D12Resource> m_uvDistortionMap;
 	ComPtr<ID3D12Resource> m_uvDistortionMapUploadHeap;
 	float m_fovScale;
-
-	ComPtr<ID3D12Resource> m_vertexBufferUpload;
-	ComPtr<ID3D12Resource> m_vertexBuffer;
-	std::vector<float> m_vertices;
 	
-	ComPtr<ID3D12Resource> m_stereoVertexBufferUpload;
-	ComPtr<ID3D12Resource> m_stereoVertexBuffer;
-	std::vector<float> m_stereoVertices;
+	Mesh<VertexFormatBasic> m_cylinderMesh;
+	ComPtr<ID3D12Resource> m_cylinderMeshVertexBuffer;
+	ComPtr<ID3D12Resource> m_cylinderMeshIndexBuffer;
+	ComPtr<ID3D12Resource> m_cylinderMeshVertexBufferUpload;
+	ComPtr<ID3D12Resource> m_cylinderMeshIndexBufferUpload;
+
+	Mesh<VertexFormatBasic> m_gridMesh;
+	ComPtr<ID3D12Resource> m_gridMeshVertexBuffer;
+	ComPtr<ID3D12Resource> m_gridMeshIndexBuffer;
+	ComPtr<ID3D12Resource> m_gridMeshVertexBufferUpload;
+	ComPtr<ID3D12Resource> m_gridMeshIndexBufferUpload;
+	bool m_bUseHexagonGridMesh;
 
 	uint32_t m_cameraTextureWidth;
 	uint32_t m_cameraTextureHeight;

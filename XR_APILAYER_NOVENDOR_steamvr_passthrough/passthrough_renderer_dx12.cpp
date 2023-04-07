@@ -32,6 +32,13 @@ enum ECBV_SRVIndex
 	INDEX_CBV_VS_VIEW_4,
 	INDEX_CBV_VS_VIEW_5,
 
+	INDEX_CBV_VS_VIEW_CROSS_0,
+	INDEX_CBV_VS_VIEW_CROSS_1,
+	INDEX_CBV_VS_VIEW_CROSS_2,
+	INDEX_CBV_VS_VIEW_CROSS_3,
+	INDEX_CBV_VS_VIEW_CROSS_4,
+	INDEX_CBV_VS_VIEW_CROSS_5,
+
 	INDEX_CBV_PS_PASS_0,
 	INDEX_CBV_PS_PASS_1,
 	INDEX_CBV_PS_PASS_2,
@@ -42,6 +49,13 @@ enum ECBV_SRVIndex
 	INDEX_CBV_PS_VIEW_3,
 	INDEX_CBV_PS_VIEW_4,
 	INDEX_CBV_PS_VIEW_5,
+
+	INDEX_CBV_PS_VIEW_CROSS_0,
+	INDEX_CBV_PS_VIEW_CROSS_1,
+	INDEX_CBV_PS_VIEW_CROSS_2,
+	INDEX_CBV_PS_VIEW_CROSS_3,
+	INDEX_CBV_PS_VIEW_CROSS_4,
+	INDEX_CBV_PS_VIEW_CROSS_5,
 
 	INDEX_CBV_PS_MASKED_0,
 	INDEX_CBV_PS_MASKED_1,
@@ -71,7 +85,7 @@ enum ECBV_SRVIndex
 	INDEX_SRV_RT_4,
 	INDEX_SRV_RT_5,
 
-	INDEX_SRV_TESTIMAGE,
+	INDEX_SRV_DEBUG_TEXTURE,
 
 	CBV_SRV_HEAPSIZE
 };
@@ -79,10 +93,17 @@ enum ECBV_SRVIndex
 
 struct VSPassConstantBuffer
 {
-	XrMatrix4x4f disparityViewToWorld;
+	XrMatrix4x4f disparityViewToWorldLeft;
+	XrMatrix4x4f disparityViewToWorldRight;
 	XrMatrix4x4f disparityToDepth;
 	uint32_t disparityTextureSize[2];
 	float disparityDownscaleFactor;
+	float cutoutFactor;
+	float cutoutOffset;
+	float cutoutFilterWidth;
+	int32_t disparityFilterWidth;
+	uint32_t bProjectBorders;
+	uint32_t bFindDiscontinuities;
 };
 
 struct VSViewConstantBuffer
@@ -94,6 +115,7 @@ struct VSViewConstantBuffer
 	XrVector3f hmdViewWorldPos;
 	float projectionDistance;
 	float floorHeightOffset;
+	uint32_t viewIndex;
 };
 
 struct PSPassConstantBuffer
@@ -103,6 +125,7 @@ struct PSPassConstantBuffer
 	float brightness;
 	float contrast;
 	float saturation;
+	float sharpness;
 	uint32_t bDoColorAdjustment;
 	uint32_t bDebugDepth;
 	uint32_t bDebugValidStereo;
@@ -114,6 +137,7 @@ struct PSViewConstantBuffer
 	XrVector4f frameUVBounds;
 	XrVector4f prepassUVBounds;
 	uint32_t rtArrayIndex;
+	uint32_t bDoCutout;
 };
 
 struct PSMaskedConstantBuffer
@@ -229,12 +253,15 @@ PassthroughRendererDX12::PassthroughRendererDX12(ID3D12Device* device, ID3D12Com
 	, m_cameraTextureWidth(0)
 	, m_cameraTextureHeight(0)
 	, m_cameraFrameBufferSize(0)
+	, m_selectedDebugTexture(DebugTexture_None)
 {
 	memset(m_vsPassConstantBufferCPUData, 0, sizeof(m_vsPassConstantBufferCPUData));
 	memset(m_vsViewConstantBufferCPUData, 0, sizeof(m_vsViewConstantBufferCPUData));
 	memset(m_psPassConstantBufferCPUData, 0, sizeof(m_psPassConstantBufferCPUData));
 	memset(m_psViewConstantBufferCPUData, 0, sizeof(m_psViewConstantBufferCPUData));
 	memset(m_psMaskedConstantBufferCPUData, 0, sizeof(m_psMaskedConstantBufferCPUData));
+
+	m_bUseHexagonGridMesh = m_configManager->GetConfig_Stereo().StereoUseHexagonGridMesh;
 }
 
 
@@ -275,9 +302,9 @@ bool PassthroughRendererDX12::InitRenderer()
 	m_CBVSRVHeapDescSize = m_d3dDevice->GetDescriptorHandleIncrementSize(D3D12_DESCRIPTOR_HEAP_TYPE_CBV_SRV_UAV);
 
 	m_vsPassConstantBuffer = InitBuffer(m_vsPassConstantBufferCPUData, NUM_SWAPCHAINS, 1, INDEX_CBV_VS_PASS_0);
-	m_vsViewConstantBuffer = InitBuffer(m_vsViewConstantBufferCPUData, NUM_SWAPCHAINS * 2, 1, INDEX_CBV_VS_VIEW_0);
+	m_vsViewConstantBuffer = InitBuffer(m_vsViewConstantBufferCPUData, NUM_SWAPCHAINS * 4, 1, INDEX_CBV_VS_VIEW_0);
 	m_psPassConstantBuffer = InitBuffer(m_psPassConstantBufferCPUData, NUM_SWAPCHAINS, 1, INDEX_CBV_PS_PASS_0);
-	m_psViewConstantBuffer = InitBuffer(m_psViewConstantBufferCPUData, NUM_SWAPCHAINS * 2, 1, INDEX_CBV_PS_VIEW_0);
+	m_psViewConstantBuffer = InitBuffer(m_psViewConstantBufferCPUData, NUM_SWAPCHAINS * 4, 1, INDEX_CBV_PS_VIEW_0);
 	m_psMaskedConstantBuffer = InitBuffer(m_psMaskedConstantBufferCPUData, NUM_SWAPCHAINS, 1, INDEX_CBV_PS_MASKED_0);
 
 	if (!m_vsPassConstantBuffer || !m_vsViewConstantBuffer || !m_psPassConstantBuffer || !m_psViewConstantBuffer || !m_psMaskedConstantBuffer)
@@ -302,7 +329,6 @@ bool PassthroughRendererDX12::InitRenderer()
 		return false;
 	}
 
-	SetupTestImage();
 	SetupFrameResource();
 	GenerateMesh();
 
@@ -342,32 +368,36 @@ ComPtr<ID3D12Resource> PassthroughRendererDX12::InitBuffer(UINT8** bufferCPUData
 }
 
 
-void PassthroughRendererDX12::SetupTestImage()
+void PassthroughRendererDX12::SetupDebugTexture(DebugTexture& texture)
 {
-	char path[MAX_PATH];
+	DXGI_FORMAT format;
 
-	if (FAILED(GetModuleFileNameA(m_dllModule, path, sizeof(path))))
+	switch (texture.Format)
 	{
-		ErrorLog("Error opening test pattern.\n");
-	}
-
-	std::string pathStr = path;
-	std::string imgPath = pathStr.substr(0, pathStr.find_last_of("/\\")) + "\\testpattern.png";
-
-	std::vector<uint8_t> image;
-	unsigned width, height;
-
-	unsigned error = lodepng::decode(image, width, height, imgPath.c_str());
-	if (error)
-	{
-		ErrorLog("Error decoding test pattern.\n");
+	case DebugTextureFormat_RGBA8:
+		format = DXGI_FORMAT_R8G8B8A8_UNORM_SRGB;
+		break;
+	case DebugTextureFormat_R8:
+		format = DXGI_FORMAT_R8_UNORM;
+		break;
+	case DebugTextureFormat_R16S:
+		format = DXGI_FORMAT_R16_SNORM;
+		break;
+	case DebugTextureFormat_R16U:
+		format = DXGI_FORMAT_R16_UNORM;
+		break;
+	case DebugTextureFormat_R32F:
+		format = DXGI_FORMAT_R32_FLOAT;
+		break;
+	default:
+		format = DXGI_FORMAT_R8G8B8A8_UNORM_SRGB;
 	}
 
 	D3D12_RESOURCE_DESC textureDesc = {};
 	textureDesc.MipLevels = 1;
-	textureDesc.Format = DXGI_FORMAT_R8G8B8A8_UNORM_SRGB;
-	textureDesc.Width = width;
-	textureDesc.Height = height;
+	textureDesc.Format = format;
+	textureDesc.Width = texture.Width;
+	textureDesc.Height = texture.Height;
 	textureDesc.Flags = D3D12_RESOURCE_FLAG_NONE;
 	textureDesc.DepthOrArraySize = 1;
 	textureDesc.SampleDesc.Count = 1;
@@ -377,19 +407,16 @@ void PassthroughRendererDX12::SetupTestImage()
 	D3D12_HEAP_PROPERTIES heapProp = {};
 	heapProp.Type = D3D12_HEAP_TYPE_DEFAULT;
 
-	m_d3dDevice->CreateCommittedResource(&heapProp, D3D12_HEAP_FLAG_NONE, &textureDesc, D3D12_RESOURCE_STATE_COPY_DEST, nullptr, IID_PPV_ARGS(&m_testPattern));
+	m_d3dDevice->CreateCommittedResource(&heapProp, D3D12_HEAP_FLAG_NONE, &textureDesc, D3D12_RESOURCE_STATE_COPY_DEST, nullptr, IID_PPV_ARGS(&m_debugTexture));
 
 	D3D12_CPU_DESCRIPTOR_HANDLE srvHandle = m_CBVSRVHeap->GetCPUDescriptorHandleForHeapStart();
-	srvHandle.ptr += INDEX_SRV_TESTIMAGE * m_CBVSRVHeapDescSize;
+	srvHandle.ptr += INDEX_SRV_DEBUG_TEXTURE * m_CBVSRVHeapDescSize;
 
-	m_d3dDevice->CreateShaderResourceView(m_testPattern.Get(), nullptr, srvHandle);
+	m_d3dDevice->CreateShaderResourceView(m_debugTexture.Get(), nullptr, srvHandle);
 
+	int heapSize = Align(texture.Width * texture.PixelSize, D3D12_TEXTURE_DATA_PITCH_ALIGNMENT) * texture.Height;
 
-	m_testPatternUploadHeap = CreateBuffer(m_d3dDevice.Get(), (uint32_t)image.size(), D3D12_HEAP_TYPE_UPLOAD);
-
-	UploadTexture(m_commandList.Get(), m_testPattern.Get(), m_testPatternUploadHeap.Get(), 0, image.data(), width, height, DXGI_FORMAT_R8G8B8A8_UNORM_SRGB, 4, 0);
-
-	TransitionResource(m_commandList.Get(), m_testPattern.Get(), D3D12_RESOURCE_STATE_COPY_DEST, D3D12_RESOURCE_STATE_PIXEL_SHADER_RESOURCE);
+	m_debugTextureUploadHeap = CreateBuffer(m_d3dDevice.Get(), heapSize, D3D12_HEAP_TYPE_UPLOAD);
 }
 
 
@@ -418,12 +445,7 @@ void PassthroughRendererDX12::SetupFrameResource()
 
 	for (int i = 0; i < NUM_SWAPCHAINS; i++)
 	{
-		m_d3dDevice->CreateCommittedResource(&heapProp,
-			D3D12_HEAP_FLAG_NONE,
-			&textureDesc,
-			D3D12_RESOURCE_STATE_COPY_DEST,
-			nullptr,
-			IID_PPV_ARGS(&m_cameraFrameRes[i]));
+		m_d3dDevice->CreateCommittedResource(&heapProp, D3D12_HEAP_FLAG_NONE, &textureDesc,D3D12_RESOURCE_STATE_COPY_DEST, nullptr, IID_PPV_ARGS(&m_cameraFrameRes[i]));
 
 		D3D12_CPU_DESCRIPTOR_HANDLE srvHandle = m_CBVSRVHeap->GetCPUDescriptorHandleForHeapStart();
 		srvHandle.ptr += (INDEX_SRV_CAMERAFRAME_0 + i) * m_CBVSRVHeapDescSize;
@@ -444,7 +466,7 @@ void PassthroughRendererDX12::SetupDisparityMap(uint32_t width, uint32_t height)
 {
 	D3D12_RESOURCE_DESC textureDesc = {};
 	textureDesc.MipLevels = 1;
-	textureDesc.Format = DXGI_FORMAT_R16_UNORM;
+	textureDesc.Format = DXGI_FORMAT_R16G16_SNORM;
 	textureDesc.Width = width;
 	textureDesc.Height = height;
 	textureDesc.Flags = D3D12_RESOURCE_FLAG_NONE;
@@ -458,12 +480,7 @@ void PassthroughRendererDX12::SetupDisparityMap(uint32_t width, uint32_t height)
 
 	for (int i = 0; i < NUM_SWAPCHAINS; i++)
 	{
-		m_d3dDevice->CreateCommittedResource(&heapProp,
-			D3D12_HEAP_FLAG_NONE,
-			&textureDesc,
-			D3D12_RESOURCE_STATE_COPY_DEST,
-			nullptr,
-			IID_PPV_ARGS(&m_disparityMap[i]));
+		m_d3dDevice->CreateCommittedResource(&heapProp, D3D12_HEAP_FLAG_NONE, &textureDesc, D3D12_RESOURCE_STATE_COPY_DEST, nullptr, IID_PPV_ARGS(&m_disparityMap[i]));
 
 		D3D12_CPU_DESCRIPTOR_HANDLE srvHandle = m_CBVSRVHeap->GetCPUDescriptorHandleForHeapStart();
 		srvHandle.ptr += (INDEX_SRV_DISPARITY_0 + i) * m_CBVSRVHeapDescSize;
@@ -471,9 +488,10 @@ void PassthroughRendererDX12::SetupDisparityMap(uint32_t width, uint32_t height)
 		m_d3dDevice->CreateShaderResourceView(m_disparityMap[i].Get(), nullptr, srvHandle);
 	}
 
-	int rowPitch = Align(width * sizeof(uint16_t), D3D12_TEXTURE_DATA_PITCH_ALIGNMENT);
+	int rowPitch = Align(width * sizeof(uint16_t) * 2, D3D12_TEXTURE_DATA_PITCH_ALIGNMENT);
+	int heapSize = Align(rowPitch * height, D3D12_TEXTURE_DATA_PLACEMENT_ALIGNMENT) * NUM_SWAPCHAINS;
 
-	m_disparityMapUploadHeap = CreateBuffer(m_d3dDevice.Get(), rowPitch * height * NUM_SWAPCHAINS, D3D12_HEAP_TYPE_UPLOAD);
+	m_disparityMapUploadHeap = CreateBuffer(m_d3dDevice.Get(), heapSize, D3D12_HEAP_TYPE_UPLOAD);
 }
 
 
@@ -498,12 +516,7 @@ void PassthroughRendererDX12::SetupUVDistortionMap(std::shared_ptr<std::vector<f
 	D3D12_HEAP_PROPERTIES heapProp = {};
 	heapProp.Type = D3D12_HEAP_TYPE_DEFAULT;
 
-	m_d3dDevice->CreateCommittedResource(&heapProp,
-		D3D12_HEAP_FLAG_NONE,
-		&textureDesc,
-		D3D12_RESOURCE_STATE_COPY_DEST,
-		nullptr,
-		IID_PPV_ARGS(&m_uvDistortionMap));
+	m_d3dDevice->CreateCommittedResource(&heapProp, D3D12_HEAP_FLAG_NONE, &textureDesc, D3D12_RESOURCE_STATE_COPY_DEST, nullptr, IID_PPV_ARGS(&m_uvDistortionMap));
 
 	D3D12_CPU_DESCRIPTOR_HANDLE srvHandle = m_CBVSRVHeap->GetCPUDescriptorHandleForHeapStart();
 	srvHandle.ptr += INDEX_SRV_UV_DISTORTION * m_CBVSRVHeapDescSize;
@@ -677,7 +690,14 @@ void PassthroughRendererDX12::SetupIntermediateRenderTarget(uint32_t index, uint
 	D3D12_HEAP_PROPERTIES heapProp = {};
 	heapProp.Type = D3D12_HEAP_TYPE_DEFAULT;
 
-	m_d3dDevice->CreateCommittedResource(&heapProp, D3D12_HEAP_FLAG_NONE, &textureDesc, D3D12_RESOURCE_STATE_RENDER_TARGET, nullptr, IID_PPV_ARGS(&m_intermediateRenderTargets[index]));
+	D3D12_CLEAR_VALUE clearValue = {};
+	clearValue.Format = DXGI_FORMAT_R8_UNORM;
+	clearValue.Color[0] = 0.0f;
+	clearValue.Color[1] = 0.0f;
+	clearValue.Color[2] = 0.0f;
+	clearValue.Color[3] = 0.0f;
+
+	m_d3dDevice->CreateCommittedResource(&heapProp, D3D12_HEAP_FLAG_NONE, &textureDesc, D3D12_RESOURCE_STATE_RENDER_TARGET, &clearValue, IID_PPV_ARGS(&m_intermediateRenderTargets[index]));
 
 	D3D12_CPU_DESCRIPTOR_HANDLE rtvCPUDesc = m_intermediateRTVHeap->GetCPUDescriptorHandleForHeapStart();
 	rtvCPUDesc.ptr += index * m_RTVHeapDescSize;
@@ -717,6 +737,9 @@ bool PassthroughRendererDX12::InitPipeline()
 	D3D12_BLEND_DESC blendStateSrcAlpha = blendStateDestAlpha;
 	blendStateSrcAlpha.RenderTarget[0].SrcBlend = D3D12_BLEND_SRC_ALPHA;
 	blendStateSrcAlpha.RenderTarget[0].DestBlend = D3D12_BLEND_INV_SRC_ALPHA;
+	blendStateSrcAlpha.RenderTarget[0].BlendOpAlpha = D3D12_BLEND_OP_ADD;
+	blendStateSrcAlpha.RenderTarget[0].SrcBlendAlpha = D3D12_BLEND_ONE;
+	blendStateSrcAlpha.RenderTarget[0].DestBlendAlpha = D3D12_BLEND_ZERO;
 
 	D3D12_BLEND_DESC blendStatePrepassUseAppAlpha = blendStateDestAlpha;
 	blendStatePrepassUseAppAlpha.RenderTarget[0].RenderTargetWriteMask = D3D12_COLOR_WRITE_ENABLE_ALPHA;
@@ -754,12 +777,15 @@ bool PassthroughRendererDX12::InitPipeline()
 	depthStencilPrepass.DepthEnable = m_bUsingDepth;
 	depthStencilPrepass.DepthFunc = m_bUsingReversedDepth ? D3D12_COMPARISON_FUNC_GREATER_EQUAL :
 			D3D12_COMPARISON_FUNC_LESS_EQUAL;
-	depthStencilPrepass.DepthWriteMask = (m_blendMode == Masked && m_bWriteDepth) ? D3D12_DEPTH_WRITE_MASK_ALL : D3D12_DEPTH_WRITE_MASK_ZERO;
+	depthStencilPrepass.DepthWriteMask = m_bWriteDepth ? D3D12_DEPTH_WRITE_MASK_ALL : D3D12_DEPTH_WRITE_MASK_ZERO;
 
 	D3D12_DEPTH_STENCIL_DESC depthStencilMain{};
-	depthStencilMain.DepthEnable = (m_blendMode == Masked) ? false : m_bUsingDepth;
+	depthStencilMain.DepthEnable = m_bUsingDepth;
 	depthStencilMain.DepthFunc = m_bUsingReversedDepth ? D3D12_COMPARISON_FUNC_GREATER_EQUAL : D3D12_COMPARISON_FUNC_LESS_EQUAL;
-	depthStencilMain.DepthWriteMask = m_bWriteDepth ? D3D12_DEPTH_WRITE_MASK_ALL : D3D12_DEPTH_WRITE_MASK_ZERO;
+	depthStencilMain.DepthWriteMask = (m_blendMode != Masked && m_bWriteDepth) ? D3D12_DEPTH_WRITE_MASK_ALL : D3D12_DEPTH_WRITE_MASK_ZERO;
+
+	D3D12_DEPTH_STENCIL_DESC depthStencilDisabled{};
+	depthStencilMain.DepthEnable = false;
 
 
 	D3D12_GRAPHICS_PIPELINE_STATE_DESC psoDesc = {};
@@ -799,6 +825,15 @@ bool PassthroughRendererDX12::InitPipeline()
 	if (FAILED(m_d3dDevice->CreateGraphicsPipelineState(&psoDesc, IID_PPV_ARGS(&m_psoMainPass))))
 	{
 		ErrorLog("Error creating main PSO.\n");
+		return false;
+	}
+
+
+	psoDesc.DepthStencilState = depthStencilDisabled;
+	psoDesc.BlendState = blendStateDestAlpha;
+	if (FAILED(m_d3dDevice->CreateGraphicsPipelineState(&psoDesc, IID_PPV_ARGS(&m_psoCutoutPass))))
+	{
+		ErrorLog("Error creating cutout PSO.\n");
 		return false;
 	}
 
@@ -909,117 +944,71 @@ void PassthroughRendererDX12::SetFrameSize(const uint32_t width, const uint32_t 
 
 void PassthroughRendererDX12::GenerateMesh()
 {
-	m_vertices.resize(0);
-	m_vertices.reserve(NUM_MESH_BOUNDARY_VERTICES * 4 * 6);
+	MeshCreateCylinder(m_cylinderMesh, NUM_MESH_BOUNDARY_VERTICES);
 
-	// Grenerate a triangle strip cylinder with radius and height 1.
+	uint32_t bufferSize = (uint32_t) (m_cylinderMesh.vertices.size() * sizeof(VertexFormatBasic));
 
-	float radianStep = -2.0f * MATH_PI / (float)NUM_MESH_BOUNDARY_VERTICES;
-
-	for (int i = 0; i <= NUM_MESH_BOUNDARY_VERTICES; i++)
-	{
-		m_vertices.push_back(0.0f);
-		m_vertices.push_back(1.0f);
-		m_vertices.push_back(0.0f);
-
-		m_vertices.push_back(cosf(radianStep * i));
-		m_vertices.push_back(1.0f);
-		m_vertices.push_back(sinf(radianStep * i));
-	}
-
-	for (int i = 0; i <= NUM_MESH_BOUNDARY_VERTICES; i++)
-	{
-		m_vertices.push_back(cosf(radianStep * i));
-		m_vertices.push_back(1.0f);
-		m_vertices.push_back(sinf(radianStep * i));
-
-		m_vertices.push_back(cosf(radianStep * i));
-		m_vertices.push_back(0.0f);
-		m_vertices.push_back(sinf(radianStep * i));
-	}
-
-	for (int i = 0; i <= NUM_MESH_BOUNDARY_VERTICES; i++)
-	{
-		m_vertices.push_back(cosf(radianStep * i));
-		m_vertices.push_back(0.0f);
-		m_vertices.push_back(sinf(radianStep * i));
-
-		m_vertices.push_back(0.0f);
-		m_vertices.push_back(0.0f);
-		m_vertices.push_back(0.0f);
-	}
-
-	uint32_t bufferSize = (uint32_t) (m_vertices.size() * sizeof(float));
-
-	m_vertexBuffer = CreateBuffer(m_d3dDevice.Get(), bufferSize, D3D12_HEAP_TYPE_DEFAULT);
-
-	m_vertexBufferUpload = CreateBuffer(m_d3dDevice.Get(), bufferSize, D3D12_HEAP_TYPE_UPLOAD);
+	m_cylinderMeshVertexBuffer = CreateBuffer(m_d3dDevice.Get(), bufferSize, D3D12_HEAP_TYPE_DEFAULT);
+	m_cylinderMeshVertexBufferUpload = CreateBuffer(m_d3dDevice.Get(), bufferSize, D3D12_HEAP_TYPE_UPLOAD);
 
 	void* mappedData;
 	const D3D12_RANGE readRange{ 0, 0 };
 	
-	m_vertexBufferUpload->Map(0, &readRange, &mappedData);
-	memcpy(mappedData, m_vertices.data(), bufferSize);
-	m_vertexBufferUpload->Unmap(0, nullptr);
+	m_cylinderMeshVertexBufferUpload->Map(0, &readRange, &mappedData);
+	memcpy(mappedData, m_cylinderMesh.vertices.data(), bufferSize);
+	m_cylinderMeshVertexBufferUpload->Unmap(0, nullptr);
 
-	m_commandList->CopyBufferRegion(m_vertexBuffer.Get(), 0, m_vertexBufferUpload.Get(), 0, bufferSize);
+	m_commandList->CopyBufferRegion(m_cylinderMeshVertexBuffer.Get(), 0, m_cylinderMeshVertexBufferUpload.Get(), 0, bufferSize);
+	TransitionResource(m_commandList.Get(), m_cylinderMeshVertexBuffer.Get(), D3D12_RESOURCE_STATE_COPY_DEST, D3D12_RESOURCE_STATE_VERTEX_AND_CONSTANT_BUFFER);
+
+	bufferSize = (uint32_t)(m_cylinderMesh.triangles.size() * sizeof(MeshTriangle));
+
+	m_cylinderMeshIndexBuffer = CreateBuffer(m_d3dDevice.Get(), bufferSize, D3D12_HEAP_TYPE_DEFAULT);
+	m_cylinderMeshIndexBufferUpload = CreateBuffer(m_d3dDevice.Get(), bufferSize, D3D12_HEAP_TYPE_UPLOAD);
+
+	m_cylinderMeshIndexBufferUpload->Map(0, &readRange, &mappedData);
+	memcpy(mappedData, m_cylinderMesh.triangles.data(), bufferSize);
+	m_cylinderMeshIndexBufferUpload->Unmap(0, nullptr);
+
+	m_commandList->CopyBufferRegion(m_cylinderMeshIndexBuffer.Get(), 0, m_cylinderMeshIndexBufferUpload.Get(), 0, bufferSize);
+	TransitionResource(m_commandList.Get(), m_cylinderMeshIndexBuffer.Get(), D3D12_RESOURCE_STATE_COPY_DEST, D3D12_RESOURCE_STATE_INDEX_BUFFER);
 }
 
 
 void PassthroughRendererDX12::GenerateDepthMesh(uint32_t width, uint32_t height)
 {
-	m_stereoVertices.resize(0);
-	m_stereoVertices.reserve((width + 1) * (height + 1) * 2);
+	m_bUseHexagonGridMesh ? MeshCreateHexGrid(m_gridMesh, width, height) : MeshCreateGrid(m_gridMesh, width, height);
 
-	float step = 1.0f / (float)height;
+	uint32_t bufferSize = (uint32_t)(m_gridMesh.vertices.size() * sizeof(VertexFormatBasic));
 
-	for (int y = 0; y < (int)height; y += 2)
-	{
-		float y_pos = y * step;
-		float y_pos1 = (y + 1) * step;
-		float y_pos2 = (y + 2) * step;
-
-		for (int x = 0; x <= (int)width; x++)
-		{
-			float x_pos = x * step;
-
-
-			m_stereoVertices.push_back(x_pos);
-			m_stereoVertices.push_back(y_pos1);
-			m_stereoVertices.push_back(1.0f);
-
-			m_stereoVertices.push_back(x_pos);
-			m_stereoVertices.push_back(y_pos);
-			m_stereoVertices.push_back(1.0f);
-		}
-
-		for (int x = (int)width; x >= 0; x--)
-		{
-			float x_pos = x * step;
-
-			m_stereoVertices.push_back(x_pos);
-			m_stereoVertices.push_back(y_pos1);
-			m_stereoVertices.push_back(1.0f);
-
-			m_stereoVertices.push_back(x_pos);
-			m_stereoVertices.push_back(y_pos2);
-			m_stereoVertices.push_back(1.0f);
-		}
-	}
-
-	uint32_t bufferSize = (uint32_t)(m_stereoVertices.size() * sizeof(float));
-	m_stereoVertexBuffer = CreateBuffer(m_d3dDevice.Get(), bufferSize, D3D12_HEAP_TYPE_DEFAULT);
-	m_stereoVertexBufferUpload = CreateBuffer(m_d3dDevice.Get(), bufferSize, D3D12_HEAP_TYPE_UPLOAD);
+	m_gridMeshVertexBuffer = CreateBuffer(m_d3dDevice.Get(), bufferSize, D3D12_HEAP_TYPE_DEFAULT);
+	m_gridMeshVertexBufferUpload = CreateBuffer(m_d3dDevice.Get(), bufferSize, D3D12_HEAP_TYPE_UPLOAD);
 
 	void* mappedData;
 	const D3D12_RANGE readRange{ 0, 0 };
 
-	m_stereoVertexBufferUpload->Map(0, &readRange, &mappedData);
-	memcpy(mappedData, m_stereoVertices.data(), bufferSize);
-	m_stereoVertexBufferUpload->Unmap(0, nullptr);
+	m_gridMeshVertexBufferUpload->Map(0, &readRange, &mappedData);
+	memcpy(mappedData, m_gridMesh.vertices.data(), bufferSize);
+	m_gridMeshVertexBufferUpload->Unmap(0, nullptr);
 
-	m_commandList->CopyBufferRegion(m_stereoVertexBuffer.Get(), 0, m_stereoVertexBufferUpload.Get(), 0, bufferSize);
+	m_commandList->CopyBufferRegion(m_gridMeshVertexBuffer.Get(), 0, m_gridMeshVertexBufferUpload.Get(), 0, bufferSize);
+	TransitionResource(m_commandList.Get(), m_gridMeshVertexBuffer.Get(), D3D12_RESOURCE_STATE_COPY_DEST, D3D12_RESOURCE_STATE_VERTEX_AND_CONSTANT_BUFFER);
+
+	bufferSize = (uint32_t)(m_gridMesh.triangles.size() * sizeof(MeshTriangle));
+
+	m_gridMeshIndexBuffer = CreateBuffer(m_d3dDevice.Get(), bufferSize, D3D12_HEAP_TYPE_DEFAULT);
+	m_gridMeshIndexBufferUpload = CreateBuffer(m_d3dDevice.Get(), bufferSize, D3D12_HEAP_TYPE_UPLOAD);
+
+	m_gridMeshIndexBufferUpload->Map(0, &readRange, &mappedData);
+	memcpy(mappedData, m_gridMesh.triangles.data(), bufferSize);
+	m_gridMeshIndexBufferUpload->Unmap(0, nullptr);
+
+	m_commandList->CopyBufferRegion(m_gridMeshIndexBuffer.Get(), 0, m_gridMeshIndexBufferUpload.Get(), 0, bufferSize);
+	TransitionResource(m_commandList.Get(), m_gridMeshIndexBuffer.Get(), D3D12_RESOURCE_STATE_COPY_DEST, D3D12_RESOURCE_STATE_INDEX_BUFFER);
 }
+
+
+
 
 
 void PassthroughRendererDX12::RenderPassthroughFrame(const XrCompositionLayerProjection* layer, CameraFrame* frame, EPassthroughBlendMode blendMode, int leftSwapchainIndex, int rightSwapchainIndex, std::shared_ptr<DepthFrame> depthFrame, UVDistortionParameters& distortionParams)
@@ -1035,15 +1024,16 @@ void PassthroughRendererDX12::RenderPassthroughFrame(const XrCompositionLayerPro
 	}
 
 	bool bCompositeDepth = depthConf.DepthForceComposition && depthConf.DepthReadFromApplication;
+	bool bDepthWrtite = depthConf.DepthWriteOutput && depthConf.DepthReadFromApplication;
 	bool bUseReversedDepth = (m_blendMode == Masked) ? coreConf.CoreForceMaskedUseCameraImage == frame->bHasReversedDepth : frame->bHasReversedDepth;
 
-	if (!m_psoMainPass.Get() || m_blendMode != blendMode || m_bUsingStereo != (mainConf.ProjectionMode == Projection_StereoReconstruction) || m_bUsingDepth != bCompositeDepth || m_bUsingReversedDepth != bUseReversedDepth || m_bWriteDepth != depthConf.DepthWriteOutput)
+	if (!m_psoMainPass.Get() || m_blendMode != blendMode || m_bUsingStereo != (mainConf.ProjectionMode == Projection_StereoReconstruction) || m_bUsingDepth != bCompositeDepth || m_bUsingReversedDepth != bUseReversedDepth || m_bWriteDepth != bDepthWrtite)
 	{
 		m_blendMode = blendMode;
 		m_bUsingStereo = (mainConf.ProjectionMode == Projection_StereoReconstruction);
 		m_bUsingDepth = bCompositeDepth;
 		m_bUsingReversedDepth = bUseReversedDepth;
-		m_bWriteDepth = depthConf.DepthWriteOutput;
+		m_bWriteDepth = bDepthWrtite;
 
 		if (!InitPipeline())
 		{
@@ -1080,9 +1070,10 @@ void PassthroughRendererDX12::RenderPassthroughFrame(const XrCompositionLayerPro
 	{
 		std::shared_lock readLock(depthFrame->readWriteMutex);
 
-		if (depthFrame->disparityTextureSize[0] != m_disparityMapWidth)
+		if (depthFrame->disparityTextureSize[0] != m_disparityMapWidth || stereoConf.StereoUseHexagonGridMesh != m_bUseHexagonGridMesh)
 		{
 			m_disparityMapWidth = depthFrame->disparityTextureSize[0];
+			m_bUseHexagonGridMesh = stereoConf.StereoUseHexagonGridMesh;
 			SetupDisparityMap(depthFrame->disparityTextureSize[0], depthFrame->disparityTextureSize[1]);
 			GenerateDepthMesh(depthFrame->disparityTextureSize[0], depthFrame->disparityTextureSize[1]);
 		}
@@ -1091,10 +1082,10 @@ void PassthroughRendererDX12::RenderPassthroughFrame(const XrCompositionLayerPro
 			TransitionResource(m_commandList.Get(), m_disparityMap[m_frameIndex].Get(), D3D12_RESOURCE_STATE_NON_PIXEL_SHADER_RESOURCE, D3D12_RESOURCE_STATE_COPY_DEST);
 		}
 
-		int rowPitch = Align(depthFrame->disparityTextureSize[0] * sizeof(uint16_t), D3D12_TEXTURE_DATA_PITCH_ALIGNMENT);
-		size_t disparityTextureSize = depthFrame->disparityTextureSize[1] * depthFrame->disparityTextureSize[0] * sizeof(uint16_t);
+		int rowPitch = Align(depthFrame->disparityTextureSize[0] * sizeof(uint16_t) * 2, D3D12_TEXTURE_DATA_PITCH_ALIGNMENT);
+		size_t disparityTextureSize = Align(depthFrame->disparityTextureSize[1] * rowPitch, D3D12_TEXTURE_DATA_PLACEMENT_ALIGNMENT);
 
-		UploadTexture(m_commandList.Get(), m_disparityMap[m_frameIndex].Get(), m_disparityMapUploadHeap.Get(), disparityTextureSize * m_frameIndex, (uint8_t*)depthFrame->disparityMap->data(), depthFrame->disparityTextureSize[0], depthFrame->disparityTextureSize[1], DXGI_FORMAT_R16_UNORM, sizeof(uint16_t), 0);
+		UploadTexture(m_commandList.Get(), m_disparityMap[m_frameIndex].Get(), m_disparityMapUploadHeap.Get(), disparityTextureSize * m_frameIndex, (uint8_t*)depthFrame->disparityMap->data(), depthFrame->disparityTextureSize[0], depthFrame->disparityTextureSize[1], DXGI_FORMAT_R16G16_SNORM, sizeof(uint16_t) * 2, 0);
 
 		TransitionResource(m_commandList.Get(), m_disparityMap[m_frameIndex].Get(), D3D12_RESOURCE_STATE_COPY_DEST, D3D12_RESOURCE_STATE_NON_PIXEL_SHADER_RESOURCE);
 
@@ -1103,45 +1094,116 @@ void PassthroughRendererDX12::RenderPassthroughFrame(const XrCompositionLayerPro
 		m_commandList->SetGraphicsRootDescriptorTable(8, disparitySRVHandle);
 
 		VSPassConstantBuffer* vsPassBuffer = (VSPassConstantBuffer*)m_vsPassConstantBufferCPUData[m_frameIndex];
-		vsPassBuffer->disparityViewToWorld = depthFrame->disparityViewToWorldLeft;
+		vsPassBuffer->disparityViewToWorldLeft = depthFrame->disparityViewToWorldLeft;
+		vsPassBuffer->disparityViewToWorldRight = depthFrame->disparityViewToWorldRight;
 		vsPassBuffer->disparityToDepth = depthFrame->disparityToDepth;
-		vsPassBuffer->disparityDownscaleFactor = depthFrame->disparityDownscaleFactor;
 		vsPassBuffer->disparityTextureSize[0] = depthFrame->disparityTextureSize[0];
 		vsPassBuffer->disparityTextureSize[1] = depthFrame->disparityTextureSize[1];
+		vsPassBuffer->disparityDownscaleFactor = depthFrame->disparityDownscaleFactor;
+		vsPassBuffer->cutoutFactor = stereoConf.StereoCutoutFactor;
+		vsPassBuffer->cutoutOffset = stereoConf.StereoCutoutOffset;
+		vsPassBuffer->cutoutFilterWidth = stereoConf.StereoCutoutFilterWidth;
+		vsPassBuffer->disparityFilterWidth = stereoConf.StereoDisparityFilterWidth;
+		vsPassBuffer->bProjectBorders = !stereoConf.StereoReconstructionFreeze;
+		vsPassBuffer->bFindDiscontinuities = stereoConf.StereoCutoutEnabled;
 
 		D3D12_GPU_DESCRIPTOR_HANDLE vsPassCBVHandle = m_CBVSRVHeap->GetGPUDescriptorHandleForHeapStart();
 		vsPassCBVHandle.ptr += (INDEX_CBV_VS_PASS_0 + m_frameIndex) * m_CBVSRVHeapDescSize;
 		m_commandList->SetGraphicsRootDescriptorTable(7, vsPassCBVHandle);
 	}
 
-	UINT numVertices;
+	UINT numIndices;
 	D3D12_VERTEX_BUFFER_VIEW vertexBufferView{};
+	D3D12_INDEX_BUFFER_VIEW indexBufferView{};
 
 	if (mainConf.ProjectionMode == Projection_StereoReconstruction)
 	{
-		numVertices = (UINT)m_stereoVertices.size() / 3;
+		numIndices = (UINT)m_gridMesh.triangles.size() * 3;
 
-		vertexBufferView.BufferLocation = m_stereoVertexBuffer->GetGPUVirtualAddress();
-		vertexBufferView.SizeInBytes = (UINT)m_stereoVertices.size() * sizeof(float);
-		vertexBufferView.StrideInBytes = sizeof(float) * 3;
+		vertexBufferView.BufferLocation = m_gridMeshVertexBuffer->GetGPUVirtualAddress();
+		vertexBufferView.SizeInBytes = (UINT)m_gridMesh.vertices.size() * sizeof(VertexFormatBasic);
+		vertexBufferView.StrideInBytes = sizeof(VertexFormatBasic);
+
+		indexBufferView.BufferLocation = m_gridMeshIndexBuffer->GetGPUVirtualAddress();
+		indexBufferView.SizeInBytes = (UINT)m_gridMesh.triangles.size() * sizeof(MeshTriangle);
+		indexBufferView.Format = DXGI_FORMAT_R32_UINT;
 	}
 	else
 	{
-		numVertices = (UINT)m_vertices.size() / 3;
+		numIndices = (UINT)m_cylinderMesh.triangles.size() * 3;
 
-		vertexBufferView.BufferLocation = m_vertexBuffer->GetGPUVirtualAddress();
-		vertexBufferView.SizeInBytes = (UINT)m_vertices.size() * sizeof(float);
-		vertexBufferView.StrideInBytes = sizeof(float) * 3;
+		vertexBufferView.BufferLocation = m_cylinderMeshVertexBuffer->GetGPUVirtualAddress();
+		vertexBufferView.SizeInBytes = (UINT)m_cylinderMesh.vertices.size() * sizeof(VertexFormatBasic);
+		vertexBufferView.StrideInBytes = sizeof(VertexFormatBasic);
+
+		indexBufferView.BufferLocation = m_cylinderMeshIndexBuffer->GetGPUVirtualAddress();
+		indexBufferView.SizeInBytes = (UINT)m_cylinderMesh.triangles.size() * sizeof(MeshTriangle);
+		indexBufferView.Format = DXGI_FORMAT_R32_UINT;
 	}
 
-	m_commandList->IASetPrimitiveTopology(D3D_PRIMITIVE_TOPOLOGY_TRIANGLESTRIP);
+	m_commandList->IASetPrimitiveTopology(D3D_PRIMITIVE_TOPOLOGY_TRIANGLELIST);
 	m_commandList->IASetVertexBuffers(0, 1, &vertexBufferView);
+	m_commandList->IASetIndexBuffer(&indexBufferView);
 	
+
+	bool bGotDebugTexture = false;
+
 	if (mainConf.DebugTexture != DebugTexture_None)
 	{
-		D3D12_GPU_DESCRIPTOR_HANDLE testImageSRVHandle = m_CBVSRVHeap->GetGPUDescriptorHandleForHeapStart();
-		testImageSRVHandle.ptr += INDEX_SRV_TESTIMAGE * m_CBVSRVHeapDescSize;
-		m_commandList->SetGraphicsRootDescriptorTable(3, testImageSRVHandle);
+		DebugTexture& texture = m_configManager->GetDebugTexture();
+		std::lock_guard<std::mutex> readlock(texture.RWMutex);
+
+		if (texture.CurrentTexture == mainConf.DebugTexture)
+		{
+			if (!m_debugTexture.Get() || texture.CurrentTexture != m_selectedDebugTexture || texture.bDimensionsUpdated)
+			{
+				SetupDebugTexture(texture);
+
+				m_selectedDebugTexture = texture.CurrentTexture;
+				texture.bDimensionsUpdated = false;
+			}
+
+			if (m_debugTextureUploadHeap.Get())
+			{
+				TransitionResource(m_commandList.Get(), m_debugTexture.Get(), D3D12_RESOURCE_STATE_PIXEL_SHADER_RESOURCE, D3D12_RESOURCE_STATE_COPY_DEST);
+
+				DXGI_FORMAT format;
+
+				switch (texture.Format)
+				{
+				case DebugTextureFormat_RGBA8:
+					format = DXGI_FORMAT_R8G8B8A8_UNORM_SRGB;
+					break;
+				case DebugTextureFormat_R8:
+					format = DXGI_FORMAT_R8_UNORM;
+					break;
+				case DebugTextureFormat_R16S:
+					format = DXGI_FORMAT_R16_SNORM;
+					break;
+				case DebugTextureFormat_R16U:
+					format = DXGI_FORMAT_R16_UNORM;
+					break;
+				case DebugTextureFormat_R32F:
+					format = DXGI_FORMAT_R32_FLOAT;
+					break;
+				default:
+					format = DXGI_FORMAT_R8G8B8A8_UNORM_SRGB;
+				}
+
+				UploadTexture(m_commandList.Get(), m_debugTexture.Get(), m_debugTextureUploadHeap.Get(), 0, texture.Texture.data(), texture.Width, texture.Height, format, texture.PixelSize, 0);
+
+				TransitionResource(m_commandList.Get(), m_debugTexture.Get(), D3D12_RESOURCE_STATE_COPY_DEST, D3D12_RESOURCE_STATE_PIXEL_SHADER_RESOURCE);
+
+				bGotDebugTexture = true;
+			}
+		}
+	}
+
+	if (bGotDebugTexture)
+	{
+		D3D12_GPU_DESCRIPTOR_HANDLE debugTextureSRVHandle = m_CBVSRVHeap->GetGPUDescriptorHandleForHeapStart();
+		debugTextureSRVHandle.ptr += INDEX_SRV_DEBUG_TEXTURE * m_CBVSRVHeapDescSize;
+		m_commandList->SetGraphicsRootDescriptorTable(3, debugTextureSRVHandle);
 	}
 	else
 	{
@@ -1163,6 +1225,7 @@ void PassthroughRendererDX12::RenderPassthroughFrame(const XrCompositionLayerPro
 	psPassBuffer->brightness = mainConf.Brightness;
 	psPassBuffer->contrast = mainConf.Contrast;
 	psPassBuffer->saturation = mainConf.Saturation;
+	psPassBuffer->sharpness = mainConf.Sharpness;
 	psPassBuffer->bDoColorAdjustment = fabsf(mainConf.Brightness) > 0.01f || fabsf(mainConf.Contrast - 1.0f) > 0.01f || fabsf(mainConf.Saturation - 1.0f) > 0.01f;
 	psPassBuffer->bDebugDepth = mainConf.DebugDepth;
 	psPassBuffer->bDebugValidStereo = mainConf.DebugStereoValid;
@@ -1189,18 +1252,18 @@ void PassthroughRendererDX12::RenderPassthroughFrame(const XrCompositionLayerPro
 		maskedCBVHandle.ptr += (INDEX_CBV_PS_MASKED_0 + m_frameIndex) * m_CBVSRVHeapDescSize;
 		m_commandList->SetGraphicsRootDescriptorTable(2, maskedCBVHandle);
 
-		RenderPassthroughViewMasked(LEFT_EYE, leftSwapchainIndex, layer, frame, numVertices);
-		RenderPassthroughViewMasked(RIGHT_EYE, rightSwapchainIndex, layer, frame, numVertices);
+		RenderPassthroughViewMasked(LEFT_EYE, leftSwapchainIndex, layer, frame, numIndices);
+		RenderPassthroughViewMasked(RIGHT_EYE, rightSwapchainIndex, layer, frame, numIndices);
 	}
 	else
 	{
-		RenderPassthroughView(LEFT_EYE, leftSwapchainIndex, layer, frame, blendMode, numVertices);
-		RenderPassthroughView(RIGHT_EYE, rightSwapchainIndex, layer, frame, blendMode, numVertices);
+		RenderPassthroughView(LEFT_EYE, leftSwapchainIndex, layer, frame, blendMode, numIndices);
+		RenderPassthroughView(RIGHT_EYE, rightSwapchainIndex, layer, frame, blendMode, numIndices);
 	}
 	RenderFrameFinish();
 }
 
-void PassthroughRendererDX12::RenderPassthroughView(const ERenderEye eye, const int32_t imageIndex, const XrCompositionLayerProjection* layer, CameraFrame* frame, EPassthroughBlendMode blendMode, UINT numVertices)
+void PassthroughRendererDX12::RenderPassthroughView(const ERenderEye eye, const int32_t imageIndex, const XrCompositionLayerProjection* layer, CameraFrame* frame, EPassthroughBlendMode blendMode, UINT numIndices)
 {
 	if (imageIndex < 0) { return; }
 
@@ -1231,6 +1294,7 @@ void PassthroughRendererDX12::RenderPassthroughView(const ERenderEye eye, const 
 	m_commandList->OMSetRenderTargets(1, &rtvHandle, FALSE, &dsvHandle);
 
 	Config_Main& mainConf = m_configManager->GetConfig_Main();
+	Config_Stereo& stereoConf = m_configManager->GetConfig_Stereo();
 
 	VSViewConstantBuffer* vsViewBuffer = (VSViewConstantBuffer*)m_vsViewConstantBufferCPUData[bufferIndex];
 	vsViewBuffer->cameraProjectionToWorld = (eye == LEFT_EYE) ? frame->cameraProjectionToWorldLeft : frame->cameraProjectionToWorldRight;
@@ -1240,6 +1304,7 @@ void PassthroughRendererDX12::RenderPassthroughView(const ERenderEye eye, const 
 	vsViewBuffer->hmdViewWorldPos = (eye == LEFT_EYE) ? frame->hmdViewPosWorldLeft : frame->hmdViewPosWorldRight;
 	vsViewBuffer->projectionDistance = mainConf.ProjectionDistanceFar;
 	vsViewBuffer->floorHeightOffset = mainConf.FloorHeightOffset;
+	vsViewBuffer->viewIndex = (eye == LEFT_EYE) ? 0 : 1;
 
 	D3D12_GPU_DESCRIPTOR_HANDLE cbvVSHandle = m_CBVSRVHeap->GetGPUDescriptorHandleForHeapStart();
 	cbvVSHandle.ptr += (INDEX_CBV_VS_VIEW_0 + bufferIndex) * m_CBVSRVHeapDescSize;
@@ -1249,6 +1314,7 @@ void PassthroughRendererDX12::RenderPassthroughView(const ERenderEye eye, const 
 	PSViewConstantBuffer* psViewBuffer = (PSViewConstantBuffer*)m_psViewConstantBufferCPUData[bufferIndex];
 	psViewBuffer->frameUVBounds = GetFrameUVBounds(eye, frame->frameLayout);
 	psViewBuffer->rtArrayIndex = m_frameIndex;
+	psViewBuffer->bDoCutout = false;
 
 	D3D12_GPU_DESCRIPTOR_HANDLE cbvPSHandle = m_CBVSRVHeap->GetGPUDescriptorHandleForHeapStart();
 	cbvPSHandle.ptr += (INDEX_CBV_PS_VIEW_0 + bufferIndex) * m_CBVSRVHeapDescSize;
@@ -1260,15 +1326,52 @@ void PassthroughRendererDX12::RenderPassthroughView(const ERenderEye eye, const 
 	if ((blendMode != AlphaBlendPremultiplied && blendMode != AlphaBlendUnpremultiplied) || m_configManager->GetConfig_Main().PassthroughOpacity < 1.0f || bCompositeDepth)
 	{
 		m_commandList->SetPipelineState(m_psoPrepass.Get());
-		m_commandList->DrawInstanced(numVertices, 1, 0, 0);
+		m_commandList->DrawIndexedInstanced(numIndices, 1, 0, 0, 0);
 	}
 
 	m_commandList->SetPipelineState(m_psoMainPass.Get());
-	m_commandList->DrawInstanced(numVertices, 1, 0, 0);
+	m_commandList->DrawIndexedInstanced(numIndices, 1, 0, 0, 0);
+
+	if (false && stereoConf.StereoCutoutEnabled)
+	{
+		float secondaryWidthFactor = 0.6f;
+		int scissorStart = (eye == LEFT_EYE) ? (int)(rect.extent.width * (1.0f - secondaryWidthFactor)) : 0;
+		int scissorEnd = (eye == LEFT_EYE) ? rect.extent.width : (int)(rect.extent.width * secondaryWidthFactor);
+		scissor = { rect.offset.x + scissorStart, rect.offset.y, rect.offset.x + scissorEnd, rect.offset.y + rect.extent.height };
+		m_commandList->RSSetScissorRects(1, &scissor);
+
+		int crossBufferIndex = NUM_SWAPCHAINS * 2 + bufferIndex;
+		VSViewConstantBuffer* vsCrossViewBuffer = (VSViewConstantBuffer*)m_vsViewConstantBufferCPUData[crossBufferIndex];
+		
+		vsCrossViewBuffer->cameraProjectionToWorld = (eye != LEFT_EYE) ? frame->cameraProjectionToWorldLeft : frame->cameraProjectionToWorldRight;
+		vsCrossViewBuffer->worldToCameraProjection = (eye != LEFT_EYE) ? frame->worldToCameraProjectionLeft : frame->worldToCameraProjectionRight;
+		vsCrossViewBuffer->worldToHMDProjection = (eye != LEFT_EYE) ? frame->worldToHMDProjectionLeft : frame->worldToHMDProjectionRight;
+		vsCrossViewBuffer->frameUVBounds = GetFrameUVBounds(eye == LEFT_EYE ? RIGHT_EYE : LEFT_EYE, frame->frameLayout);
+		vsCrossViewBuffer->hmdViewWorldPos = (eye != LEFT_EYE) ? frame->hmdViewPosWorldLeft : frame->hmdViewPosWorldRight;
+		vsCrossViewBuffer->projectionDistance = mainConf.ProjectionDistanceFar;
+		vsCrossViewBuffer->floorHeightOffset = mainConf.FloorHeightOffset;
+		vsCrossViewBuffer->viewIndex = (eye == LEFT_EYE) ? 0 : 1;
+
+		D3D12_GPU_DESCRIPTOR_HANDLE cbvCrossVSHandle = m_CBVSRVHeap->GetGPUDescriptorHandleForHeapStart();
+		cbvCrossVSHandle.ptr += (INDEX_CBV_VS_VIEW_0 + crossBufferIndex) * m_CBVSRVHeapDescSize;
+		m_commandList->SetGraphicsRootDescriptorTable(6, cbvCrossVSHandle);
+		
+		PSViewConstantBuffer* psCrossViewBuffer = (PSViewConstantBuffer*)m_psViewConstantBufferCPUData[crossBufferIndex];
+		psCrossViewBuffer->frameUVBounds = GetFrameUVBounds(eye == LEFT_EYE ? RIGHT_EYE : LEFT_EYE, frame->frameLayout);
+		psCrossViewBuffer->rtArrayIndex = m_frameIndex;
+		psCrossViewBuffer->bDoCutout = true;
+
+		D3D12_GPU_DESCRIPTOR_HANDLE cbvCrossPSHandle = m_CBVSRVHeap->GetGPUDescriptorHandleForHeapStart();
+		cbvCrossPSHandle.ptr += (INDEX_CBV_PS_VIEW_0 + crossBufferIndex) * m_CBVSRVHeapDescSize;
+		m_commandList->SetGraphicsRootDescriptorTable(1, cbvCrossPSHandle);
+
+		m_commandList->SetPipelineState(m_psoCutoutPass.Get());
+		m_commandList->DrawIndexedInstanced(numIndices, 1, 0, 0, 0);
+	}
 }
 
 
-void PassthroughRendererDX12::RenderPassthroughViewMasked(const ERenderEye eye, const int32_t imageIndex, const XrCompositionLayerProjection* layer, CameraFrame* frame, UINT numVertices)
+void PassthroughRendererDX12::RenderPassthroughViewMasked(const ERenderEye eye, const int32_t imageIndex, const XrCompositionLayerProjection* layer, CameraFrame* frame, UINT numIndices)
 {
 	if (imageIndex < 0) { return; }
 
@@ -1288,6 +1391,7 @@ void PassthroughRendererDX12::RenderPassthroughViewMasked(const ERenderEye eye, 
 	m_commandList->RSSetScissorRects(1, &scissor);
 
 	Config_Main& mainConf = m_configManager->GetConfig_Main();
+	Config_Stereo& stereoConf = m_configManager->GetConfig_Stereo();
 
 	VSViewConstantBuffer* vsViewBuffer = (VSViewConstantBuffer*)m_vsViewConstantBufferCPUData[bufferIndex];
 	vsViewBuffer->cameraProjectionToWorld = (eye == LEFT_EYE) ? frame->cameraProjectionToWorldLeft : frame->cameraProjectionToWorldRight;
@@ -1297,6 +1401,7 @@ void PassthroughRendererDX12::RenderPassthroughViewMasked(const ERenderEye eye, 
 	vsViewBuffer->hmdViewWorldPos = (eye == LEFT_EYE) ? frame->hmdViewPosWorldLeft : frame->hmdViewPosWorldRight;
 	vsViewBuffer->projectionDistance = mainConf.ProjectionDistanceFar;
 	vsViewBuffer->floorHeightOffset = mainConf.FloorHeightOffset;
+	vsViewBuffer->viewIndex = (eye == LEFT_EYE) ? 0 : 1;
 
 	D3D12_GPU_DESCRIPTOR_HANDLE cbvVSHandle = m_CBVSRVHeap->GetGPUDescriptorHandleForHeapStart();
 	cbvVSHandle.ptr += (INDEX_CBV_VS_VIEW_0 + bufferIndex) * m_CBVSRVHeapDescSize;
@@ -1318,6 +1423,7 @@ void PassthroughRendererDX12::RenderPassthroughViewMasked(const ERenderEye eye, 
 	}
 	psViewBuffer->frameUVBounds = GetFrameUVBounds(eye, frame->frameLayout);
 	psViewBuffer->rtArrayIndex = layer->views[viewIndex].subImage.imageArrayIndex;
+	psViewBuffer->bDoCutout = false;
 
 	D3D12_GPU_DESCRIPTOR_HANDLE cbvPSHandle = m_CBVSRVHeap->GetGPUDescriptorHandleForHeapStart();
 	cbvPSHandle.ptr += (INDEX_CBV_PS_VIEW_0 + bufferIndex) * m_CBVSRVHeapDescSize;
@@ -1348,7 +1454,7 @@ void PassthroughRendererDX12::RenderPassthroughViewMasked(const ERenderEye eye, 
 
 	if (m_configManager->GetConfig_Main().DebugTexture != DebugTexture_None)
 	{
-		cameraFrameSRVHandle.ptr += INDEX_SRV_TESTIMAGE * m_CBVSRVHeapDescSize;
+		cameraFrameSRVHandle.ptr += INDEX_SRV_DEBUG_TEXTURE * m_CBVSRVHeapDescSize;
 	}
 	else
 	{
@@ -1376,7 +1482,7 @@ void PassthroughRendererDX12::RenderPassthroughViewMasked(const ERenderEye eye, 
 	bool bUseStereo = mainConf.ProjectionMode == Projection_StereoReconstruction;
 
 	m_commandList->SetPipelineState(m_psoPrepass.Get());
-	m_commandList->DrawInstanced(numVertices, 1, 0, 0);
+	m_commandList->DrawIndexedInstanced(numIndices, 1, 0, 0, 0);
 
 
 
@@ -1394,7 +1500,30 @@ void PassthroughRendererDX12::RenderPassthroughViewMasked(const ERenderEye eye, 
 	m_commandList->SetGraphicsRootDescriptorTable(5, srvHandle);
 
 	m_commandList->SetPipelineState(m_psoMainPass.Get());
-	m_commandList->DrawInstanced(numVertices, 1, 0, 0);
+	m_commandList->DrawIndexedInstanced(numIndices, 1, 0, 0, 0);
+
+
+	if (stereoConf.StereoCutoutEnabled)
+	{
+		float secondaryWidthFactor = 0.6f;
+		int scissorStart = (eye == LEFT_EYE) ? (int)(rect.extent.width * (1.0f - secondaryWidthFactor)) : 0;
+		int scissorEnd = (eye == LEFT_EYE) ? rect.extent.width : (int)(rect.extent.width * secondaryWidthFactor);
+		scissor = { rect.offset.x + scissorStart, rect.offset.y, rect.offset.x + scissorEnd, rect.offset.y + rect.extent.height };
+		m_commandList->RSSetScissorRects(1, &scissor);
+
+		vsViewBuffer->frameUVBounds = GetFrameUVBounds(eye == LEFT_EYE ? RIGHT_EYE : LEFT_EYE, frame->frameLayout);
+		vsViewBuffer->cameraProjectionToWorld = (eye != LEFT_EYE) ? frame->cameraProjectionToWorldLeft : frame->cameraProjectionToWorldRight;
+		vsViewBuffer->worldToCameraProjection = (eye != LEFT_EYE) ? frame->worldToCameraProjectionLeft : frame->worldToCameraProjectionRight;
+		vsViewBuffer->hmdViewWorldPos = (eye != LEFT_EYE) ? frame->hmdViewPosWorldLeft : frame->hmdViewPosWorldRight;
+		m_commandList->SetGraphicsRootDescriptorTable(6, cbvVSHandle);
+
+		psViewBuffer->frameUVBounds = GetFrameUVBounds(eye == LEFT_EYE ? RIGHT_EYE : LEFT_EYE, frame->frameLayout);
+		psViewBuffer->bDoCutout = true;
+		m_commandList->SetGraphicsRootDescriptorTable(1, cbvPSHandle);
+
+		m_commandList->SetPipelineState(m_psoCutoutPass.Get());
+		m_commandList->DrawIndexedInstanced(numIndices, 1, 0, 0, 0);
+	}
 
 
 	TransitionResource(m_commandList.Get(), m_intermediateRenderTargets[intermediateRTIndex].Get(), D3D12_RESOURCE_STATE_PIXEL_SHADER_RESOURCE, D3D12_RESOURCE_STATE_RENDER_TARGET);

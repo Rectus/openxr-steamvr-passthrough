@@ -575,6 +575,9 @@ if (bIsActiveTab) { ImGui::PopStyleColor(1); bIsActiveTab = false; }
 			ImGui::Checkbox("Use Color", &stereoCustomConfig.StereoUseColor);
 			TextDescription("Uses full color images for stereo proecssing.");
 
+			ImGui::Checkbox("Use Hexagon Grid Mesh", &stereoCustomConfig.StereoUseHexagonGridMesh);
+			TextDescription("Mesh with smoother corners for less artifacting. May introduce warping.");
+
 			ImGui::Checkbox("Rectification Filtering", &stereoCustomConfig.StereoRectificationFiltering);
 			TextDescription("Applies linear filtering before stereo processing.");
 			IMGUI_BIG_SPACING;

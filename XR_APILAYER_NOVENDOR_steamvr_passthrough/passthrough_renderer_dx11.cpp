@@ -78,6 +78,11 @@ struct PSMaskedConstantBuffer
 };
 
 
+inline uint32_t Align(const uint32_t value, const uint32_t alignment)
+{
+	return (value + alignment - 1) & ~(alignment - 1);
+}
+
 void UploadTexture(ComPtr<ID3D11DeviceContext> deviceContext, ComPtr<ID3D11Texture2D> uploadTexture, uint8_t* inputBuffer, int height, int width)
 {
 	D3D11_MAPPED_SUBRESOURCE resource = {};
@@ -107,6 +112,7 @@ PassthroughRendererDX11::PassthroughRendererDX11(ID3D11Device* device, HMODULE d
 	, m_selectedDebugTexture(DebugTexture_None)
 {
 	memset(m_temportaryRenderTargets, 0, sizeof(m_temportaryRenderTargets));
+	m_bUseHexagonGridMesh = m_configManager->GetConfig_Stereo().StereoUseHexagonGridMesh;
 }
 
 
@@ -152,7 +158,7 @@ bool PassthroughRendererDX11::InitRenderer()
 	}
 
 	D3D11_BUFFER_DESC bufferDesc = {};
-	bufferDesc.ByteWidth = sizeof(XrMatrix4x4f) * 4;
+	bufferDesc.ByteWidth = Align(sizeof(VSViewConstantBuffer), 16);
 	bufferDesc.BindFlags = D3D11_BIND_CONSTANT_BUFFER;
 	for (int i = 0; i < NUM_SWAPCHAINS * 2; i++) 
 	{
@@ -163,7 +169,7 @@ bool PassthroughRendererDX11::InitRenderer()
 		}
 	}
 
-	bufferDesc.ByteWidth = 256;
+	bufferDesc.ByteWidth = Align(sizeof(VSPassConstantBuffer), 16);
 	for (int i = 0; i < NUM_SWAPCHAINS; i++)
 	{
 		if (FAILED(m_d3dDevice->CreateBuffer(&bufferDesc, nullptr, &m_vsPassConstantBuffer[i])))
@@ -174,21 +180,21 @@ bool PassthroughRendererDX11::InitRenderer()
 	}
 
 
-	bufferDesc.ByteWidth = 64;
+	bufferDesc.ByteWidth = Align(sizeof(PSPassConstantBuffer), 16);
 	if (FAILED(m_d3dDevice->CreateBuffer(&bufferDesc, nullptr, &m_psPassConstantBuffer)))
 	{
 		ErrorLog("m_psPassConstantBuffer creation failure!\n");
 		return false;
 	}
 
-	bufferDesc.ByteWidth = 48;
+	bufferDesc.ByteWidth = Align(sizeof(PSViewConstantBuffer), 16);
 	if (FAILED(m_d3dDevice->CreateBuffer(&bufferDesc, nullptr, &m_psViewConstantBuffer)))
 	{
 		ErrorLog("m_psViewConstantBuffer creation failure!\n");
 		return false;
 	}
 
-	bufferDesc.ByteWidth = 32;
+	bufferDesc.ByteWidth = Align(sizeof(PSMaskedConstantBuffer), 16);
 	if (FAILED(m_d3dDevice->CreateBuffer(&bufferDesc, nullptr, &m_psMaskedConstantBuffer)))
 	{
 		ErrorLog("m_psMaskedConstantBuffer creation failure!\n");
@@ -291,6 +297,7 @@ bool PassthroughRendererDX11::InitRenderer()
 	blendState.RenderTarget[0].RenderTargetWriteMask = D3D11_COLOR_WRITE_ENABLE_ALPHA;
 	blendState.RenderTarget[0].SrcBlend = D3D11_BLEND_ZERO;
 	blendState.RenderTarget[0].DestBlend = D3D11_BLEND_ONE;
+	blendState.RenderTarget[0].BlendOpAlpha = D3D11_BLEND_OP_ADD;
 	blendState.RenderTarget[0].SrcBlendAlpha = D3D11_BLEND_ONE;
 	blendState.RenderTarget[0].DestBlendAlpha = D3D11_BLEND_ONE;
 
@@ -312,6 +319,7 @@ bool PassthroughRendererDX11::InitRenderer()
 	blendState.RenderTarget[0].SrcBlend = D3D11_BLEND_DEST_ALPHA;
 	blendState.RenderTarget[0].DestBlend = D3D11_BLEND_INV_DEST_ALPHA;
 	blendState.RenderTarget[0].BlendOpAlpha = D3D11_BLEND_OP_SUBTRACT;
+	blendState.RenderTarget[0].SrcBlendAlpha = D3D11_BLEND_ONE;
 	blendState.RenderTarget[0].DestBlendAlpha = D3D11_BLEND_ONE;
 
 	if (FAILED(m_d3dDevice->CreateBlendState(&blendState, m_blendStatePrepassInverseAppAlpha.GetAddressOf())))
@@ -734,7 +742,7 @@ void PassthroughRendererDX11::GenerateMesh()
 
 void PassthroughRendererDX11::GenerateDepthMesh(uint32_t width, uint32_t height)
 {
-	MeshCreateHexGrid(m_gridMesh, width, height);
+	m_bUseHexagonGridMesh ? MeshCreateHexGrid(m_gridMesh, width, height) : MeshCreateGrid(m_gridMesh, width, height);
 
 	D3D11_SUBRESOURCE_DATA vertexBufferData{};
 	vertexBufferData.pSysMem = m_gridMesh.vertices.data();
@@ -804,9 +812,10 @@ void PassthroughRendererDX11::RenderPassthroughFrame(const XrCompositionLayerPro
 	{
 		std::shared_lock readLock(depthFrame->readWriteMutex);
 
-		if (depthFrame->disparityTextureSize[0] != m_disparityMapWidth)
+		if (depthFrame->disparityTextureSize[0] != m_disparityMapWidth || m_bUseHexagonGridMesh != stereoConf.StereoUseHexagonGridMesh)
 		{
 			m_disparityMapWidth = depthFrame->disparityTextureSize[0];
+			m_bUseHexagonGridMesh = stereoConf.StereoUseHexagonGridMesh;
 			SetupDisparityMap(depthFrame->disparityTextureSize[0], depthFrame->disparityTextureSize[1]);
 			GenerateDepthMesh(depthFrame->disparityTextureSize[0] / 2, depthFrame->disparityTextureSize[1]);
 		}

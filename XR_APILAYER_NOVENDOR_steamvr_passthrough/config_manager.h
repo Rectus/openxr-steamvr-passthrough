@@ -112,6 +112,7 @@ struct Config_Stereo
 	bool StereoReconstructionFreeze = false;
 	bool StereoRectificationFiltering = false;
 	bool StereoUseColor = false;
+	bool StereoUseHexagonGridMesh = true;
 	int StereoFrameSkip = 0;
 	int StereoDownscaleFactor = 2;
 
