@@ -254,6 +254,7 @@ PassthroughRendererDX12::PassthroughRendererDX12(ID3D12Device* device, ID3D12Com
 	, m_cameraTextureHeight(0)
 	, m_cameraFrameBufferSize(0)
 	, m_selectedDebugTexture(DebugTexture_None)
+	, m_bUsingDepth(false)
 {
 	memset(m_vsPassConstantBufferCPUData, 0, sizeof(m_vsPassConstantBufferCPUData));
 	memset(m_vsViewConstantBufferCPUData, 0, sizeof(m_vsViewConstantBufferCPUData));
@@ -782,10 +783,10 @@ bool PassthroughRendererDX12::InitPipeline()
 	D3D12_DEPTH_STENCIL_DESC depthStencilMain{};
 	depthStencilMain.DepthEnable = m_bUsingDepth;
 	depthStencilMain.DepthFunc = m_bUsingReversedDepth ? D3D12_COMPARISON_FUNC_GREATER_EQUAL : D3D12_COMPARISON_FUNC_LESS_EQUAL;
-	depthStencilMain.DepthWriteMask = (m_blendMode != Masked && m_bWriteDepth) ? D3D12_DEPTH_WRITE_MASK_ALL : D3D12_DEPTH_WRITE_MASK_ZERO;
+	depthStencilMain.DepthWriteMask = D3D12_DEPTH_WRITE_MASK_ZERO;
 
 	D3D12_DEPTH_STENCIL_DESC depthStencilDisabled{};
-	depthStencilMain.DepthEnable = false;
+	depthStencilDisabled.DepthEnable = false;
 
 
 	D3D12_GRAPHICS_PIPELINE_STATE_DESC psoDesc = {};
@@ -1332,7 +1333,9 @@ void PassthroughRendererDX12::RenderPassthroughView(const ERenderEye eye, const 
 	m_commandList->SetPipelineState(m_psoMainPass.Get());
 	m_commandList->DrawIndexedInstanced(numIndices, 1, 0, 0, 0);
 
-	if (false && stereoConf.StereoCutoutEnabled)
+
+
+	if (stereoConf.StereoCutoutEnabled)
 	{
 		float secondaryWidthFactor = 0.6f;
 		int scissorStart = (eye == LEFT_EYE) ? (int)(rect.extent.width * (1.0f - secondaryWidthFactor)) : 0;
@@ -1345,9 +1348,9 @@ void PassthroughRendererDX12::RenderPassthroughView(const ERenderEye eye, const 
 		
 		vsCrossViewBuffer->cameraProjectionToWorld = (eye != LEFT_EYE) ? frame->cameraProjectionToWorldLeft : frame->cameraProjectionToWorldRight;
 		vsCrossViewBuffer->worldToCameraProjection = (eye != LEFT_EYE) ? frame->worldToCameraProjectionLeft : frame->worldToCameraProjectionRight;
-		vsCrossViewBuffer->worldToHMDProjection = (eye != LEFT_EYE) ? frame->worldToHMDProjectionLeft : frame->worldToHMDProjectionRight;
+		vsCrossViewBuffer->worldToHMDProjection = (eye == LEFT_EYE) ? frame->worldToHMDProjectionLeft : frame->worldToHMDProjectionRight;
 		vsCrossViewBuffer->frameUVBounds = GetFrameUVBounds(eye == LEFT_EYE ? RIGHT_EYE : LEFT_EYE, frame->frameLayout);
-		vsCrossViewBuffer->hmdViewWorldPos = (eye != LEFT_EYE) ? frame->hmdViewPosWorldLeft : frame->hmdViewPosWorldRight;
+		vsCrossViewBuffer->hmdViewWorldPos = (eye == LEFT_EYE) ? frame->hmdViewPosWorldLeft : frame->hmdViewPosWorldRight;
 		vsCrossViewBuffer->projectionDistance = mainConf.ProjectionDistanceFar;
 		vsCrossViewBuffer->floorHeightOffset = mainConf.FloorHeightOffset;
 		vsCrossViewBuffer->viewIndex = (eye == LEFT_EYE) ? 0 : 1;
