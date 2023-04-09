@@ -342,7 +342,7 @@ bool PassthroughRendererDX11::InitRenderer()
 		return false;
 	}
 
-	rasterizerDesc.DepthBias = 10;
+	rasterizerDesc.DepthBias = 16;
 	if (FAILED(m_d3dDevice->CreateRasterizerState(&rasterizerDesc, m_rasterizerStateDepthBias.GetAddressOf())))
 	{
 		ErrorLog("CreateRasterizerState failure!\n");
@@ -1075,43 +1075,44 @@ void PassthroughRendererDX11::RenderPassthroughView(const ERenderEye eye, const 
 
 
 
+	// Draw the other stereo camera on occluded areas
 	if (stereoConf.StereoCutoutEnabled)
 	{
 		float secondaryWidthFactor = 0.6f;
 		int scissorStart = (eye == LEFT_EYE) ? (int)(rect.extent.width * (1.0f - secondaryWidthFactor)) : 0;
 		int scissorEnd = (eye == LEFT_EYE) ? rect.extent.width : (int)(rect.extent.width * secondaryWidthFactor);
-		scissor = { rect.offset.x + scissorStart, rect.offset.y, rect.offset.x + scissorEnd, rect.offset.y + rect.extent.height };
-		m_renderContext->RSSetScissorRects(1, &scissor);
+		D3D11_RECT crossScissor = { rect.offset.x + scissorStart, rect.offset.y, rect.offset.x + scissorEnd, rect.offset.y + rect.extent.height };
+		m_renderContext->RSSetScissorRects(1, &crossScissor);
 
-		vsViewBuffer.frameUVBounds = GetFrameUVBounds(eye == LEFT_EYE ? RIGHT_EYE : LEFT_EYE, frame->frameLayout);
-		vsViewBuffer.cameraProjectionToWorld = (eye != LEFT_EYE) ? frame->cameraProjectionToWorldLeft : frame->cameraProjectionToWorldRight;
-		vsViewBuffer.worldToCameraProjection = (eye != LEFT_EYE) ? frame->worldToCameraProjectionLeft : frame->worldToCameraProjectionRight;
-		vsViewBuffer.hmdViewWorldPos = (eye != LEFT_EYE) ? frame->hmdViewPosWorldLeft : frame->hmdViewPosWorldRight;
-		m_renderContext->UpdateSubresource(m_vsViewConstantBuffer[bufferIndex].Get(), 0, nullptr, &vsViewBuffer, 0, 0);
+		VSViewConstantBuffer vsCrossBuffer = vsViewBuffer;
+		vsCrossBuffer.frameUVBounds = GetFrameUVBounds(eye == LEFT_EYE ? RIGHT_EYE : LEFT_EYE, frame->frameLayout);
+		vsCrossBuffer.cameraProjectionToWorld = (eye != LEFT_EYE) ? frame->cameraProjectionToWorldLeft : frame->cameraProjectionToWorldRight;
+		vsCrossBuffer.worldToCameraProjection = (eye != LEFT_EYE) ? frame->worldToCameraProjectionLeft : frame->worldToCameraProjectionRight;
+		vsCrossBuffer.hmdViewWorldPos = (eye != LEFT_EYE) ? frame->hmdViewPosWorldLeft : frame->hmdViewPosWorldRight;
+		m_renderContext->UpdateSubresource(m_vsViewConstantBuffer[bufferIndex].Get(), 0, nullptr, &vsCrossBuffer, 0, 0);
 
-		psViewBuffer.frameUVBounds = GetFrameUVBounds(eye == LEFT_EYE ? RIGHT_EYE : LEFT_EYE, frame->frameLayout);
-		psViewBuffer.bDoCutout = true;
-		m_renderContext->UpdateSubresource(m_psViewConstantBuffer.Get(), 0, nullptr, &psViewBuffer, 0, 0);
+		PSViewConstantBuffer psCrossBuffer = psViewBuffer;
+		psCrossBuffer.frameUVBounds = GetFrameUVBounds(eye == LEFT_EYE ? RIGHT_EYE : LEFT_EYE, frame->frameLayout);
+		psCrossBuffer.bDoCutout = true;
+		m_renderContext->UpdateSubresource(m_psViewConstantBuffer.Get(), 0, nullptr, &psCrossBuffer, 0, 0);
 
-		m_renderContext->OMSetDepthStencilState(GET_DEPTH_STENCIL_STATE(false, frame->bHasReversedDepth, false), 1);
+		// Reverse depth check to only affect ares below previously drawn
+		m_renderContext->OMSetDepthStencilState(GET_DEPTH_STENCIL_STATE(bCompositeDepth, !frame->bHasReversedDepth, false), 1);
 
 		m_renderContext->DrawIndexed(numIndices, 0, 0);
 	}
 
 
-	//if(mainConf.ProjectionMode == Projection_StereoReconstruction && !stereoConf.StereoReconstructionFreeze)
+	// Draw cylinder mesh ato fill out any holes
+	if(mainConf.ProjectionMode == Projection_StereoReconstruction && !stereoConf.StereoReconstructionFreeze)
 	{
-		scissor = { rect.offset.x, rect.offset.y, rect.offset.x + rect.extent.width, rect.offset.y + rect.extent.height };
 		m_renderContext->RSSetScissorRects(1, &scissor);
+
+		m_renderContext->UpdateSubresource(m_vsViewConstantBuffer[bufferIndex].Get(), 0, nullptr, &vsViewBuffer, 0, 0);
+		m_renderContext->UpdateSubresource(m_psViewConstantBuffer.Get(), 0, nullptr, &psViewBuffer, 0, 0);
 
 		const UINT strides[] = { sizeof(float) * 3 };
 		const UINT offsets[] = { 0 };
-
-		PSViewConstantBuffer psViewBuffer = {};
-		psViewBuffer.frameUVBounds = GetFrameUVBounds(eye, frame->frameLayout);
-		psViewBuffer.rtArrayIndex = layer->views[viewIndex].subImage.imageArrayIndex;
-		psViewBuffer.bDoCutout = false;
-
 		m_renderContext->IASetVertexBuffers(0, 1, m_cylinderMeshVertexBuffer.GetAddressOf(), strides, offsets);
 		m_renderContext->IASetIndexBuffer(m_cylinderMeshIndexBuffer.Get(), DXGI_FORMAT_R32_UINT, 0);
 		m_renderContext->VSSetShader(m_vertexShader.Get(), nullptr, 0);
@@ -1296,9 +1297,37 @@ void PassthroughRendererDX11::RenderPassthroughViewMasked(const ERenderEye eye, 
 		m_renderContext->UpdateSubresource(m_psViewConstantBuffer.Get(), 0, nullptr, &psViewBuffer, 0, 0);
 
 		m_renderContext->OMSetBlendState(m_blendStateBase.Get(), nullptr, UINT_MAX);
-		m_renderContext->OMSetDepthStencilState(GET_DEPTH_STENCIL_STATE(false, frame->bHasReversedDepth, false), 1);
+		m_renderContext->OMSetDepthStencilState(GET_DEPTH_STENCIL_STATE(bCompositeDepth, !frame->bHasReversedDepth, false), 1);
 
+		//m_renderContext->PSSetShader(m_pixelShader.Get(), nullptr, 0);
 		m_renderContext->DrawIndexed(numIndices, 0, 0);
+	}
+
+
+	// Draw cylinder mesh ato fill out any holes
+	if (mainConf.ProjectionMode == Projection_StereoReconstruction && !stereoConf.StereoReconstructionFreeze)
+	{
+		m_renderContext->RSSetScissorRects(1, &scissor);
+
+		m_renderContext->UpdateSubresource(m_vsViewConstantBuffer[bufferIndex].Get(), 0, nullptr, &vsViewBuffer, 0, 0);
+		m_renderContext->UpdateSubresource(m_psViewConstantBuffer.Get(), 0, nullptr, &psViewBuffer, 0, 0);
+
+		const UINT strides[] = { sizeof(float) * 3 };
+		const UINT offsets[] = { 0 };
+		m_renderContext->IASetVertexBuffers(0, 1, m_cylinderMeshVertexBuffer.GetAddressOf(), strides, offsets);
+		m_renderContext->IASetIndexBuffer(m_cylinderMeshIndexBuffer.Get(), DXGI_FORMAT_R32_UINT, 0);
+		m_renderContext->VSSetShader(m_vertexShader.Get(), nullptr, 0);
+		m_renderContext->RSSetState(m_rasterizerStateDepthBias.Get());
+		m_renderContext->PSSetShader(m_pixelShader.Get(), nullptr, 0);
+
+		m_renderContext->OMSetDepthStencilState(GET_DEPTH_STENCIL_STATE(bCompositeDepth, frame->bHasReversedDepth, depthConfig.DepthWriteOutput && depthConfig.DepthReadFromApplication), 1);
+
+		m_renderContext->DrawIndexed((UINT)m_cylinderMesh.triangles.size() * 3, 0, 0);
+
+		m_renderContext->IASetVertexBuffers(0, 1, m_gridMeshVertexBuffer.GetAddressOf(), strides, offsets);
+		m_renderContext->IASetIndexBuffer(m_gridMeshIndexBuffer.Get(), DXGI_FORMAT_R32_UINT, 0);
+		m_renderContext->VSSetShader(m_stereoVertexShader.Get(), nullptr, 0);	
+		m_renderContext->RSSetState(m_rasterizerState.Get());
 	}
 }
 

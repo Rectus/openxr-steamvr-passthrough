@@ -37,8 +37,8 @@ VS_OUTPUT main(float3 inPosition : POSITION, uint vertexID : SV_VertexID)
     output.projectionValidity = 1;
     
 	// Disparity at the max projection distance
-    float minDisparity = g_disparityToDepth[2][3] /
-    (g_projectionDistance * 2048.0 * g_disparityDownscaleFactor * g_disparityToDepth[3][2]);
+    float minDisparity = max(0, g_disparityToDepth[2][3] /
+    (g_projectionDistance * 2048.0 * g_disparityDownscaleFactor * g_disparityToDepth[3][2]));
     
     float maxDisparity = 0.0465;
     
@@ -53,13 +53,13 @@ VS_OUTPUT main(float3 inPosition : POSITION, uint vertexID : SV_VertexID)
     {
         // Hack that causes some artifacting. Ideally patch any holes or discard and render behind instead.
         disparity = defaultDisparity;
-        output.projectionValidity = -10000;
+        output.projectionValidity = -1000;
     }
     // Prevent filtering if it would sample across the image edge
-    else if (uvPos.x < maxFilterWidth || uvPos.x > g_disparityTextureSize.x - maxFilterWidth || 
-             uvPos.y < maxFilterWidth || uvPos.y > g_disparityTextureSize.y - maxFilterWidth)
+    else if (uvPos.x < maxFilterWidth || uvPos.x >= g_disparityTextureSize.x - maxFilterWidth || 
+             uvPos.y < maxFilterWidth || uvPos.y >= g_disparityTextureSize.y - maxFilterWidth)
     {
-        disparity = minDisparity;
+        disparity = defaultDisparity;
         output.projectionValidity = -10000;
     }
     else if (confidence < 0.5)
@@ -150,23 +150,6 @@ VS_OUTPUT main(float3 inPosition : POSITION, uint vertexID : SV_VertexID)
 	
     output.position = mul(g_worldToHMDProjection, worldSpacePoint); 
 	output.screenCoords = output.position.xyw;
- 
-    
-//    // Project the border vertices to the edges of the screen to cover any gaps from reprojection.
-//    if (g_bProjectBorders && inPosition.z > 0)
-//    {
-//#ifndef VULKAN
-//        float4 worldPos = mul(g_cameraProjectionToWorld, float4(inPosition.xy * 2 - 1, 0, 1));
-//        output.clipSpaceCoords = lerp(output.clipSpaceCoords, mul(g_worldToCameraProjection, worldPos).xyw, inPosition.z);
-//#endif
-        
-//        output.position = lerp(output.position, float4(inPosition.xy * float2(2, -2) + float2(-1, 1), 0, 1), inPosition.z);
-//        output.screenCoords = output.position.xyw;
-
-//        output.projectionValidity = -1;
-        
-//        return output;
-//    }
     
     
 #ifdef VULKAN
