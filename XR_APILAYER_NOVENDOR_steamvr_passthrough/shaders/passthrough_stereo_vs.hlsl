@@ -24,25 +24,6 @@ VS_OUTPUT main(float3 inPosition : POSITION, uint vertexID : SV_VertexID)
 {
 	VS_OUTPUT output;
     
-
-    // Project the border vertices to the edges of the screen to cover any gaps from reprojection.
-    if (g_bProjectBorders && inPosition.z == 1)
-    {
-        output.position = float4(inPosition.xy * float2(2, -2) + float2(-1, 1), 0.98, 1);
-        output.screenCoords = output.position.xyw;
-#ifndef VULKAN
-        float4 worldPos = mul(g_cameraProjectionToWorld, float4(inPosition.xy * 2 - 1, 1, 1));
-        output.clipSpaceCoords = mul(g_worldToCameraProjection, worldPos).xyw;
-#endif
-        output.projectionValidity = -1;
-        
-#ifdef VULKAN
-	output.position.y *= -1.0;
-#endif      
-        return output;
-    }
-    
-    
     float2 disparityUVs = inPosition.xy * (g_vsUVBounds.zw - g_vsUVBounds.xy) + g_vsUVBounds.xy;
     uint3 uvPos = uint3(round(disparityUVs * g_disparityTextureSize), 0);
     
@@ -65,18 +46,21 @@ VS_OUTPUT main(float3 inPosition : POSITION, uint vertexID : SV_VertexID)
     (min(2.0, g_projectionDistance) * 2048.0 * g_disparityDownscaleFactor * g_disparityToDepth[3][2]);
 
     
-    //if (inPosition.x < 0.01 || inPosition.x > 0.99 ||
-    //    inPosition.y < 0.01 || inPosition.y > 0.99)
-    //{
-    //    disparity = minDisparity;
-    //    output.projectionValidity = -10000.0;
-    //}
-    //else 
+    
+    uint maxFilterWidth = max(g_disparityFilterWidth, (int)ceil(g_cutoutFilterWidth));
+    
     if (disparity > maxDisparity || disparity < minDisparity)
     {
         // Hack that causes some artifacting. Ideally patch any holes or discard and render behind instead.
         disparity = defaultDisparity;
-        output.projectionValidity = -10000.0;
+        output.projectionValidity = -10000;
+    }
+    // Prevent filtering if it would sample across the image edge
+    else if (uvPos.x < maxFilterWidth || uvPos.x > g_disparityTextureSize.x - maxFilterWidth || 
+             uvPos.y < maxFilterWidth || uvPos.y > g_disparityTextureSize.y - maxFilterWidth)
+    {
+        disparity = minDisparity;
+        output.projectionValidity = -10000;
     }
     else if (confidence < 0.5)
     {
@@ -166,6 +150,23 @@ VS_OUTPUT main(float3 inPosition : POSITION, uint vertexID : SV_VertexID)
 	
     output.position = mul(g_worldToHMDProjection, worldSpacePoint); 
 	output.screenCoords = output.position.xyw;
+ 
+    
+//    // Project the border vertices to the edges of the screen to cover any gaps from reprojection.
+//    if (g_bProjectBorders && inPosition.z > 0)
+//    {
+//#ifndef VULKAN
+//        float4 worldPos = mul(g_cameraProjectionToWorld, float4(inPosition.xy * 2 - 1, 0, 1));
+//        output.clipSpaceCoords = lerp(output.clipSpaceCoords, mul(g_worldToCameraProjection, worldPos).xyw, inPosition.z);
+//#endif
+        
+//        output.position = lerp(output.position, float4(inPosition.xy * float2(2, -2) + float2(-1, 1), 0, 1), inPosition.z);
+//        output.screenCoords = output.position.xyw;
+
+//        output.projectionValidity = -1;
+        
+//        return output;
+//    }
     
     
 #ifdef VULKAN

@@ -3,6 +3,8 @@
 #include "mesh.h"
 
 
+#define BORDER_SIZE 3
+
 // Generate a cylinder with radius and height 1.
 void MeshCreateCylinder(Mesh<VertexFormatBasic>& mesh, int numBoundaryVertices)
 {
@@ -55,8 +57,20 @@ void MeshCreateGrid(Mesh<VertexFormatBasic>& mesh, int width, int height)
 	{
 		for (int x = 0; x < width; x++)
 		{
-			// Mark border vertices with z = 1
-			float z = (x == 0 || x == (width - 1) || y == 0 || y == (height - 1)) ? 1.0f : 0.0f;
+			// Mark border vertices
+			float z = 0.0f;
+				
+			if (x < BORDER_SIZE || x >= (width - BORDER_SIZE) || y < BORDER_SIZE || y >= (height - BORDER_SIZE))
+			{
+				float size = (float)BORDER_SIZE;
+
+				float low = fmaxf((size - x) / size, (size - y) / size);
+				float high = -fmin(0.0f, fminf((width - size - x - 1) / size, (height - size - y - 1) / size));
+
+				z = fmaxf(low, high);
+			}
+
+			//float z = (x < BORDER_SIZE || x >= (width - BORDER_SIZE) || y < BORDER_SIZE || y >= (height - BORDER_SIZE)) ? 1.0f : 0.0f;
 
 			mesh.vertices.emplace_back(x * stepX, y * stepY, z);
 
@@ -88,8 +102,18 @@ void MeshCreateHexGrid(Mesh<VertexFormatBasic>& mesh, int width, int height)
 	{
 		for (int x = 0; x < width; x++)
 		{
-			// Mark border vertices with z = 1
-			float z = (x == 0 || x == (width - 1) || y == 0 || y == (height - 1)) ? 1.0f : 0.0f;
+			// Mark border vertices
+			float z = 0.0f;
+
+			if (x < BORDER_SIZE || x >= (width - BORDER_SIZE) || y < BORDER_SIZE || y >= (height - BORDER_SIZE))
+			{
+				float size = (float)BORDER_SIZE;
+
+				float low = fmaxf((size - x) / size, (size - y) / size);
+				float high = -fmin(0.0f, fminf((width - size - x - 1) / size, (height - size - y - 1) / size));
+
+				z = fmaxf(low, high);
+			}
 
 			if (y % 2 == 0)
 			{

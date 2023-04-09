@@ -335,7 +335,15 @@ bool PassthroughRendererDX11::InitRenderer()
 	rasterizerDesc.FrontCounterClockwise = false;
 	rasterizerDesc.FillMode = D3D11_FILL_SOLID;
 	rasterizerDesc.ScissorEnable = true;
+	rasterizerDesc.DepthBias = 0;
 	if (FAILED(m_d3dDevice->CreateRasterizerState(&rasterizerDesc, m_rasterizerState.GetAddressOf())))
+	{
+		ErrorLog("CreateRasterizerState failure!\n");
+		return false;
+	}
+
+	rasterizerDesc.DepthBias = 10;
+	if (FAILED(m_d3dDevice->CreateRasterizerState(&rasterizerDesc, m_rasterizerStateDepthBias.GetAddressOf())))
 	{
 		ErrorLog("CreateRasterizerState failure!\n");
 		return false;
@@ -1088,6 +1096,35 @@ void PassthroughRendererDX11::RenderPassthroughView(const ERenderEye eye, const 
 		m_renderContext->OMSetDepthStencilState(GET_DEPTH_STENCIL_STATE(false, frame->bHasReversedDepth, false), 1);
 
 		m_renderContext->DrawIndexed(numIndices, 0, 0);
+	}
+
+
+	//if(mainConf.ProjectionMode == Projection_StereoReconstruction && !stereoConf.StereoReconstructionFreeze)
+	{
+		scissor = { rect.offset.x, rect.offset.y, rect.offset.x + rect.extent.width, rect.offset.y + rect.extent.height };
+		m_renderContext->RSSetScissorRects(1, &scissor);
+
+		const UINT strides[] = { sizeof(float) * 3 };
+		const UINT offsets[] = { 0 };
+
+		PSViewConstantBuffer psViewBuffer = {};
+		psViewBuffer.frameUVBounds = GetFrameUVBounds(eye, frame->frameLayout);
+		psViewBuffer.rtArrayIndex = layer->views[viewIndex].subImage.imageArrayIndex;
+		psViewBuffer.bDoCutout = false;
+
+		m_renderContext->IASetVertexBuffers(0, 1, m_cylinderMeshVertexBuffer.GetAddressOf(), strides, offsets);
+		m_renderContext->IASetIndexBuffer(m_cylinderMeshIndexBuffer.Get(), DXGI_FORMAT_R32_UINT, 0);
+		m_renderContext->VSSetShader(m_vertexShader.Get(), nullptr, 0);
+		m_renderContext->RSSetState(m_rasterizerStateDepthBias.Get());
+
+		m_renderContext->OMSetDepthStencilState(GET_DEPTH_STENCIL_STATE(bCompositeDepth, frame->bHasReversedDepth, depthConfig.DepthWriteOutput && depthConfig.DepthReadFromApplication), 1);
+
+		m_renderContext->DrawIndexed((UINT)m_cylinderMesh.triangles.size() * 3, 0, 0);
+
+		m_renderContext->IASetVertexBuffers(0, 1, m_gridMeshVertexBuffer.GetAddressOf(), strides, offsets);
+		m_renderContext->IASetIndexBuffer(m_gridMeshIndexBuffer.Get(), DXGI_FORMAT_R32_UINT, 0);
+		m_renderContext->VSSetShader(m_stereoVertexShader.Get(), nullptr, 0);
+		m_renderContext->RSSetState(m_rasterizerState.Get());
 	}
 }
 
