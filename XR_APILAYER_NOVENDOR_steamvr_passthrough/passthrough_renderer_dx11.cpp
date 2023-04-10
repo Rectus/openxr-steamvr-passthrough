@@ -39,6 +39,9 @@ struct VSViewConstantBuffer
 	XrMatrix4x4f cameraProjectionToWorld;
 	XrMatrix4x4f worldToCameraProjection;
 	XrMatrix4x4f worldToHMDProjection;
+	XrMatrix4x4f prevCameraProjectionToWorld;
+	XrMatrix4x4f prevWorldToCameraProjection;
+	XrMatrix4x4f prevWorldToHMDProjection;
 	XrVector4f frameUVBounds;
 	XrVector3f hmdViewWorldPos;
 	float projectionDistance;
@@ -497,6 +500,34 @@ void PassthroughRendererDX11::SetupFrameResource()
 			return;
 		}
 		m_deviceContext->CopyResource(m_cameraFrameTexture[i].Get(), m_cameraFrameUploadTexture.Get());
+	}
+
+	D3D11_TEXTURE2D_DESC uavTextureDesc = {};
+	uavTextureDesc.MipLevels = 1;
+	uavTextureDesc.Format = DXGI_FORMAT_R8G8B8A8_UNORM;
+	uavTextureDesc.Width = m_cameraTextureWidth;
+	uavTextureDesc.Height = m_cameraTextureHeight;
+	uavTextureDesc.ArraySize = 1;
+	uavTextureDesc.SampleDesc.Count = 1;
+	uavTextureDesc.SampleDesc.Quality = 0;
+	uavTextureDesc.BindFlags = D3D11_BIND_UNORDERED_ACCESS;
+	uavTextureDesc.Usage = D3D11_USAGE_DEFAULT;
+	uavTextureDesc.CPUAccessFlags = 0;
+
+	if (FAILED(m_d3dDevice->CreateTexture2D(&uavTextureDesc, nullptr, &m_cameraFilterUAVTexture)))
+	{
+		ErrorLog("Frame Resource CreateTexture2D error!\n");
+		return;
+	}
+
+	D3D11_UNORDERED_ACCESS_VIEW_DESC uavDesc = {};
+	uavDesc.Format = DXGI_FORMAT_R8G8B8A8_UNORM;
+	uavDesc.ViewDimension = D3D11_UAV_DIMENSION_TEXTURE2D;
+
+	if(FAILED(m_d3dDevice->CreateUnorderedAccessView(m_cameraFilterUAVTexture.Get(), &uavDesc, m_cameraFilterUAV.GetAddressOf())))
+	{
+		ErrorLog("Frame Resource CreateUnorderedAccessView error!\n");
+		return;
 	}
 }
 
@@ -996,7 +1027,7 @@ void PassthroughRendererDX11::RenderPassthroughView(const ERenderEye eye, const 
 	bool bCompositeDepth = depthConfig.DepthForceComposition && depthConfig.DepthReadFromApplication && depthStencil != nullptr;
 	bool bWriteDepth = depthConfig.DepthWriteOutput && depthConfig.DepthReadFromApplication;
 
-	m_renderContext->OMSetRenderTargets(1, &rendertarget, depthStencil);
+	m_renderContext->OMSetRenderTargetsAndUnorderedAccessViews(1, &rendertarget, depthStencil, 1, 1, m_cameraFilterUAV.GetAddressOf(), nullptr);
 
 
 	XrRect2Di rect = layer->views[viewIndex].subImage.imageRect;
@@ -1014,6 +1045,11 @@ void PassthroughRendererDX11::RenderPassthroughView(const ERenderEye eye, const 
 	vsViewBuffer.cameraProjectionToWorld = (eye == LEFT_EYE) ? frame->cameraProjectionToWorldLeft : frame->cameraProjectionToWorldRight;
 	vsViewBuffer.worldToCameraProjection = (eye == LEFT_EYE) ? frame->worldToCameraProjectionLeft : frame->worldToCameraProjectionRight;
 	vsViewBuffer.worldToHMDProjection = (eye == LEFT_EYE) ? frame->worldToHMDProjectionLeft : frame->worldToHMDProjectionRight;
+
+	vsViewBuffer.prevCameraProjectionToWorld = (eye == LEFT_EYE) ? frame->prevCameraProjectionToWorldLeft : frame->cameraProjectionToWorldRight;
+	vsViewBuffer.prevWorldToCameraProjection = (eye == LEFT_EYE) ? frame->prevWorldToCameraProjectionLeft : frame->worldToCameraProjectionRight;
+	vsViewBuffer.prevWorldToHMDProjection = (eye == LEFT_EYE) ? frame->prevWorldToHMDProjectionLeft : frame->worldToHMDProjectionRight;
+
 	vsViewBuffer.frameUVBounds = GetFrameUVBounds(eye, frame->frameLayout);
 	vsViewBuffer.hmdViewWorldPos = (eye == LEFT_EYE) ? frame->hmdViewPosWorldLeft : frame->hmdViewPosWorldRight;
 	vsViewBuffer.projectionDistance = mainConf.ProjectionDistanceFar;

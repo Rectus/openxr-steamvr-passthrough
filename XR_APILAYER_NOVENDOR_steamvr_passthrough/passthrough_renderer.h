@@ -170,6 +170,9 @@ private:
 	ComPtr<ID3D11Texture2D> m_cameraFrameUploadTexture;
 	ComPtr<ID3D11ShaderResourceView> m_cameraFrameSRV[NUM_SWAPCHAINS];
 
+	ComPtr<ID3D11UnorderedAccessView> m_cameraFilterUAV;
+	ComPtr<ID3D11Texture2D> m_cameraFilterUAVTexture;
+
 	ComPtr<ID3D11Texture2D> m_disparityMap[NUM_SWAPCHAINS * 2];
 	ComPtr<ID3D11Texture2D> m_disparityMapUploadTexture;
 	ComPtr<ID3D11ShaderResourceView> m_disparityMapSRV[NUM_SWAPCHAINS * 2];

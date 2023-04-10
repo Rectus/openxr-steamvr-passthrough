@@ -7,6 +7,7 @@ struct VS_OUTPUT
 	float3 clipSpaceCoords : TEXCOORD0;
 	float3 screenCoords : TEXCOORD1;
 	float projectionValidity : TEXCOORD2;
+    float3 prevClipSpaceCoords : TEXCOORD3;
 };
 
 
@@ -25,6 +26,8 @@ VS_OUTPUT main(float3 inPosition : POSITION, uint vertexID : SV_VertexID)
     //float4 clipSpacePos = mul(g_worldToHMDProjection, float4(inPosition, 1.0));
 //#else
     float4 clipSpacePos = mul(g_worldToCameraProjection, float4(inPosition, 1.0));
+	
+    output.prevClipSpaceCoords = mul(g_prevWorldToCameraProjection, float4(inPosition, 1.0)).xyw;
 //#endif
     output.clipSpaceCoords = clipSpacePos.xyw;
 	

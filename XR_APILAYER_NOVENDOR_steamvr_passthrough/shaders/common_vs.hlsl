@@ -5,6 +5,10 @@ cbuffer vsViewConstantBuffer : register(b0)
     float4x4 g_cameraProjectionToWorld;
     float4x4 g_worldToCameraProjection;
     float4x4 g_worldToHMDProjection;
+    
+    float4x4 g_prevCameraProjectionToWorld;
+    float4x4 g_prevWorldToCameraProjection;
+    float4x4 g_prevWorldToHMDProjection;
     float4 g_vsUVBounds;
     float3 g_hmdViewWorldPos;
     float g_projectionDistance;

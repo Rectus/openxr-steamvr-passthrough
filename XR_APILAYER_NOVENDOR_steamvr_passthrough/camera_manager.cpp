@@ -593,6 +593,28 @@ void CameraManager::CalculateFrameProjection(std::shared_ptr<CameraFrame>& frame
 
     CalculateFrameProjectionForEye(LEFT_EYE, frame, layer, refSpaceInfo, distortionParams);
     CalculateFrameProjectionForEye(RIGHT_EYE, frame, layer, refSpaceInfo, distortionParams);
+
+
+    if (frame->header.nFrameSequence != m_lastFrameSequence)
+    {
+        frame->prevCameraProjectionToWorldLeft = m_lastCameraProjectionToWorldLeft;
+        frame->prevWorldToCameraProjectionLeft = m_lastWorldToCameraProjectionLeft;
+        frame->prevCameraProjectionToWorldRight = m_lastCameraProjectionToWorldRight;
+        frame->prevWorldToCameraProjectionRight = m_lastWorldToCameraProjectionRight;
+
+        m_lastCameraProjectionToWorldLeft = frame->cameraProjectionToWorldLeft;
+        m_lastWorldToCameraProjectionLeft = frame->worldToCameraProjectionLeft;
+        m_lastCameraProjectionToWorldRight = frame->cameraProjectionToWorldRight;
+        m_lastWorldToCameraProjectionRight = frame->worldToCameraProjectionRight;
+
+        m_lastFrameSequence = frame->header.nFrameSequence;
+    }
+
+    frame->prevWorldToHMDProjectionLeft = m_lastWorldToHMDProjectionLeft;
+    frame->prevWorldToHMDProjectionRight = m_lastWorldToHMDProjectionRight;
+
+    m_lastWorldToHMDProjectionLeft = frame->worldToHMDProjectionLeft; 
+    m_lastWorldToHMDProjectionRight = frame->worldToHMDProjectionRight;
 }
 
 void CameraManager::CalculateFrameProjectionForEye(const ERenderEye eye, std::shared_ptr<CameraFrame>& frame, const XrCompositionLayerProjection& layer, const XrReferenceSpaceCreateInfo& refSpaceInfo, UVDistortionParameters& distortionParams)

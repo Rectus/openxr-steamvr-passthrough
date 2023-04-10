@@ -8,6 +8,7 @@ struct VS_OUTPUT
 	float3 clipSpaceCoords : TEXCOORD0;
 	float3 screenCoords : TEXCOORD1;
 	float projectionValidity : TEXCOORD2;
+    float3 prevClipSpaceCoords : TEXCOORD3;
 };
 
 
@@ -22,6 +23,8 @@ Texture2D<float2> g_fisheyeCorrectionTexture : register(t6);
 SamplerState g_samplerState : register(s0);
 Texture2D g_cameraFrameTexture : register(t0);
 Texture2D<float2> g_fisheyeCorrectionTexture : register(t1);
+
+RWTexture2D<float4> g_cameraFilter;
 
 #endif
 
@@ -44,9 +47,11 @@ float4 main(VS_OUTPUT input) : SV_TARGET
 	outUvs = outUvs * (g_uvBounds.zw - g_uvBounds.xy) + g_uvBounds.xy;
 	outUvs = clamp(outUvs, g_uvBounds.xy, g_uvBounds.zw);
 
+    float2 correction = 0;
+    
     if (g_bUseFisheyeCorrection)
     {
-        float2 correction = g_fisheyeCorrectionTexture.Sample(g_samplerState, outUvs);
+        correction = g_fisheyeCorrectionTexture.Sample(g_samplerState, outUvs);
         outUvs += correction;
     }
 	else
@@ -56,16 +61,64 @@ float4 main(VS_OUTPUT input) : SV_TARGET
 	
     float3 rgbColor = g_cameraFrameTexture.Sample(g_samplerState, outUvs).xyz;
     
-    if (g_sharpness != 0.0)
+#ifndef VULKAN
+    
+    float2 prevUvs = (input.prevClipSpaceCoords.xy / input.prevClipSpaceCoords.z) * float2(0.5, 0.5) + float2(0.5, 0.5);
+    prevUvs = prevUvs * (g_uvBounds.zw - g_uvBounds.xy) + g_uvBounds.xy;
+    prevUvs = clamp(prevUvs, g_uvBounds.xy, g_uvBounds.zw);
+
+    if (g_bUseFisheyeCorrection)
     {
-        float2 textureSize;
-        g_cameraFrameTexture.GetDimensions(textureSize.x, textureSize.y);
-        rgbColor *= 1 + g_sharpness * 4;
-        rgbColor -= g_cameraFrameTexture.Sample(g_samplerState, outUvs + float2(-1, 0) / textureSize.xy).xyz * g_sharpness;
-        rgbColor -= g_cameraFrameTexture.Sample(g_samplerState, outUvs + float2(1, 0) / textureSize.xy).xyz * g_sharpness;
-        rgbColor -= g_cameraFrameTexture.Sample(g_samplerState, outUvs + float2(0, -1) / textureSize.xy).xyz * g_sharpness;
-        rgbColor -= g_cameraFrameTexture.Sample(g_samplerState, outUvs + float2(0, 1) / textureSize.xy).xyz * g_sharpness;
+        prevUvs += correction;
     }
+    else
+    {
+        prevUvs.y = 1 - prevUvs.y;
+    }
+    uint w, h;
+    g_cameraFilter.GetDimensions(w, h);
+    
+    float2 prevTexCoords = prevUvs * float2(w, h);
+    uint2 prevPixel = floor(prevTexCoords);
+    
+    float4 ul = g_cameraFilter.Load(uint3(prevPixel, 0));
+    
+    float3 filtered = 0;
+    
+    if(ul.w > 0)
+    {
+        float3 ur = g_cameraFilter.Load(uint3(prevPixel + uint2(1, 0), 0)).xyz;
+        float3 dl = g_cameraFilter.Load(uint3(prevPixel + uint2(0, 1), 0)).xyz;
+        float3 dr = g_cameraFilter.Load(uint3(prevPixel + uint2(1, 1), 0)).xyz;
+    
+        float3 top = lerp(ul.xyz, ur, frac(prevTexCoords.x));
+        float3 bottom = lerp(dl, dr, frac(prevTexCoords.x));
+        filtered = lerp(top, bottom, frac(prevTexCoords.y));
+    }
+    
+    float factor = lerp(1, g_sharpness + 1, abs(frac(outUvs.x * w) - 0.5) + abs(frac(outUvs.y * h) - 0.5));
+    //float factor = 0.95;
+    
+    rgbColor = rgbColor * factor + filtered.xyz * (1 - factor);
+    
+    //if (abs(frac(prevTexCoords.x)) < 0.5 && abs(frac(prevTexCoords.y)) < 0.5)
+    {
+        g_cameraFilter[outUvs * float2(w, h)] = float4(rgbColor, 1);
+    }
+    
+    
+#endif
+    
+    //if (g_sharpness != 0.0)
+    //{
+    //    float3 textureSize;
+    //    g_cameraFrameTexture.GetDimensions(0, textureSize.x, textureSize.y, textureSize.z);
+    //    rgbColor *= 1 + g_sharpness * 4;
+    //    rgbColor -= g_cameraFrameTexture.Sample(g_samplerState, outUvs + float2(-1, 0) / textureSize.xy).xyz * g_sharpness;
+    //    rgbColor -= g_cameraFrameTexture.Sample(g_samplerState, outUvs + float2(1, 0) / textureSize.xy).xyz * g_sharpness;
+    //    rgbColor -= g_cameraFrameTexture.Sample(g_samplerState, outUvs + float2(0, -1) / textureSize.xy).xyz * g_sharpness;
+    //    rgbColor -= g_cameraFrameTexture.Sample(g_samplerState, outUvs + float2(0, 1) / textureSize.xy).xyz * g_sharpness;
+    //}
     
 	if (g_bDoColorAdjustment)
 	{

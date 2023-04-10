@@ -8,6 +8,7 @@ struct VS_OUTPUT
 	float3 clipSpaceCoords : TEXCOORD0;
 	float3 screenCoords : TEXCOORD1;
 	float projectionValidity : TEXCOORD2;
+    float3 prevClipSpaceCoords : TEXCOORD3;
 };
 
 SamplerState g_samplerState : register(s0);
@@ -154,10 +155,13 @@ VS_OUTPUT main(float3 inPosition : POSITION, uint vertexID : SV_VertexID)
     }
     
 	
-//#ifndef VULKAN
+#ifndef VULKAN
     float4 outCoords = mul(g_worldToCameraProjection, worldSpacePoint);
 	output.clipSpaceCoords = outCoords.xyw;
-//#endif
+    
+    float4 prevOutCoords = mul(g_prevWorldToCameraProjection, worldSpacePoint);
+    output.prevClipSpaceCoords = prevOutCoords.xyw;
+#endif
 	
     output.position = mul(g_worldToHMDProjection, worldSpacePoint); 
 	output.screenCoords = output.position.xyw;
