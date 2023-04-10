@@ -115,7 +115,7 @@ struct VSViewConstantBuffer
 	XrVector3f hmdViewWorldPos;
 	float projectionDistance;
 	float floorHeightOffset;
-	uint32_t viewIndex;
+	uint32_t cameraViewIndex;
 };
 
 struct PSPassConstantBuffer
@@ -1306,7 +1306,7 @@ void PassthroughRendererDX12::RenderPassthroughView(const ERenderEye eye, const 
 	vsViewBuffer->hmdViewWorldPos = (eye == LEFT_EYE) ? frame->hmdViewPosWorldLeft : frame->hmdViewPosWorldRight;
 	vsViewBuffer->projectionDistance = mainConf.ProjectionDistanceFar;
 	vsViewBuffer->floorHeightOffset = mainConf.FloorHeightOffset;
-	vsViewBuffer->viewIndex = (eye == LEFT_EYE) ? 0 : 1;
+	vsViewBuffer->cameraViewIndex = (eye == LEFT_EYE) ? 0 : 1;
 
 	D3D12_GPU_DESCRIPTOR_HANDLE cbvVSHandle = m_CBVSRVHeap->GetGPUDescriptorHandleForHeapStart();
 	cbvVSHandle.ptr += (INDEX_CBV_VS_VIEW_0 + bufferIndex) * m_CBVSRVHeapDescSize;
@@ -1354,7 +1354,7 @@ void PassthroughRendererDX12::RenderPassthroughView(const ERenderEye eye, const 
 		vsCrossViewBuffer->hmdViewWorldPos = (eye == LEFT_EYE) ? frame->hmdViewPosWorldLeft : frame->hmdViewPosWorldRight;
 		vsCrossViewBuffer->projectionDistance = mainConf.ProjectionDistanceFar;
 		vsCrossViewBuffer->floorHeightOffset = mainConf.FloorHeightOffset;
-		vsCrossViewBuffer->viewIndex = (eye == LEFT_EYE) ? 0 : 1;
+		vsCrossViewBuffer->cameraViewIndex = (eye != LEFT_EYE) ? 0 : 1;
 
 		D3D12_GPU_DESCRIPTOR_HANDLE cbvCrossVSHandle = m_CBVSRVHeap->GetGPUDescriptorHandleForHeapStart();
 		cbvCrossVSHandle.ptr += (INDEX_CBV_VS_VIEW_0 + crossBufferIndex) * m_CBVSRVHeapDescSize;
@@ -1405,7 +1405,7 @@ void PassthroughRendererDX12::RenderPassthroughViewMasked(const ERenderEye eye, 
 	vsViewBuffer->hmdViewWorldPos = (eye == LEFT_EYE) ? frame->hmdViewPosWorldLeft : frame->hmdViewPosWorldRight;
 	vsViewBuffer->projectionDistance = mainConf.ProjectionDistanceFar;
 	vsViewBuffer->floorHeightOffset = mainConf.FloorHeightOffset;
-	vsViewBuffer->viewIndex = (eye == LEFT_EYE) ? 0 : 1;
+	vsViewBuffer->cameraViewIndex = (eye == LEFT_EYE) ? 0 : 1;
 
 	D3D12_GPU_DESCRIPTOR_HANDLE cbvVSHandle = m_CBVSRVHeap->GetGPUDescriptorHandleForHeapStart();
 	cbvVSHandle.ptr += (INDEX_CBV_VS_VIEW_0 + bufferIndex) * m_CBVSRVHeapDescSize;
@@ -1528,7 +1528,7 @@ void PassthroughRendererDX12::RenderPassthroughViewMasked(const ERenderEye eye, 
 		vsCrossViewBuffer->hmdViewWorldPos = (eye == LEFT_EYE) ? frame->hmdViewPosWorldLeft : frame->hmdViewPosWorldRight;
 		vsCrossViewBuffer->projectionDistance = mainConf.ProjectionDistanceFar;
 		vsCrossViewBuffer->floorHeightOffset = mainConf.FloorHeightOffset;
-		vsCrossViewBuffer->viewIndex = (eye == LEFT_EYE) ? 0 : 1;
+		vsCrossViewBuffer->cameraViewIndex = (eye != LEFT_EYE) ? 0 : 1;
 
 		D3D12_GPU_DESCRIPTOR_HANDLE cbvCrossVSHandle = m_CBVSRVHeap->GetGPUDescriptorHandleForHeapStart();
 		cbvCrossVSHandle.ptr += (INDEX_CBV_VS_VIEW_0 + crossBufferIndex) * m_CBVSRVHeapDescSize;
