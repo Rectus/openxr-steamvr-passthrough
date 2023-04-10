@@ -103,6 +103,8 @@ float4 main(VS_OUTPUT input) : SV_TARGET
             }
         }
     }
+    
+    rgbColor = g_bPremultiplyAlpha ? rgbColor * g_opacity * alpha : rgbColor;
 	
     return float4(rgbColor, g_opacity * alpha);
 }

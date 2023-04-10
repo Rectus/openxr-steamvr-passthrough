@@ -138,6 +138,7 @@ struct PSViewConstantBuffer
 	XrVector4f prepassUVBounds;
 	uint32_t rtArrayIndex;
 	uint32_t bDoCutout;
+	uint32_t bPremultiplyAlpha;
 };
 
 struct PSMaskedConstantBuffer
@@ -1506,6 +1507,9 @@ void PassthroughRendererDX12::RenderPassthroughViewMasked(const ERenderEye eye, 
 	m_commandList->DrawIndexedInstanced(numIndices, 1, 0, 0, 0);
 
 
+	TransitionResource(m_commandList.Get(), m_intermediateRenderTargets[intermediateRTIndex].Get(), D3D12_RESOURCE_STATE_PIXEL_SHADER_RESOURCE, D3D12_RESOURCE_STATE_RENDER_TARGET);
+
+
 	if (stereoConf.StereoCutoutEnabled)
 	{
 		float secondaryWidthFactor = 0.6f;
@@ -1514,22 +1518,34 @@ void PassthroughRendererDX12::RenderPassthroughViewMasked(const ERenderEye eye, 
 		scissor = { rect.offset.x + scissorStart, rect.offset.y, rect.offset.x + scissorEnd, rect.offset.y + rect.extent.height };
 		m_commandList->RSSetScissorRects(1, &scissor);
 
-		vsViewBuffer->frameUVBounds = GetFrameUVBounds(eye == LEFT_EYE ? RIGHT_EYE : LEFT_EYE, frame->frameLayout);
-		vsViewBuffer->cameraProjectionToWorld = (eye != LEFT_EYE) ? frame->cameraProjectionToWorldLeft : frame->cameraProjectionToWorldRight;
-		vsViewBuffer->worldToCameraProjection = (eye != LEFT_EYE) ? frame->worldToCameraProjectionLeft : frame->worldToCameraProjectionRight;
-		vsViewBuffer->hmdViewWorldPos = (eye != LEFT_EYE) ? frame->hmdViewPosWorldLeft : frame->hmdViewPosWorldRight;
-		m_commandList->SetGraphicsRootDescriptorTable(6, cbvVSHandle);
+		int crossBufferIndex = NUM_SWAPCHAINS * 2 + bufferIndex;
+		VSViewConstantBuffer* vsCrossViewBuffer = (VSViewConstantBuffer*)m_vsViewConstantBufferCPUData[crossBufferIndex];
 
-		psViewBuffer->frameUVBounds = GetFrameUVBounds(eye == LEFT_EYE ? RIGHT_EYE : LEFT_EYE, frame->frameLayout);
-		psViewBuffer->bDoCutout = true;
-		m_commandList->SetGraphicsRootDescriptorTable(1, cbvPSHandle);
+		vsCrossViewBuffer->cameraProjectionToWorld = (eye != LEFT_EYE) ? frame->cameraProjectionToWorldLeft : frame->cameraProjectionToWorldRight;
+		vsCrossViewBuffer->worldToCameraProjection = (eye != LEFT_EYE) ? frame->worldToCameraProjectionLeft : frame->worldToCameraProjectionRight;
+		vsCrossViewBuffer->worldToHMDProjection = (eye == LEFT_EYE) ? frame->worldToHMDProjectionLeft : frame->worldToHMDProjectionRight;
+		vsCrossViewBuffer->frameUVBounds = GetFrameUVBounds(eye == LEFT_EYE ? RIGHT_EYE : LEFT_EYE, frame->frameLayout);
+		vsCrossViewBuffer->hmdViewWorldPos = (eye == LEFT_EYE) ? frame->hmdViewPosWorldLeft : frame->hmdViewPosWorldRight;
+		vsCrossViewBuffer->projectionDistance = mainConf.ProjectionDistanceFar;
+		vsCrossViewBuffer->floorHeightOffset = mainConf.FloorHeightOffset;
+		vsCrossViewBuffer->viewIndex = (eye == LEFT_EYE) ? 0 : 1;
+
+		D3D12_GPU_DESCRIPTOR_HANDLE cbvCrossVSHandle = m_CBVSRVHeap->GetGPUDescriptorHandleForHeapStart();
+		cbvCrossVSHandle.ptr += (INDEX_CBV_VS_VIEW_0 + crossBufferIndex) * m_CBVSRVHeapDescSize;
+		m_commandList->SetGraphicsRootDescriptorTable(6, cbvCrossVSHandle);
+
+		PSViewConstantBuffer* psCrossViewBuffer = (PSViewConstantBuffer*)m_psViewConstantBufferCPUData[crossBufferIndex];
+		psCrossViewBuffer->frameUVBounds = GetFrameUVBounds(eye == LEFT_EYE ? RIGHT_EYE : LEFT_EYE, frame->frameLayout);
+		psCrossViewBuffer->rtArrayIndex = m_frameIndex;
+		psCrossViewBuffer->bDoCutout = true;
+
+		D3D12_GPU_DESCRIPTOR_HANDLE cbvCrossPSHandle = m_CBVSRVHeap->GetGPUDescriptorHandleForHeapStart();
+		cbvCrossPSHandle.ptr += (INDEX_CBV_PS_VIEW_0 + crossBufferIndex) * m_CBVSRVHeapDescSize;
+		m_commandList->SetGraphicsRootDescriptorTable(1, cbvCrossPSHandle);
 
 		m_commandList->SetPipelineState(m_psoCutoutPass.Get());
 		m_commandList->DrawIndexedInstanced(numIndices, 1, 0, 0, 0);
 	}
-
-
-	TransitionResource(m_commandList.Get(), m_intermediateRenderTargets[intermediateRTIndex].Get(), D3D12_RESOURCE_STATE_PIXEL_SHADER_RESOURCE, D3D12_RESOURCE_STATE_RENDER_TARGET);
 }
 
 

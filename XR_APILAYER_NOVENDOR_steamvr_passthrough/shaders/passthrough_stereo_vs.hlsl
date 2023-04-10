@@ -53,14 +53,14 @@ VS_OUTPUT main(float3 inPosition : POSITION, uint vertexID : SV_VertexID)
     {
         // Hack that causes some artifacting. Ideally patch any holes or discard and render behind instead.
         disparity = defaultDisparity;
-        output.projectionValidity = -1000;
+        output.projectionValidity = -10000;
     }
     // Prevent filtering if it would sample across the image edge
     else if (uvPos.x < maxFilterWidth || uvPos.x >= g_disparityTextureSize.x - maxFilterWidth || 
              uvPos.y < maxFilterWidth || uvPos.y >= g_disparityTextureSize.y - maxFilterWidth)
     {
         disparity = defaultDisparity;
-        output.projectionValidity = -10000;
+        output.projectionValidity = -100;
     }
     else if (confidence < 0.5)
     {

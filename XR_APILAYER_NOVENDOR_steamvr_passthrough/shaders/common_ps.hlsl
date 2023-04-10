@@ -20,6 +20,7 @@ cbuffer psViewConstantBuffer
 	float4 g_uvPrepassBounds;
 	uint g_arrayIndex;
 	bool g_doCutout;
+    bool g_bPremultiplyAlpha;
 };
 
 #else
@@ -30,6 +31,7 @@ cbuffer psViewConstantBuffer : register(b1)
     float4 g_uvPrepassBounds;
     uint g_arrayIndex;
     bool g_doCutout;
+    bool g_bPremultiplyAlpha;
 };
 
 #endif

@@ -124,6 +124,8 @@ float4 main(VS_OUTPUT input) : SV_TARGET
             }
         }
     }
+    
+    cameraColor = g_bPremultiplyAlpha ? cameraColor * alpha : cameraColor;
 
 	return float4(cameraColor, alpha);
 }

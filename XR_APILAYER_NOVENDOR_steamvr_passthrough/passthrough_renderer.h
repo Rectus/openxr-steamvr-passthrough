@@ -153,8 +153,8 @@ private:
 	ComPtr<ID3D11RasterizerState> m_rasterizerState;
 	ComPtr<ID3D11RasterizerState> m_rasterizerStateDepthBias;
 
-	ComPtr<ID3D11BlendState> m_blendStateBase;
-	ComPtr<ID3D11BlendState> m_blendStateAlphaPremultiplied;
+	ComPtr<ID3D11BlendState> m_blendStateDestAlpha;
+	ComPtr<ID3D11BlendState> m_blendStateDestAlphaPremultiplied;
 	ComPtr<ID3D11BlendState> m_blendStateSrcAlpha;
 	ComPtr<ID3D11BlendState> m_blendStatePrepassInverseAppAlpha;
 	ComPtr<ID3D11BlendState> m_blendStatePrepassUseAppAlpha;

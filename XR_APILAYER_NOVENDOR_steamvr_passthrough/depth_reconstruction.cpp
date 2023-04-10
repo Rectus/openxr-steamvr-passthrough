@@ -457,13 +457,7 @@ void DepthReconstruction::RunThread()
             m_wlsFilterLeft->setSigmaColor(stereoConfig.StereoWLS_Sigma);
             m_wlsFilterLeft->setDepthDiscontinuityRadius((int)ceil(stereoConfig.StereoWLS_ConfidenceRadius * stereoConfig.StereoBlockSize));
 
-            m_wlsFilterLeft->filter(m_rawDisparityLeft, m_scaledExtFrameLeft, m_filteredDisparityLeft, m_rawDisparityRight, filterROI, m_scaledExtFrameRight);
-
-            m_confidenceLeft = m_wlsFilterLeft->getConfidenceMap();
-            m_confidenceRight = m_wlsFilterLeft->getConfidenceMap();
-
-            outputMatrixLeft = &m_filteredDisparityLeft;
-            outputMatrixRight = &m_filteredDisparityLeft;
+            m_wlsFilterLeft->filter(m_rawDisparityLeft, m_scaledExtFrameLeft, m_filteredDisparityLeft, m_rawDisparityRight, cv::Rect(), m_scaledExtFrameRight);
 
 
             if (m_bDisparityBothEyes)
@@ -476,10 +470,21 @@ void DepthReconstruction::RunThread()
 
                 m_wlsFilterRight->filter(m_rawDisparityRight, m_scaledExtFrameRight, m_filteredDisparityRight, m_rawDisparityLeft, filterROI, m_scaledExtFrameLeft);
 
+                m_confidenceLeft = m_wlsFilterLeft->getConfidenceMap();
                 m_confidenceRight = m_wlsFilterRight->getConfidenceMap();
 
+                outputMatrixLeft = &m_filteredDisparityLeft;
                 outputMatrixRight = &m_filteredDisparityRight;
             }
+            else
+            {
+                m_confidenceLeft = m_wlsFilterLeft->getConfidenceMap();
+                m_confidenceRight = m_wlsFilterLeft->getConfidenceMap();
+
+                outputMatrixLeft = &m_filteredDisparityLeft;
+                outputMatrixRight = &m_filteredDisparityLeft;
+            }
+
 
             if (stereoConfig.StereoFiltering == StereoFiltering_WLS_FBS)
             {
