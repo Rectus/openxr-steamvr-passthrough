@@ -42,7 +42,7 @@ struct VSViewConstantBuffer
 	XrVector3f hmdViewWorldPos;
 	float projectionDistance;
 	float floorHeightOffset;
-	uint32_t viewIndex;
+	uint32_t cameraViewIndex;
 };
 
 struct PSPassConstantBuffer
@@ -1008,7 +1008,7 @@ void PassthroughRendererDX11::RenderPassthroughView(const ERenderEye eye, const 
 	vsViewBuffer.hmdViewWorldPos = (eye == LEFT_EYE) ? frame->hmdViewPosWorldLeft : frame->hmdViewPosWorldRight;
 	vsViewBuffer.projectionDistance = mainConf.ProjectionDistanceFar;
 	vsViewBuffer.floorHeightOffset = mainConf.FloorHeightOffset;
-	vsViewBuffer.viewIndex = (eye == LEFT_EYE) ? 0 : 1;
+	vsViewBuffer.cameraViewIndex = (eye == LEFT_EYE) ? 0 : 1;
 	
 	m_renderContext->UpdateSubresource(m_vsViewConstantBuffer[bufferIndex].Get(), 0, nullptr, &vsViewBuffer, 0, 0);
 	
@@ -1082,6 +1082,7 @@ void PassthroughRendererDX11::RenderPassthroughView(const ERenderEye eye, const 
 		vsCrossBuffer.frameUVBounds = GetFrameUVBounds(eye == LEFT_EYE ? RIGHT_EYE : LEFT_EYE, frame->frameLayout);
 		vsCrossBuffer.cameraProjectionToWorld = (eye != LEFT_EYE) ? frame->cameraProjectionToWorldLeft : frame->cameraProjectionToWorldRight;
 		vsCrossBuffer.worldToCameraProjection = (eye != LEFT_EYE) ? frame->worldToCameraProjectionLeft : frame->worldToCameraProjectionRight;
+		vsCrossBuffer.cameraViewIndex = (eye != LEFT_EYE) ? 0 : 1;
 		//vsCrossBuffer.hmdViewWorldPos = (eye != LEFT_EYE) ? frame->hmdViewPosWorldLeft : frame->hmdViewPosWorldRight;
 		m_renderContext->UpdateSubresource(m_vsViewConstantBuffer[bufferIndex].Get(), 0, nullptr, &vsCrossBuffer, 0, 0);
 
@@ -1164,7 +1165,7 @@ void PassthroughRendererDX11::RenderPassthroughViewMasked(const ERenderEye eye, 
 	vsViewBuffer.hmdViewWorldPos = (eye == LEFT_EYE) ? frame->hmdViewPosWorldLeft : frame->hmdViewPosWorldRight;
 	vsViewBuffer.projectionDistance = mainConf.ProjectionDistanceFar;
 	vsViewBuffer.floorHeightOffset = mainConf.FloorHeightOffset;
-	vsViewBuffer.viewIndex = (eye == LEFT_EYE) ? 0 : 1;
+	vsViewBuffer.cameraViewIndex = (eye == LEFT_EYE) ? 0 : 1;
 
 	m_renderContext->UpdateSubresource(m_vsViewConstantBuffer[bufferIndex].Get(), 0, nullptr, &vsViewBuffer, 0, 0);
 
@@ -1290,6 +1291,7 @@ void PassthroughRendererDX11::RenderPassthroughViewMasked(const ERenderEye eye, 
 		vsCrossBuffer.frameUVBounds = GetFrameUVBounds(eye == LEFT_EYE ? RIGHT_EYE : LEFT_EYE, frame->frameLayout);
 		vsCrossBuffer.cameraProjectionToWorld = (eye != LEFT_EYE) ? frame->cameraProjectionToWorldLeft : frame->cameraProjectionToWorldRight;
 		vsCrossBuffer.worldToCameraProjection = (eye != LEFT_EYE) ? frame->worldToCameraProjectionLeft : frame->worldToCameraProjectionRight;
+		vsCrossBuffer.cameraViewIndex = (eye == LEFT_EYE) ? 0 : 1;
 		m_renderContext->UpdateSubresource(m_vsViewConstantBuffer[bufferIndex].Get(), 0, nullptr, &vsCrossBuffer, 0, 0);
 
 		PSViewConstantBuffer psCrossBuffer = psViewBuffer;

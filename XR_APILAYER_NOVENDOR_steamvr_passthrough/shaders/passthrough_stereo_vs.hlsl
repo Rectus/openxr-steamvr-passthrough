@@ -45,6 +45,13 @@ VS_OUTPUT main(float3 inPosition : POSITION, uint vertexID : SV_VertexID)
     float defaultDisparity = g_disparityToDepth[2][3] /
     (min(2.0, g_projectionDistance) * 2048.0 * g_disparityDownscaleFactor * g_disparityToDepth[3][2]);
 
+    if(g_viewIndex == 1)
+    {
+        maxDisparity = -minDisparity;
+        minDisparity = -0.0465;
+        defaultDisparity *= -1;
+
+    }
     
     
     uint maxFilterWidth = max(g_disparityFilterWidth, (int)ceil(g_cutoutFilterWidth));
@@ -81,11 +88,11 @@ VS_OUTPUT main(float3 inPosition : POSITION, uint vertexID : SV_VertexID)
             float dispDR = g_disparityTexture.SampleLevel(g_samplerState, disparityUVs + float2(1, 1) * fac, 0).x;
             
             float filterX = (g_viewIndex == 0) ? max(0, dispUL + dispL * 2 + dispDL - dispUR - dispR * 2 - dispDR) :
-                max(0, -dispUL - dispL * 2 - dispDL + dispUR + dispR * 2 + dispDR);
+                min(0, dispUL + dispL * 2 + dispDL - dispUR - dispR * 2 - dispDR);
             
             float filterY = dispUL + dispU * 2 + dispUR - dispDL - dispD * 2 - dispDR;
             
-            float filter = sqrt(pow(filterX, 2) + pow(filterY, 2));          
+            float filter = sqrt(pow(filterX, 2) + pow(filterY, 2));
 
             output.projectionValidity = 1 + g_cutoutOffset - 100 * g_cutoutFactor * filter;
         }
@@ -113,6 +120,8 @@ VS_OUTPUT main(float3 inPosition : POSITION, uint vertexID : SV_VertexID)
         disparity = outDisp / totalWeight;
         }
     }
+    
+    disparity *= (g_viewIndex == 1) ? -1 : 1;
 
     float2 texturePos = inPosition.xy * g_disparityTextureSize * float2(0.5, 1) * g_disparityDownscaleFactor;
 
