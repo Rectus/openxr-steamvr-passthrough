@@ -45,14 +45,41 @@ inline float3 lanczos(float2 uvs, float2 res)
     float3 output = 0;
     float totalWeight = 0;
     
-    for (int y = -LANCZOS_TAPS; y < LANCZOS_TAPS; y++)
+    for (int y = -LANCZOS_TAPS; y <= LANCZOS_TAPS; y++)
     {
-        for (int x = -LANCZOS_TAPS; x < LANCZOS_TAPS; x++)
+        for (int x = -LANCZOS_TAPS; x <= LANCZOS_TAPS; x++)
         {
             float weight = lanczosWeight(x - offset.x, LANCZOS_TAPS) * lanczosWeight(y - offset.y, LANCZOS_TAPS);
             
             output += g_cameraFrameTexture.Load(uint3(floor(uvs * res) + int2(x, y), 0)).rgb * weight;
             //output += weight * g_cameraFrameTexture.Sample(g_samplerState, center + float2(x, y) * res).rgb;
+            totalWeight += weight;
+        }
+    }
+    
+    return output / totalWeight;
+}
+
+float blackmanSincWeight(float distance, float n)
+{
+    return (distance == 0) ? 1 : (distance * distance < n * n ? sinc(distance) * 
+        (0.42 + 0.5 * cos(2 * PI * distance / n) + 0.08 * cos(4 * PI * distance / n)) : 0);
+}
+
+float3 blackmanSinc(float2 uvs, float2 res)
+{
+    float2 offset = (((uvs * res) % 1) - 0.5);
+    
+    float3 output = 0;
+    float totalWeight = 0;
+    
+    for (int y = -2; y <= 2; y++)
+    {
+        for (int x = -2; x <= 2; x++)
+        {
+            float weight = blackmanSincWeight(x - offset.x, 2) * blackmanSincWeight(y - offset.y, 2);
+            
+            output += g_cameraFrameTexture.Load(uint3(floor(uvs * res) + int2(x, y), 0)).rgb * weight;
             totalWeight += weight;
         }
     }
@@ -131,13 +158,14 @@ float4 main(VS_OUTPUT input) : SV_TARGET
     {
         float2 textureSize;
         g_cameraFrameTexture.GetDimensions(textureSize.x, textureSize.y);
-        //rgbColor *= 1 + g_sharpness * 4;
-        //rgbColor -= g_cameraFrameTexture.Sample(g_samplerState, outUvs + float2(-1, 0) / textureSize.xy).xyz * g_sharpness;
-        //rgbColor -= g_cameraFrameTexture.Sample(g_samplerState, outUvs + float2(1, 0) / textureSize.xy).xyz * g_sharpness;
-        //rgbColor -= g_cameraFrameTexture.Sample(g_samplerState, outUvs + float2(0, -1) / textureSize.xy).xyz * g_sharpness;
-        //rgbColor -= g_cameraFrameTexture.Sample(g_samplerState, outUvs + float2(0, 1) / textureSize.xy).xyz * g_sharpness;
+        rgbColor *= 1 + g_sharpness * 4;
+        rgbColor -= g_cameraFrameTexture.Sample(g_samplerState, outUvs + float2(-1, 0) / textureSize.xy).xyz * g_sharpness;
+        rgbColor -= g_cameraFrameTexture.Sample(g_samplerState, outUvs + float2(1, 0) / textureSize.xy).xyz * g_sharpness;
+        rgbColor -= g_cameraFrameTexture.Sample(g_samplerState, outUvs + float2(0, -1) / textureSize.xy).xyz * g_sharpness;
+        rgbColor -= g_cameraFrameTexture.Sample(g_samplerState, outUvs + float2(0, 1) / textureSize.xy).xyz * g_sharpness;
         
-        rgbColor = lanczos(outUvs, textureSize);
+        //rgbColor = lanczos(outUvs, textureSize);
+        //rgbColor = blackmanSinc(outUvs, textureSize);
         //rgbColor = nonlinearFiltering(outUvs, textureSize);
 
     }
