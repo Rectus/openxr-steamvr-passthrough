@@ -198,21 +198,42 @@ inline void ScrollableSliderInt(const char* label, int* v, int v_min, int v_max,
 	}
 }
 
+#define IMGUI_BIG_SPACING ImGui::Dummy(ImVec2(0.0f, 20.0f))
+
 inline void DashboardMenu::TextDescription(const char* fmt, ...)
 {
-	ImGui::Indent();
-	ImGui::PushFont(m_smallFont);
-	ImGui::PushTextWrapPos(ImGui::GetContentRegionAvail().x);
-	va_list args;
-	va_start(args, fmt);
-	ImGui::TextColored(ImVec4(0.6f, 0.6f, 0.6f, 1.0f), fmt, args);
-	va_end(args);
-	ImGui::PopTextWrapPos();
-	ImGui::PopFont();
-	ImGui::Unindent();
+	if (m_configManager->GetConfig_Main().ShowSettingDescriptions)
+	{
+		ImGui::Indent();
+		ImGui::PushFont(m_smallFont);
+		ImGui::PushTextWrapPos(ImGui::GetContentRegionAvail().x);
+		va_list args;
+		va_start(args, fmt);
+		ImGui::TextColored(ImVec4(0.6f, 0.6f, 0.6f, 1.0f), fmt, args);
+		va_end(args);
+		ImGui::PopTextWrapPos();
+		ImGui::PopFont();
+		ImGui::Unindent();
+	}
 }
 
-#define IMGUI_BIG_SPACING ImGui::Dummy(ImVec2(0.0f, 20.0f))
+inline void DashboardMenu::TextDescriptionSpaced(const char* fmt, ...)
+{
+	if (m_configManager->GetConfig_Main().ShowSettingDescriptions)
+	{
+		ImGui::Indent();
+		ImGui::PushFont(m_smallFont);
+		ImGui::PushTextWrapPos(ImGui::GetContentRegionAvail().x);
+		va_list args;
+		va_start(args, fmt);
+		ImGui::TextColored(ImVec4(0.6f, 0.6f, 0.6f, 1.0f), fmt, args);
+		va_end(args);
+		ImGui::PopTextWrapPos();
+		ImGui::PopFont();
+		ImGui::Unindent();
+		IMGUI_BIG_SPACING;
+	}
+}
 
 inline void BeginSoftDisabled(bool bIsDisabled)
 {
@@ -248,6 +269,7 @@ void DashboardMenu::TickMenu()
 
 	ImVec4 colorTextGreen(0.2f, 0.8f, 0.2f, 1.0f);
 	ImVec4 colorTextRed(0.8f, 0.2f, 0.2f, 1.0f);
+	ImVec4 colorTextOrange(0.85f, 0.7f, 0.2f, 1.0f);
 
 	ImGuiIO& io = ImGui::GetIO();
 
@@ -284,7 +306,7 @@ if (bIsActiveTab) { ImGui::PopStyleColor(1); bIsActiveTab = false; }
 	TAB_BUTTON("Debug", TabDebug);
 
 
-	ImGui::BeginChild("Sep1", ImVec2(0, 70));
+	ImGui::BeginChild("Sep1", ImVec2(0, 40));
 	ImGui::EndChild();
 
 	ImGui::PushFont(m_smallFont);
@@ -299,6 +321,15 @@ if (bIsActiveTab) { ImGui::PopStyleColor(1); bIsActiveTab = false; }
 	ImGui::Separator();
 	ImGui::Text("Passthrough:");
 	m_displayValues.bCorePassthroughActive ? ImGui::TextColored(colorTextGreen, "Active") : ImGui::TextColored(colorTextRed, "Inactive");
+
+	if (coreConfig.CoreForcePassthrough || depthConfig.DepthForceComposition)
+	{
+		ImGui::Separator();
+		ImGui::Text("Override:");
+		if (depthConfig.DepthForceComposition) { ImGui::TextColored(colorTextOrange, "Depth Composition"); }
+		if (coreConfig.CoreForcePassthrough) { ImGui::TextColored(colorTextOrange, "Passthrough Mode"); }	
+	}
+
 	ImGui::Unindent();
 	ImGui::PopFont();
 
@@ -345,8 +376,7 @@ if (bIsActiveTab) { ImGui::PopStyleColor(1); bIsActiveTab = false; }
 			{
 				mainConfig.ProjectionMode = Projection_StereoReconstruction;
 			}
-			TextDescription("Full depth estimation.");
-			IMGUI_BIG_SPACING;
+			TextDescriptionSpaced("Full depth estimation.");
 
 			ImGui::SetNextItemOpen(true, ImGuiCond_Once);
 			if (ImGui::TreeNode("Image Controls"))
@@ -357,6 +387,7 @@ if (bIsActiveTab) { ImGui::PopStyleColor(1); bIsActiveTab = false; }
 				ScrollableSlider("Contrast", &mainConfig.Contrast, 0.0f, 2.0f, "%.1f", 0.1f);
 				ScrollableSlider("Saturation", &mainConfig.Saturation, 0.0f, 2.0f, "%.1f", 0.1f);
 				ScrollableSlider("Sharpness", &mainConfig.Sharpness, -1.0f, 1.0f, "%.1f", 0.1f);
+				if (fabsf(mainConfig.Sharpness) < 0.1) { mainConfig.Sharpness = 0.0f; }
 				ImGui::PopItemWidth();
 				IMGUI_BIG_SPACING;
 
@@ -371,25 +402,27 @@ if (bIsActiveTab) { ImGui::PopStyleColor(1); bIsActiveTab = false; }
 
 			ImGui::SetNextItemWidth(ImGui::GetContentRegionAvail().x * 0.45f);
 			ScrollableSlider("Depth Offset Calibration", &mainConfig.DepthOffsetCalibration, 0.5f, 1.5f, "%.2f", 0.01f);
-			TextDescription("Calibration to compensate for incorrect distance between stereo cameras.");
-
-			IMGUI_BIG_SPACING;
+			TextDescriptionSpaced("Calibration to compensate for incorrect distance between stereo cameras.");
 
 			ImGui::SetNextItemWidth(ImGui::GetContentRegionAvail().x * 0.45f);
 			ScrollableSlider("Projection Distance (m)", &mainConfig.ProjectionDistanceFar, 0.5f, 20.0f, "%.1f", 0.1f);
-			TextDescription("The horizontal projection distance in 2D modes, and maximum projection distance in the 3D mode.");
-			IMGUI_BIG_SPACING;
+			TextDescriptionSpaced("The horizontal projection distance in 2D modes, and maximum projection distance in the 3D mode.");
 
 			ImGui::SetNextItemWidth(ImGui::GetContentRegionAvail().x * 0.45f);
 			ScrollableSlider("Floor Height Offset (m)", &mainConfig.FloorHeightOffset, 0.0f, 2.0f, "%.2f", 0.01f);
-			TextDescription("Allows setting the floor height higher in the 2D modes,\nfor example to have correct projection on a table surface.");
-			IMGUI_BIG_SPACING;
+			TextDescriptionSpaced("Allows setting the floor height higher in the 2D modes,\nfor example to have correct projection on a table surface.");
 			
 			ImGui::SetNextItemWidth(ImGui::GetContentRegionAvail().x * 0.45f);
 			ScrollableSlider("Field of View Scale", &mainConfig.FieldOfViewScale, 0.0f, 1.0f, "%.1f", 0.1f);
-			TextDescription("Sets the size of the rendered area in the Custom 2D and Stereo 3D projection modes.");
+			TextDescriptionSpaced("Sets the size of the rendered area in the Custom 2D and Stereo 3D projection modes.");
 
-		}	
+		}
+
+		ImGui::SetNextItemOpen(true, ImGuiCond_Once);
+		if (ImGui::CollapsingHeader("UI Settings"))
+		{
+			ImGui::Checkbox("Show Descriptions", &mainConfig.ShowSettingDescriptions);
+		}
 		IMGUI_BIG_SPACING;
 
 		ImGui::EndChild();
@@ -404,8 +437,7 @@ if (bIsActiveTab) { ImGui::PopStyleColor(1); bIsActiveTab = false; }
 		ImGui::SetNextItemOpen(true, ImGuiCond_Once);
 		if (ImGui::CollapsingHeader("OpenXR Core"))
 		{
-			TextDescription("Options for application controlled passthrough features built into the OpenXR core specification. Allows using the environment blend modes for passthrough.");
-			IMGUI_BIG_SPACING;
+			TextDescriptionSpaced("Options for application controlled passthrough features built into the OpenXR core specification. Allows using the environment blend modes for passthrough.");
 
 			ImGui::PushFont(m_fixedFont);
 			ImGui::Text("Core passthrough:");
@@ -430,9 +462,7 @@ if (bIsActiveTab) { ImGui::PopStyleColor(1); bIsActiveTab = false; }
 			IMGUI_BIG_SPACING;
 
 			ImGui::Checkbox("Enable###CoreEnable", &coreConfig.CorePassthroughEnable);
-			TextDescription("Allow OpenXR applications to enable passthrough.");
-
-			IMGUI_BIG_SPACING;
+			TextDescriptionSpaced("Allow OpenXR applications to enable passthrough.");
 
 			ImGui::BeginGroup();
 			ImGui::Text("Blend Modes");
@@ -496,8 +526,7 @@ if (bIsActiveTab) { ImGui::PopStyleColor(1); bIsActiveTab = false; }
 		ImGui::SetNextItemOpen(true, ImGuiCond_Once);
 		if (ImGui::CollapsingHeader("Settings"))
 		{
-			TextDescription("Settings for the 3D stereo reconstuction.");
-			IMGUI_BIG_SPACING;
+			TextDescriptionSpaced("Settings for the 3D stereo reconstuction.");
 
 			ImGui::BeginGroup();
 			ImGui::Text("Filtering");
@@ -524,22 +553,17 @@ if (bIsActiveTab) { ImGui::PopStyleColor(1); bIsActiveTab = false; }
 
 			ImGui::SetNextItemWidth(ImGui::GetContentRegionAvail().x * 0.45f);
 			ScrollableSliderInt("Image Downscale Factor", &stereoCustomConfig.StereoDownscaleFactor, 1, 16, "%d", 1);
-			TextDescription("Ratio of the stereo processed image to the camera frame. Larger values will improve performance.");
-			IMGUI_BIG_SPACING;
+			TextDescriptionSpaced("Ratio of the stereo processed image to the camera frame. Larger values will improve performance.");
 
 			ImGui::SetNextItemWidth(ImGui::GetContentRegionAvail().x * 0.45f);
 			ScrollableSliderInt("Disparity Smoothing", &stereoCustomConfig.StereoDisparityFilterWidth, 0, 20, "%d", 1);
-			TextDescription("Applies smoothing to areas with low projection confidence.");
-
-			IMGUI_BIG_SPACING;
+			TextDescriptionSpaced("Applies smoothing to areas with low projection confidence.");
 
 			ImGui::Checkbox("Calculate Disparity for Both Cameras", &stereoCustomConfig.StereoDisparityBothEyes);
-			TextDescription("Calculates a separate disparity map for each camera, instead of using the left one for both.");
-			IMGUI_BIG_SPACING;
+			TextDescriptionSpaced("Calculates a separate disparity map for each camera, instead of using the left one for both.");
 
 			ImGui::Checkbox("Composite Both Cameras for Each Eye", &stereoCustomConfig.StereoCutoutEnabled);
-			TextDescription("Detects areas occluded to the main camera and renders them with the other camera where possible.");
-			IMGUI_BIG_SPACING;
+			TextDescriptionSpaced("Detects areas occluded to the main camera and renders them with the other camera where possible.");
 
 			BeginSoftDisabled(!stereoCustomConfig.StereoCutoutEnabled);
 			ImGui::Indent();
@@ -558,8 +582,7 @@ if (bIsActiveTab) { ImGui::PopStyleColor(1); bIsActiveTab = false; }
 			if (ImGui::TreeNode("Performance"))
 			{
 				ImGui::Checkbox("Use Multiple Cores", &stereoCustomConfig.StereoUseMulticore);
-				TextDescription("Allows the stereo calculations to use multiple CPU cores. This can be turned off for CPU limited applications.");
-				IMGUI_BIG_SPACING;
+				TextDescriptionSpaced("Allows the stereo calculations to use multiple CPU cores. This can be turned off for CPU limited applications.");
 
 				ImGui::SetNextItemWidth(ImGui::GetContentRegionAvail().x * 0.45f);
 				ScrollableSliderInt("Frame Skip Ratio", &stereoCustomConfig.StereoFrameSkip, 0, 14, "%d", 1);
@@ -579,8 +602,7 @@ if (bIsActiveTab) { ImGui::PopStyleColor(1); bIsActiveTab = false; }
 			TextDescription("Mesh with smoother corners for less artifacting. May introduce warping.");
 
 			ImGui::Checkbox("Rectification Filtering", &stereoCustomConfig.StereoRectificationFiltering);
-			TextDescription("Applies linear filtering before stereo processing.");
-			IMGUI_BIG_SPACING;
+			TextDescriptionSpaced("Applies linear filtering before stereo processing.");
 
 			ImGui::SetNextItemOpen(true, ImGuiCond_Once);
 			if (ImGui::TreeNode("Block Matching"))

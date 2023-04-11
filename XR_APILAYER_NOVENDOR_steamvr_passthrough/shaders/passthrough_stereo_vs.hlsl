@@ -1,5 +1,6 @@
 
 #include "common_vs.hlsl"
+#include "util.hlsl"
 
 struct VS_OUTPUT
 {
@@ -16,8 +17,9 @@ Texture2D<float2> g_disparityTexture : register(t0);
 float gaussian(float2 value)
 {
     return exp(-0.5 * dot(value /= (g_disparityFilterWidth * 2 * 0.25), value)) / 
-        (2 * 3.14 * pow(g_disparityFilterWidth * 2 * 0.25, 2));
+        (2 * PI * pow(g_disparityFilterWidth * 2 * 0.25, 2));
 }
+
 
 
 VS_OUTPUT main(float3 inPosition : POSITION, uint vertexID : SV_VertexID)
@@ -108,7 +110,7 @@ VS_OUTPUT main(float3 inPosition : POSITION, uint vertexID : SV_VertexID)
             {
                 for (int y = -g_disparityFilterWidth; y <= g_disparityFilterWidth; y++)
                 {
-                    float2 offset = float2(x, y) / (float)g_disparityTextureSize;
+                    float2 offset = float2(x, y) / (float) g_disparityTextureSize;
                     float sampleDisp = g_disparityTexture.SampleLevel(g_samplerState, disparityUVs + offset, 0).x;
                     //float sampleDisp = g_disparityTexture.Load(uvPos + uint3(x, y, 0)).x;
                     float weight = gaussian(float2(x, y));
@@ -117,7 +119,7 @@ VS_OUTPUT main(float3 inPosition : POSITION, uint vertexID : SV_VertexID)
                 }
             }
 
-        disparity = outDisp / totalWeight;
+            disparity = outDisp / totalWeight;
         }
     }
     

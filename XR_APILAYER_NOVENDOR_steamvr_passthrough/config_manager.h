@@ -67,6 +67,8 @@ struct Config_Main
 
 	bool RequireSteamVRRuntime = true;
 
+	bool ShowSettingDescriptions = true;
+
 	// Transient settings not written to file
 	bool DebugDepth = false;
 	bool DebugStereoValid = false;

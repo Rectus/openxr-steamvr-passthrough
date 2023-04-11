@@ -99,8 +99,8 @@ void ConfigManager::ParseConfig_Main()
 	m_configMain.Saturation = (float)m_iniData.GetDoubleValue("Main", "Saturation", m_configMain.Saturation);
 	m_configMain.Sharpness = (float)m_iniData.GetDoubleValue("Main", "Sharpness", m_configMain.Sharpness);
 
-	m_configMain.RequireSteamVRRuntime = m_iniData.GetBoolValue("Main", "RequireSteamVRRuntime", m_configMain.RequireSteamVRRuntime);
-	
+	m_configMain.RequireSteamVRRuntime = m_iniData.GetBoolValue("Main", "RequireSteamVRRuntime", m_configMain.RequireSteamVRRuntime);	
+	m_configMain.ShowSettingDescriptions = m_iniData.GetBoolValue("Main", "ShowSettingDescriptions", m_configMain.ShowSettingDescriptions);
 }
 
 void ConfigManager::ParseConfig_Core()
@@ -189,7 +189,7 @@ void ConfigManager::UpdateConfig_Main()
 	m_iniData.SetDoubleValue("Main", "Sharpness", m_configMain.Sharpness);
 
 	m_iniData.SetBoolValue("Main", "RequireSteamVRRuntime", m_configMain.RequireSteamVRRuntime);
-	
+	m_iniData.SetBoolValue("Main", "ShowSettingDescriptions", m_configMain.ShowSettingDescriptions);
 }
 
 void ConfigManager::UpdateConfig_Core()
