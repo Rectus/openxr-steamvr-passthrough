@@ -560,15 +560,9 @@ void DepthReconstruction::RunThread()
             leftIn[0] = (*outputMatrixLeft)(cv::Rect(m_maxDisparity, 0, m_cvImageWidth, m_cvImageHeight));
             rightIn[0] = (*outputMatrixRight)(cv::Rect(m_maxDisparity, 0, m_cvImageWidth, m_cvImageHeight));
 
-            //if (m_bDisparityBothEyes)
-            //{
-            //    // Invert right eye disparity
-            //    rightIn[0] *= -1;
-            //}
-
             if (true || stereoConfig.StereoFiltering != StereoFiltering_None)
             {
-                float confFactor = (stereoConfig.StereoFiltering != StereoFiltering_None) ? 32768.0 / 255.0 : 32768.0;
+                float confFactor = (stereoConfig.StereoFiltering != StereoFiltering_None) ? 32768.0f / 255.0f : 32768.0f;
 
                 if ((uint32_t)m_confidenceLeft.size().width >= m_cvImageWidth + m_maxDisparity)
                 {
@@ -597,9 +591,6 @@ void DepthReconstruction::RunThread()
                 int fromTo[4] = { 0,0 , 1,1 };
                 cv::mixChannels(leftIn, 2, &m_outputDisparityLeft, 1, fromTo, 2);
                 cv::mixChannels(rightIn, 2, &m_outputDisparityRight, 1, fromTo, 2);
-
-                //(*outputMatrixLeft)(cv::Rect(m_maxDisparity, 0, m_cvImageWidth, m_cvImageHeight)).convertTo(m_outputDisparityLeft, CV_16SC2);
-                //(*outputMatrixRight)(cv::Rect(m_maxDisparity, 0, m_cvImageWidth, m_cvImageHeight)).convertTo(m_outputDisparityRight, CV_16SC2);
             }
 
             if (!m_bDisparityBothEyes)

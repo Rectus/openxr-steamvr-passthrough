@@ -1052,7 +1052,7 @@ void PassthroughRendererDX11::RenderPassthroughView(const ERenderEye eye, const 
 	}
 
 
-	if (blendMode == AlphaBlendUnpremultiplied || bCompositeDepth)
+	if (blendMode == AlphaBlendUnpremultiplied || blendMode == Opaque || bCompositeDepth)
 	{
 		m_renderContext->OMSetBlendState(m_blendStateDestAlpha.Get(), nullptr, UINT_MAX);
 	}
