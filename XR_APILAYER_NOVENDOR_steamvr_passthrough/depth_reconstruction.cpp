@@ -437,9 +437,13 @@ void DepthReconstruction::RunThread()
 
             m_stereoRightMatcher->compute(m_scaledExtFrameRight, m_scaledExtFrameLeft, m_rawDisparityRight);
 
+            outputMatrixLeft = &m_rawDisparityLeft;
             outputMatrixRight = &m_rawDisparityRight;
-
-            
+        }
+        else
+        {
+            outputMatrixLeft = &m_rawDisparityLeft;
+            outputMatrixRight = &m_rawDisparityLeft;
         }
 
 
@@ -453,7 +457,7 @@ void DepthReconstruction::RunThread()
                 for (int x = 0; x < m_rawDisparityLeft.cols; x++)
                 {
                     int16_t in = m_rawDisparityLeft.at<int16_t>(y, x);
-                    m_confidenceLeft.at<float>(y, x) = (in < m_maxDisparity&& in > 0) ? 1.0f : 0.0f;
+                    m_confidenceLeft.at<float>(y, x) = (in < m_maxDisparity && in > 0) ? 1.0f : 0.0f;
                 }
             }
 
@@ -558,7 +562,7 @@ void DepthReconstruction::RunThread()
             leftIn[0] = (*outputMatrixLeft)(cv::Rect(m_maxDisparity, 0, m_cvImageWidth, m_cvImageHeight));
             rightIn[0] = (*outputMatrixRight)(cv::Rect(m_maxDisparity, 0, m_cvImageWidth, m_cvImageHeight));
 
-            if (true || stereoConfig.StereoFiltering != StereoFiltering_None)
+            if (stereoConfig.StereoFiltering != StereoFiltering_None)
             {
                 float confFactor = (stereoConfig.StereoFiltering != StereoFiltering_None) ? 32768.0f / 255.0f : 32768.0f;
 

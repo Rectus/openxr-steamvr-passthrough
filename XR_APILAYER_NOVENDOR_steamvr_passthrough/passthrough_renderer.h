@@ -107,6 +107,7 @@ private:
 	DX11TemporaryRenderTarget& GetTemporaryRenderTarget(uint32_t bufferIndex);
 	void GenerateMesh();
 	void GenerateDepthMesh(uint32_t width, uint32_t height);
+	void SetupTemporalUAV(const ERenderEye eye, ID3D11Resource* rendertarget, const uint32_t imageIndex);
 
 	void RenderPassthroughView(const ERenderEye eye, const int32_t imageIndex, const XrCompositionLayerProjection* layer, CameraFrame* frame, EPassthroughBlendMode blendMode, UINT numIndices);
 	void RenderMaskedPrepassView(const ERenderEye eye, const int32_t imageIndex, const XrCompositionLayerProjection* layer, CameraFrame* frame, UINT numIndices);
@@ -141,6 +142,7 @@ private:
 	ComPtr<ID3D11VertexShader> m_vertexShader;
 	ComPtr<ID3D11VertexShader> m_stereoVertexShader;
 	ComPtr<ID3D11PixelShader> m_pixelShader;
+	ComPtr<ID3D11PixelShader> m_pixelShaderTemporal;
 	ComPtr<ID3D11PixelShader> m_prepassShader;
 	ComPtr<ID3D11PixelShader> m_maskedPrepassShader;
 	ComPtr<ID3D11PixelShader> m_maskedAlphaCopyShader;
@@ -170,13 +172,18 @@ private:
 	ComPtr<ID3D11Texture2D> m_cameraFrameUploadTexture;
 	ComPtr<ID3D11ShaderResourceView> m_cameraFrameSRV[NUM_SWAPCHAINS];
 
-	ComPtr<ID3D11UnorderedAccessView> m_cameraFilterUAV;
-	ComPtr<ID3D11Texture2D> m_cameraFilterUAVTexture;
+	ComPtr<ID3D11UnorderedAccessView> m_cameraFilterUAV[NUM_SWAPCHAINS * 2];
+	ComPtr<ID3D11ShaderResourceView> m_cameraFilterSRV[NUM_SWAPCHAINS * 2];
+	ComPtr<ID3D11Texture2D> m_cameraFilterUAVTexture[NUM_SWAPCHAINS * 2];
 
-	ComPtr<ID3D11Texture2D> m_disparityMap[NUM_SWAPCHAINS * 2];
+	ComPtr<ID3D11Texture2D> m_disparityMap[NUM_SWAPCHAINS];
 	ComPtr<ID3D11Texture2D> m_disparityMapUploadTexture;
-	ComPtr<ID3D11ShaderResourceView> m_disparityMapSRV[NUM_SWAPCHAINS * 2];
+	ComPtr<ID3D11ShaderResourceView> m_disparityMapSRV[NUM_SWAPCHAINS];
 	uint32_t m_disparityMapWidth;
+
+	ComPtr<ID3D11UnorderedAccessView> m_disparityMapUAV[NUM_SWAPCHAINS];
+	ComPtr<ID3D11ShaderResourceView> m_disparityMapUAVSRV[NUM_SWAPCHAINS];
+	ComPtr<ID3D11Texture2D> m_disparityMapUAVTexture[NUM_SWAPCHAINS];
 
 	ComPtr<ID3D11Texture2D> m_uvDistortionMap;
 	ComPtr<ID3D11ShaderResourceView> m_uvDistortionMapSRV;

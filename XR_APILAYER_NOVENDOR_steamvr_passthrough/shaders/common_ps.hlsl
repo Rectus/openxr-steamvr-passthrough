@@ -19,10 +19,12 @@ cbuffer psPassConstantBuffer : register(b3)
     float g_contrast;
     float g_saturation;
     float g_sharpness;
+    int g_temporalFilteringSampling;
     bool g_bDoColorAdjustment;
     bool g_bDebugDepth;
     bool g_bDebugValidStereo;
     bool g_bUseFisheyeCorrection;
+    bool g_bIsFirstRenderOfCameraFrame;
 };
 
 cbuffer psMaskedConstantBuffer : register(b4)
@@ -54,10 +56,12 @@ cbuffer psPassConstantBuffer : register(b0)
     float g_contrast;
     float g_saturation;
     float g_sharpness;
+    int g_temporalFilteringSampling;
     bool g_bDoColorAdjustment;
     bool g_bDebugDepth;
     bool g_bDebugValidStereo;
     bool g_bUseFisheyeCorrection;
+    bool g_bIsFirstRenderOfCameraFrame;
 };
 
 cbuffer psMaskedConstantBuffer : register(b2)

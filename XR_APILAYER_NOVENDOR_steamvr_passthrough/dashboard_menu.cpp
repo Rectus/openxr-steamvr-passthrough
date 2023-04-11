@@ -389,6 +389,36 @@ if (bIsActiveTab) { ImGui::PopStyleColor(1); bIsActiveTab = false; }
 				ScrollableSlider("Sharpness", &mainConfig.Sharpness, -1.0f, 1.0f, "%.1f", 0.1f);
 				if (fabsf(mainConfig.Sharpness) < 0.1) { mainConfig.Sharpness = 0.0f; }
 				ImGui::PopItemWidth();
+
+				IMGUI_BIG_SPACING;
+
+				ImGui::Checkbox("Enable Temporal Filtering (Experimental)", &mainConfig.EnableTemporalFiltering);
+				TextDescriptionSpaced("Improves image quality by removing noise and flickering, and sharpening it. Possibly slightly increases image resolution. Expensive on the GPU.");
+
+				if (ImGui::CollapsingHeader("Advanced"))
+				{
+					ImGui::Text("Temporal Filtering Sampling");
+					if (ImGui::RadioButton("Nearest", mainConfig.TemporalFilteringSampling == 0))
+					{
+						mainConfig.TemporalFilteringSampling = 0;
+					}
+					if (ImGui::RadioButton("Bilinear", mainConfig.TemporalFilteringSampling == 1))
+					{
+						mainConfig.TemporalFilteringSampling = 1;
+					}
+					if (ImGui::RadioButton("Bicubic 4 samples", mainConfig.TemporalFilteringSampling == 2))
+					{
+						mainConfig.TemporalFilteringSampling = 2;
+					}
+					if (ImGui::RadioButton("Catmull-Rom 9 samples", mainConfig.TemporalFilteringSampling == 3))
+					{
+						mainConfig.TemporalFilteringSampling = 3;
+					}
+					if (ImGui::RadioButton("Lanczos 25 samples", mainConfig.TemporalFilteringSampling == 4))
+					{
+						mainConfig.TemporalFilteringSampling = 4;
+					}
+				}
 				IMGUI_BIG_SPACING;
 
 				ImGui::TreePop();
@@ -648,6 +678,22 @@ if (bIsActiveTab) { ImGui::PopStyleColor(1); bIsActiveTab = false; }
 				ScrollableSlider("Composition Cutout Offset", &stereoCustomConfig.StereoCutoutOffset, 0.0f, 2.0f, "%.2f", 0.01f);
 				ScrollableSlider("Composition Cutout Filter Distance", &stereoCustomConfig.StereoCutoutFilterWidth, 0.1f, 2.0f, "%.1f", 0.1f);
 				EndSoftDisabled(!stereoCustomConfig.StereoCutoutEnabled);
+				ImGui::PopItemWidth();
+				ImGui::TreePop();
+			}
+
+			ImGui::SetNextItemOpen(true, ImGuiCond_Once);
+			if (ImGui::TreeNode("Temporal Filtering"))
+			{
+				ImGui::Checkbox("Use Disparity Temporal Filtering", &stereoCustomConfig.StereoUseDisparityTemporalFiltering);
+				TextDescription("Possibly smoothes out and improves quality of the projection depth.");
+
+				IMGUI_BIG_SPACING;
+				ImGui::PushItemWidth(ImGui::GetContentRegionAvail().x * 0.45f);
+				BeginSoftDisabled(!stereoCustomConfig.StereoUseDisparityTemporalFiltering);
+				ScrollableSlider("Disparity Temporal Filtering Strength", &stereoCustomConfig.StereoDisparityTemporalFilteringStrength, 0.0f, 1.0f, "%.1f", 0.1f);
+				ScrollableSlider("Disparity Temporal Filtering Cutout Factor", &stereoCustomConfig.StereoDisparityTemporalFilteringDistance, 0.1f, 10.0f, "%.1f", 0.1f);
+				EndSoftDisabled(!stereoCustomConfig.StereoUseDisparityTemporalFiltering);
 				ImGui::PopItemWidth();
 				ImGui::TreePop();
 			}

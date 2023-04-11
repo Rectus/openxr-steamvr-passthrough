@@ -14,6 +14,7 @@ cbuffer vsViewConstantBuffer : register(b0)
     float g_projectionDistance;
     float g_floorHeightOffset;
     uint g_viewIndex;
+    bool g_bWriteDisparityFilter;
 };
 
 cbuffer vsPassConstantBuffer : register(b1)
@@ -29,4 +30,7 @@ cbuffer vsPassConstantBuffer : register(b1)
     int g_disparityFilterWidth;
     bool g_bProjectBorders;
     bool g_bFindDiscontinuities;
+    bool g_bUseDisparityTemporalFilter;
+    float g_disparityTemporalFilterStrength;
+    float g_disparityTemporalFilterDistance;
 };

@@ -608,6 +608,18 @@ void CameraManager::CalculateFrameProjection(std::shared_ptr<CameraFrame>& frame
         m_lastWorldToCameraProjectionRight = frame->worldToCameraProjectionRight;
 
         m_lastFrameSequence = frame->header.nFrameSequence;
+
+        frame->bIsFirstRender = true;
+    }
+    else
+    {
+        // Previous HMD frame was rendered from the same camera frame
+        frame->prevCameraProjectionToWorldLeft = frame->cameraProjectionToWorldLeft;
+        frame->prevWorldToCameraProjectionLeft = frame->worldToCameraProjectionLeft;
+        frame->prevCameraProjectionToWorldRight = frame->cameraProjectionToWorldRight;
+        frame->prevWorldToCameraProjectionRight = frame->worldToCameraProjectionRight;
+
+        frame->bIsFirstRender = false;
     }
 
     frame->prevWorldToHMDProjectionLeft = m_lastWorldToHMDProjectionLeft;

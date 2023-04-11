@@ -95,6 +95,7 @@ struct CameraFrame
 		, bIsValid(false)
 		, bHasFrameBuffer(false)
 		, bHasReversedDepth(false)
+		, bIsFirstRender(true)
 	{
 	}
 
@@ -125,6 +126,7 @@ struct CameraFrame
 	bool bIsValid;
 	bool bHasFrameBuffer;
 	bool bHasReversedDepth;
+	bool bIsFirstRender;
 };
 
 struct DepthFrame

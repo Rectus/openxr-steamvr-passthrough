@@ -75,6 +75,9 @@ struct Config_Main
 	float Saturation = 1.0f;
 	float Sharpness = 0.0f;
 
+	bool EnableTemporalFiltering = false;
+	int TemporalFilteringSampling = 3;
+
 	bool RequireSteamVRRuntime = true;
 
 	bool ShowSettingDescriptions = true;
@@ -132,6 +135,9 @@ struct Config_Stereo
 	bool StereoFillHoles = true;
 	int StereoFrameSkip = 0;
 	int StereoDownscaleFactor = 2;
+	bool StereoUseDisparityTemporalFiltering = false;
+	float StereoDisparityTemporalFilteringStrength = 0.9;
+	float StereoDisparityTemporalFilteringDistance = 1.0;
 
 	bool StereoDisparityBothEyes = true;
 	int StereoDisparityFilterWidth = 3;
