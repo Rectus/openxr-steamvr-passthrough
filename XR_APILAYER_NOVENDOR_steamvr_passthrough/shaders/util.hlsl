@@ -1,5 +1,6 @@
 
 
+static const float PI = 3.1415926535897932384626433f;
 
 #define RGBtoXYZMat float3x3( \
     0.4124564, 0.3575761, 0.1804375,\
