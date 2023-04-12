@@ -12,6 +12,7 @@ ConfigManager::ConfigManager(std::wstring configFile)
 	, m_debugTexture()
 {
 	m_iniData.SetUnicode(true);
+	SetupStereoPresets();
 }
 
 ConfigManager::~ConfigManager()
@@ -33,9 +34,6 @@ void ConfigManager::ReadConfigFile()
 		ParseConfig_Core();
 		ParseConfig_Stereo();
 		ParseConfig_Depth();
-
-		// TODO: Using the custom preset while we don't have presets.
-		m_configStereo = m_configCustomStereo;
 	}
 	m_bConfigUpdated = false;
 }
@@ -60,9 +58,10 @@ void ConfigManager::ConfigUpdated()
 {
 	m_bConfigUpdated = true;
 
-	// TODO: Using the custom preset while we don't have presets.
-	m_configCustomStereo.StereoReconstructionFreeze = m_configStereo.StereoReconstructionFreeze;
-	m_configStereo = m_configCustomStereo;
+	if (m_configMain.StereoPreset == StereoPreset_Custom)
+	{
+		m_stereoPresets[0] = m_configCustomStereo;
+	}
 }
 
 void ConfigManager::DispatchUpdate()
@@ -77,10 +76,208 @@ void ConfigManager::ResetToDefaults()
 {
 	m_configMain = Config_Main();
 	m_configCore = Config_Core();
-	m_configStereo = Config_Stereo();
 	m_configCustomStereo = Config_Stereo();
 	m_configDepth = Config_Depth();
 	UpdateConfigFile();
+
+	m_stereoPresets[0] = m_configCustomStereo;
+}
+
+void ConfigManager::SetupStereoPresets()
+{
+	m_stereoPresets[1].StereoUseMulticore = true;
+	m_stereoPresets[1].StereoRectificationFiltering = false;
+	m_stereoPresets[1].StereoUseColor = false;
+	m_stereoPresets[1].StereoUseBWInputAlpha = false;
+	m_stereoPresets[1].StereoUseHexagonGridMesh = true;
+	m_stereoPresets[1].StereoFillHoles = false;
+	m_stereoPresets[1].StereoFrameSkip = 0;
+	m_stereoPresets[1].StereoDownscaleFactor = 6;
+
+	m_stereoPresets[1].StereoDisparityBothEyes = false;
+	m_stereoPresets[1].StereoDisparityFilterWidth = 0;
+	m_stereoPresets[1].StereoCutoutEnabled = false;
+	m_stereoPresets[1].StereoCutoutFactor = 0.75f;
+	m_stereoPresets[1].StereoCutoutOffset = 1.5f;
+	m_stereoPresets[1].StereoCutoutFilterWidth = 0.9f;
+
+	m_stereoPresets[1].StereoBlockSize = 11;
+	m_stereoPresets[1].StereoMinDisparity = 0;
+	m_stereoPresets[1].StereoMaxDisparity = 96;
+	m_stereoPresets[1].StereoSGBM_Mode = StereoMode_SGBM3Way;
+	m_stereoPresets[5].StereoSGBM_P1 = 200;
+	m_stereoPresets[5].StereoSGBM_P2 = 220;
+	m_stereoPresets[1].StereoSGBM_DispMaxDiff = 3;
+	m_stereoPresets[1].StereoSGBM_PreFilterCap = 4;
+	m_stereoPresets[1].StereoSGBM_UniquenessRatio = 4;
+	m_stereoPresets[1].StereoSGBM_SpeckleWindowSize = 80;
+	m_stereoPresets[1].StereoSGBM_SpeckleRange = 1;
+
+	m_stereoPresets[1].StereoFiltering = StereoFiltering_None;
+	m_stereoPresets[1].StereoWLS_Lambda = 8000.0f;
+	m_stereoPresets[1].StereoWLS_Sigma = 1.8f;
+	m_stereoPresets[1].StereoWLS_ConfidenceRadius = 0.5f;
+	m_stereoPresets[1].StereoFBS_Spatial = 6.0f;
+	m_stereoPresets[1].StereoFBS_Luma = 8.0f;
+	m_stereoPresets[1].StereoFBS_Chroma = 8.0f;
+	m_stereoPresets[1].StereoFBS_Lambda = 128.0f;
+	m_stereoPresets[1].StereoFBS_Iterations = 11;
+
+
+	m_stereoPresets[2].StereoUseMulticore = true;
+	m_stereoPresets[2].StereoRectificationFiltering = false;
+	m_stereoPresets[2].StereoUseColor = false;
+	m_stereoPresets[2].StereoUseBWInputAlpha = false;
+	m_stereoPresets[2].StereoUseHexagonGridMesh = true;
+	m_stereoPresets[2].StereoFillHoles = true;
+	m_stereoPresets[2].StereoFrameSkip = 0;
+	m_stereoPresets[2].StereoDownscaleFactor = 4;
+
+	m_stereoPresets[2].StereoDisparityBothEyes = false;
+	m_stereoPresets[2].StereoDisparityFilterWidth = 1;
+	m_stereoPresets[2].StereoCutoutEnabled = false;
+	m_stereoPresets[2].StereoCutoutFactor = 0.75f;
+	m_stereoPresets[2].StereoCutoutOffset = 1.5f;
+	m_stereoPresets[2].StereoCutoutFilterWidth = 0.9f;
+
+	m_stereoPresets[2].StereoBlockSize = 1;
+	m_stereoPresets[2].StereoMinDisparity = 0;
+	m_stereoPresets[2].StereoMaxDisparity = 96;
+	m_stereoPresets[2].StereoSGBM_Mode = StereoMode_SGBM3Way;
+	m_stereoPresets[5].StereoSGBM_P1 = 200;
+	m_stereoPresets[5].StereoSGBM_P2 = 220;
+	m_stereoPresets[2].StereoSGBM_DispMaxDiff = 3;
+	m_stereoPresets[2].StereoSGBM_PreFilterCap = 4;
+	m_stereoPresets[2].StereoSGBM_UniquenessRatio = 4;
+	m_stereoPresets[2].StereoSGBM_SpeckleWindowSize = 80;
+	m_stereoPresets[2].StereoSGBM_SpeckleRange = 1;
+
+	m_stereoPresets[2].StereoFiltering = StereoFiltering_WLS;
+	m_stereoPresets[2].StereoWLS_Lambda = 8000.0f;
+	m_stereoPresets[2].StereoWLS_Sigma = 1.8f;
+	m_stereoPresets[2].StereoWLS_ConfidenceRadius = 0.5f;
+	m_stereoPresets[2].StereoFBS_Spatial = 6.0f;
+	m_stereoPresets[2].StereoFBS_Luma = 8.0f;
+	m_stereoPresets[2].StereoFBS_Chroma = 8.0f;
+	m_stereoPresets[2].StereoFBS_Lambda = 128.0f;
+	m_stereoPresets[2].StereoFBS_Iterations = 11;
+
+
+	m_stereoPresets[3].StereoUseMulticore = true;
+	m_stereoPresets[3].StereoRectificationFiltering = false;
+	m_stereoPresets[3].StereoUseColor = false;
+	m_stereoPresets[3].StereoUseBWInputAlpha = false;
+	m_stereoPresets[3].StereoUseHexagonGridMesh = true;
+	m_stereoPresets[3].StereoFillHoles = true;
+	m_stereoPresets[3].StereoFrameSkip = 0;
+	m_stereoPresets[3].StereoDownscaleFactor = 4;
+
+	m_stereoPresets[3].StereoDisparityBothEyes = true;
+	m_stereoPresets[3].StereoDisparityFilterWidth = 2;
+	m_stereoPresets[3].StereoCutoutEnabled = false;
+	m_stereoPresets[3].StereoCutoutFactor = 0.75f;
+	m_stereoPresets[3].StereoCutoutOffset = 1.5f;
+	m_stereoPresets[3].StereoCutoutFilterWidth = 0.9f;
+
+	m_stereoPresets[3].StereoBlockSize = 1;
+	m_stereoPresets[3].StereoMinDisparity = 0;
+	m_stereoPresets[3].StereoMaxDisparity = 96;
+	m_stereoPresets[3].StereoSGBM_Mode = StereoMode_SGBM3Way;
+	m_stereoPresets[5].StereoSGBM_P1 = 200;
+	m_stereoPresets[5].StereoSGBM_P2 = 220;
+	m_stereoPresets[3].StereoSGBM_DispMaxDiff = 3;
+	m_stereoPresets[3].StereoSGBM_PreFilterCap = 4;
+	m_stereoPresets[3].StereoSGBM_UniquenessRatio = 4;
+	m_stereoPresets[3].StereoSGBM_SpeckleWindowSize = 80;
+	m_stereoPresets[3].StereoSGBM_SpeckleRange = 1;
+
+	m_stereoPresets[3].StereoFiltering = StereoFiltering_WLS;
+	m_stereoPresets[3].StereoWLS_Lambda = 8000.0f;
+	m_stereoPresets[3].StereoWLS_Sigma = 1.8f;
+	m_stereoPresets[3].StereoWLS_ConfidenceRadius = 0.5f;
+	m_stereoPresets[3].StereoFBS_Spatial = 6.0f;
+	m_stereoPresets[3].StereoFBS_Luma = 8.0f;
+	m_stereoPresets[3].StereoFBS_Chroma = 8.0f;
+	m_stereoPresets[3].StereoFBS_Lambda = 128.0f;
+	m_stereoPresets[3].StereoFBS_Iterations = 11;
+
+
+	m_stereoPresets[4].StereoUseMulticore = true;
+	m_stereoPresets[4].StereoRectificationFiltering = false;
+	m_stereoPresets[4].StereoUseColor = false;
+	m_stereoPresets[4].StereoUseBWInputAlpha = false;
+	m_stereoPresets[4].StereoUseHexagonGridMesh = true;
+	m_stereoPresets[4].StereoFillHoles = true;
+	m_stereoPresets[4].StereoFrameSkip = 0;
+	m_stereoPresets[4].StereoDownscaleFactor = 3;
+
+	m_stereoPresets[4].StereoDisparityBothEyes = true;
+	m_stereoPresets[4].StereoDisparityFilterWidth = 4;
+	m_stereoPresets[4].StereoCutoutEnabled = true;
+	m_stereoPresets[4].StereoCutoutFactor = 0.75f;
+	m_stereoPresets[4].StereoCutoutOffset = 1.5f;
+	m_stereoPresets[4].StereoCutoutFilterWidth = 0.9f;
+
+	m_stereoPresets[4].StereoBlockSize = 1;
+	m_stereoPresets[4].StereoMinDisparity = 0;
+	m_stereoPresets[4].StereoMaxDisparity = 96;
+	m_stereoPresets[4].StereoSGBM_Mode = StereoMode_SGBM3Way;
+	m_stereoPresets[5].StereoSGBM_P1 = 200;
+	m_stereoPresets[5].StereoSGBM_P2 = 220;
+	m_stereoPresets[4].StereoSGBM_DispMaxDiff = 3;
+	m_stereoPresets[4].StereoSGBM_PreFilterCap = 4;
+	m_stereoPresets[4].StereoSGBM_UniquenessRatio = 4;
+	m_stereoPresets[4].StereoSGBM_SpeckleWindowSize = 80;
+	m_stereoPresets[4].StereoSGBM_SpeckleRange = 1;
+
+	m_stereoPresets[4].StereoFiltering = StereoFiltering_WLS;
+	m_stereoPresets[4].StereoWLS_Lambda = 8000.0f;
+	m_stereoPresets[4].StereoWLS_Sigma = 1.8f;
+	m_stereoPresets[4].StereoWLS_ConfidenceRadius = 0.5f;
+	m_stereoPresets[4].StereoFBS_Spatial = 6.0f;
+	m_stereoPresets[4].StereoFBS_Luma = 8.0f;
+	m_stereoPresets[4].StereoFBS_Chroma = 8.0f;
+	m_stereoPresets[4].StereoFBS_Lambda = 128.0f;
+	m_stereoPresets[4].StereoFBS_Iterations = 11;
+
+
+	m_stereoPresets[5].StereoUseMulticore = true;
+	m_stereoPresets[5].StereoRectificationFiltering = false;
+	m_stereoPresets[5].StereoUseColor = true;
+	m_stereoPresets[5].StereoUseBWInputAlpha = false;
+	m_stereoPresets[5].StereoUseHexagonGridMesh = true;
+	m_stereoPresets[5].StereoFillHoles = true;
+	m_stereoPresets[5].StereoFrameSkip = 0;
+	m_stereoPresets[5].StereoDownscaleFactor = 2;
+
+	m_stereoPresets[5].StereoDisparityBothEyes = true;
+	m_stereoPresets[5].StereoDisparityFilterWidth = 5;
+	m_stereoPresets[5].StereoCutoutEnabled = true;
+	m_stereoPresets[5].StereoCutoutFactor = 0.75f;
+	m_stereoPresets[5].StereoCutoutOffset = 1.5f;
+	m_stereoPresets[5].StereoCutoutFilterWidth = 0.9f;
+
+	m_stereoPresets[5].StereoBlockSize = 1;
+	m_stereoPresets[5].StereoMinDisparity = 0;
+	m_stereoPresets[5].StereoMaxDisparity = 96;
+	m_stereoPresets[5].StereoSGBM_Mode = StereoMode_SGBM3Way;
+	m_stereoPresets[5].StereoSGBM_P1 = 200;
+	m_stereoPresets[5].StereoSGBM_P2 = 220;
+	m_stereoPresets[5].StereoSGBM_DispMaxDiff = 3;
+	m_stereoPresets[5].StereoSGBM_PreFilterCap = 4;
+	m_stereoPresets[5].StereoSGBM_UniquenessRatio = 4;
+	m_stereoPresets[5].StereoSGBM_SpeckleWindowSize = 80;
+	m_stereoPresets[5].StereoSGBM_SpeckleRange = 1;
+
+	m_stereoPresets[5].StereoFiltering = StereoFiltering_WLS_FBS;
+	m_stereoPresets[5].StereoWLS_Lambda = 8000.0f;
+	m_stereoPresets[5].StereoWLS_Sigma = 1.8f;
+	m_stereoPresets[5].StereoWLS_ConfidenceRadius = 0.5f;
+	m_stereoPresets[5].StereoFBS_Spatial = 6.0f;
+	m_stereoPresets[5].StereoFBS_Luma = 8.0f;
+	m_stereoPresets[5].StereoFBS_Chroma = 8.0f;
+	m_stereoPresets[5].StereoFBS_Lambda = 128.0f;
+	m_stereoPresets[5].StereoFBS_Iterations = 11;
 }
 
 void ConfigManager::ParseConfig_Main()
@@ -101,6 +298,8 @@ void ConfigManager::ParseConfig_Main()
 
 	m_configMain.RequireSteamVRRuntime = m_iniData.GetBoolValue("Main", "RequireSteamVRRuntime", m_configMain.RequireSteamVRRuntime);	
 	m_configMain.ShowSettingDescriptions = m_iniData.GetBoolValue("Main", "ShowSettingDescriptions", m_configMain.ShowSettingDescriptions);
+
+	m_configMain.StereoPreset = (EStereoPreset)m_iniData.GetLongValue("Main", "StereoPreset", m_configMain.StereoPreset);
 }
 
 void ConfigManager::ParseConfig_Core()
@@ -129,7 +328,9 @@ void ConfigManager::ParseConfig_Stereo()
 	m_configCustomStereo.StereoUseMulticore = m_iniData.GetBoolValue("StereoCustom", "StereoUseMulticore", m_configCustomStereo.StereoUseMulticore);
 	m_configCustomStereo.StereoRectificationFiltering = m_iniData.GetBoolValue("StereoCustom", "StereoRectificationFiltering", m_configCustomStereo.StereoRectificationFiltering);
 	m_configCustomStereo.StereoUseColor = m_iniData.GetBoolValue("StereoCustom", "StereoUseColor", m_configCustomStereo.StereoUseColor);
+	m_configCustomStereo.StereoUseBWInputAlpha = m_iniData.GetBoolValue("StereoCustom", "StereoUseBWInputAlpha", m_configCustomStereo.StereoUseBWInputAlpha);
 	m_configCustomStereo.StereoUseHexagonGridMesh = m_iniData.GetBoolValue("StereoCustom", "StereoUseHexagonGridMesh", m_configCustomStereo.StereoUseHexagonGridMesh);
+	m_configCustomStereo.StereoFillHoles = m_iniData.GetBoolValue("StereoCustom", "StereoFillHoles", m_configCustomStereo.StereoFillHoles);
 	m_configCustomStereo.StereoFrameSkip = m_iniData.GetLongValue("StereoCustom", "StereoFrameSkip", m_configCustomStereo.StereoFrameSkip);
 	m_configCustomStereo.StereoDownscaleFactor = m_iniData.GetLongValue("StereoCustom", "StereoDownscaleFactor", m_configCustomStereo.StereoDownscaleFactor);
 
@@ -190,6 +391,8 @@ void ConfigManager::UpdateConfig_Main()
 
 	m_iniData.SetBoolValue("Main", "RequireSteamVRRuntime", m_configMain.RequireSteamVRRuntime);
 	m_iniData.SetBoolValue("Main", "ShowSettingDescriptions", m_configMain.ShowSettingDescriptions);
+
+	m_iniData.SetLongValue("Main", "StereoPreset", m_configMain.StereoPreset);
 }
 
 void ConfigManager::UpdateConfig_Core()
@@ -218,7 +421,9 @@ void ConfigManager::UpdateConfig_Stereo()
 	m_iniData.SetBoolValue("StereoCustom", "StereoUseMulticore", m_configCustomStereo.StereoUseMulticore);
 	m_iniData.SetBoolValue("StereoCustom", "StereoRectificationFiltering", m_configCustomStereo.StereoRectificationFiltering);
 	m_iniData.SetBoolValue("StereoCustom", "StereoUseColor", m_configCustomStereo.StereoUseColor);
+	m_iniData.SetBoolValue("StereoCustom", "StereoUseBWInputAlpha", m_configCustomStereo.StereoUseBWInputAlpha);
 	m_iniData.SetBoolValue("StereoCustom", "StereoUseHexagonGridMesh", m_configCustomStereo.StereoUseHexagonGridMesh);
+	m_iniData.SetBoolValue("StereoCustom", "StereoFillHoles", m_configCustomStereo.StereoFillHoles);
 	m_iniData.SetLongValue("StereoCustom", "StereoFrameSkip", m_configCustomStereo.StereoFrameSkip);
 	m_iniData.SetLongValue("StereoCustom", "StereoDownscaleFactor", m_configCustomStereo.StereoDownscaleFactor);
 

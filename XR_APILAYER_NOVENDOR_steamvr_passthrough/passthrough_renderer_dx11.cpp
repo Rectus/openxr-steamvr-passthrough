@@ -1102,7 +1102,7 @@ void PassthroughRendererDX11::RenderPassthroughView(const ERenderEye eye, const 
 
 
 	// Draw cylinder mesh ato fill out any holes
-	if(mainConf.ProjectionMode == Projection_StereoReconstruction && !stereoConf.StereoReconstructionFreeze)
+	if(stereoConf.StereoFillHoles && mainConf.ProjectionMode == Projection_StereoReconstruction && !stereoConf.StereoReconstructionFreeze)
 	{
 		m_renderContext->RSSetScissorRects(1, &scissor);
 
@@ -1308,7 +1308,7 @@ void PassthroughRendererDX11::RenderPassthroughViewMasked(const ERenderEye eye, 
 
 
 	// Draw cylinder mesh ato fill out any holes
-	if (mainConf.ProjectionMode == Projection_StereoReconstruction && !stereoConf.StereoReconstructionFreeze)
+	if (stereoConf.StereoFillHoles && mainConf.ProjectionMode == Projection_StereoReconstruction && !stereoConf.StereoReconstructionFreeze)
 	{
 		m_renderContext->RSSetScissorRects(1, &scissor);
 

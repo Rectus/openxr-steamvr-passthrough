@@ -381,17 +381,19 @@ void DepthReconstruction::RunThread()
                 cv::cvtColor(m_inputFrame(frameROILeft), m_inputFrameLeft, cv::COLOR_RGBA2RGB);
                 cv::cvtColor(m_inputFrame(frameROIRight), m_inputFrameRight, cv::COLOR_RGBA2RGB);
             }
+            else if (stereoConfig.StereoUseBWInputAlpha)
+            {
+                // Uses B&W image in alpha channel of distorted frames, unsure if all headsets support this.
+                m_inputAlphaLeft = m_inputFrame(frameROILeft);
+                m_inputAlphaRight = m_inputFrame(frameROIRight);
+                int fromTo[2] = { 3, 0 };
+                cv::mixChannels(&m_inputAlphaLeft, 1, &m_inputFrameLeft, 1, fromTo, 1);
+                cv::mixChannels(&m_inputAlphaRight, 1, &m_inputFrameRight, 1, fromTo, 1);
+            }
             else
             {
                 cv::cvtColor(m_inputFrame(frameROILeft), m_inputFrameLeft, cv::COLOR_RGBA2GRAY);
                 cv::cvtColor(m_inputFrame(frameROIRight), m_inputFrameRight, cv::COLOR_RGBA2GRAY);
-                
-                // Uses B&W image in alpha channel of distorted frames, unsure if all headsets support this.
-                //m_inputAlphaLeft = m_inputFrame(frameROILeft);
-                //m_inputAlphaRight = m_inputFrame(frameROIRight);
-                //int fromTo[2] = { 3, 0 };
-                //cv::mixChannels(&m_inputAlphaLeft, 1, &m_inputFrameLeft, 1, fromTo, 1);
-                //cv::mixChannels(&m_inputAlphaRight, 1, &m_inputFrameRight, 1, fromTo, 1);
             }
         }
 
@@ -423,7 +425,6 @@ void DepthReconstruction::RunThread()
 
         cv::Mat* outputMatrixLeft = &m_rawDisparityLeft;
         cv::Mat* outputMatrixRight = &m_rawDisparityLeft;
-        cv::Rect filterROI(0, 0, m_cvImageWidth, m_cvImageHeight);
 
 
         if (m_bDisparityBothEyes)
@@ -438,53 +439,49 @@ void DepthReconstruction::RunThread()
 
             outputMatrixRight = &m_rawDisparityRight;
 
-            filterROI = cv::Rect(0, 0, m_cvImageWidth + m_maxDisparity, m_cvImageHeight);
+            
         }
 
 
-        if (stereoConfig.StereoFiltering == StereoFiltering_None)
+        if (stereoConfig.StereoFiltering == StereoFiltering_FBS)
         {
-            //if (stereoConfig.StereoFiltering == StereoFiltering_WLS_FBS)
+            m_confidenceLeft = cv::Mat(m_rawDisparityLeft.rows, m_rawDisparityLeft.cols, CV_32F);
+            m_confidenceRight = m_confidenceLeft;
+
+            for (int y = 0; y < m_rawDisparityLeft.rows; y++)
             {
-                m_confidenceLeft = cv::Mat(m_rawDisparityLeft.rows, m_rawDisparityLeft.cols, CV_32F);
-                m_confidenceRight = m_confidenceLeft;
-
-                for (int y = 0; y < m_rawDisparityLeft.rows; y++)
+                for (int x = 0; x < m_rawDisparityLeft.cols; x++)
                 {
-                    for (int x = 0; x < m_rawDisparityLeft.cols; x++)
-                    {
-                        int16_t in = m_rawDisparityLeft.at<int16_t>(y, x);
-                        m_confidenceLeft.at<float>(y, x) = (in < m_maxDisparity&& in > 0) ? 1.0f : 0.0f;
-                    }
-                }
-
-                cv::ximgproc::fastBilateralSolverFilter(m_scaledExtFrameLeft, m_rawDisparityLeft, m_confidenceLeft, m_bilateralDisparityLeft, stereoConfig.StereoFBS_Spatial, stereoConfig.StereoFBS_Luma, stereoConfig.StereoFBS_Chroma, stereoConfig.StereoFBS_Lambda, stereoConfig.StereoFBS_Iterations);
-
-                outputMatrixLeft = &m_bilateralDisparityLeft;
-                outputMatrixRight = &m_bilateralDisparityLeft;
-
-                if (m_bDisparityBothEyes)
-                {
-                     m_confidenceRight = cv::Mat(m_rawDisparityRight.rows, m_rawDisparityRight.cols, CV_32F);
-
-                    for (int y = 0; y < m_rawDisparityRight.rows; y++)
-                    {
-                        for (int x = 0; x < m_rawDisparityRight.cols; x++)
-                        {
-                            int16_t in = m_rawDisparityRight.at<int16_t>(y, x);
-                            //m_rawDisparityRight.at<int16_t>(y, x) = in >= m_maxDisparity ? -minDisparity : in;
-                            m_confidenceRight.at<float>(y, x) = (in < m_maxDisparity && in > 0) ? 1.0f : 0.0f;
-                        }
-                    }
-
-                    cv::ximgproc::fastBilateralSolverFilter(m_scaledExtFrameRight, m_rawDisparityRight, m_confidenceRight, m_bilateralDisparityRight, stereoConfig.StereoFBS_Spatial, stereoConfig.StereoFBS_Luma, stereoConfig.StereoFBS_Chroma, stereoConfig.StereoFBS_Lambda, stereoConfig.StereoFBS_Iterations);
-
-                    outputMatrixRight = &m_bilateralDisparityRight;
+                    int16_t in = m_rawDisparityLeft.at<int16_t>(y, x);
+                    m_confidenceLeft.at<float>(y, x) = (in < m_maxDisparity&& in > 0) ? 1.0f : 0.0f;
                 }
             }
 
+            cv::ximgproc::fastBilateralSolverFilter(m_scaledExtFrameLeft, m_rawDisparityLeft, m_confidenceLeft, m_bilateralDisparityLeft, stereoConfig.StereoFBS_Spatial, stereoConfig.StereoFBS_Luma, stereoConfig.StereoFBS_Chroma, stereoConfig.StereoFBS_Lambda, stereoConfig.StereoFBS_Iterations);
+
+            outputMatrixLeft = &m_bilateralDisparityLeft;
+            outputMatrixRight = &m_bilateralDisparityLeft;
+
+            if (m_bDisparityBothEyes)
+            {
+                    m_confidenceRight = cv::Mat(m_rawDisparityRight.rows, m_rawDisparityRight.cols, CV_32F);
+
+                for (int y = 0; y < m_rawDisparityRight.rows; y++)
+                {
+                    for (int x = 0; x < m_rawDisparityRight.cols; x++)
+                    {
+                        int16_t in = m_rawDisparityRight.at<int16_t>(y, x);
+                        //m_rawDisparityRight.at<int16_t>(y, x) = in >= m_maxDisparity ? -minDisparity : in;
+                        m_confidenceRight.at<float>(y, x) = (in < m_maxDisparity && in > 0) ? 1.0f : 0.0f;
+                    }
+                }
+
+                cv::ximgproc::fastBilateralSolverFilter(m_scaledExtFrameRight, m_rawDisparityRight, m_confidenceRight, m_bilateralDisparityRight, stereoConfig.StereoFBS_Spatial, stereoConfig.StereoFBS_Luma, stereoConfig.StereoFBS_Chroma, stereoConfig.StereoFBS_Lambda, stereoConfig.StereoFBS_Iterations);
+
+                outputMatrixRight = &m_bilateralDisparityRight;
+            }
         }
-        else
+        else if(stereoConfig.StereoFiltering != StereoFiltering_None)
         {
             if (!m_bDisparityBothEyes)
             {
@@ -509,6 +506,7 @@ void DepthReconstruction::RunThread()
                 m_wlsFilterRight->setLambda(stereoConfig.StereoWLS_Lambda);
                 m_wlsFilterRight->setSigmaColor(stereoConfig.StereoWLS_Sigma);
                 m_wlsFilterRight->setDepthDiscontinuityRadius((int)ceil(stereoConfig.StereoWLS_ConfidenceRadius * stereoConfig.StereoBlockSize));
+                cv::Rect filterROI = cv::Rect(0, 0, m_cvImageWidth + m_maxDisparity, m_cvImageHeight);
 
                 m_wlsFilterRight->filter(m_rawDisparityRight, m_scaledExtFrameRight, m_filteredDisparityRight, m_rawDisparityLeft, filterROI, m_scaledExtFrameLeft);
 

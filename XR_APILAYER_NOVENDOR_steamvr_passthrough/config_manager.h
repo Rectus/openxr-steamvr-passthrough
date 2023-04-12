@@ -49,6 +49,16 @@ struct DebugTexture
 	std::mutex RWMutex;
 };
 
+enum EStereoPreset
+{
+	StereoPreset_Custom = 0,
+	StereoPreset_VeryLow = 1,
+	StereoPreset_Low = 2,
+	StereoPreset_Medium = 3,
+	StereoPreset_High = 4,
+	StereoPreset_VeryHigh = 5
+};
+
 struct Config_Main
 {
 	bool EnablePassthrough = true;
@@ -68,6 +78,8 @@ struct Config_Main
 	bool RequireSteamVRRuntime = true;
 
 	bool ShowSettingDescriptions = true;
+
+	EStereoPreset StereoPreset = StereoPreset_Medium;
 
 	// Transient settings not written to file
 	bool DebugDepth = false;
@@ -105,6 +117,7 @@ enum EStereoFiltering
 	StereoFiltering_None = 0,
 	StereoFiltering_WLS = 1,
 	StereoFiltering_WLS_FBS = 2,
+	StereoFiltering_FBS = 3
 };
 
 // Configuration for stereo reconstruction
@@ -114,7 +127,9 @@ struct Config_Stereo
 	bool StereoReconstructionFreeze = false;
 	bool StereoRectificationFiltering = false;
 	bool StereoUseColor = false;
+	bool StereoUseBWInputAlpha= false;
 	bool StereoUseHexagonGridMesh = true;
+	bool StereoFillHoles = true;
 	int StereoFrameSkip = 0;
 	int StereoDownscaleFactor = 2;
 
@@ -125,7 +140,6 @@ struct Config_Stereo
 	float StereoCutoutOffset = 1.5f;
 	float StereoCutoutFilterWidth = 0.9f;
 
-	//int StereoAlgorithmQuality = 0;
 	int StereoBlockSize = 1;
 	int StereoMinDisparity = 0;
 	int StereoMaxDisparity = 96;
@@ -170,7 +184,7 @@ public:
 
 	Config_Main& GetConfig_Main() { return m_configMain; }
 	Config_Core& GetConfig_Core() { return m_configCore; }
-	Config_Stereo& GetConfig_Stereo() { return m_configStereo; }
+	Config_Stereo& GetConfig_Stereo() { return m_stereoPresets[m_configMain.StereoPreset]; }
 	Config_Stereo& GetConfig_CustomStereo() { return m_configCustomStereo; }
 	Config_Depth& GetConfig_Depth() { return m_configDepth; }
 
@@ -178,6 +192,8 @@ public:
 
 private:
 	void UpdateConfigFile();
+
+	void SetupStereoPresets();
 
 	void ParseConfig_Main();
 	void ParseConfig_Core();
@@ -195,8 +211,8 @@ private:
 
 	Config_Main m_configMain;
 	Config_Core m_configCore;
-	Config_Stereo m_configStereo;
 	Config_Stereo m_configCustomStereo;
+	Config_Stereo m_stereoPresets[6];
 	Config_Depth m_configDepth;
 
 	DebugTexture m_debugTexture;

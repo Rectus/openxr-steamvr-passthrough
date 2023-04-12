@@ -414,8 +414,9 @@ if (bIsActiveTab) { ImGui::PopStyleColor(1); bIsActiveTab = false; }
 			
 			ImGui::SetNextItemWidth(ImGui::GetContentRegionAvail().x * 0.45f);
 			ScrollableSlider("Field of View Scale", &mainConfig.FieldOfViewScale, 0.0f, 1.0f, "%.1f", 0.1f);
-			TextDescriptionSpaced("Sets the size of the rendered area in the Custom 2D and Stereo 3D projection modes.");
+			TextDescription("Sets the size of the rendered area in the Custom 2D and Stereo 3D projection modes.");
 
+			IMGUI_BIG_SPACING;
 		}
 
 		ImGui::SetNextItemOpen(true, ImGuiCond_Once);
@@ -464,6 +465,7 @@ if (bIsActiveTab) { ImGui::PopStyleColor(1); bIsActiveTab = false; }
 			ImGui::Checkbox("Enable###CoreEnable", &coreConfig.CorePassthroughEnable);
 			TextDescriptionSpaced("Allow OpenXR applications to enable passthrough.");
 
+			BeginSoftDisabled(!coreConfig.CorePassthroughEnable);
 			ImGui::BeginGroup();
 			ImGui::Text("Blend Modes");
 			TextDescription("Controls what blend modes are presented to the application. Requires a restart to apply.");
@@ -489,6 +491,7 @@ if (bIsActiveTab) { ImGui::PopStyleColor(1); bIsActiveTab = false; }
 				coreConfig.CorePreferredMode = 1;
 			}
 			ImGui::EndGroup();
+			EndSoftDisabled(!coreConfig.CorePassthroughEnable);
 		}
 		ImGui::EndChild();
 	}
@@ -524,17 +527,55 @@ if (bIsActiveTab) { ImGui::PopStyleColor(1); bIsActiveTab = false; }
 		}
 
 		ImGui::SetNextItemOpen(true, ImGuiCond_Once);
-		if (ImGui::CollapsingHeader("Settings"))
+		if (ImGui::CollapsingHeader("Stereo Presets"))
 		{
-			TextDescriptionSpaced("Settings for the 3D stereo reconstuction.");
+			ImGui::BeginGroup();
+			if (ImGui::RadioButton("Very Low", mainConfig.StereoPreset == StereoPreset_VeryLow))
+			{
+				mainConfig.StereoPreset = StereoPreset_VeryLow;
+			}
 
+			if (ImGui::RadioButton("Low", mainConfig.StereoPreset == StereoPreset_Low))
+			{
+				mainConfig.StereoPreset = StereoPreset_Low;
+			}
+
+			if (ImGui::RadioButton("Medium", mainConfig.StereoPreset == StereoPreset_Medium))
+			{
+				mainConfig.StereoPreset = StereoPreset_Medium;
+			}
+
+			if (ImGui::RadioButton("High", mainConfig.StereoPreset == StereoPreset_High))
+			{
+				mainConfig.StereoPreset = StereoPreset_High;
+			}
+
+			if (ImGui::RadioButton("Very High", mainConfig.StereoPreset == StereoPreset_VeryHigh))
+			{
+				mainConfig.StereoPreset = StereoPreset_VeryHigh;
+			}
+
+			if (ImGui::RadioButton("Custom", mainConfig.StereoPreset == StereoPreset_Custom))
+			{
+				mainConfig.StereoPreset = StereoPreset_Custom;
+			}
+			ImGui::EndGroup();
+
+			IMGUI_BIG_SPACING;
+		}
+
+		BeginSoftDisabled(mainConfig.StereoPreset != StereoPreset_Custom);
+
+		ImGui::SetNextItemOpen(true, ImGuiCond_Once);
+		if (ImGui::CollapsingHeader("Main Settings"))
+		{
 			ImGui::BeginGroup();
 			ImGui::Text("Filtering");
 			if (ImGui::RadioButton("None###FiltNone", stereoCustomConfig.StereoFiltering == StereoFiltering_None))
 			{
 				stereoCustomConfig.StereoFiltering = StereoFiltering_None;
 			}
-			TextDescription("No filtering. Very noisy image with many invalid areas.");
+			TextDescription("Filtering from SGBM pass only. Noisy image with many invalid areas.");
 
 			if (ImGui::RadioButton("Weighted Least Squares###FiltWLS", stereoCustomConfig.StereoFiltering == StereoFiltering_WLS))
 			{
@@ -542,11 +583,17 @@ if (bIsActiveTab) { ImGui::PopStyleColor(1); bIsActiveTab = false; }
 			}
 			TextDescription("Patches up invalid areas. May still be noisy.");
 
-			if (ImGui::RadioButton("Weighted Least Squares & Fast Bilateral Solver###FiltFBS", stereoCustomConfig.StereoFiltering == StereoFiltering_WLS_FBS))
+			if (ImGui::RadioButton("Weighted Least Squares & Fast Bilateral Solver###FiltWLSFBS", stereoCustomConfig.StereoFiltering == StereoFiltering_WLS_FBS))
 			{
 				stereoCustomConfig.StereoFiltering = StereoFiltering_WLS_FBS;
 			}
-			TextDescription("Patches up invalid areas, and filters the output. May produce worse depth results.");
+			TextDescription("Patches up invalid areas and filters the output. May produce worse depth results.");
+
+			if (ImGui::RadioButton("Fast Bilateral Solver###FiltFBS", stereoCustomConfig.StereoFiltering == StereoFiltering_FBS))
+			{
+				stereoCustomConfig.StereoFiltering = StereoFiltering_FBS;
+			}
+			TextDescription("Patches up invalid areas and filters the output. May produce worse depth results.");
 			ImGui::EndGroup();
 
 			IMGUI_BIG_SPACING;
@@ -565,49 +612,59 @@ if (bIsActiveTab) { ImGui::PopStyleColor(1); bIsActiveTab = false; }
 			ImGui::Checkbox("Composite Both Cameras for Each Eye", &stereoCustomConfig.StereoCutoutEnabled);
 			TextDescriptionSpaced("Detects areas occluded to the main camera and renders them with the other camera where possible.");
 
-			BeginSoftDisabled(!stereoCustomConfig.StereoCutoutEnabled);
-			ImGui::Indent();
-
-			ImGui::PushItemWidth(ImGui::GetContentRegionAvail().x * 0.45f);
-			ScrollableSlider("Composition Cutout Factor", &stereoCustomConfig.StereoCutoutFactor, 0.0f, 3.0f, "%.2f", 0.01f);
-			ScrollableSlider("Composition Cutout Offset", &stereoCustomConfig.StereoCutoutOffset, 0.0f, 2.0f, "%.2f", 0.01f);
-			ScrollableSlider("Composition Cutout Filter Distance", &stereoCustomConfig.StereoCutoutFilterWidth, 0.1f, 2.0f, "%.1f", 0.1f);
-			ImGui::PopItemWidth();
-			ImGui::Unindent();
-			EndSoftDisabled(!stereoCustomConfig.StereoCutoutEnabled);
 			IMGUI_BIG_SPACING;
+		}
 
-
-			ImGui::SetNextItemOpen(true, ImGuiCond_Once);
-			if (ImGui::TreeNode("Performance"))
-			{
+		ImGui::SetNextItemOpen(true, ImGuiCond_Once);
+		if (ImGui::CollapsingHeader("Performance"))
+		{
 				ImGui::Checkbox("Use Multiple Cores", &stereoCustomConfig.StereoUseMulticore);
 				TextDescriptionSpaced("Allows the stereo calculations to use multiple CPU cores. This can be turned off for CPU limited applications.");
 
 				ImGui::SetNextItemWidth(ImGui::GetContentRegionAvail().x * 0.45f);
 				ScrollableSliderInt("Frame Skip Ratio", &stereoCustomConfig.StereoFrameSkip, 0, 14, "%d", 1);
 				TextDescription("Skip stereo processing of this many frames for each frame processed. This does not affect the frame rate of viewed camera frames, every frame will still be reprojected on the latest stereo data.");
-				ImGui::TreePop();
-			}
+
 			IMGUI_BIG_SPACING;
 		}
 
 		ImGui::SetNextItemOpen(true, ImGuiCond_Once);
 		if (ImGui::CollapsingHeader("Advanced"))
 		{
-			ImGui::Checkbox("Use Color", &stereoCustomConfig.StereoUseColor);
-			TextDescription("Uses full color images for stereo proecssing.");
+			ImGui::SetNextItemOpen(true, ImGuiCond_Once);
+			if (ImGui::TreeNode("Projection"))
+			{
+				ImGui::Spacing();
+				ImGui::Checkbox("Use Hexagon Grid Mesh", &stereoCustomConfig.StereoUseHexagonGridMesh);
+				TextDescription("Mesh with smoother corners for less artifacting. May introduce warping.");
 
-			ImGui::Checkbox("Use Hexagon Grid Mesh", &stereoCustomConfig.StereoUseHexagonGridMesh);
-			TextDescription("Mesh with smoother corners for less artifacting. May introduce warping.");
+				ImGui::Checkbox("Fill Holes", &stereoCustomConfig.StereoFillHoles);
+				TextDescription("Extra pass to render a cylinder mesh behind the stereo mesh.");
 
-			ImGui::Checkbox("Rectification Filtering", &stereoCustomConfig.StereoRectificationFiltering);
-			TextDescriptionSpaced("Applies linear filtering before stereo processing.");
+				IMGUI_BIG_SPACING;
+				ImGui::PushItemWidth(ImGui::GetContentRegionAvail().x * 0.45f);
+				BeginSoftDisabled(!stereoCustomConfig.StereoCutoutEnabled);
+				ScrollableSlider("Composition Cutout Factor", &stereoCustomConfig.StereoCutoutFactor, 0.0f, 3.0f, "%.2f", 0.01f);
+				ScrollableSlider("Composition Cutout Offset", &stereoCustomConfig.StereoCutoutOffset, 0.0f, 2.0f, "%.2f", 0.01f);
+				ScrollableSlider("Composition Cutout Filter Distance", &stereoCustomConfig.StereoCutoutFilterWidth, 0.1f, 2.0f, "%.1f", 0.1f);
+				EndSoftDisabled(!stereoCustomConfig.StereoCutoutEnabled);
+				ImGui::PopItemWidth();
+				ImGui::TreePop();
+			}
 
 			ImGui::SetNextItemOpen(true, ImGuiCond_Once);
 			if (ImGui::TreeNode("Block Matching"))
 			{
 				ImGui::Spacing();
+
+				ImGui::Checkbox("Use Color", &stereoCustomConfig.StereoUseColor);
+				TextDescription("Uses full color images for stereo proecssing.");
+
+				ImGui::Checkbox("Use Frame Alpha Channel", &stereoCustomConfig.StereoUseBWInputAlpha);
+				TextDescription("Uses existing alpha channel in camera frames instead of desaturating the color channels.\n May not work on all HMDs.");
+
+				ImGui::Checkbox("Rectification Filtering", &stereoCustomConfig.StereoRectificationFiltering);
+				TextDescriptionSpaced("Applies linear filtering before stereo processing.");
 
 				ImGui::BeginGroup();
 				ImGui::Text("SGBM Algorithm");
@@ -655,29 +712,36 @@ if (bIsActiveTab) { ImGui::PopStyleColor(1); bIsActiveTab = false; }
 			}
 
 			ImGui::SetNextItemOpen(true, ImGuiCond_Once);
-			if (ImGui::TreeNode("Filter Settings"))
+			if (ImGui::TreeNode("Filtering"))
 			{
+				BeginSoftDisabled(stereoCustomConfig.StereoFiltering == StereoFiltering_None || stereoCustomConfig.StereoFiltering == StereoFiltering_FBS);
 				ImGui::PushItemWidth(ImGui::GetContentRegionAvail().x * 0.45f);
 				ScrollableSlider("WLS Lambda", &stereoCustomConfig.StereoWLS_Lambda, 1.0f, 10000.0f, "%.0f", 100.0f);
 				ScrollableSlider("WLS Sigma", &stereoCustomConfig.StereoWLS_Sigma, 0.5f, 2.0f, "%.1f", 0.1f);
 				ScrollableSlider("WLS Confidence Radius", &stereoCustomConfig.StereoWLS_ConfidenceRadius, 0.1f, 2.0f, "%.1f", 0.1f);
+				EndSoftDisabled(stereoCustomConfig.StereoFiltering == StereoFiltering_None || stereoCustomConfig.StereoFiltering == StereoFiltering_FBS);
 				IMGUI_BIG_SPACING;
 
+				BeginSoftDisabled(stereoCustomConfig.StereoFiltering == StereoFiltering_None || stereoCustomConfig.StereoFiltering == StereoFiltering_WLS);
 				ScrollableSlider("FBS Spatial", &stereoCustomConfig.StereoFBS_Spatial, 0.0f, 50.0f, "%.0f", 1.0f);
 				ScrollableSlider("FBS Luma", &stereoCustomConfig.StereoFBS_Luma, 0.0f, 16.0f, "%.0f", 1.0f);
 				ScrollableSlider("FBS Chroma", &stereoCustomConfig.StereoFBS_Chroma, 0.0f, 16.0f, "%.0f", 1.0f);
 				ScrollableSlider("FBS Lambda", &stereoCustomConfig.StereoFBS_Lambda, 0.0f, 256.0f, "%.0f", 1.0f);
 
 				ScrollableSliderInt("FBS Iterations", &stereoCustomConfig.StereoFBS_Iterations, 1, 35, "%d", 1);
+				EndSoftDisabled(stereoCustomConfig.StereoFiltering == StereoFiltering_None || stereoCustomConfig.StereoFiltering == StereoFiltering_WLS);
 				ImGui::PopItemWidth();
 				ImGui::TreePop();
 			}
 		}
 		IMGUI_BIG_SPACING;
 
-		stereoCustomConfig.StereoReconstructionFreeze = stereoConfig.StereoReconstructionFreeze;
-		// TODO: Using the custom preset while we don't have presets.
-		stereoConfig = stereoCustomConfig;
+		EndSoftDisabled(mainConfig.StereoPreset != StereoPreset_Custom);
+
+		if (mainConfig.StereoPreset == StereoPreset_Custom)
+		{
+			stereoConfig = stereoCustomConfig;
+		}
 
 		ImGui::EndChild();
 	}
