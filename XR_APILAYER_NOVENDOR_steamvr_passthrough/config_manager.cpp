@@ -36,6 +36,8 @@ void ConfigManager::ReadConfigFile()
 		ParseConfig_Depth();
 	}
 	m_bConfigUpdated = false;
+
+	m_stereoPresets[0] = m_configCustomStereo;
 }
 
 void ConfigManager::UpdateConfigFile()

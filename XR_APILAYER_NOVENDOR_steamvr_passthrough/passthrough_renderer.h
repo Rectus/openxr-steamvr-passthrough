@@ -252,6 +252,7 @@ private:
 	ComPtr<ID3D12PipelineState> m_psoPrepass;
 	ComPtr<ID3D12PipelineState> m_psoMainPass;
 	ComPtr<ID3D12PipelineState> m_psoCutoutPass;
+	ComPtr<ID3D12PipelineState> m_psoHoleFillPass;
 
 	DXGI_FORMAT m_swapchainFormat;
 	DXGI_FORMAT m_depthStencilFormat;

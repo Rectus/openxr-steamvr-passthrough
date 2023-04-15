@@ -983,7 +983,7 @@ void PassthroughRendererDX11::RenderPassthroughView(const ERenderEye eye, const 
 	if (!rendertarget) { return; }
 
 	Config_Depth& depthConfig = m_configManager->GetConfig_Depth();
-	bool bCompositeDepth = depthConfig.DepthForceComposition && depthConfig.DepthReadFromApplication;
+	bool bCompositeDepth = depthConfig.DepthForceComposition && depthConfig.DepthReadFromApplication && depthStencil != nullptr;
 	bool bWriteDepth = depthConfig.DepthWriteOutput && depthConfig.DepthReadFromApplication;
 
 	m_renderContext->OMSetRenderTargets(1, &rendertarget, depthStencil);
@@ -1101,7 +1101,7 @@ void PassthroughRendererDX11::RenderPassthroughView(const ERenderEye eye, const 
 	}
 
 
-	// Draw cylinder mesh ato fill out any holes
+	// Draw cylinder mesh to fill out any holes
 	if(stereoConf.StereoFillHoles && mainConf.ProjectionMode == Projection_StereoReconstruction && !stereoConf.StereoReconstructionFreeze)
 	{
 		m_renderContext->RSSetScissorRects(1, &scissor);
@@ -1143,7 +1143,7 @@ void PassthroughRendererDX11::RenderPassthroughViewMasked(const ERenderEye eye, 
 	if (!rendertarget) { return; }
 
 	Config_Depth& depthConfig = m_configManager->GetConfig_Depth();
-	bool bCompositeDepth = depthConfig.DepthForceComposition && depthConfig.DepthReadFromApplication;
+	bool bCompositeDepth = depthConfig.DepthForceComposition && depthConfig.DepthReadFromApplication && depthStencil != nullptr;
 	bool bWriteDepth = depthConfig.DepthWriteOutput && depthConfig.DepthReadFromApplication;
 
 	XrRect2Di rect = layer->views[viewIndex].subImage.imageRect;
@@ -1307,8 +1307,8 @@ void PassthroughRendererDX11::RenderPassthroughViewMasked(const ERenderEye eye, 
 	}
 
 
-	// Draw cylinder mesh ato fill out any holes
-	if (stereoConf.StereoFillHoles && mainConf.ProjectionMode == Projection_StereoReconstruction && !stereoConf.StereoReconstructionFreeze)
+	// Draw cylinder mesh to fill out any holes
+	if (stereoConf.StereoFillHoles && mainConf.ProjectionMode == Projection_StereoReconstruction && !stereoConf.StereoReconstructionFreeze && bCompositeDepth) // TODO: Masked hole filling without depth does not work.
 	{
 		m_renderContext->RSSetScissorRects(1, &scissor);
 

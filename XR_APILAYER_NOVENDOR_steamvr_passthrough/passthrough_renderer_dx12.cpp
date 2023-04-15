@@ -754,6 +754,8 @@ bool PassthroughRendererDX12::InitPipeline()
 	blendStatePrepassIgnoreAppAlpha.RenderTarget[0].DestBlendAlpha = D3D12_BLEND_ZERO;
 
 	D3D12_BLEND_DESC blendStateInverseAppAlpha = blendStateDestAlpha;
+	blendStateInverseAppAlpha.RenderTarget[0].RenderTargetWriteMask = D3D12_COLOR_WRITE_ENABLE_ALL;
+	blendStateInverseAppAlpha.RenderTarget[0].BlendOp = D3D12_BLEND_OP_ADD;
 	blendStateInverseAppAlpha.RenderTarget[0].SrcBlend = D3D12_BLEND_DEST_ALPHA;
 	blendStateInverseAppAlpha.RenderTarget[0].DestBlend = D3D12_BLEND_INV_DEST_ALPHA;
 	blendStateInverseAppAlpha.RenderTarget[0].BlendOpAlpha = D3D12_BLEND_OP_SUBTRACT;
@@ -777,7 +779,7 @@ bool PassthroughRendererDX12::InitPipeline()
 
 	D3D12_DEPTH_STENCIL_DESC depthStencilPrepass{};
 	depthStencilPrepass.DepthEnable = m_bUsingDepth;
-	depthStencilPrepass.DepthFunc = m_bUsingReversedDepth ? D3D12_COMPARISON_FUNC_GREATER_EQUAL :
+	depthStencilPrepass.DepthFunc = ((m_blendMode == Masked) ? (m_configManager->GetConfig_Core().CoreForceMaskedUseCameraImage == m_bUsingReversedDepth) : m_bUsingReversedDepth) ? D3D12_COMPARISON_FUNC_GREATER_EQUAL :
 			D3D12_COMPARISON_FUNC_LESS_EQUAL;
 	depthStencilPrepass.DepthWriteMask = m_bWriteDepth ? D3D12_DEPTH_WRITE_MASK_ALL : D3D12_DEPTH_WRITE_MASK_ZERO;
 
@@ -786,8 +788,10 @@ bool PassthroughRendererDX12::InitPipeline()
 	depthStencilMain.DepthFunc = m_bUsingReversedDepth ? D3D12_COMPARISON_FUNC_GREATER_EQUAL : D3D12_COMPARISON_FUNC_LESS_EQUAL;
 	depthStencilMain.DepthWriteMask = D3D12_DEPTH_WRITE_MASK_ZERO;
 
-	D3D12_DEPTH_STENCIL_DESC depthStencilDisabled{};
-	depthStencilDisabled.DepthEnable = false;
+	D3D12_DEPTH_STENCIL_DESC depthStencilCutout{};
+	depthStencilCutout.DepthEnable = m_bUsingDepth;
+	depthStencilCutout.DepthFunc = m_bUsingReversedDepth ? D3D12_COMPARISON_FUNC_LESS_EQUAL : D3D12_COMPARISON_FUNC_GREATER_EQUAL;
+	depthStencilCutout.DepthWriteMask = D3D12_DEPTH_WRITE_MASK_ZERO;
 
 
 	D3D12_GRAPHICS_PIPELINE_STATE_DESC psoDesc = {};
@@ -815,7 +819,7 @@ bool PassthroughRendererDX12::InitPipeline()
 	{
 		psoDesc.BlendState = blendStateSrcAlpha;
 	}
-	else if(m_blendMode == AlphaBlendPremultiplied || m_blendMode == Additive)
+	else if((m_blendMode == AlphaBlendPremultiplied || m_blendMode == Additive) && !m_bUsingDepth)
 	{
 		psoDesc.BlendState = blendStateDestAlphaPremultiplied;
 	}
@@ -830,8 +834,8 @@ bool PassthroughRendererDX12::InitPipeline()
 		return false;
 	}
 
-
-	psoDesc.DepthStencilState = depthStencilDisabled;
+	
+	psoDesc.DepthStencilState = depthStencilCutout;
 	psoDesc.BlendState = blendStateDestAlpha;
 	if (FAILED(m_d3dDevice->CreateGraphicsPipelineState(&psoDesc, IID_PPV_ARGS(&m_psoCutoutPass))))
 	{
@@ -863,6 +867,18 @@ bool PassthroughRendererDX12::InitPipeline()
 	if (FAILED(m_d3dDevice->CreateGraphicsPipelineState(&psoDesc, IID_PPV_ARGS(&m_psoPrepass))))
 	{
 		ErrorLog("Error creating prepass PSO.\n");
+		return false;
+	}
+
+
+	psoDesc.DepthStencilState = depthStencilPrepass;
+	psoDesc.BlendState = blendStateDestAlpha;
+	psoDesc.RasterizerState.DepthBias = 16;
+	psoDesc.VS = passthroughShaderVS;
+	psoDesc.PS = m_blendMode == Masked ? passthroughMaskedShaderPS : passthroughShaderPS;
+	if (FAILED(m_d3dDevice->CreateGraphicsPipelineState(&psoDesc, IID_PPV_ARGS(&m_psoHoleFillPass))))
+	{
+		ErrorLog("Error creating hole fill PSO.\n");
 		return false;
 	}
 
@@ -1025,7 +1041,7 @@ void PassthroughRendererDX12::RenderPassthroughFrame(const XrCompositionLayerPro
 		return;
 	}
 
-	bool bCompositeDepth = depthConf.DepthForceComposition && depthConf.DepthReadFromApplication;
+	bool bCompositeDepth = depthConf.DepthForceComposition && depthConf.DepthReadFromApplication && m_depthStencils[0].Get() != nullptr;
 	bool bDepthWrtite = depthConf.DepthWriteOutput && depthConf.DepthReadFromApplication;
 	bool bUseReversedDepth = (m_blendMode == Masked) ? coreConf.CoreForceMaskedUseCameraImage == frame->bHasReversedDepth : frame->bHasReversedDepth;
 
@@ -1277,7 +1293,7 @@ void PassthroughRendererDX12::RenderPassthroughView(const ERenderEye eye, const 
 	if (!rendertarget) { return; }
 
 	Config_Depth& depthConfig = m_configManager->GetConfig_Depth();
-	bool bCompositeDepth = depthConfig.DepthForceComposition && depthConfig.DepthReadFromApplication;
+	bool bCompositeDepth = depthConfig.DepthForceComposition && depthConfig.DepthReadFromApplication && m_depthStencils[bufferIndex].Get() != nullptr;
 
 	XrRect2Di rect = layer->views[viewIndex].subImage.imageRect;
 
@@ -1317,6 +1333,7 @@ void PassthroughRendererDX12::RenderPassthroughView(const ERenderEye eye, const 
 	psViewBuffer->frameUVBounds = GetFrameUVBounds(eye, frame->frameLayout);
 	psViewBuffer->rtArrayIndex = m_frameIndex;
 	psViewBuffer->bDoCutout = false;
+	psViewBuffer->bPremultiplyAlpha = (blendMode == AlphaBlendPremultiplied) && !bCompositeDepth;
 
 	D3D12_GPU_DESCRIPTOR_HANDLE cbvPSHandle = m_CBVSRVHeap->GetGPUDescriptorHandleForHeapStart();
 	cbvPSHandle.ptr += (INDEX_CBV_PS_VIEW_0 + bufferIndex) * m_CBVSRVHeapDescSize;
@@ -1331,18 +1348,21 @@ void PassthroughRendererDX12::RenderPassthroughView(const ERenderEye eye, const 
 		m_commandList->DrawIndexedInstanced(numIndices, 1, 0, 0, 0);
 	}
 
+
+	// Draw main pass
 	m_commandList->SetPipelineState(m_psoMainPass.Get());
 	m_commandList->DrawIndexedInstanced(numIndices, 1, 0, 0, 0);
 
 
 
+	// Draw the other stereo camera on occluded areas
 	if (stereoConf.StereoCutoutEnabled)
 	{
 		float secondaryWidthFactor = 0.6f;
 		int scissorStart = (eye == LEFT_EYE) ? (int)(rect.extent.width * (1.0f - secondaryWidthFactor)) : 0;
 		int scissorEnd = (eye == LEFT_EYE) ? rect.extent.width : (int)(rect.extent.width * secondaryWidthFactor);
-		scissor = { rect.offset.x + scissorStart, rect.offset.y, rect.offset.x + scissorEnd, rect.offset.y + rect.extent.height };
-		m_commandList->RSSetScissorRects(1, &scissor);
+		D3D12_RECT crossScissor = { rect.offset.x + scissorStart, rect.offset.y, rect.offset.x + scissorEnd, rect.offset.y + rect.extent.height };
+		m_commandList->RSSetScissorRects(1, &crossScissor);
 
 		int crossBufferIndex = NUM_SWAPCHAINS * 2 + bufferIndex;
 		VSViewConstantBuffer* vsCrossViewBuffer = (VSViewConstantBuffer*)m_vsViewConstantBufferCPUData[crossBufferIndex];
@@ -1364,6 +1384,7 @@ void PassthroughRendererDX12::RenderPassthroughView(const ERenderEye eye, const 
 		psCrossViewBuffer->frameUVBounds = GetFrameUVBounds(eye == LEFT_EYE ? RIGHT_EYE : LEFT_EYE, frame->frameLayout);
 		psCrossViewBuffer->rtArrayIndex = m_frameIndex;
 		psCrossViewBuffer->bDoCutout = true;
+		psCrossViewBuffer->bPremultiplyAlpha = false;
 
 		D3D12_GPU_DESCRIPTOR_HANDLE cbvCrossPSHandle = m_CBVSRVHeap->GetGPUDescriptorHandleForHeapStart();
 		cbvCrossPSHandle.ptr += (INDEX_CBV_PS_VIEW_0 + crossBufferIndex) * m_CBVSRVHeapDescSize;
@@ -1371,6 +1392,46 @@ void PassthroughRendererDX12::RenderPassthroughView(const ERenderEye eye, const 
 
 		m_commandList->SetPipelineState(m_psoCutoutPass.Get());
 		m_commandList->DrawIndexedInstanced(numIndices, 1, 0, 0, 0);
+	}
+
+
+
+	// Draw cylinder mesh to fill out any holes
+	if (stereoConf.StereoFillHoles && mainConf.ProjectionMode == Projection_StereoReconstruction && !stereoConf.StereoReconstructionFreeze)
+	{
+		m_commandList->RSSetScissorRects(1, &scissor);
+		m_commandList->SetGraphicsRootDescriptorTable(6, cbvVSHandle);
+		m_commandList->SetGraphicsRootDescriptorTable(1, cbvPSHandle);
+
+		D3D12_VERTEX_BUFFER_VIEW vertexBufferView{};
+		D3D12_INDEX_BUFFER_VIEW indexBufferView{};
+
+		vertexBufferView.BufferLocation = m_cylinderMeshVertexBuffer->GetGPUVirtualAddress();
+		vertexBufferView.SizeInBytes = (UINT)m_cylinderMesh.vertices.size() * sizeof(VertexFormatBasic);
+		vertexBufferView.StrideInBytes = sizeof(VertexFormatBasic);
+
+		indexBufferView.BufferLocation = m_cylinderMeshIndexBuffer->GetGPUVirtualAddress();
+		indexBufferView.SizeInBytes = (UINT)m_cylinderMesh.triangles.size() * sizeof(MeshTriangle);
+		indexBufferView.Format = DXGI_FORMAT_R32_UINT;
+
+		m_commandList->IASetVertexBuffers(0, 1, &vertexBufferView);
+		m_commandList->IASetIndexBuffer(&indexBufferView);
+
+
+		m_commandList->SetPipelineState(m_psoHoleFillPass.Get());
+		m_commandList->DrawIndexedInstanced((UINT)m_cylinderMesh.triangles.size() * 3, 1, 0, 0, 0);
+
+
+		vertexBufferView.BufferLocation = m_gridMeshVertexBuffer->GetGPUVirtualAddress();
+		vertexBufferView.SizeInBytes = (UINT)m_gridMesh.vertices.size() * sizeof(VertexFormatBasic);
+		vertexBufferView.StrideInBytes = sizeof(VertexFormatBasic);
+
+		indexBufferView.BufferLocation = m_gridMeshIndexBuffer->GetGPUVirtualAddress();
+		indexBufferView.SizeInBytes = (UINT)m_gridMesh.triangles.size() * sizeof(MeshTriangle);
+		indexBufferView.Format = DXGI_FORMAT_R32_UINT;
+
+		m_commandList->IASetVertexBuffers(0, 1, &vertexBufferView);
+		m_commandList->IASetIndexBuffer(&indexBufferView);
 	}
 }
 
@@ -1396,6 +1457,8 @@ void PassthroughRendererDX12::RenderPassthroughViewMasked(const ERenderEye eye, 
 
 	Config_Main& mainConf = m_configManager->GetConfig_Main();
 	Config_Stereo& stereoConf = m_configManager->GetConfig_Stereo();
+	Config_Depth& depthConfig = m_configManager->GetConfig_Depth();
+	bool bCompositeDepth = depthConfig.DepthForceComposition && depthConfig.DepthReadFromApplication && m_depthStencils[bufferIndex].Get() != nullptr;
 
 	VSViewConstantBuffer* vsViewBuffer = (VSViewConstantBuffer*)m_vsViewConstantBufferCPUData[bufferIndex];
 	vsViewBuffer->cameraProjectionToWorld = (eye == LEFT_EYE) ? frame->cameraProjectionToWorldLeft : frame->cameraProjectionToWorldRight;
@@ -1428,6 +1491,7 @@ void PassthroughRendererDX12::RenderPassthroughViewMasked(const ERenderEye eye, 
 	psViewBuffer->frameUVBounds = GetFrameUVBounds(eye, frame->frameLayout);
 	psViewBuffer->rtArrayIndex = layer->views[viewIndex].subImage.imageArrayIndex;
 	psViewBuffer->bDoCutout = false;
+	psViewBuffer->bPremultiplyAlpha = false;
 
 	D3D12_GPU_DESCRIPTOR_HANDLE cbvPSHandle = m_CBVSRVHeap->GetGPUDescriptorHandleForHeapStart();
 	cbvPSHandle.ptr += (INDEX_CBV_PS_VIEW_0 + bufferIndex) * m_CBVSRVHeapDescSize;
@@ -1503,6 +1567,8 @@ void PassthroughRendererDX12::RenderPassthroughViewMasked(const ERenderEye eye, 
 	srvHandle.ptr += (INDEX_SRV_MASKED_INTERMEDIATE_0 + intermediateRTIndex) * m_CBVSRVHeapDescSize;
 	m_commandList->SetGraphicsRootDescriptorTable(5, srvHandle);
 
+
+	// Draw main pass
 	m_commandList->SetPipelineState(m_psoMainPass.Get());
 	m_commandList->DrawIndexedInstanced(numIndices, 1, 0, 0, 0);
 
@@ -1510,13 +1576,14 @@ void PassthroughRendererDX12::RenderPassthroughViewMasked(const ERenderEye eye, 
 	TransitionResource(m_commandList.Get(), m_intermediateRenderTargets[intermediateRTIndex].Get(), D3D12_RESOURCE_STATE_PIXEL_SHADER_RESOURCE, D3D12_RESOURCE_STATE_RENDER_TARGET);
 
 
-	if (stereoConf.StereoCutoutEnabled)
+	// Draw the other stereo camera on occluded areas
+	if (stereoConf.StereoCutoutEnabled && m_configManager->GetConfig_Core().CoreForceMaskedUseCameraImage == true) // TODO: Not working with application image mode
 	{
 		float secondaryWidthFactor = 0.6f;
 		int scissorStart = (eye == LEFT_EYE) ? (int)(rect.extent.width * (1.0f - secondaryWidthFactor)) : 0;
 		int scissorEnd = (eye == LEFT_EYE) ? rect.extent.width : (int)(rect.extent.width * secondaryWidthFactor);
-		scissor = { rect.offset.x + scissorStart, rect.offset.y, rect.offset.x + scissorEnd, rect.offset.y + rect.extent.height };
-		m_commandList->RSSetScissorRects(1, &scissor);
+		D3D12_RECT crossScissor = { rect.offset.x + scissorStart, rect.offset.y, rect.offset.x + scissorEnd, rect.offset.y + rect.extent.height };
+		m_commandList->RSSetScissorRects(1, &crossScissor);
 
 		int crossBufferIndex = NUM_SWAPCHAINS * 2 + bufferIndex;
 		VSViewConstantBuffer* vsCrossViewBuffer = (VSViewConstantBuffer*)m_vsViewConstantBufferCPUData[crossBufferIndex];
@@ -1538,6 +1605,7 @@ void PassthroughRendererDX12::RenderPassthroughViewMasked(const ERenderEye eye, 
 		psCrossViewBuffer->frameUVBounds = GetFrameUVBounds(eye == LEFT_EYE ? RIGHT_EYE : LEFT_EYE, frame->frameLayout);
 		psCrossViewBuffer->rtArrayIndex = m_frameIndex;
 		psCrossViewBuffer->bDoCutout = true;
+		psCrossViewBuffer->bPremultiplyAlpha = false;
 
 		D3D12_GPU_DESCRIPTOR_HANDLE cbvCrossPSHandle = m_CBVSRVHeap->GetGPUDescriptorHandleForHeapStart();
 		cbvCrossPSHandle.ptr += (INDEX_CBV_PS_VIEW_0 + crossBufferIndex) * m_CBVSRVHeapDescSize;
@@ -1546,6 +1614,46 @@ void PassthroughRendererDX12::RenderPassthroughViewMasked(const ERenderEye eye, 
 		m_commandList->SetPipelineState(m_psoCutoutPass.Get());
 		m_commandList->DrawIndexedInstanced(numIndices, 1, 0, 0, 0);
 	}
+
+
+	//TODO: Not working under DX12 masked mode
+	//// Draw cylinder mesh to fill out any holes
+	//if (stereoConf.StereoFillHoles && mainConf.ProjectionMode == Projection_StereoReconstruction && !stereoConf.StereoReconstructionFreeze && bCompositeDepth) // TODO: Masked hole filling without depth does not work.
+	//{
+	//	m_commandList->RSSetScissorRects(1, &scissor);
+	//	m_commandList->SetGraphicsRootDescriptorTable(6, cbvVSHandle);
+	//	m_commandList->SetGraphicsRootDescriptorTable(1, cbvPSHandle);
+
+	//	D3D12_VERTEX_BUFFER_VIEW vertexBufferView{};
+	//	D3D12_INDEX_BUFFER_VIEW indexBufferView{};
+
+	//	vertexBufferView.BufferLocation = m_cylinderMeshVertexBuffer->GetGPUVirtualAddress();
+	//	vertexBufferView.SizeInBytes = (UINT)m_cylinderMesh.vertices.size() * sizeof(VertexFormatBasic);
+	//	vertexBufferView.StrideInBytes = sizeof(VertexFormatBasic);
+
+	//	indexBufferView.BufferLocation = m_cylinderMeshIndexBuffer->GetGPUVirtualAddress();
+	//	indexBufferView.SizeInBytes = (UINT)m_cylinderMesh.triangles.size() * sizeof(MeshTriangle);
+	//	indexBufferView.Format = DXGI_FORMAT_R32_UINT;
+
+	//	m_commandList->IASetVertexBuffers(0, 1, &vertexBufferView);
+	//	m_commandList->IASetIndexBuffer(&indexBufferView);
+
+
+	//	m_commandList->SetPipelineState(m_psoHoleFillPass.Get());
+	//	m_commandList->DrawIndexedInstanced((UINT)m_cylinderMesh.triangles.size() * 3, 1, 0, 0, 0);
+
+
+	//	vertexBufferView.BufferLocation = m_gridMeshVertexBuffer->GetGPUVirtualAddress();
+	//	vertexBufferView.SizeInBytes = (UINT)m_gridMesh.vertices.size() * sizeof(VertexFormatBasic);
+	//	vertexBufferView.StrideInBytes = sizeof(VertexFormatBasic);
+
+	//	indexBufferView.BufferLocation = m_gridMeshIndexBuffer->GetGPUVirtualAddress();
+	//	indexBufferView.SizeInBytes = (UINT)m_gridMesh.triangles.size() * sizeof(MeshTriangle);
+	//	indexBufferView.Format = DXGI_FORMAT_R32_UINT;
+
+	//	m_commandList->IASetVertexBuffers(0, 1, &vertexBufferView);
+	//	m_commandList->IASetIndexBuffer(&indexBufferView);
+	//}
 }
 
 
