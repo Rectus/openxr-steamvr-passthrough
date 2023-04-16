@@ -109,7 +109,7 @@ private:
 	void GenerateDepthMesh(uint32_t width, uint32_t height);
 
 	void RenderPassthroughView(const ERenderEye eye, const int32_t imageIndex, const XrCompositionLayerProjection* layer, CameraFrame* frame, EPassthroughBlendMode blendMode, UINT numIndices);
-	void RenderPassthroughViewMasked(const ERenderEye eye, const int32_t imageIndex, const XrCompositionLayerProjection* layer, CameraFrame* frame, UINT numIndices);
+	void RenderMaskedPrepassView(const ERenderEye eye, const int32_t imageIndex, const XrCompositionLayerProjection* layer, CameraFrame* frame, UINT numIndices);
 	void RenderFrameFinish();
 
 	std::shared_ptr<ConfigManager> m_configManager;
@@ -142,7 +142,7 @@ private:
 	ComPtr<ID3D11PixelShader> m_pixelShader;
 	ComPtr<ID3D11PixelShader> m_prepassShader;
 	ComPtr<ID3D11PixelShader> m_maskedPrepassShader;
-	ComPtr<ID3D11PixelShader> m_maskedPixelShader;
+	ComPtr<ID3D11PixelShader> m_maskedAlphaCopyShader;
 
 	ComPtr<ID3D11Buffer> m_vsViewConstantBuffer[NUM_SWAPCHAINS * 2];
 	ComPtr<ID3D11Buffer> m_vsPassConstantBuffer[NUM_SWAPCHAINS];
@@ -225,7 +225,7 @@ private:
 	void GenerateDepthMesh(uint32_t width, uint32_t height);
 
 	void RenderPassthroughView(const ERenderEye eye, const int32_t imageIndex, const XrCompositionLayerProjection* layer, CameraFrame* frame, EPassthroughBlendMode blendMode, UINT numIndices);
-	void RenderPassthroughViewMasked(const ERenderEye eye, const int32_t imageIndex, const XrCompositionLayerProjection* layer, CameraFrame* frame, UINT numIndices);
+	void RenderMaskedPrepassView(const ERenderEye eye, const int32_t imageIndex, const XrCompositionLayerProjection* layer, CameraFrame* frame, UINT numIndices);
 	void RenderFrameFinish();
 
 	std::shared_ptr<ConfigManager> m_configManager;
@@ -250,6 +250,7 @@ private:
 	ComPtr<ID3D12RootSignature> m_rootSignature;
 
 	ComPtr<ID3D12PipelineState> m_psoPrepass;
+	ComPtr<ID3D12PipelineState> m_psoMaskedAlphaCopy;
 	ComPtr<ID3D12PipelineState> m_psoMainPass;
 	ComPtr<ID3D12PipelineState> m_psoCutoutPass;
 	ComPtr<ID3D12PipelineState> m_psoHoleFillPass;
@@ -361,7 +362,7 @@ private:
 	VkShaderModule m_pixelShader;
 	VkShaderModule m_prepassShader;
 	VkShaderModule m_maskedPrepassShader;
-	VkShaderModule m_maskedPixelShader;
+	VkShaderModule m_maskedAlphaCopyShader;
 
 	VkRenderPass m_renderpass;
 	VkRenderPass m_renderpassMaskedPrepass;

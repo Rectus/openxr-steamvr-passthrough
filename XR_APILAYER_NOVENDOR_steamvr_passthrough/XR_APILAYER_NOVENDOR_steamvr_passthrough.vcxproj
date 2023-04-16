@@ -130,7 +130,7 @@ copy $(ProjectDir)\passthrough_icon.png $(OutDir)
       <ConformanceMode>true</ConformanceMode>
       <PrecompiledHeader>Use</PrecompiledHeader>
       <PrecompiledHeaderFile>pch.h</PrecompiledHeaderFile>
-      <AdditionalIncludeDirectories>$(ProjectDir);$(ProjectDir)framework;$(SolutionDir)\external\OpenXR-SDK\include;$(SolutionDir)\external\OpenXR-SDK\src\common;$(SolutionDir)\external\openvr\headers;$(SolutionDir)\external\lodepng;$(SolutionDir)\external\imgui;$(SolutionDir)\external\imgui\backends;$(SolutionDir)\external\simpleini;$(SolutionDir)\external\opencv\build\include;$(VULKAN_SDK)\Include</AdditionalIncludeDirectories>
+      <AdditionalIncludeDirectories>$(ProjectDir);$(ProjectDir)shaders;$(ProjectDir)framework;$(SolutionDir)\external\OpenXR-SDK\include;$(SolutionDir)\external\OpenXR-SDK\src\common;$(SolutionDir)\external\openvr\headers;$(SolutionDir)\external\lodepng;$(SolutionDir)\external\imgui;$(SolutionDir)\external\imgui\backends;$(SolutionDir)\external\simpleini;$(SolutionDir)\external\opencv\build\include;$(VULKAN_SDK)\Include</AdditionalIncludeDirectories>
       <LanguageStandard>stdcpp20</LanguageStandard>
       <InlineFunctionExpansion>AnySuitable</InlineFunctionExpansion>
       <FavorSizeOrSpeed>Speed</FavorSizeOrSpeed>
@@ -292,16 +292,16 @@ copy $(SolutionDir)\external\openvr\bin\win64\openvr_api.dll $(OutDir)
     <None Include="shaders\common_ps.hlsl">
       <FileType>Document</FileType>
     </None>
-    <FxCompile Include="shaders\passthrough_masked_ps.hlsl">
+    <FxCompile Include="shaders\alpha_copy_masked_ps.hlsl">
       <ShaderType Condition="'$(Configuration)|$(Platform)'=='Debug|x64'">Pixel</ShaderType>
       <ShaderModel Condition="'$(Configuration)|$(Platform)'=='Debug|x64'">5.0</ShaderModel>
       <HeaderFileOutput Condition="'$(Configuration)|$(Platform)'=='Debug|x64'">shaders\passthrough_masked_ps.h</HeaderFileOutput>
       <ObjectFileOutput Condition="'$(Configuration)|$(Platform)'=='Debug|x64'">
       </ObjectFileOutput>
       <VariableName Condition="'$(Configuration)|$(Platform)'=='Debug|x64'">g_PassthroughMaskedShaderPS</VariableName>
-      <HeaderFileOutput Condition="'$(Configuration)|$(Platform)'=='Release|x64'">shaders\passthrough_masked_ps.h</HeaderFileOutput>
+      <HeaderFileOutput Condition="'$(Configuration)|$(Platform)'=='Release|x64'">shaders\alpha_copy_masked_ps.h</HeaderFileOutput>
       <ShaderType Condition="'$(Configuration)|$(Platform)'=='Release|x64'">Pixel</ShaderType>
-      <VariableName Condition="'$(Configuration)|$(Platform)'=='Release|x64'">g_PassthroughMaskedShaderPS</VariableName>
+      <VariableName Condition="'$(Configuration)|$(Platform)'=='Release|x64'">g_AlphaCopyMaskedShaderPS</VariableName>
     </FxCompile>
     <FxCompile Include="shaders\passthrough_ps.hlsl">
       <VariableName Condition="'$(Configuration)|$(Platform)'=='Debug|x64'">g_PassthroughShaderPS</VariableName>

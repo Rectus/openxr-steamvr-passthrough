@@ -176,7 +176,7 @@
     <FxCompile Include="shaders\alpha_prepass_ps.hlsl">
       <Filter>Shaders</Filter>
     </FxCompile>
-    <FxCompile Include="shaders\passthrough_masked_ps.hlsl">
+    <FxCompile Include="shaders\alpha_copy_masked_ps.hlsl">
       <Filter>Shaders</Filter>
     </FxCompile>
     <FxCompile Include="shaders\passthrough_ps.hlsl">

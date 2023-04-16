@@ -11,7 +11,7 @@
 #include "shaders\alpha_prepass_ps.spv.h"
 #include "shaders\alpha_prepass_masked_ps.spv.h"
 #include "shaders\passthrough_ps.spv.h"
-#include "shaders\passthrough_masked_ps.spv.h"
+#include "shaders\alpha_copy_masked_ps.spv.h"
 
 
 using namespace steamvr_passthrough;
@@ -227,7 +227,7 @@ PassthroughRendererVulkan::PassthroughRendererVulkan(const XrGraphicsBindingVulk
 	, m_pixelShader(nullptr)
 	, m_prepassShader(nullptr)
 	, m_maskedPrepassShader(nullptr)
-	, m_maskedPixelShader(nullptr)
+	, m_maskedAlphaCopyShader(nullptr)
 	, m_renderpass(nullptr)
 	, m_pipelineLayout(nullptr)
 	, m_pipelineDefault(nullptr)
@@ -346,10 +346,10 @@ bool PassthroughRendererVulkan::InitRenderer()
 	m_maskedPrepassShader = CreateShaderModule(g_AlphaPrepassMaskedShaderPS, ARRAYSIZE(g_AlphaPrepassMaskedShaderPS) * sizeof(g_AlphaPrepassMaskedShaderPS[0]));
 	m_deletionQueue.push_back([=]() { vkDestroyShaderModule(m_device, m_maskedPrepassShader, nullptr); });
 
-	m_maskedPixelShader = CreateShaderModule(g_PassthroughMaskedShaderPS, ARRAYSIZE(g_PassthroughMaskedShaderPS) * sizeof(g_PassthroughMaskedShaderPS[0]));
-	m_deletionQueue.push_back([=]() { vkDestroyShaderModule(m_device, m_maskedPixelShader, nullptr); });
+	m_maskedAlphaCopyShader = CreateShaderModule(g_AlphaCopyMaskedShaderPS, ARRAYSIZE(g_AlphaCopyMaskedShaderPS) * sizeof(g_AlphaCopyMaskedShaderPS[0]));
+	m_deletionQueue.push_back([=]() { vkDestroyShaderModule(m_device, m_maskedAlphaCopyShader, nullptr); });
 
-	if (!m_vertexShader || !m_pixelShader || !m_prepassShader || !m_maskedPrepassShader || !m_maskedPixelShader)
+	if (!m_vertexShader || !m_pixelShader || !m_prepassShader || !m_maskedPrepassShader || !m_maskedAlphaCopyShader)
 	{
 		ErrorLog("Shader module creation failure!\n");
 		return false;
@@ -735,7 +735,7 @@ bool PassthroughRendererVulkan::SetupPipeline(VkFormat format)
 	shaderInfoMaskedPrepassFS.pName = "main";
 
 	VkPipelineShaderStageCreateInfo shaderInfoMaskedPassthroughFS{ VK_STRUCTURE_TYPE_PIPELINE_SHADER_STAGE_CREATE_INFO };
-	shaderInfoMaskedPassthroughFS.module = m_maskedPixelShader;
+	shaderInfoMaskedPassthroughFS.module = m_maskedAlphaCopyShader;
 	shaderInfoMaskedPassthroughFS.stage = VK_SHADER_STAGE_FRAGMENT_BIT;
 	shaderInfoMaskedPassthroughFS.pName = "main";
 
