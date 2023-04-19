@@ -341,7 +341,7 @@ private:
 	void UpdateDescriptorSets(VkCommandBuffer commandBuffer, int swapchainIndex, const XrCompositionLayerProjection* layer, EPassthroughBlendMode blendMode);
 
 	void RenderPassthroughView(const ERenderEye eye, const int32_t imageIndex, const XrCompositionLayerProjection* layer, CameraFrame* frame, EPassthroughBlendMode blendMode);
-	void RenderPassthroughViewMasked(const ERenderEye eye, const int32_t imageIndex, const XrCompositionLayerProjection* layer, CameraFrame* frame);
+	void RenderMaskedPrepassView(const ERenderEye eye, const int32_t imageIndex, const XrCompositionLayerProjection* layer, CameraFrame* frame);
 
 	std::shared_ptr<ConfigManager> m_configManager;
 	HMODULE m_dllModule;
@@ -435,9 +435,11 @@ private:
 	VkDeviceMemory m_uvDistortionMapBufferMem;
 	float m_fovScale;
 
-	VkDeviceMemory m_vertexBufferMem;
-	VkBuffer m_vertexBuffer;
-	std::vector<float> m_vertices;
+	Mesh<VertexFormatBasic> m_cylinderMesh;
+	VkDeviceMemory m_cylinderMeshVertexBufferMem;
+	VkBuffer m_cylinderMeshVertexBuffer;
+	VkDeviceMemory m_cylinderMeshIndexBufferMem;
+	VkBuffer m_cylinderMeshIndexBuffer;
 
 	uint32_t m_cameraTextureWidth;
 	uint32_t m_cameraTextureHeight;

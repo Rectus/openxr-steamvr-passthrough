@@ -13,9 +13,9 @@ struct VS_OUTPUT
 
 #ifdef VULKAN
 
-SamplerState g_samplerState : register(s2);
-Texture2D g_cameraFrameTexture : register(t2);
-Texture2D<float2> g_fisheyeCorrectionTexture : register(t3);
+SamplerState g_samplerState : register(s5);
+Texture2D g_cameraFrameTexture : register(t5);
+Texture2D<float2> g_fisheyeCorrectionTexture : register(t6);
 
 #else
 

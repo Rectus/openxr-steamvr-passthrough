@@ -13,8 +13,8 @@ struct VS_OUTPUT
 
 #ifdef VULKAN
 
-SamplerState g_samplerState : register(s3);
-Texture2D g_blendMask : register(t3);
+SamplerState g_samplerState : register(s5);
+Texture2D g_blendMask : register(t5);
 
 #else
 

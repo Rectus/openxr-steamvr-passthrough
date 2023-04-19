@@ -154,10 +154,10 @@ VS_OUTPUT main(float3 inPosition : POSITION, uint vertexID : SV_VertexID)
     }
     
 	
-#ifndef VULKAN
+//#ifndef VULKAN
     float4 outCoords = mul(g_worldToCameraProjection, worldSpacePoint);
 	output.clipSpaceCoords = outCoords.xyw;
-#endif
+//#endif
 	
     output.position = mul(g_worldToHMDProjection, worldSpacePoint); 
 	output.screenCoords = output.position.xyw;

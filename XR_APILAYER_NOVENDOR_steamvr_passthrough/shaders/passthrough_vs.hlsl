@@ -9,8 +9,6 @@ struct VS_OUTPUT
 	float projectionValidity : TEXCOORD2;
 };
 
-//SamplerState g_samplerState : register(s0);
-//Texture2D<float> g_DepthTexture : register(t0);
 
 
 VS_OUTPUT main(float3 inPosition : POSITION, uint vertexID : SV_VertexID)
@@ -23,11 +21,11 @@ VS_OUTPUT main(float3 inPosition : POSITION, uint vertexID : SV_VertexID)
 	inPosition.y *= max(g_projectionDistance * 2.0, g_hmdViewWorldPos.y + g_projectionDistance - heightOffset);
 	inPosition.y += min(heightOffset, g_hmdViewWorldPos.y - 0.1);
 
-#ifdef VULKAN //TODO add to vulkan
-    float4 clipSpacePos = mul(g_worldToHMDProjection, float4(inPosition, 1.0));
-#else
+//#ifdef VULKAN //TODO add to vulkan
+    //float4 clipSpacePos = mul(g_worldToHMDProjection, float4(inPosition, 1.0));
+//#else
     float4 clipSpacePos = mul(g_worldToCameraProjection, float4(inPosition, 1.0));
-#endif
+//#endif
     output.clipSpaceCoords = clipSpacePos.xyw;
 	
     float4 worldPos = mul(g_cameraProjectionToWorld, clipSpacePos);
