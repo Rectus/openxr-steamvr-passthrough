@@ -7,6 +7,7 @@
 #include <xr_linear.h>
 #include "lodepng.h"
 
+#include "shaders\fullscreen_quad_vs.h"
 #include "shaders\passthrough_vs.h"
 #include "shaders\passthrough_stereo_vs.h"
 
@@ -714,6 +715,7 @@ void PassthroughRendererDX12::SetupIntermediateRenderTarget(uint32_t index, uint
 
 bool PassthroughRendererDX12::InitPipeline()
 {
+	D3D12_SHADER_BYTECODE fullscreenQuadShaderVS = { g_FullscreenQuadShaderVS, sizeof(g_FullscreenQuadShaderVS) };
 	D3D12_SHADER_BYTECODE passthroughShaderVS = { g_PassthroughShaderVS, sizeof(g_PassthroughShaderVS) };
 	D3D12_SHADER_BYTECODE passthroughStereoShaderVS = { g_PassthroughStereoShaderVS, sizeof(g_PassthroughStereoShaderVS) };
 
@@ -872,6 +874,7 @@ bool PassthroughRendererDX12::InitPipeline()
 
 	psoDesc.DepthStencilState = depthStencilDisabled;
 	psoDesc.BlendState = blendStateSrcAlpha;
+	psoDesc.VS = fullscreenQuadShaderVS;
 	psoDesc.PS = alphaCopyMaskedShaderPS;
 	if (FAILED(m_d3dDevice->CreateGraphicsPipelineState(&psoDesc, IID_PPV_ARGS(&m_psoMaskedAlphaCopy))))
 	{
@@ -1305,8 +1308,7 @@ void PassthroughRendererDX12::RenderPassthroughView(const ERenderEye eye, const 
 
 	if (!rendertarget) { return; }
 
-	Config_Depth& depthConfig = m_configManager->GetConfig_Depth();
-	bool bCompositeDepth = depthConfig.DepthForceComposition && depthConfig.DepthReadFromApplication && m_depthStencils[bufferIndex].Get() != nullptr;
+	bool bCompositeDepth = m_bUsingDepth && m_depthStencils[bufferIndex].Get() != nullptr;
 
 	XrRect2Di rect = layer->views[viewIndex].subImage.imageRect;
 
@@ -1346,7 +1348,7 @@ void PassthroughRendererDX12::RenderPassthroughView(const ERenderEye eye, const 
 	psViewBuffer->frameUVBounds = GetFrameUVBounds(eye, frame->frameLayout);
 	psViewBuffer->rtArrayIndex = m_frameIndex;
 	psViewBuffer->bDoCutout = false;
-	psViewBuffer->bPremultiplyAlpha = (blendMode == AlphaBlendPremultiplied) && !bCompositeDepth;
+	psViewBuffer->bPremultiplyAlpha = (blendMode == AlphaBlendPremultiplied) && !m_bUsingDepth;
 
 	D3D12_GPU_DESCRIPTOR_HANDLE cbvPSHandle = m_CBVSRVHeap->GetGPUDescriptorHandleForHeapStart();
 	cbvPSHandle.ptr += (INDEX_CBV_PS_VIEW_0 + bufferIndex) * m_CBVSRVHeapDescSize;
@@ -1355,7 +1357,7 @@ void PassthroughRendererDX12::RenderPassthroughView(const ERenderEye eye, const 
 	bool bUseStereo = mainConf.ProjectionMode == Projection_StereoReconstruction;
 
 	// Extra draw if we need to preadjust the alpha.
-	if (blendMode != Masked && ((blendMode != AlphaBlendPremultiplied && blendMode != AlphaBlendUnpremultiplied) || m_configManager->GetConfig_Main().PassthroughOpacity < 1.0f || bCompositeDepth))
+	if (blendMode != Masked && ((blendMode != AlphaBlendPremultiplied && blendMode != AlphaBlendUnpremultiplied) || m_configManager->GetConfig_Main().PassthroughOpacity < 1.0f || m_bUsingDepth))
 	{
 		m_commandList->SetPipelineState(m_psoPrepass.Get());
 		m_commandList->DrawIndexedInstanced(numIndices, 1, 0, 0, 0);
@@ -1469,9 +1471,6 @@ void PassthroughRendererDX12::RenderMaskedPrepassView(const ERenderEye eye, cons
 	m_commandList->RSSetScissorRects(1, &scissor);
 
 	Config_Main& mainConf = m_configManager->GetConfig_Main();
-	Config_Stereo& stereoConf = m_configManager->GetConfig_Stereo();
-	Config_Depth& depthConfig = m_configManager->GetConfig_Depth();
-	bool bCompositeDepth = depthConfig.DepthForceComposition && depthConfig.DepthReadFromApplication && m_depthStencils[bufferIndex].Get() != nullptr;
 
 	VSViewConstantBuffer* vsViewBuffer = (VSViewConstantBuffer*)m_vsViewConstantBufferCPUData[bufferIndex];
 	vsViewBuffer->cameraProjectionToWorld = (eye == LEFT_EYE) ? frame->cameraProjectionToWorldLeft : frame->cameraProjectionToWorldRight;

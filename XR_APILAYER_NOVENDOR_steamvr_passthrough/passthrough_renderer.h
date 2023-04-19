@@ -137,6 +137,7 @@ private:
 	ComPtr<ID3D11DepthStencilState> m_depthStencilStateGreater;
 	ComPtr<ID3D11DepthStencilState> m_depthStencilStateGreaterWrite;
 
+	ComPtr<ID3D11VertexShader> m_fullscreenQuadShader;
 	ComPtr<ID3D11VertexShader> m_vertexShader;
 	ComPtr<ID3D11VertexShader> m_stereoVertexShader;
 	ComPtr<ID3D11PixelShader> m_pixelShader;
@@ -358,6 +359,7 @@ private:
 	VkCommandPool m_commandPool;
 	VkCommandBuffer m_commandBuffer[NUM_SWAPCHAINS];
 
+	VkShaderModule m_fullscreenQuadShader;
 	VkShaderModule m_vertexShader;
 	VkShaderModule m_pixelShader;
 	VkShaderModule m_prepassShader;
@@ -374,16 +376,27 @@ private:
 	VkPipeline m_pipelinePrepassUseAppAlpha;
 	VkPipeline m_pipelinePrepassIgnoreAppAlpha;
 	VkPipeline m_pipelineMaskedPrepass;
-	VkPipeline m_pipelineMaskedRender;
+	VkPipeline m_pipelineMaskedAlphaCopy;
 
 	VkDescriptorPool m_descriptorPool;
 	VkDescriptorSet m_descriptorSets[NUM_SWAPCHAINS * 2];
 	VkDescriptorSetLayout m_descriptorLayout;
 	
+	VkBuffer m_vsPassConstantBuffer[NUM_SWAPCHAINS];
+	VkDeviceMemory m_vsPassConstantBufferMem[NUM_SWAPCHAINS];
+	void* m_vsPassConstantBufferMappings[NUM_SWAPCHAINS];
+
+	VkBuffer m_vsViewConstantBuffer[NUM_SWAPCHAINS * 2];
+	VkDeviceMemory m_vsViewConstantBufferMem[NUM_SWAPCHAINS * 2];
+	void* m_vsViewConstantBufferMappings[NUM_SWAPCHAINS * 2];
 
 	VkBuffer m_psPassConstantBuffer[NUM_SWAPCHAINS];
 	VkDeviceMemory m_psPassConstantBufferMem[NUM_SWAPCHAINS];
 	void* m_psPassConstantBufferMappings[NUM_SWAPCHAINS];
+
+	VkBuffer m_psViewConstantBuffer[NUM_SWAPCHAINS * 2];
+	VkDeviceMemory m_psViewConstantBufferMem[NUM_SWAPCHAINS * 2];
+	void* m_psViewConstantBufferMappings[NUM_SWAPCHAINS * 2];
 
 	VkBuffer m_psMaskedConstantBuffer[NUM_SWAPCHAINS];
 	VkDeviceMemory m_psMaskedConstantBufferMem[NUM_SWAPCHAINS];

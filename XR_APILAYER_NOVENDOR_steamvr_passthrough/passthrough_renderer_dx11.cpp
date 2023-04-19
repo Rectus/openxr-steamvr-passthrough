@@ -6,6 +6,7 @@
 #include <xr_linear.h>
 
 
+#include "shaders\fullscreen_quad_vs.h"
 #include "shaders\passthrough_vs.h"
 #include "shaders\passthrough_stereo_vs.h"
 
@@ -121,6 +122,12 @@ bool PassthroughRendererDX11::InitRenderer()
 {
 	m_d3dDevice->GetImmediateContext(&m_deviceContext);
 
+
+	if (FAILED(m_d3dDevice->CreateVertexShader(g_FullscreenQuadShaderVS, sizeof(g_FullscreenQuadShaderVS), nullptr, &m_fullscreenQuadShader)))
+	{
+		ErrorLog("g_PassthroughShaderVS creation failure!\n");
+		return false;
+	}
 
 	if (FAILED(m_d3dDevice->CreateVertexShader(g_PassthroughShaderVS, sizeof(g_PassthroughShaderVS), nullptr, &m_vertexShader)))
 	{
@@ -1030,7 +1037,7 @@ void PassthroughRendererDX11::RenderPassthroughView(const ERenderEye eye, const 
 	m_renderContext->PSSetConstantBuffers(0, 2, psBuffers);
 
 	// Extra draw if we need to preadjust the alpha.
-	if (blendMode != Masked && ((blendMode != AlphaBlendPremultiplied && blendMode != AlphaBlendUnpremultiplied) || m_configManager->GetConfig_Main().PassthroughOpacity < 1.0f || bCompositeDepth))
+	if (blendMode != Masked && ((blendMode != AlphaBlendPremultiplied && blendMode != AlphaBlendUnpremultiplied) || mainConf.PassthroughOpacity < 1.0f || bCompositeDepth))
 	{
 		m_renderContext->PSSetShader(m_prepassShader.Get(), nullptr, 0);
 
@@ -1252,8 +1259,17 @@ void PassthroughRendererDX11::RenderMaskedPrepassView(const ERenderEye eye, cons
 
 	m_renderContext->PSSetShader(m_maskedPrepassShader.Get(), nullptr, 0);
 
-	m_renderContext->DrawIndexed(numIndices, 0, 0);
-
+	// Draw with simple vertex shader if we don't need to sample camera
+	if (!bCompositeDepth && !m_configManager->GetConfig_Core().CoreForceMaskedUseCameraImage)
+	{
+		m_renderContext->IASetPrimitiveTopology(D3D11_PRIMITIVE_TOPOLOGY_TRIANGLESTRIP);
+		m_renderContext->VSSetShader(m_fullscreenQuadShader.Get(), nullptr, 0);
+		m_renderContext->Draw(3, 0);
+	}
+	else
+	{
+		m_renderContext->DrawIndexed(numIndices, 0, 0);
+	}
 
 	
 	// Clear rendertarget so we can swap the places of the RTV and SRV.
@@ -1270,6 +1286,9 @@ void PassthroughRendererDX11::RenderMaskedPrepassView(const ERenderEye eye, cons
 		ID3D11ShaderResourceView* views[3] = { cameraFrameSRV, m_uvDistortionMapSRV.Get(), tempTarget.SRV.Get() };
 		m_renderContext->PSSetShaderResources(0, 3, views);
 	}
+
+	ID3D11ShaderResourceView* views[3] = { cameraFrameSRV, nullptr, tempTarget.SRV.Get() };
+
 	
 	psViewBuffer.bDoCutout = !stereoConf.StereoCutoutEnabled;
 	m_renderContext->UpdateSubresource(m_psViewConstantBuffer.Get(), 0, nullptr, &psViewBuffer, 0, 0);
@@ -1277,9 +1296,25 @@ void PassthroughRendererDX11::RenderMaskedPrepassView(const ERenderEye eye, cons
 	m_renderContext->OMSetRenderTargets(1, &rendertarget, depthStencil);
 	m_renderContext->OMSetBlendState(m_blendStateSrcAlpha.Get(), nullptr, UINT_MAX);
 	m_renderContext->OMSetDepthStencilState(GET_DEPTH_STENCIL_STATE(false, frame->bHasReversedDepth, false), 1);
+
+	m_renderContext->IASetPrimitiveTopology(D3D11_PRIMITIVE_TOPOLOGY_TRIANGLESTRIP);
+	m_renderContext->VSSetShader(m_fullscreenQuadShader.Get(), nullptr, 0);
 	m_renderContext->PSSetShader(m_maskedAlphaCopyShader.Get(), nullptr, 0);
 
-	m_renderContext->DrawIndexed(numIndices, 0, 0);
+	m_renderContext->Draw(3, 0);
+
+
+
+	if (mainConf.ProjectionMode == Projection_StereoReconstruction)
+	{
+		m_renderContext->IASetPrimitiveTopology(D3D11_PRIMITIVE_TOPOLOGY_TRIANGLELIST);
+		m_renderContext->VSSetShader(m_stereoVertexShader.Get(), nullptr, 0);
+	}
+	else
+	{
+		m_renderContext->IASetPrimitiveTopology(D3D11_PRIMITIVE_TOPOLOGY_TRIANGLELIST);
+		m_renderContext->VSSetShader(m_vertexShader.Get(), nullptr, 0);
+	}
 }
 
 
