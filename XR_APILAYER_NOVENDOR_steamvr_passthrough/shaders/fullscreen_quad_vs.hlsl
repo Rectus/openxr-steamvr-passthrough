@@ -23,9 +23,6 @@ VS_OUTPUT main(float3 inPosition : POSITION, uint vertexID : SV_VertexID)
 
 #ifdef VULKAN
 	output.position.y *= -1.0;
-    output.position.y += 2.0;
-    output.clipSpaceCoords.y -= 2.0;
-    output.screenCoords.y -= 2.0;
 #endif
     
     return output;
