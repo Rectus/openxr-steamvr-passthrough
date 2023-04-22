@@ -392,14 +392,14 @@ bool PassthroughRendererVulkan::InitRenderer()
 	{
 		VkDescriptorPoolSize poolSizes[2] =
 		{
-			{VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER, NUM_SWAPCHAINS * 4},
-			{VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER, NUM_SWAPCHAINS * 6}
+			{VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER, NUM_SWAPCHAINS * 2 * 5 * 2},
+			{VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER, NUM_SWAPCHAINS * 2 * 3 * 2}
 		};
 
 		VkDescriptorPoolCreateInfo poolInfo{ VK_STRUCTURE_TYPE_DESCRIPTOR_POOL_CREATE_INFO };
 		poolInfo.poolSizeCount = 2;
 		poolInfo.pPoolSizes = poolSizes;
-		poolInfo.maxSets = NUM_SWAPCHAINS * 2;
+		poolInfo.maxSets = NUM_SWAPCHAINS * 2 * 2;
 
 		if (vkCreateDescriptorPool(m_device, &poolInfo, nullptr, &m_descriptorPool) != VK_SUCCESS)
 		{
@@ -435,9 +435,9 @@ bool PassthroughRendererVulkan::InitRenderer()
 		m_deletionQueue.push_back([=]() { vkDestroyDescriptorSetLayout(m_device, m_descriptorLayout, nullptr); });
 		
 
-		VkDescriptorSetLayout layouts[NUM_SWAPCHAINS * 2];
+		VkDescriptorSetLayout layouts[NUM_SWAPCHAINS * 2 * 2];
 
-		for (int i = 0; i < NUM_SWAPCHAINS * 2; i++)
+		for (int i = 0; i < NUM_SWAPCHAINS * 2 * 2; i++)
 		{
 			layouts[i] = m_descriptorLayout;
 		}
@@ -445,7 +445,7 @@ bool PassthroughRendererVulkan::InitRenderer()
 		VkDescriptorSetAllocateInfo allocInfo{};
 		allocInfo.sType = VK_STRUCTURE_TYPE_DESCRIPTOR_SET_ALLOCATE_INFO;
 		allocInfo.descriptorPool = m_descriptorPool;
-		allocInfo.descriptorSetCount = NUM_SWAPCHAINS * 2;
+		allocInfo.descriptorSetCount = NUM_SWAPCHAINS * 2 * 2;
 		allocInfo.pSetLayouts = layouts;
 
 		if (vkAllocateDescriptorSets(m_device, &allocInfo, m_descriptorSets) != VK_SUCCESS)
@@ -680,9 +680,13 @@ bool PassthroughRendererVulkan::SetupPipeline(VkFormat format)
 	vi.vertexAttributeDescriptionCount = 1;
 	vi.pVertexAttributeDescriptions = &attrDesc;
 
-	VkPipelineInputAssemblyStateCreateInfo ia{ VK_STRUCTURE_TYPE_PIPELINE_INPUT_ASSEMBLY_STATE_CREATE_INFO };
-	ia.primitiveRestartEnable = VK_FALSE;
-	ia.topology = VK_PRIMITIVE_TOPOLOGY_TRIANGLE_LIST;
+	VkPipelineInputAssemblyStateCreateInfo iaList{ VK_STRUCTURE_TYPE_PIPELINE_INPUT_ASSEMBLY_STATE_CREATE_INFO };
+	iaList.primitiveRestartEnable = VK_FALSE;
+	iaList.topology = VK_PRIMITIVE_TOPOLOGY_TRIANGLE_LIST;
+
+	VkPipelineInputAssemblyStateCreateInfo iaStrip{ VK_STRUCTURE_TYPE_PIPELINE_INPUT_ASSEMBLY_STATE_CREATE_INFO };
+	iaStrip.primitiveRestartEnable = VK_FALSE;
+	iaStrip.topology = VK_PRIMITIVE_TOPOLOGY_TRIANGLE_STRIP;
 
 	VkPipelineRasterizationStateCreateInfo rs{ VK_STRUCTURE_TYPE_PIPELINE_RASTERIZATION_STATE_CREATE_INFO };
 	rs.polygonMode = VK_POLYGON_MODE_FILL;
@@ -745,8 +749,11 @@ bool PassthroughRendererVulkan::SetupPipeline(VkFormat format)
 	blendStateAlphaPremultiplied.pAttachments = &attachStateAlphaPremultiplied;
 
 	VkPipelineColorBlendAttachmentState attachStateSrcAlpha = attachStateBase;
-	attachStateSrcAlpha.srcColorBlendFactor = VK_BLEND_FACTOR_SRC_ALPHA;
-	attachStateSrcAlpha.dstColorBlendFactor = VK_BLEND_FACTOR_ONE_MINUS_SRC_ALPHA;
+	attachStateSrcAlpha.colorWriteMask = VK_COLOR_COMPONENT_A_BIT;
+	attachStateSrcAlpha.srcColorBlendFactor = VK_BLEND_FACTOR_ZERO;
+	attachStateSrcAlpha.dstColorBlendFactor = VK_BLEND_FACTOR_ONE;
+	attachStateSrcAlpha.srcAlphaBlendFactor = VK_BLEND_FACTOR_ONE;
+	attachStateSrcAlpha.dstAlphaBlendFactor = VK_BLEND_FACTOR_ZERO;
 	VkPipelineColorBlendStateCreateInfo blendStateSrcAlpha = blendStateBase;
 	blendStateSrcAlpha.pAttachments = &attachStateSrcAlpha;
 
@@ -790,10 +797,15 @@ bool PassthroughRendererVulkan::SetupPipeline(VkFormat format)
 	VkPipelineMultisampleStateCreateInfo ms{ VK_STRUCTURE_TYPE_PIPELINE_MULTISAMPLE_STATE_CREATE_INFO };
 	ms.rasterizationSamples = VK_SAMPLE_COUNT_1_BIT;
 
-	VkPipelineShaderStageCreateInfo shaderInfoVertex{ VK_STRUCTURE_TYPE_PIPELINE_SHADER_STAGE_CREATE_INFO };
-	shaderInfoVertex.module = m_vertexShader;
-	shaderInfoVertex.stage = VK_SHADER_STAGE_VERTEX_BIT;
-	shaderInfoVertex.pName = "main";
+	VkPipelineShaderStageCreateInfo shaderInfoFullscreenVS{ VK_STRUCTURE_TYPE_PIPELINE_SHADER_STAGE_CREATE_INFO };
+	shaderInfoFullscreenVS.module = m_fullscreenQuadShader;
+	shaderInfoFullscreenVS.stage = VK_SHADER_STAGE_VERTEX_BIT;
+	shaderInfoFullscreenVS.pName = "main";
+
+	VkPipelineShaderStageCreateInfo shaderInfoPassthroughVS{ VK_STRUCTURE_TYPE_PIPELINE_SHADER_STAGE_CREATE_INFO };
+	shaderInfoPassthroughVS.module = m_vertexShader;
+	shaderInfoPassthroughVS.stage = VK_SHADER_STAGE_VERTEX_BIT;
+	shaderInfoPassthroughVS.pName = "main";
 
 	VkPipelineShaderStageCreateInfo shaderInfoPassthroughFS{ VK_STRUCTURE_TYPE_PIPELINE_SHADER_STAGE_CREATE_INFO };
 	shaderInfoPassthroughFS.module = m_pixelShader;
@@ -815,16 +827,17 @@ bool PassthroughRendererVulkan::SetupPipeline(VkFormat format)
 	shaderInfoMaskedPassthroughFS.stage = VK_SHADER_STAGE_FRAGMENT_BIT;
 	shaderInfoMaskedPassthroughFS.pName = "main";
 
-	std::vector<VkPipelineShaderStageCreateInfo> shaderInfoBase{ shaderInfoVertex, shaderInfoPassthroughFS };
-	std::vector<VkPipelineShaderStageCreateInfo> shaderInfoPrepass{ shaderInfoVertex, shaderInfoPrepassFS };
-	std::vector<VkPipelineShaderStageCreateInfo> shaderInfoMaskedPrepass{ shaderInfoVertex, shaderInfoMaskedPrepassFS };
-	std::vector<VkPipelineShaderStageCreateInfo> shaderInfoMasked{ shaderInfoVertex, shaderInfoMaskedPassthroughFS };
+	std::vector<VkPipelineShaderStageCreateInfo> shaderInfoBase{ shaderInfoPassthroughVS, shaderInfoPassthroughFS };
+	std::vector<VkPipelineShaderStageCreateInfo> shaderInfoPrepass{ shaderInfoPassthroughVS, shaderInfoPrepassFS };
+	std::vector<VkPipelineShaderStageCreateInfo> shaderInfoMaskedPrepass{ shaderInfoPassthroughVS, shaderInfoMaskedPrepassFS };
+	std::vector<VkPipelineShaderStageCreateInfo> shaderInfoMaskedPrepassFullscreen{ shaderInfoFullscreenVS, shaderInfoMaskedPrepassFS };
+	std::vector<VkPipelineShaderStageCreateInfo> shaderInfoMasked{ shaderInfoFullscreenVS, shaderInfoMaskedPassthroughFS };
 
 	VkGraphicsPipelineCreateInfo pipelineInfoBase{ VK_STRUCTURE_TYPE_GRAPHICS_PIPELINE_CREATE_INFO };
 	pipelineInfoBase.stageCount = (uint32_t)shaderInfoBase.size();
 	pipelineInfoBase.pStages = shaderInfoBase.data();
 	pipelineInfoBase.pVertexInputState = &vi;
-	pipelineInfoBase.pInputAssemblyState = &ia;
+	pipelineInfoBase.pInputAssemblyState = &iaList;
 	pipelineInfoBase.pTessellationState = nullptr;
 	pipelineInfoBase.pViewportState = &vp;
 	pipelineInfoBase.pRasterizationState = &rs;
@@ -861,13 +874,22 @@ bool PassthroughRendererVulkan::SetupPipeline(VkFormat format)
 	piMaskedPrepass.pColorBlendState = &blendStateNoBlend;
 	piMaskedPrepass.renderPass = m_renderpassMaskedPrepass;
 
-	VkGraphicsPipelineCreateInfo piMaskedRender{ VK_STRUCTURE_TYPE_GRAPHICS_PIPELINE_CREATE_INFO };
-	piMaskedRender = pipelineInfoBase;
-	piMaskedRender.stageCount = (uint32_t)shaderInfoMasked.size();
-	piMaskedRender.pStages = shaderInfoMasked.data();
-	piMaskedRender.pColorBlendState = &blendStateSrcAlpha;
+	VkGraphicsPipelineCreateInfo piMaskedPrepassFullscreen{ VK_STRUCTURE_TYPE_GRAPHICS_PIPELINE_CREATE_INFO };
+	piMaskedPrepassFullscreen = pipelineInfoBase;
+	piMaskedPrepassFullscreen.pInputAssemblyState = &iaStrip;
+	piMaskedPrepassFullscreen.stageCount = (uint32_t)shaderInfoMaskedPrepassFullscreen.size();
+	piMaskedPrepassFullscreen.pStages = shaderInfoMaskedPrepassFullscreen.data();
+	piMaskedPrepassFullscreen.pColorBlendState = &blendStateNoBlend;
+	piMaskedPrepassFullscreen.renderPass = m_renderpassMaskedPrepass;
+
+	VkGraphicsPipelineCreateInfo piMaskedAlphaCopy{ VK_STRUCTURE_TYPE_GRAPHICS_PIPELINE_CREATE_INFO };
+	piMaskedAlphaCopy = pipelineInfoBase;
+	piMaskedAlphaCopy.pInputAssemblyState = &iaStrip;
+	piMaskedAlphaCopy.stageCount = (uint32_t)shaderInfoMasked.size();
+	piMaskedAlphaCopy.pStages = shaderInfoMasked.data();
+	piMaskedAlphaCopy.pColorBlendState = &blendStateSrcAlpha;
 	
-	std::vector<VkGraphicsPipelineCreateInfo> pipelineInfos{ pipelineInfoBase, piAlphaPremultiplied, piPrepassUseAppAlpha, piPrepassIgnoreAppAlpha, piMaskedPrepass, piMaskedRender };
+	std::vector<VkGraphicsPipelineCreateInfo> pipelineInfos{ pipelineInfoBase, piAlphaPremultiplied, piPrepassUseAppAlpha, piPrepassIgnoreAppAlpha, piMaskedPrepass, piMaskedPrepassFullscreen, piMaskedAlphaCopy };
 
 	std::vector<VkPipeline> pipelines;
 	pipelines.resize(pipelineInfos.size());
@@ -883,13 +905,15 @@ bool PassthroughRendererVulkan::SetupPipeline(VkFormat format)
 	m_pipelinePrepassUseAppAlpha = pipelines[2];
 	m_pipelinePrepassIgnoreAppAlpha = pipelines[3];
 	m_pipelineMaskedPrepass = pipelines[4];
-	m_pipelineMaskedAlphaCopy = pipelines[5];
+	m_pipelineMaskedPrepassFullscreen = pipelines[5];
+	m_pipelineMaskedAlphaCopy = pipelines[6];
 
 	m_deletionQueue.push_back([=]() { vkDestroyPipeline(m_device, m_pipelineDefault, nullptr); });
 	m_deletionQueue.push_back([=]() { vkDestroyPipeline(m_device, m_pipelineAlphaPremultiplied, nullptr); });
 	m_deletionQueue.push_back([=]() { vkDestroyPipeline(m_device, m_pipelinePrepassUseAppAlpha, nullptr); });
 	m_deletionQueue.push_back([=]() { vkDestroyPipeline(m_device, m_pipelinePrepassIgnoreAppAlpha, nullptr); });
 	m_deletionQueue.push_back([=]() { vkDestroyPipeline(m_device, m_pipelineMaskedPrepass, nullptr); });
+	m_deletionQueue.push_back([=]() { vkDestroyPipeline(m_device, m_pipelineMaskedPrepassFullscreen, nullptr); });
 	m_deletionQueue.push_back([=]() { vkDestroyPipeline(m_device, m_pipelineMaskedAlphaCopy, nullptr); });
 
 	return true;
@@ -1465,6 +1489,9 @@ bool PassthroughRendererVulkan::UpdateCameraFrameResource(VkCommandBuffer comman
 
 void PassthroughRendererVulkan::UpdateDescriptorSets(VkCommandBuffer commandBuffer, int swapchainIndex, const XrCompositionLayerProjection* layer, EPassthroughBlendMode blendMode)
 {
+
+	VkDescriptorSet& desc = m_descriptorSets[(blendMode == Masked) ? NUM_SWAPCHAINS * 2 + swapchainIndex : swapchainIndex];
+
 	int viewIndex = swapchainIndex >= (NUM_SWAPCHAINS - 1) ? 1 : 0;
 
 	VkDescriptorBufferInfo vsViewBufferInfo{};
@@ -1516,7 +1543,7 @@ void PassthroughRendererVulkan::UpdateDescriptorSets(VkCommandBuffer commandBuff
 	VkWriteDescriptorSet descriptorWrite[9]{};
 
 	descriptorWrite[0].sType = VK_STRUCTURE_TYPE_WRITE_DESCRIPTOR_SET;
-	descriptorWrite[0].dstSet = m_descriptorSets[swapchainIndex];
+	descriptorWrite[0].dstSet = desc;
 	descriptorWrite[0].dstBinding = 0;
 	descriptorWrite[0].dstArrayElement = 0;
 	descriptorWrite[0].descriptorType = VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER;
@@ -1524,7 +1551,7 @@ void PassthroughRendererVulkan::UpdateDescriptorSets(VkCommandBuffer commandBuff
 	descriptorWrite[0].pBufferInfo = &vsViewBufferInfo;
 
 	descriptorWrite[1].sType = VK_STRUCTURE_TYPE_WRITE_DESCRIPTOR_SET;
-	descriptorWrite[1].dstSet = m_descriptorSets[swapchainIndex];
+	descriptorWrite[1].dstSet = desc;
 	descriptorWrite[1].dstBinding = 1;
 	descriptorWrite[1].dstArrayElement = 0;
 	descriptorWrite[1].descriptorType = VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER;
@@ -1532,7 +1559,7 @@ void PassthroughRendererVulkan::UpdateDescriptorSets(VkCommandBuffer commandBuff
 	descriptorWrite[1].pBufferInfo = &vsPassBufferInfo;
 
 	descriptorWrite[2].sType = VK_STRUCTURE_TYPE_WRITE_DESCRIPTOR_SET;
-	descriptorWrite[2].dstSet = m_descriptorSets[swapchainIndex];
+	descriptorWrite[2].dstSet = desc;
 	descriptorWrite[2].dstBinding = 2;
 	descriptorWrite[2].dstArrayElement = 0;
 	descriptorWrite[2].descriptorType = VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER;
@@ -1540,7 +1567,7 @@ void PassthroughRendererVulkan::UpdateDescriptorSets(VkCommandBuffer commandBuff
 	descriptorWrite[2].pBufferInfo = &psViewBufferInfo;
 
 	descriptorWrite[3].sType = VK_STRUCTURE_TYPE_WRITE_DESCRIPTOR_SET;
-	descriptorWrite[3].dstSet = m_descriptorSets[swapchainIndex];
+	descriptorWrite[3].dstSet = desc;
 	descriptorWrite[3].dstBinding = 3;
 	descriptorWrite[3].dstArrayElement = 0;
 	descriptorWrite[3].descriptorType = VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER;
@@ -1548,7 +1575,7 @@ void PassthroughRendererVulkan::UpdateDescriptorSets(VkCommandBuffer commandBuff
 	descriptorWrite[3].pBufferInfo = &psPassBufferInfo;
 
 	descriptorWrite[4].sType = VK_STRUCTURE_TYPE_WRITE_DESCRIPTOR_SET;
-	descriptorWrite[4].dstSet = m_descriptorSets[swapchainIndex];
+	descriptorWrite[4].dstSet = desc;
 	descriptorWrite[4].dstBinding = 4;
 	descriptorWrite[4].dstArrayElement = 0;
 	descriptorWrite[4].descriptorType = VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER;
@@ -1556,7 +1583,7 @@ void PassthroughRendererVulkan::UpdateDescriptorSets(VkCommandBuffer commandBuff
 	descriptorWrite[4].pBufferInfo = &psMaskedBufferInfo;
 
 	descriptorWrite[5].sType = VK_STRUCTURE_TYPE_WRITE_DESCRIPTOR_SET;
-	descriptorWrite[5].dstSet = m_descriptorSets[swapchainIndex];
+	descriptorWrite[5].dstSet = desc;
 	descriptorWrite[5].dstBinding = 5;
 	descriptorWrite[5].dstArrayElement = 0;
 	descriptorWrite[5].descriptorType = VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER;
@@ -1597,7 +1624,7 @@ void PassthroughRendererVulkan::UpdateDescriptorSets(VkCommandBuffer commandBuff
 		originalRTImageInfo.sampler = m_cameraSampler;
 
 		descriptorWrite[6].sType = VK_STRUCTURE_TYPE_WRITE_DESCRIPTOR_SET;
-		descriptorWrite[6].dstSet = m_descriptorSets[swapchainIndex];
+		descriptorWrite[6].dstSet = desc;
 		descriptorWrite[6].dstBinding = 6;
 		descriptorWrite[6].dstArrayElement = 0;
 		descriptorWrite[6].descriptorType = VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER;
@@ -1605,7 +1632,7 @@ void PassthroughRendererVulkan::UpdateDescriptorSets(VkCommandBuffer commandBuff
 		descriptorWrite[6].pImageInfo = &intermediateImageInfo;
 
 		descriptorWrite[7].sType = VK_STRUCTURE_TYPE_WRITE_DESCRIPTOR_SET;
-		descriptorWrite[7].dstSet = m_descriptorSets[swapchainIndex];
+		descriptorWrite[7].dstSet = desc;
 		descriptorWrite[7].dstBinding = 7;
 		descriptorWrite[7].dstArrayElement = 0;
 		descriptorWrite[7].descriptorType = VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER;
@@ -1621,7 +1648,7 @@ void PassthroughRendererVulkan::UpdateDescriptorSets(VkCommandBuffer commandBuff
 			uvDistortionImageInfo.sampler = m_cameraSampler;
 
 			descriptorWrite[8].sType = VK_STRUCTURE_TYPE_WRITE_DESCRIPTOR_SET;
-			descriptorWrite[8].dstSet = m_descriptorSets[swapchainIndex];
+			descriptorWrite[8].dstSet = desc;
 			descriptorWrite[8].dstBinding = 8;
 			descriptorWrite[8].dstArrayElement = 0;
 			descriptorWrite[8].descriptorType = VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER;
@@ -1638,7 +1665,7 @@ void PassthroughRendererVulkan::UpdateDescriptorSets(VkCommandBuffer commandBuff
 		uvDistortionImageInfo.sampler = m_cameraSampler;
 
 		descriptorWrite[6].sType = VK_STRUCTURE_TYPE_WRITE_DESCRIPTOR_SET;
-		descriptorWrite[6].dstSet = m_descriptorSets[swapchainIndex];
+		descriptorWrite[6].dstSet = desc;
 		descriptorWrite[6].dstBinding = 6;
 		descriptorWrite[6].dstArrayElement = 0;
 		descriptorWrite[6].descriptorType = VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER;
@@ -1650,7 +1677,7 @@ void PassthroughRendererVulkan::UpdateDescriptorSets(VkCommandBuffer commandBuff
 	else
 	{
 		descriptorWrite[6].sType = VK_STRUCTURE_TYPE_WRITE_DESCRIPTOR_SET;
-		descriptorWrite[6].dstSet = m_descriptorSets[swapchainIndex];
+		descriptorWrite[6].dstSet = desc;
 		descriptorWrite[6].dstBinding = 6;
 		descriptorWrite[6].dstArrayElement = 0;
 		descriptorWrite[6].descriptorType = VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER;
@@ -1662,7 +1689,7 @@ void PassthroughRendererVulkan::UpdateDescriptorSets(VkCommandBuffer commandBuff
 
 	vkUpdateDescriptorSets(m_device, numdescriptors, descriptorWrite, 0, nullptr);
 
-	vkCmdBindDescriptorSets(m_commandBuffer[m_frameIndex], VK_PIPELINE_BIND_POINT_GRAPHICS, m_pipelineLayout, 0, 1, &m_descriptorSets[swapchainIndex], 0, nullptr);
+	vkCmdBindDescriptorSets(m_commandBuffer[m_frameIndex], VK_PIPELINE_BIND_POINT_GRAPHICS, m_pipelineLayout, 0, 1, &desc, 0, nullptr);
 }
 
 
@@ -1788,48 +1815,52 @@ void PassthroughRendererVulkan::RenderPassthroughView(const ERenderEye eye, cons
 	VkViewport viewport = { (float)rect.offset.x, (float)rect.offset.y, (float)rect.extent.width, (float)rect.extent.height, 0.0f, 1.0f };
 	VkRect2D scissor = { {rect.offset.x, rect.offset.y}, {(uint32_t)rect.offset.x + rect.extent.width, (uint32_t)rect.offset.y + rect.extent.height} };
 
-	UpdateDescriptorSets(commandBuffer, bufferIndex, layer, blendMode);
+	UpdateDescriptorSets(commandBuffer, bufferIndex, layer, (blendMode == Masked) ? AlphaBlendUnpremultiplied : blendMode);
 
-	VkRenderPassBeginInfo renderPassInfo{ VK_STRUCTURE_TYPE_RENDER_PASS_BEGIN_INFO };
-	renderPassInfo.renderPass = m_renderpass;
-	renderPassInfo.framebuffer = rendertarget;
-	renderPassInfo.renderArea = scissor;
 
-	vkCmdBeginRenderPass(commandBuffer, &renderPassInfo, VK_SUBPASS_CONTENTS_INLINE);
+	if (blendMode != Masked)
+	{
+		VkRenderPassBeginInfo renderPassInfo{ VK_STRUCTURE_TYPE_RENDER_PASS_BEGIN_INFO };
+		renderPassInfo.renderPass = m_renderpass;
+		renderPassInfo.framebuffer = rendertarget;
+		renderPassInfo.renderArea = scissor;
 
-	vkCmdSetViewport(commandBuffer, 0, 1, &viewport);
-	vkCmdSetScissor(commandBuffer, 0, 1, &scissor);
+		vkCmdBeginRenderPass(commandBuffer, &renderPassInfo, VK_SUBPASS_CONTENTS_INLINE);
+	
+		vkCmdSetViewport(commandBuffer, 0, 1, &viewport);
+		vkCmdSetScissor(commandBuffer, 0, 1, &scissor);
 
-	VkDeviceSize vertOffset = 0;
-	vkCmdBindVertexBuffers(commandBuffer, 0, 1, &m_cylinderMeshVertexBuffer, &vertOffset);
-	vkCmdBindIndexBuffer(commandBuffer, m_cylinderMeshIndexBuffer, 0, VK_INDEX_TYPE_UINT32);
+		VkDeviceSize vertOffset = 0;
+		vkCmdBindVertexBuffers(commandBuffer, 0, 1, &m_cylinderMeshVertexBuffer, &vertOffset);
+		vkCmdBindIndexBuffer(commandBuffer, m_cylinderMeshIndexBuffer, 0, VK_INDEX_TYPE_UINT32);
 
-	Config_Main& mainConf = m_configManager->GetConfig_Main();
+		Config_Main& mainConf = m_configManager->GetConfig_Main();
 
-	VSViewConstantBuffer vsViewBuffer = {};
-	vsViewBuffer.cameraProjectionToWorld = (eye == LEFT_EYE) ? frame->cameraProjectionToWorldLeft : frame->cameraProjectionToWorldRight;
-	vsViewBuffer.worldToCameraProjection = (eye == LEFT_EYE) ? frame->worldToCameraProjectionLeft : frame->worldToCameraProjectionRight;
-	vsViewBuffer.worldToHMDProjection = (eye == LEFT_EYE) ? frame->worldToHMDProjectionLeft : frame->worldToHMDProjectionRight;
-	vsViewBuffer.frameUVBounds = GetFrameUVBounds(eye, frame->frameLayout);
-	vsViewBuffer.hmdViewWorldPos = (eye == LEFT_EYE) ? frame->hmdViewPosWorldLeft : frame->hmdViewPosWorldRight;
-	vsViewBuffer.projectionDistance = mainConf.ProjectionDistanceFar;
-	vsViewBuffer.floorHeightOffset = mainConf.FloorHeightOffset;
-	vsViewBuffer.cameraViewIndex = viewIndex;
+		VSViewConstantBuffer vsViewBuffer = {};
+		vsViewBuffer.cameraProjectionToWorld = (eye == LEFT_EYE) ? frame->cameraProjectionToWorldLeft : frame->cameraProjectionToWorldRight;
+		vsViewBuffer.worldToCameraProjection = (eye == LEFT_EYE) ? frame->worldToCameraProjectionLeft : frame->worldToCameraProjectionRight;
+		vsViewBuffer.worldToHMDProjection = (eye == LEFT_EYE) ? frame->worldToHMDProjectionLeft : frame->worldToHMDProjectionRight;
+		vsViewBuffer.frameUVBounds = GetFrameUVBounds(eye, frame->frameLayout);
+		vsViewBuffer.hmdViewWorldPos = (eye == LEFT_EYE) ? frame->hmdViewPosWorldLeft : frame->hmdViewPosWorldRight;
+		vsViewBuffer.projectionDistance = mainConf.ProjectionDistanceFar;
+		vsViewBuffer.floorHeightOffset = mainConf.FloorHeightOffset;
+		vsViewBuffer.cameraViewIndex = viewIndex;
 
-	memcpy(m_vsViewConstantBufferMappings[bufferIndex], &vsViewBuffer, sizeof(VSViewConstantBuffer));
+		memcpy(m_vsViewConstantBufferMappings[bufferIndex], &vsViewBuffer, sizeof(VSViewConstantBuffer));
 
-	PSViewConstantBuffer psViewBuffer = {};
-	psViewBuffer.frameUVBounds = GetFrameUVBounds(eye, frame->frameLayout);
-	psViewBuffer.prepassUVBounds = psViewBuffer.frameUVBounds;
-	psViewBuffer.rtArrayIndex = layer->views[viewIndex].subImage.imageArrayIndex;
-	psViewBuffer.bDoCutout = false;
-	psViewBuffer.bPremultiplyAlpha = (blendMode == AlphaBlendPremultiplied);
+		PSViewConstantBuffer psViewBuffer = {};
+		psViewBuffer.frameUVBounds = GetFrameUVBounds(eye, frame->frameLayout);
+		psViewBuffer.prepassUVBounds = psViewBuffer.frameUVBounds;
+		psViewBuffer.rtArrayIndex = layer->views[viewIndex].subImage.imageArrayIndex;
+		psViewBuffer.bDoCutout = false;
+		psViewBuffer.bPremultiplyAlpha = (blendMode == AlphaBlendPremultiplied);
 
-	memcpy(m_psViewConstantBufferMappings[bufferIndex], &psViewBuffer, sizeof(PSViewConstantBuffer));
+		memcpy(m_psViewConstantBufferMappings[bufferIndex], &psViewBuffer, sizeof(PSViewConstantBuffer));
+	}
 
 
 	// Extra draw if we need to preadjust the alpha.
-	if ((blendMode != AlphaBlendPremultiplied && blendMode != AlphaBlendUnpremultiplied) || m_configManager->GetConfig_Main().PassthroughOpacity < 1.0f)
+	if (blendMode != Masked && ((blendMode != AlphaBlendPremultiplied && blendMode != AlphaBlendUnpremultiplied) || m_configManager->GetConfig_Main().PassthroughOpacity < 1.0f))
 	{
 		VkPipeline prepassPipeline;
 
@@ -1890,8 +1921,10 @@ void PassthroughRendererVulkan::RenderMaskedPrepassView(const ERenderEye eye, co
 
 	XrRect2Di rect = layer->views[viewIndex].subImage.imageRect;
 
-	VkViewport viewport = { 0.0f, 0.0f, (float)rect.extent.width, (float)rect.extent.height, 0.0f, 1.0f };
-	VkRect2D scissor = { {0, 0}, {(uint32_t)rect.extent.width, (uint32_t)rect.extent.height} };
+	VkViewport viewport = { (float)rect.offset.x, (float)rect.offset.y, (float)rect.extent.width, (float)rect.extent.height, 0.0f, 1.0f };
+	VkRect2D scissor = { (uint32_t)rect.offset.x, (uint32_t)rect.offset.y, (uint32_t)(rect.offset.x + rect.extent.width), (uint32_t)(rect.offset.y + rect.extent.height) };
+	//VkViewport viewport = { 0.0f, 0.0f, (float)rect.extent.width, (float)rect.extent.height, 0.0f, 1.0f };
+	//VkRect2D scissor = { {0, 0}, {(uint32_t)rect.extent.width, (uint32_t)rect.extent.height} };
 
 	UpdateDescriptorSets(commandBuffer, bufferIndex, layer, Masked);
 
@@ -1927,7 +1960,6 @@ void PassthroughRendererVulkan::RenderMaskedPrepassView(const ERenderEye eye, co
 
 	PSViewConstantBuffer psViewBuffer = {};
 	psViewBuffer.frameUVBounds = GetFrameUVBounds(eye, frame->frameLayout);
-	psViewBuffer.prepassUVBounds = psViewBuffer.frameUVBounds;
 	psViewBuffer.rtArrayIndex = layer->views[viewIndex].subImage.imageArrayIndex;
 	psViewBuffer.bDoCutout = false;
 	psViewBuffer.bPremultiplyAlpha = false;
@@ -1945,10 +1977,16 @@ void PassthroughRendererVulkan::RenderMaskedPrepassView(const ERenderEye eye, co
 
 	memcpy(m_psViewConstantBufferMappings[bufferIndex], &psViewBuffer, sizeof(PSViewConstantBuffer));
 
-
-	vkCmdBindPipeline(commandBuffer, VK_PIPELINE_BIND_POINT_GRAPHICS, m_pipelineMaskedPrepass);
-
-	vkCmdDrawIndexed(commandBuffer, (uint32_t)m_cylinderMesh.triangles.size() * 3, 1, 0, 0, 0);
+	if (m_configManager->GetConfig_Core().CoreForceMaskedUseCameraImage)
+	{
+		vkCmdBindPipeline(commandBuffer, VK_PIPELINE_BIND_POINT_GRAPHICS, m_pipelineMaskedPrepass);
+		vkCmdDrawIndexed(commandBuffer, (uint32_t)m_cylinderMesh.triangles.size() * 3, 1, 0, 0, 0);
+	}
+	else
+	{
+		vkCmdBindPipeline(commandBuffer, VK_PIPELINE_BIND_POINT_GRAPHICS, m_pipelineMaskedPrepassFullscreen);
+		vkCmdDraw(commandBuffer, 3, 1, 0, 0);
+	}
 
 	vkCmdEndRenderPass(commandBuffer);
 
@@ -1970,9 +2008,7 @@ void PassthroughRendererVulkan::RenderMaskedPrepassView(const ERenderEye eye, co
 
 	vkCmdBindPipeline(commandBuffer, VK_PIPELINE_BIND_POINT_GRAPHICS, m_pipelineMaskedAlphaCopy);
 
-	vkCmdDrawIndexed(commandBuffer, (uint32_t)m_cylinderMesh.triangles.size() * 3, 1, 0, 0, 0);
-
-	vkCmdEndRenderPass(commandBuffer);
+	vkCmdDraw(commandBuffer, 3, 1, 0, 0);
 }
 
 

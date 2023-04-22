@@ -251,6 +251,7 @@ private:
 	ComPtr<ID3D12RootSignature> m_rootSignature;
 
 	ComPtr<ID3D12PipelineState> m_psoPrepass;
+	ComPtr<ID3D12PipelineState> m_psoMaskedPrepassFullscreen;
 	ComPtr<ID3D12PipelineState> m_psoMaskedAlphaCopy;
 	ComPtr<ID3D12PipelineState> m_psoMainPass;
 	ComPtr<ID3D12PipelineState> m_psoCutoutPass;
@@ -376,10 +377,11 @@ private:
 	VkPipeline m_pipelinePrepassUseAppAlpha;
 	VkPipeline m_pipelinePrepassIgnoreAppAlpha;
 	VkPipeline m_pipelineMaskedPrepass;
+	VkPipeline m_pipelineMaskedPrepassFullscreen;
 	VkPipeline m_pipelineMaskedAlphaCopy;
 
 	VkDescriptorPool m_descriptorPool;
-	VkDescriptorSet m_descriptorSets[NUM_SWAPCHAINS * 2];
+	VkDescriptorSet m_descriptorSets[NUM_SWAPCHAINS * 2 * 2];
 	VkDescriptorSetLayout m_descriptorLayout;
 	
 	VkBuffer m_vsPassConstantBuffer[NUM_SWAPCHAINS];

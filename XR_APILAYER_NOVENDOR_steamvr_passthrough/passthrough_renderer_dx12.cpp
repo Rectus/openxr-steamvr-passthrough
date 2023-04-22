@@ -819,7 +819,7 @@ bool PassthroughRendererDX12::InitPipeline()
 
 
 	psoDesc.DepthStencilState = depthStencilMain;
-	psoDesc.PS = m_blendMode == Masked ? alphaCopyMaskedShaderPS : passthroughShaderPS;
+	psoDesc.PS = passthroughShaderPS;
 
 	if((m_blendMode == AlphaBlendPremultiplied && !m_bUsingDepth) || m_blendMode == Additive)
 	{
@@ -867,6 +867,13 @@ bool PassthroughRendererDX12::InitPipeline()
 	}
 
 	if (FAILED(m_d3dDevice->CreateGraphicsPipelineState(&psoDesc, IID_PPV_ARGS(&m_psoPrepass))))
+	{
+		ErrorLog("Error creating prepass PSO.\n");
+		return false;
+	}
+
+	psoDesc.VS = fullscreenQuadShaderVS;
+	if (FAILED(m_d3dDevice->CreateGraphicsPipelineState(&psoDesc, IID_PPV_ARGS(&m_psoMaskedPrepassFullscreen))))
 	{
 		ErrorLog("Error creating prepass PSO.\n");
 		return false;
@@ -1354,8 +1361,6 @@ void PassthroughRendererDX12::RenderPassthroughView(const ERenderEye eye, const 
 	cbvPSHandle.ptr += (INDEX_CBV_PS_VIEW_0 + bufferIndex) * m_CBVSRVHeapDescSize;
 	m_commandList->SetGraphicsRootDescriptorTable(1, cbvPSHandle);
 
-	bool bUseStereo = mainConf.ProjectionMode == Projection_StereoReconstruction;
-
 	// Extra draw if we need to preadjust the alpha.
 	if (blendMode != Masked && ((blendMode != AlphaBlendPremultiplied && blendMode != AlphaBlendUnpremultiplied) || m_configManager->GetConfig_Main().PassthroughOpacity < 1.0f || m_bUsingDepth))
 	{
@@ -1462,6 +1467,8 @@ void PassthroughRendererDX12::RenderMaskedPrepassView(const ERenderEye eye, cons
 
 	if (!rendertarget) { return; }
 
+	bool bCompositeDepth = m_bUsingDepth && m_depthStencils[bufferIndex].Get() != nullptr;
+
 	XrRect2Di rect = layer->views[viewIndex].subImage.imageRect;
 
 	D3D12_VIEWPORT viewport = { (float)rect.offset.x, (float)rect.offset.y, (float)rect.extent.width, (float)rect.extent.height, 0.0f, 1.0f };
@@ -1559,12 +1566,18 @@ void PassthroughRendererDX12::RenderMaskedPrepassView(const ERenderEye eye, cons
 
 	m_commandList->OMSetRenderTargets(1, &rtvHandle, FALSE, &dsvHandle);
 
-	bool bUseStereo = mainConf.ProjectionMode == Projection_StereoReconstruction;
 
-	m_commandList->SetPipelineState(m_psoPrepass.Get());
-	m_commandList->DrawIndexedInstanced(numIndices, 1, 0, 0, 0);
-
-
+	if (bCompositeDepth || m_configManager->GetConfig_Core().CoreForceMaskedUseCameraImage)
+	{
+		m_commandList->SetPipelineState(m_psoPrepass.Get());
+		m_commandList->DrawIndexedInstanced(numIndices, 1, 0, 0, 0);
+	}
+	else
+	{
+		m_commandList->IASetPrimitiveTopology(D3D_PRIMITIVE_TOPOLOGY_TRIANGLESTRIP);
+		m_commandList->SetPipelineState(m_psoMaskedPrepassFullscreen.Get());
+		m_commandList->DrawInstanced(3, 1, 0, 0);
+	}
 
 
 	rtvHandle = m_RTVHeap->GetCPUDescriptorHandleForHeapStart();
@@ -1573,7 +1586,6 @@ void PassthroughRendererDX12::RenderMaskedPrepassView(const ERenderEye eye, cons
 
 	TransitionResource(m_commandList.Get(), m_intermediateRenderTargets[intermediateRTIndex].Get(), D3D12_RESOURCE_STATE_RENDER_TARGET, D3D12_RESOURCE_STATE_PIXEL_SHADER_RESOURCE);
 
-	m_commandList->SetGraphicsRootDescriptorTable(3, cameraFrameSRVHandle);
 
 	D3D12_GPU_DESCRIPTOR_HANDLE srvHandle = m_CBVSRVHeap->GetGPUDescriptorHandleForHeapStart();
 	srvHandle.ptr += (INDEX_SRV_MASKED_INTERMEDIATE_0 + intermediateRTIndex) * m_CBVSRVHeapDescSize;
@@ -1582,8 +1594,12 @@ void PassthroughRendererDX12::RenderMaskedPrepassView(const ERenderEye eye, cons
 
 	// Copy alpha to main render target
 	m_commandList->SetPipelineState(m_psoMaskedAlphaCopy.Get());
-	m_commandList->DrawIndexedInstanced(numIndices, 1, 0, 0, 0);
+	m_commandList->IASetPrimitiveTopology(D3D_PRIMITIVE_TOPOLOGY_TRIANGLESTRIP);
+	m_commandList->DrawInstanced(3, 1, 0, 0);
 
+
+	m_commandList->IASetPrimitiveTopology(D3D_PRIMITIVE_TOPOLOGY_TRIANGLELIST);
+	m_commandList->SetGraphicsRootDescriptorTable(3, cameraFrameSRVHandle);
 
 	TransitionResource(m_commandList.Get(), m_intermediateRenderTargets[intermediateRTIndex].Get(), D3D12_RESOURCE_STATE_PIXEL_SHADER_RESOURCE, D3D12_RESOURCE_STATE_RENDER_TARGET);
 }

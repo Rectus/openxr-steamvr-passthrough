@@ -13,13 +13,13 @@ struct VS_OUTPUT
 
 #ifdef VULKAN
 
-SamplerState g_samplerState : register(s5);
-Texture2D g_blendMask : register(t5);
+SamplerState g_samplerState : register(s6);
+Texture2D<float> g_blendMask : register(t6);
 
 #else
 
 SamplerState g_samplerState : register(s0);
-Texture2D g_blendMask : register(t2);
+Texture2D<float> g_blendMask : register(t2);
 
 #endif
 
@@ -31,7 +31,7 @@ float4 main(VS_OUTPUT input) : SV_TARGET
     screenUvs = screenUvs * (g_uvPrepassBounds.zw - g_uvPrepassBounds.xy) + g_uvPrepassBounds.xy;
     screenUvs = clamp(screenUvs, g_uvPrepassBounds.xy, g_uvPrepassBounds.zw);
 
-    float alpha = g_blendMask.Sample(g_samplerState, screenUvs).x;
+    float alpha = g_blendMask.Sample(g_samplerState, screenUvs);
 
     return float4(0, 0, 0, alpha);
 }
