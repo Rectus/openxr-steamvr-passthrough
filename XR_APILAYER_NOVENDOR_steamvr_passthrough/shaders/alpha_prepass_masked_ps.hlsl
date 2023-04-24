@@ -63,7 +63,7 @@ float main(VS_OUTPUT input) : SV_TARGET
 
 	float3 difference = LinearRGBtoLAB_D65(color.xyz) - LinearRGBtoLAB_D65(g_maskedKey);
 
-	float2 distChromaSqr = pow(difference.yz, 2);
+    float2 distChromaSqr = float2(pow(difference.y, 2), pow(difference.z, 2));
 	float fracChromaSqr = pow(g_maskedFracChroma, 2);
 
 	float distChroma = smoothstep(fracChromaSqr, fracChromaSqr + pow(g_maskedSmooth, 2), (distChromaSqr.x + distChromaSqr.y));
