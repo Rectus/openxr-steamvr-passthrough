@@ -19,7 +19,7 @@
 using Microsoft::WRL::ComPtr;
 
 #define WINDOW_WIDTH 800
-#define WINDOW_HEIGHT 200
+#define WINDOW_HEIGHT 230
 
 #define OPENVR_DLL_NAME L"openvr_api.dll"
 #define API_LAYER_DLL_NAME L"XR_APILAYER_NOVENDOR_steamvr_passthrough.dll"
@@ -78,6 +78,7 @@ int APIENTRY wWinMain(_In_ HINSTANCE hInstance, _In_opt_ HINSTANCE hPrevInstance
     bool bUninstallButtonPressed = false;
     bool bRegistryAccessError = false;
     bool bKeyFound = false;
+    bool bKeyEnabled = false;
     bool bMultipleKeysFound = false;
     bool bInvalidKeyFound = false;
 
@@ -87,6 +88,7 @@ int APIENTRY wWinMain(_In_ HINSTANCE hInstance, _In_opt_ HINSTANCE hPrevInstance
     WCHAR openVRDLLPath[MAX_PATH] = { 0 };
     WCHAR apiLayerDLLPath[MAX_PATH] = { 0 };
     WCHAR apiLayerJSONPath[MAX_PATH] = { 0 };
+    WCHAR currentAPILayerRegistryPath[MAX_PATH] = { 0 };
     bool bFoundOpenVRDLL = true;
     bool bFoundAPILayerDLL = true;
     bool bFoundAPILayerJSON = true;
@@ -123,6 +125,7 @@ int APIENTRY wWinMain(_In_ HINSTANCE hInstance, _In_opt_ HINSTANCE hPrevInstance
             bInvalidKeyFound = false;
             bEnableInstallButton = false;
             bEnableUninstallButton = false;
+            bKeyEnabled = false;
         }
 
 
@@ -306,6 +309,20 @@ int APIENTRY wWinMain(_In_ HINSTANCE hInstance, _In_opt_ HINSTANCE hPrevInstance
                         numValues++;
                         bKeyFound = true;
                         bEnableUninstallButton = true;
+
+                        if (numValues == 1)
+                        {
+                            DWORD data = 0;
+                            DWORD dataSize = sizeof(data);
+
+                            ret = RegGetValueW(key, 0, keyName, RRF_RT_DWORD, NULL, &data, &dataSize);
+                            if (ret == ERROR_SUCCESS)
+                            {
+                                bKeyEnabled = (data == 0);
+                            }
+
+                            StrCpyNW(currentAPILayerRegistryPath, keyName, MAX_PATH);
+                        }
                     }
                     else
                     {
@@ -317,6 +334,11 @@ int APIENTRY wWinMain(_In_ HINSTANCE hInstance, _In_opt_ HINSTANCE hPrevInstance
                             bInvalidKeyFound = true;
                             bEnableInstallButton = true;
                             bEnableUninstallButton = true;
+
+                            if (numValues == 1)
+                            {
+                                StrCpyNW(currentAPILayerRegistryPath, keyName, MAX_PATH);
+                            }
                         }
                     }
                 }
@@ -365,13 +387,14 @@ int APIENTRY wWinMain(_In_ HINSTANCE hInstance, _In_opt_ HINSTANCE hPrevInstance
         style.WindowRounding = 0.0f;
         style.WindowPadding = ImVec2( 20.0f, 20.0f );
         style.FramePadding = ImVec2(16.0f, 10.0f);
+        ImVec2 tabButtonSize(170, 35);
 
         ImGui::Begin("Passthrough Setup", NULL, ImGuiWindowFlags_NoDecoration | ImGuiWindowFlags_NoResize);
 
         ImGui::BeginChild("Buttons", ImVec2(180, 0));
         
         if (!bEnableInstallButton) { ImGui::BeginDisabled(); }
-        if (ImGui::Button("Install API Layer"))
+        if (ImGui::Button("Install API Layer", tabButtonSize))
         {
             bUpdateState = true;
             bInstallButtonPressed = true;
@@ -379,14 +402,14 @@ int APIENTRY wWinMain(_In_ HINSTANCE hInstance, _In_opt_ HINSTANCE hPrevInstance
         if (!bEnableInstallButton) { ImGui::EndDisabled(); }
 
         if (!bEnableUninstallButton) { ImGui::BeginDisabled(); }
-        if (ImGui::Button("Uninstall API Layer"))
+        if (ImGui::Button("Uninstall API Layer", tabButtonSize))
         {
             bUpdateState = true;
             bUninstallButtonPressed = true;
         }
         if (!bEnableUninstallButton) { ImGui::EndDisabled(); }
 
-        if (ImGui::Button("Recheck Status"))
+        if (ImGui::Button("Recheck Status", tabButtonSize))
         {
             bUpdateState = true;
         }
@@ -417,6 +440,8 @@ int APIENTRY wWinMain(_In_ HINSTANCE hInstance, _In_opt_ HINSTANCE hPrevInstance
 
         ImGui::Text("");
 
+        bool bCorrectlyInstalled = false;
+
         if ((!bFoundOpenVRDLL || !bFoundAPILayerDLL || !bFoundAPILayerJSON) && (bMultipleKeysFound || bInvalidKeyFound))
         {
             ImGui::Text("Files missing and the install condition is invalid!"); 
@@ -437,11 +462,46 @@ int APIENTRY wWinMain(_In_ HINSTANCE hInstance, _In_opt_ HINSTANCE hPrevInstance
         else if (bKeyFound)
         {
             ImGui::Text("The API layer is installed.");
+            bCorrectlyInstalled = true;
         }
         else
         {
             ImGui::Text("The API layer is not installed.");
         }
+
+
+        ImGui::Spacing();
+        ImGui::Spacing();
+        ImGui::Spacing();
+        ImGui::Spacing();
+        ImGui::Spacing();
+
+        if (bCorrectlyInstalled && bKeyEnabled)
+        {
+            ImGui::Text("The API layer is enabled in SteamVR.");
+        }
+        else if(bCorrectlyInstalled)
+        {
+            ImGui::Text("The API layer is disabled in SteamVR.\nEnable it in the SteamVR settings before using.");
+        }
+
+        ImGui::Spacing();
+        ImGui::Spacing();
+        ImGui::Spacing();
+        ImGui::Spacing();
+        ImGui::Spacing();
+
+        if (bInvalidKeyFound || bKeyFound)
+        {
+            char regLoc[MAX_PATH];
+            WideCharToMultiByte(CP_UTF8, 0, currentAPILayerRegistryPath, MAX_PATH, regLoc, MAX_PATH, NULL, NULL);
+            ImGui::Text("Current install location:");
+            ImGui::TextWrapped("%s", regLoc);
+        }
+
+        
+
+        
         
         ImGui::EndChild();
 
