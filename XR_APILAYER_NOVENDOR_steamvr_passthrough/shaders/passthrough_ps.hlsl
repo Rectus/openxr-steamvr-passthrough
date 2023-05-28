@@ -8,6 +8,8 @@ struct VS_OUTPUT
 	float3 clipSpaceCoords : TEXCOORD0;
 	float3 screenCoords : TEXCOORD1;
 	float projectionValidity : TEXCOORD2;
+    float3 prevClipSpaceCoords : TEXCOORD3;
+    float3 velocity : TEXCOORD4;
 };
 
 
@@ -20,11 +22,10 @@ Texture2D<float2> g_fisheyeCorrectionTexture : register(t6);
 #else
 
 SamplerState g_samplerState : register(s0);
-Texture2D g_cameraFrameTexture : register(t0);
+Texture2D<float4> g_cameraFrameTexture : register(t0);
 Texture2D<float2> g_fisheyeCorrectionTexture : register(t1);
 
 #endif
-
 
 
 [earlydepthstencil]
@@ -44,22 +45,24 @@ float4 main(VS_OUTPUT input) : SV_TARGET
 	outUvs = outUvs * (g_uvBounds.zw - g_uvBounds.xy) + g_uvBounds.xy;
 	outUvs = clamp(outUvs, g_uvBounds.xy, g_uvBounds.zw);
 
+    float2 correction = 0;
+    
     if (g_bUseFisheyeCorrection)
     {
-        float2 correction = g_fisheyeCorrectionTexture.Sample(g_samplerState, outUvs);
+        correction = g_fisheyeCorrectionTexture.Sample(g_samplerState, outUvs);
         outUvs += correction;
     }
-	else
+    else
     {
         outUvs.y = 1 - outUvs.y;
     }
-	
+      
     float3 rgbColor = g_cameraFrameTexture.Sample(g_samplerState, outUvs).xyz;
     
     if (g_sharpness != 0.0)
     {
-        float2 textureSize;
-        g_cameraFrameTexture.GetDimensions(textureSize.x, textureSize.y);
+        float3 textureSize;
+        g_cameraFrameTexture.GetDimensions(0, textureSize.x, textureSize.y, textureSize.z);
         rgbColor *= 1 + g_sharpness * 4;
         rgbColor -= g_cameraFrameTexture.Sample(g_samplerState, outUvs + float2(-1, 0) / textureSize.xy).xyz * g_sharpness;
         rgbColor -= g_cameraFrameTexture.Sample(g_samplerState, outUvs + float2(1, 0) / textureSize.xy).xyz * g_sharpness;

@@ -83,12 +83,19 @@ struct CameraFrame
 		, worldToCameraProjectionRight()
 		, worldToHMDProjectionLeft()
 		, worldToHMDProjectionRight()
+		, prevCameraProjectionToWorldLeft()
+		, prevCameraProjectionToWorldRight()
+		, prevWorldToCameraProjectionLeft()
+		, prevWorldToCameraProjectionRight()
+		, prevWorldToHMDProjectionLeft()
+		, prevWorldToHMDProjectionRight()
 		, hmdViewPosWorldLeft()
 		, hmdViewPosWorldRight()
 		, frameLayout(Mono)
 		, bIsValid(false)
 		, bHasFrameBuffer(false)
 		, bHasReversedDepth(false)
+		, bIsFirstRender(true)
 	{
 	}
 
@@ -105,12 +112,21 @@ struct CameraFrame
 	XrMatrix4x4f worldToCameraProjectionRight;
 	XrMatrix4x4f worldToHMDProjectionLeft;
 	XrMatrix4x4f worldToHMDProjectionRight;
+
+	XrMatrix4x4f prevCameraProjectionToWorldLeft;
+	XrMatrix4x4f prevCameraProjectionToWorldRight;
+	XrMatrix4x4f prevWorldToCameraProjectionLeft;
+	XrMatrix4x4f prevWorldToCameraProjectionRight;
+	XrMatrix4x4f prevWorldToHMDProjectionLeft;
+	XrMatrix4x4f prevWorldToHMDProjectionRight;
+
 	XrVector3f hmdViewPosWorldLeft;
 	XrVector3f hmdViewPosWorldRight;	
 	EStereoFrameLayout frameLayout;
 	bool bIsValid;
 	bool bHasFrameBuffer;
 	bool bHasReversedDepth;
+	bool bIsFirstRender;
 };
 
 struct DepthFrame

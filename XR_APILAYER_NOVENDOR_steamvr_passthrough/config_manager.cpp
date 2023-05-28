@@ -298,6 +298,9 @@ void ConfigManager::ParseConfig_Main()
 	m_configMain.Saturation = (float)m_iniData.GetDoubleValue("Main", "Saturation", m_configMain.Saturation);
 	m_configMain.Sharpness = (float)m_iniData.GetDoubleValue("Main", "Sharpness", m_configMain.Sharpness);
 
+	m_configMain.EnableTemporalFiltering = m_iniData.GetBoolValue("Main", "EnableTemporalFiltering", m_configMain.EnableTemporalFiltering);
+	m_configMain.TemporalFilteringSampling = (int)m_iniData.GetLongValue("Main", "TemporalFilteringSampling", m_configMain.TemporalFilteringSampling);
+
 	m_configMain.RequireSteamVRRuntime = m_iniData.GetBoolValue("Main", "RequireSteamVRRuntime", m_configMain.RequireSteamVRRuntime);	
 	m_configMain.ShowSettingDescriptions = m_iniData.GetBoolValue("Main", "ShowSettingDescriptions", m_configMain.ShowSettingDescriptions);
 
@@ -335,6 +338,9 @@ void ConfigManager::ParseConfig_Stereo()
 	m_configCustomStereo.StereoFillHoles = m_iniData.GetBoolValue("StereoCustom", "StereoFillHoles", m_configCustomStereo.StereoFillHoles);
 	m_configCustomStereo.StereoFrameSkip = m_iniData.GetLongValue("StereoCustom", "StereoFrameSkip", m_configCustomStereo.StereoFrameSkip);
 	m_configCustomStereo.StereoDownscaleFactor = m_iniData.GetLongValue("StereoCustom", "StereoDownscaleFactor", m_configCustomStereo.StereoDownscaleFactor);
+	m_configCustomStereo.StereoUseDisparityTemporalFiltering = m_iniData.GetBoolValue("StereoCustom", "StereoUseDisparityTemporalFiltering", m_configCustomStereo.StereoUseDisparityTemporalFiltering);
+	m_configCustomStereo.StereoDisparityTemporalFilteringStrength = (float)m_iniData.GetDoubleValue("StereoCustom", "StereoDisparityTemporalFilteringStrength", m_configCustomStereo.StereoDisparityTemporalFilteringStrength);
+	m_configCustomStereo.StereoDisparityTemporalFilteringDistance = (float)m_iniData.GetDoubleValue("StereoCustom", "StereoDisparityTemporalFilteringDistance", m_configCustomStereo.StereoDisparityTemporalFilteringDistance);
 
 	m_configCustomStereo.StereoDisparityBothEyes = m_iniData.GetBoolValue("StereoCustom", "StereoDisparityBothEyes", m_configCustomStereo.StereoDisparityBothEyes);
 	m_configCustomStereo.StereoCutoutEnabled = m_iniData.GetBoolValue("StereoCustom", "StereoCutoutEnabled", m_configCustomStereo.StereoCutoutEnabled);
@@ -391,6 +397,9 @@ void ConfigManager::UpdateConfig_Main()
 	m_iniData.SetDoubleValue("Main", "Saturation", m_configMain.Saturation);
 	m_iniData.SetDoubleValue("Main", "Sharpness", m_configMain.Sharpness);
 
+	m_iniData.SetBoolValue("Main", "EnableTemporalFiltering", m_configMain.EnableTemporalFiltering);
+	m_iniData.SetLongValue("Main", "TemporalFilteringSampling", m_configMain.TemporalFilteringSampling);
+
 	m_iniData.SetBoolValue("Main", "RequireSteamVRRuntime", m_configMain.RequireSteamVRRuntime);
 	m_iniData.SetBoolValue("Main", "ShowSettingDescriptions", m_configMain.ShowSettingDescriptions);
 
@@ -428,6 +437,9 @@ void ConfigManager::UpdateConfig_Stereo()
 	m_iniData.SetBoolValue("StereoCustom", "StereoFillHoles", m_configCustomStereo.StereoFillHoles);
 	m_iniData.SetLongValue("StereoCustom", "StereoFrameSkip", m_configCustomStereo.StereoFrameSkip);
 	m_iniData.SetLongValue("StereoCustom", "StereoDownscaleFactor", m_configCustomStereo.StereoDownscaleFactor);
+	m_iniData.SetBoolValue("StereoCustom", "StereoUseDisparityTemporalFiltering", m_configCustomStereo.StereoUseDisparityTemporalFiltering);
+	m_iniData.SetDoubleValue("StereoCustom", "StereoDisparityTemporalFilteringStrength", m_configCustomStereo.StereoDisparityTemporalFilteringStrength);
+	m_iniData.SetDoubleValue("StereoCustom", "StereoDisparityTemporalFilteringDistance", m_configCustomStereo.StereoDisparityTemporalFilteringDistance);
 
 	m_iniData.SetBoolValue("StereoCustom", "StereoDisparityBothEyes", m_configCustomStereo.StereoDisparityBothEyes);
 	m_iniData.SetBoolValue("StereoCustom", "StereoCutoutEnabled", m_configCustomStereo.StereoCutoutEnabled);

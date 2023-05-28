@@ -118,6 +118,7 @@ copy $(ProjectDir)\passthrough_icon.png $(OutDir)
     <FxCompile>
       <ObjectFileOutput />
       <DisableOptimizations>false</DisableOptimizations>
+      <AdditionalIncludeDirectories>$(SolutionDir)external\FidelityFX-FSR\ffx-fsr;%(AdditionalIncludeDirectories)</AdditionalIncludeDirectories>
     </FxCompile>
   </ItemDefinitionGroup>
   <ItemDefinitionGroup Condition="'$(Configuration)|$(Platform)'=='Release|x64'">
@@ -130,7 +131,7 @@ copy $(ProjectDir)\passthrough_icon.png $(OutDir)
       <ConformanceMode>true</ConformanceMode>
       <PrecompiledHeader>Use</PrecompiledHeader>
       <PrecompiledHeaderFile>pch.h</PrecompiledHeaderFile>
-      <AdditionalIncludeDirectories>$(ProjectDir);$(ProjectDir)shaders;$(ProjectDir)framework;$(SolutionDir)\external\OpenXR-SDK\include;$(SolutionDir)\external\OpenXR-SDK\src\common;$(SolutionDir)\external\openvr\headers;$(SolutionDir)\external\lodepng;$(SolutionDir)\external\imgui;$(SolutionDir)\external\imgui\backends;$(SolutionDir)\external\simpleini;$(SolutionDir)\external\opencv\build\include;$(VULKAN_SDK)\Include</AdditionalIncludeDirectories>
+      <AdditionalIncludeDirectories>$(ProjectDir);$(ProjectDir)shaders;$(ProjectDir)framework;$(SolutionDir)external\FidelityFX-FSR\ffx-fsr;$(SolutionDir)\external\OpenXR-SDK\include;$(SolutionDir)\external\OpenXR-SDK\src\common;$(SolutionDir)\external\openvr\headers;$(SolutionDir)\external\lodepng;$(SolutionDir)\external\imgui;$(SolutionDir)\external\imgui\backends;$(SolutionDir)\external\simpleini;$(SolutionDir)\external\opencv\build\include;$(VULKAN_SDK)\Include</AdditionalIncludeDirectories>
       <LanguageStandard>stdcpp20</LanguageStandard>
       <InlineFunctionExpansion>AnySuitable</InlineFunctionExpansion>
       <FavorSizeOrSpeed>Speed</FavorSizeOrSpeed>
@@ -175,6 +176,7 @@ copy $(SolutionDir)\external\openvr\bin\win64\openvr_api.dll $(OutDir)
     </FxCompile>
     <FxCompile>
       <ObjectFileOutput />
+      <AdditionalIncludeDirectories>%(AdditionalIncludeDirectories)</AdditionalIncludeDirectories>
     </FxCompile>
   </ItemDefinitionGroup>
   <ItemGroup>
@@ -327,6 +329,11 @@ copy $(SolutionDir)\external\openvr\bin\win64\openvr_api.dll $(OutDir)
       <HeaderFileOutput Condition="'$(Configuration)|$(Platform)'=='Release|x64'">shaders\passthrough_stereo_vs.h</HeaderFileOutput>
       <VariableName Condition="'$(Configuration)|$(Platform)'=='Release|x64'">g_PassthroughStereoShaderVS</VariableName>
       <ShaderType Condition="'$(Configuration)|$(Platform)'=='Release|x64'">Vertex</ShaderType>
+    </FxCompile>
+    <FxCompile Include="shaders\passthrough_temporal_ps.hlsl">
+      <HeaderFileOutput Condition="'$(Configuration)|$(Platform)'=='Release|x64'">shaders\passthrough_temporal_ps.h</HeaderFileOutput>
+      <ShaderType Condition="'$(Configuration)|$(Platform)'=='Release|x64'">Pixel</ShaderType>
+      <VariableName Condition="'$(Configuration)|$(Platform)'=='Release|x64'">g_PassthroughTemporalShaderPS</VariableName>
     </FxCompile>
     <FxCompile Include="shaders\passthrough_vs.hlsl">
       <VariableName Condition="'$(Configuration)|$(Platform)'=='Debug|x64'">g_PassthroughShaderVS</VariableName>

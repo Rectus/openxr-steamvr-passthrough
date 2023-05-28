@@ -98,6 +98,14 @@ private:
 	XrMatrix4x4f m_cameraLeftToRightPose{};
 	XrMatrix4x4f m_cameraRightToLeftPose{};
 
+	XrMatrix4x4f m_lastCameraProjectionToWorldLeft;
+	XrMatrix4x4f m_lastCameraProjectionToWorldRight;
+	XrMatrix4x4f m_lastWorldToCameraProjectionLeft;
+	XrMatrix4x4f m_lastWorldToCameraProjectionRight;
+	XrMatrix4x4f m_lastWorldToHMDProjectionLeft;
+	XrMatrix4x4f m_lastWorldToHMDProjectionRight;
+	uint32_t m_lastFrameSequence;
+
 	std::deque<float> m_frameRetrievalTimes;
 	float m_averageFrameRetrievalTime;
 };

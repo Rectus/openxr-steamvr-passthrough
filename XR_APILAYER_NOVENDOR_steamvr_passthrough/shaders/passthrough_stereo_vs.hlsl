@@ -8,11 +8,17 @@ struct VS_OUTPUT
 	float3 clipSpaceCoords : TEXCOORD0;
 	float3 screenCoords : TEXCOORD1;
 	float projectionValidity : TEXCOORD2;
+    float3 prevClipSpaceCoords : TEXCOORD3;
+    float3 velocity : TEXCOORD4;
 };
 
 SamplerState g_samplerState : register(s0);
 Texture2D<float2> g_disparityTexture : register(t0);
 
+#ifndef VULKAN
+Texture2D<float2> g_prevDisparityFilter : register(t1);
+RWTexture2D<float2> g_disparityFilter : register(u2);
+#endif
 
 float gaussian(float2 value)
 {
@@ -20,6 +26,95 @@ float gaussian(float2 value)
         (2 * PI * pow(g_disparityFilterWidth * 2 * 0.25, 2));
 }
 
+float sinc(float x)
+{
+    return sin(x * 3.1415926535897932384626433) / (x * 3.1415926535897932384626433);
+}
+
+float lanczosWeight(float distance, float n)
+{
+    return (distance == 0) ? 1 : (distance * distance < n * n ? sinc(distance) * sinc(distance / n) : 0);
+}
+
+float2 lanczos2(in Texture2D<float2> tex, float2 uvs, float2 res)
+{
+    float2 center = uvs - (((uvs * res) % 1) - 0.5) / res;
+    float2 offset = (uvs - center) * res;
+    
+    float2 output = 0;
+    float totalWeight = 0;
+    
+    for (int y = -2; y < 2; y++)
+    {
+        for (int x = -2; x < 2; x++)
+        {
+            float weight = lanczosWeight(x - offset.x, 2) * lanczosWeight(y - offset.y, 2);
+            
+            output += tex.Load(int3(floor(uvs * res) + int2(x, y), 0)) * weight;
+            totalWeight += weight;
+        }
+    }
+    
+    return output / totalWeight;
+}
+
+
+// Based on the code in https://gist.github.com/TheRealMJP/c83b8c0f46b63f3a88a5986f4fa982b1 and http://vec3.ca/bicubic-filtering-in-fewer-taps/
+float2 catmull_rom_9tap(in Texture2D<float2> tex, in SamplerState linearSampler, in float2 uv, in float2 texSize)
+{
+    float2 samplePos = uv * texSize;
+    float2 texPos1 = floor(samplePos - 0.5f) + 0.5f;
+    float2 f = samplePos - texPos1;
+
+    float2 w0 = f * (-0.5f + f * (1.0f - 0.5f * f));
+    float2 w1 = 1.0f + f * f * (-2.5f + 1.5f * f);
+    float2 w2 = f * (0.5f + f * (2.0f - 1.5f * f));
+    float2 w3 = f * f * (-0.5f + 0.5f * f);
+
+    float2 w12 = w1 + w2;
+    float2 offset12 = w2 / (w1 + w2);
+
+    float2 texPos0 = texPos1 - 1;
+    float2 texPos3 = texPos1 + 2;
+    float2 texPos12 = texPos1 + offset12;
+
+    texPos0 /= texSize;
+    texPos3 /= texSize;
+    texPos12 /= texSize;
+
+    float2 result = 0;
+    result += tex.SampleLevel(linearSampler, float2(texPos0.x, texPos0.y), 0) * w0.x * w0.y;
+    result += tex.SampleLevel(linearSampler, float2(texPos12.x, texPos0.y), 0) * w12.x * w0.y;
+    result += tex.SampleLevel(linearSampler, float2(texPos3.x, texPos0.y), 0) * w3.x * w0.y;
+
+    result += tex.SampleLevel(linearSampler, float2(texPos0.x, texPos12.y), 0) * w0.x * w12.y;
+    result += tex.SampleLevel(linearSampler, float2(texPos12.x, texPos12.y), 0) * w12.x * w12.y;
+    result += tex.SampleLevel(linearSampler, float2(texPos3.x, texPos12.y), 0) * w3.x * w12.y;
+
+    result += tex.SampleLevel(linearSampler, float2(texPos0.x, texPos3.y), 0) * w0.x * w3.y;
+    result += tex.SampleLevel(linearSampler, float2(texPos12.x, texPos3.y), 0) * w12.x * w3.y;
+    result += tex.SampleLevel(linearSampler, float2(texPos3.x, texPos3.y), 0) * w3.x * w3.y;
+
+    return result;
+}
+
+
+float4 DisparityToWorldCoords(float disparity, float2 clipCoords)
+{
+    float2 texturePos = clipCoords * g_disparityTextureSize * float2(0.5, 1) * g_disparityDownscaleFactor;
+    
+    float scaledDisp = disparity * (g_viewIndex == 1 ? -1 : 1);
+    
+	// Convert to int16 range with 4 bit fixed decimal: 65536 / 2 / 16
+    scaledDisp = scaledDisp * 2048.0 * g_disparityDownscaleFactor;
+    float4 viewSpaceCoords = mul(g_disparityToDepth, float4(texturePos, scaledDisp, 1.0));
+    viewSpaceCoords.y = 1 - viewSpaceCoords.y;
+    viewSpaceCoords.z *= -1;
+    viewSpaceCoords /= viewSpaceCoords.w;
+    viewSpaceCoords.z = sign(viewSpaceCoords.z) * min(abs(viewSpaceCoords.z), g_projectionDistance);
+
+    return mul((g_vsUVBounds.x < 0.5) ? g_disparityViewToWorldLeft : g_disparityViewToWorldRight, viewSpaceCoords);
+}
 
 
 VS_OUTPUT main(float3 inPosition : POSITION, uint vertexID : SV_VertexID)
@@ -27,15 +122,63 @@ VS_OUTPUT main(float3 inPosition : POSITION, uint vertexID : SV_VertexID)
 	VS_OUTPUT output;
     
     float2 disparityUVs = inPosition.xy * (g_vsUVBounds.zw - g_vsUVBounds.xy) + g_vsUVBounds.xy;
-    uint3 uvPos = uint3(round(disparityUVs * g_disparityTextureSize), 0);
+    uint3 uvPos = uint3(floor(disparityUVs * g_disparityTextureSize), 0);
     
     // Load unfiltered value so that invalid values are not filtered into the texture.
     float2 dispConf = g_disparityTexture.Load(uvPos);
-    //float2 dispConf = g_disparityTexture.SampleLevel(g_samplerState, disparityUVs, 0);
-    
-    float disparity = dispConf.x;
-    float confidence = dispConf.y;
 
+    //float2 dispConf = g_disparityTexture.SampleLevel(g_samplerState, disparityUVs, 0); 
+    //float2 dispConf = lanczos2(g_disparityTexture, disparityUVs, g_disparityTextureSize);
+    //float2 dispConf = catmull_rom_9tap(g_disparityTexture, g_samplerState, disparityUVs, g_disparityTextureSize);
+    
+    float disparity;
+    float confidence;
+    
+    
+#ifndef VULKAN
+    if (g_bUseDisparityTemporalFilter)
+    {
+        float4 disparityWorldCoords = DisparityToWorldCoords(dispConf.x, inPosition.xy);
+        float4 prevDisparityCoords = mul(g_prevWorldToCameraProjection, disparityWorldCoords);
+        
+    
+        float2 prevDisparityUVs = (prevDisparityCoords.xy / prevDisparityCoords.w * 0.5 + 0.5) * (g_vsUVBounds.zw - g_vsUVBounds.xy) + g_vsUVBounds.xy;
+        int3 prevUvPos = int3(floor(prevDisparityUVs * g_disparityTextureSize), 0);
+    
+        //float2 prevDispConf = g_prevDisparityFilter.Load(prevUvPos);
+        //float2 prevDispConf = g_prevDisparityFilter.SampleLevel(g_samplerState, prevDisparityUVs, 0);
+        //float2 prevDispConf = lanczos2(g_prevDisparityFilter, prevDisparityUVs, g_disparityTextureSize);
+        float2 prevDispConf = catmull_rom_9tap(g_prevDisparityFilter, g_samplerState, prevDisparityUVs, g_disparityTextureSize);
+        
+        float4 prevDisparityWorldCoords = mul(g_prevCameraProjectionToWorld, DisparityToWorldCoords(prevDispConf.x, inPosition.xy));
+     
+        disparityWorldCoords /= disparityWorldCoords.w;
+        prevDisparityWorldCoords /= prevDisparityWorldCoords.w;
+        
+        if (prevDispConf.y < 0.5 || (dispConf.y > 0.5 &&
+            length(disparityWorldCoords.xyz - prevDisparityWorldCoords.xyz) > g_disparityTemporalFilterDistance * 0.1))
+        {
+            disparity = dispConf.x;
+            confidence = dispConf.y;
+        }
+        else
+        {
+            float depthFactor = saturate(length(disparityWorldCoords.xyz - prevDisparityWorldCoords.xyz));
+            float frac = clamp(1 * (prevDispConf.y - dispConf.y) - depthFactor, 0, g_disparityTemporalFilterStrength);
+            disparity = lerp(dispConf.x, prevDispConf.x, frac);
+            confidence = lerp(dispConf.y, prevDispConf.y, frac);
+        }
+    }
+    else
+    {
+#else   
+    {
+#endif       
+         disparity = dispConf.x;
+        confidence = dispConf.y;
+    }
+    
+    
     output.projectionValidity = 1;
     
 	// Disparity at the max projection distance
@@ -52,7 +195,6 @@ VS_OUTPUT main(float3 inPosition : POSITION, uint vertexID : SV_VertexID)
         maxDisparity = -minDisparity;
         minDisparity = -0.0465;
         defaultDisparity *= -1;
-
     }
     
     
@@ -123,21 +265,14 @@ VS_OUTPUT main(float3 inPosition : POSITION, uint vertexID : SV_VertexID)
         }
     }
     
-    disparity *= (g_viewIndex == 1) ? -1 : 1;
-
-    float2 texturePos = inPosition.xy * g_disparityTextureSize * float2(0.5, 1) * g_disparityDownscaleFactor;
-
-	// Convert to int16 range with 4 bit fixed decimal: 65536 / 2 / 16
-	disparity *= 2048.0 * g_disparityDownscaleFactor;
-    float4 viewSpaceCoords = mul(g_disparityToDepth, float4(texturePos, disparity, 1.0));
-	viewSpaceCoords.y = 1 - viewSpaceCoords.y;
-	viewSpaceCoords.z *= -1;
-	viewSpaceCoords /= viewSpaceCoords.w;
-    viewSpaceCoords.z = sign(viewSpaceCoords.z) * min(abs(viewSpaceCoords.z), g_projectionDistance);
-
-    float4 worldSpacePoint = 
-		mul((g_vsUVBounds.x < 0.5) ? g_disparityViewToWorldLeft : g_disparityViewToWorldRight, viewSpaceCoords);
+#ifndef VULKAN
+    if (g_bWriteDisparityFilter)
+    {
+        g_disparityFilter[uvPos.xy] = float2(disparity, confidence);
+    }
+#endif
     
+    float4 worldSpacePoint = DisparityToWorldCoords(disparity, inPosition.xy); 
     
     // Clamp positions to floor height
     if ((worldSpacePoint.y / worldSpacePoint.w) < g_floorHeightOffset)
@@ -153,14 +288,23 @@ VS_OUTPUT main(float3 inPosition : POSITION, uint vertexID : SV_VertexID)
         }
     }
     
+    output.position = mul(g_worldToHMDProjection, worldSpacePoint);
+    output.screenCoords = output.position.xyw;
 	
-//#ifndef VULKAN
+#ifndef VULKAN
     float4 outCoords = mul(g_worldToCameraProjection, worldSpacePoint);
 	output.clipSpaceCoords = outCoords.xyw;
-//#endif
+    
+    float4 prevOutCoords = mul(g_prevWorldToCameraProjection, worldSpacePoint);
+    //output.prevClipSpaceCoords = prevOutCoords.xyw;
+    
+    float4 prevClipCoords = mul(g_prevWorldToHMDProjection, worldSpacePoint);
+    output.prevClipSpaceCoords = prevClipCoords.xyw;
+    
+    output.velocity = outCoords.xyz / outCoords.w - prevOutCoords.xyz / prevOutCoords.w;
+#endif
 	
-    output.position = mul(g_worldToHMDProjection, worldSpacePoint); 
-	output.screenCoords = output.position.xyw;
+    
     
     
 #ifdef VULKAN
