@@ -243,11 +243,12 @@ namespace
 				case XR_TYPE_GRAPHICS_BINDING_D3D12_KHR:
 				{
 					const XrGraphicsBindingD3D12KHR* dx12bindings = reinterpret_cast<const XrGraphicsBindingD3D12KHR*>(entry);
-					m_Renderer = std::make_unique<PassthroughRendererDX12>(dx12bindings->device, dx12bindings->queue, g_dllModule, m_configManager);
+					//m_Renderer = std::make_unique<PassthroughRendererDX12>(dx12bindings->device, dx12bindings->queue, g_dllModule, m_configManager);
+					m_Renderer = std::make_unique<PassthroughRendererDX11Interop>(dx12bindings->device, dx12bindings->queue, g_dllModule, m_configManager);
 
 					if (!m_cameraManager.get())
 					{
-						m_cameraManager = std::make_unique<CameraManager>(m_Renderer, DirectX12, m_configManager, m_openVRManager);
+						m_cameraManager = std::make_unique<CameraManager>(m_Renderer, DirectX11, m_configManager, m_openVRManager);
 					}
 					if (!m_cameraManager->InitCamera())
 					{

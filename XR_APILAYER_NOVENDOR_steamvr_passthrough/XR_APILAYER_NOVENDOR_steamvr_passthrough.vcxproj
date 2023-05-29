@@ -242,6 +242,7 @@ copy $(SolutionDir)\external\openvr\bin\win64\openvr_api.dll $(OutDir)
     <ClCompile Include="mesh.cpp" />
     <ClCompile Include="openvr_manager.cpp" />
     <ClCompile Include="passthrough_renderer_dx11.cpp" />
+    <ClCompile Include="passthrough_renderer_dx11_interop.cpp" />
     <ClCompile Include="passthrough_renderer_dx12.cpp" />
     <ClCompile Include="layer.cpp" />
     <ClCompile Include="passthrough_renderer_vulkan.cpp" />

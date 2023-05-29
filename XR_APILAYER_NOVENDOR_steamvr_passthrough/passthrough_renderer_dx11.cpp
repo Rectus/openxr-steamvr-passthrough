@@ -136,7 +136,7 @@ bool PassthroughRendererDX11::InitRenderer()
 
 	if (FAILED(m_d3dDevice->CreateVertexShader(g_FullscreenQuadShaderVS, sizeof(g_FullscreenQuadShaderVS), nullptr, &m_fullscreenQuadShader)))
 	{
-		ErrorLog("g_PassthroughShaderVS creation failure!\n");
+		ErrorLog("g_FullscreenQuadShaderVS creation failure!\n");
 		return false;
 	}
 
