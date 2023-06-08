@@ -303,6 +303,7 @@ void ConfigManager::ParseConfig_Main()
 
 	m_configMain.RequireSteamVRRuntime = m_iniData.GetBoolValue("Main", "RequireSteamVRRuntime", m_configMain.RequireSteamVRRuntime);	
 	m_configMain.ShowSettingDescriptions = m_iniData.GetBoolValue("Main", "ShowSettingDescriptions", m_configMain.ShowSettingDescriptions);
+	m_configMain.UseLegacyD3D12Renderer = m_iniData.GetBoolValue("Main", "UseLegacyD3D12Renderer", m_configMain.UseLegacyD3D12Renderer);
 
 	m_configMain.StereoPreset = (EStereoPreset)m_iniData.GetLongValue("Main", "StereoPreset", m_configMain.StereoPreset);
 }
@@ -402,6 +403,7 @@ void ConfigManager::UpdateConfig_Main()
 
 	m_iniData.SetBoolValue("Main", "RequireSteamVRRuntime", m_configMain.RequireSteamVRRuntime);
 	m_iniData.SetBoolValue("Main", "ShowSettingDescriptions", m_configMain.ShowSettingDescriptions);
+	m_iniData.SetBoolValue("Main", "UseLegacyD3D12Renderer", m_configMain.UseLegacyD3D12Renderer);
 
 	m_iniData.SetLongValue("Main", "StereoPreset", m_configMain.StereoPreset);
 }

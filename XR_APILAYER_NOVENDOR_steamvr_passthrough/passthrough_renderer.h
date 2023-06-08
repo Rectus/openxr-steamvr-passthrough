@@ -215,7 +215,6 @@ class PassthroughRendererDX11Interop : public PassthroughRendererDX11
 {
 public:
 	PassthroughRendererDX11Interop(ID3D12Device* device, ID3D12CommandQueue* commandQueue, HMODULE dllModule, std::shared_ptr<ConfigManager> configManager);
-	PassthroughRendererDX11Interop(const XrGraphicsBindingVulkanKHR& binding, HMODULE dllModule, std::shared_ptr<ConfigManager> configManager);
 	~PassthroughRendererDX11Interop() {};
 
 	bool InitRenderer();
@@ -230,12 +229,6 @@ private:
 	ComPtr<ID3D12Device> m_d3d12Device;
 	ComPtr<ID3D11On12Device2> m_d3d11On12Device;
 	ComPtr<ID3D12CommandQueue> m_d3d12CommandQueue;
-
-	VkInstance m_VkInstance;
-	VkPhysicalDevice m_VkPhysDevice;
-	VkDevice m_VkDevice;
-	uint32_t m_VkQueueFamilyIndex;
-	uint32_t m_VkQueueIndex;
 };
 
 

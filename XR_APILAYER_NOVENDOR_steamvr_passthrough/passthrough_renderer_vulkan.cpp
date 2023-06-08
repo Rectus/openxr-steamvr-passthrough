@@ -32,6 +32,9 @@ struct VSPassConstantBuffer
 	int32_t disparityFilterWidth;
 	uint32_t bProjectBorders;
 	uint32_t bFindDiscontinuities;
+	uint32_t bUseDisparityTemporalFilter;
+	float disparityTemporalFilterStrength;
+	float disparityTemporalFilterDistance;
 };
 
 
@@ -40,11 +43,15 @@ struct VSViewConstantBuffer
 	XrMatrix4x4f cameraProjectionToWorld;
 	XrMatrix4x4f worldToCameraProjection;
 	XrMatrix4x4f worldToHMDProjection;
+	XrMatrix4x4f prevCameraProjectionToWorld;
+	XrMatrix4x4f prevWorldToCameraProjection;
+	XrMatrix4x4f prevWorldToHMDProjection;
 	XrVector4f frameUVBounds;
 	XrVector3f hmdViewWorldPos;
 	float projectionDistance;
 	float floorHeightOffset;
 	uint32_t cameraViewIndex;
+	uint32_t bWriteDisparityFilter;
 };
 
 
@@ -56,10 +63,12 @@ struct PSPassConstantBuffer
 	float contrast;
 	float saturation;
 	float sharpness;
+	int32_t temporalFilterinSampling;
 	uint32_t bDoColorAdjustment;
 	uint32_t bDebugDepth;
 	uint32_t bDebugValidStereo;
 	uint32_t bUseFisheyeCorrection;
+	uint32_t bIsFirstRenderOfCameraFrame;
 };
 
 struct PSViewConstantBuffer

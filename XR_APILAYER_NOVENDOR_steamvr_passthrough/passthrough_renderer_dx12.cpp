@@ -105,6 +105,9 @@ struct VSPassConstantBuffer
 	int32_t disparityFilterWidth;
 	uint32_t bProjectBorders;
 	uint32_t bFindDiscontinuities;
+	uint32_t bUseDisparityTemporalFilter;
+	float disparityTemporalFilterStrength;
+	float disparityTemporalFilterDistance;
 };
 
 struct VSViewConstantBuffer
@@ -112,11 +115,15 @@ struct VSViewConstantBuffer
 	XrMatrix4x4f cameraProjectionToWorld;
 	XrMatrix4x4f worldToCameraProjection;
 	XrMatrix4x4f worldToHMDProjection;
+	XrMatrix4x4f prevCameraProjectionToWorld;
+	XrMatrix4x4f prevWorldToCameraProjection;
+	XrMatrix4x4f prevWorldToHMDProjection;
 	XrVector4f frameUVBounds;
 	XrVector3f hmdViewWorldPos;
 	float projectionDistance;
 	float floorHeightOffset;
 	uint32_t cameraViewIndex;
+	uint32_t bWriteDisparityFilter;
 };
 
 struct PSPassConstantBuffer
@@ -127,10 +134,12 @@ struct PSPassConstantBuffer
 	float contrast;
 	float saturation;
 	float sharpness;
+	int32_t temporalFilterinSampling;
 	uint32_t bDoColorAdjustment;
 	uint32_t bDebugDepth;
 	uint32_t bDebugValidStereo;
 	uint32_t bUseFisheyeCorrection;
+	uint32_t bIsFirstRenderOfCameraFrame;
 };
 
 struct PSViewConstantBuffer
@@ -305,7 +314,7 @@ bool PassthroughRendererDX12::InitRenderer()
 	m_CBVSRVHeapDescSize = m_d3dDevice->GetDescriptorHandleIncrementSize(D3D12_DESCRIPTOR_HEAP_TYPE_CBV_SRV_UAV);
 
 	m_vsPassConstantBuffer = InitBuffer(m_vsPassConstantBufferCPUData, NUM_SWAPCHAINS, 1, INDEX_CBV_VS_PASS_0);
-	m_vsViewConstantBuffer = InitBuffer(m_vsViewConstantBufferCPUData, NUM_SWAPCHAINS * 4, 1, INDEX_CBV_VS_VIEW_0);
+	m_vsViewConstantBuffer = InitBuffer(m_vsViewConstantBufferCPUData, NUM_SWAPCHAINS * 4, 2, INDEX_CBV_VS_VIEW_0);
 	m_psPassConstantBuffer = InitBuffer(m_psPassConstantBufferCPUData, NUM_SWAPCHAINS, 1, INDEX_CBV_PS_PASS_0);
 	m_psViewConstantBuffer = InitBuffer(m_psViewConstantBufferCPUData, NUM_SWAPCHAINS * 4, 1, INDEX_CBV_PS_VIEW_0);
 	m_psMaskedConstantBuffer = InitBuffer(m_psMaskedConstantBufferCPUData, NUM_SWAPCHAINS, 1, INDEX_CBV_PS_MASKED_0);
@@ -587,8 +596,15 @@ bool PassthroughRendererDX12::CreateRootSignature()
 	rangeSRV2.RegisterSpace = 0;
 	rangeSRV2.OffsetInDescriptorsFromTableStart = D3D12_DESCRIPTOR_RANGE_OFFSET_APPEND;
 
+	D3D12_DESCRIPTOR_RANGE rangeUAV2;
+	rangeUAV2.RangeType = D3D12_DESCRIPTOR_RANGE_TYPE_UAV;
+	rangeUAV2.NumDescriptors = 1;
+	rangeUAV2.BaseShaderRegister = 2;
+	rangeUAV2.RegisterSpace = 0;
+	rangeUAV2.OffsetInDescriptorsFromTableStart = D3D12_DESCRIPTOR_RANGE_OFFSET_APPEND;
 
-	D3D12_ROOT_PARAMETER rootParams[9];
+
+	D3D12_ROOT_PARAMETER rootParams[11];
 	rootParams[0].ParameterType = D3D12_ROOT_PARAMETER_TYPE_DESCRIPTOR_TABLE;
 	rootParams[0].ShaderVisibility = D3D12_SHADER_VISIBILITY_PIXEL;
 	rootParams[0].DescriptorTable.NumDescriptorRanges = 1;
@@ -635,6 +651,16 @@ bool PassthroughRendererDX12::CreateRootSignature()
 	rootParams[8].DescriptorTable.NumDescriptorRanges = 1;
 	rootParams[8].DescriptorTable.pDescriptorRanges = &rangeSRV0;
 
+	rootParams[9].ParameterType = D3D12_ROOT_PARAMETER_TYPE_DESCRIPTOR_TABLE;
+	rootParams[9].ShaderVisibility = D3D12_SHADER_VISIBILITY_VERTEX;
+	rootParams[9].DescriptorTable.NumDescriptorRanges = 1;
+	rootParams[9].DescriptorTable.pDescriptorRanges = &rangeSRV1;
+
+	rootParams[10].ParameterType = D3D12_ROOT_PARAMETER_TYPE_DESCRIPTOR_TABLE;
+	rootParams[10].ShaderVisibility = D3D12_SHADER_VISIBILITY_VERTEX;
+	rootParams[10].DescriptorTable.NumDescriptorRanges = 1;
+	rootParams[10].DescriptorTable.pDescriptorRanges = &rangeUAV2;
+
 
 	D3D12_STATIC_SAMPLER_DESC sampler = {};
 	sampler.Filter = D3D12_FILTER_MIN_MAG_MIP_LINEAR;
@@ -652,7 +678,7 @@ bool PassthroughRendererDX12::CreateRootSignature()
 		D3D12_ROOT_SIGNATURE_FLAG_DENY_GEOMETRY_SHADER_ROOT_ACCESS;
 
 	D3D12_ROOT_SIGNATURE_DESC rootSignatureDesc = {};
-	rootSignatureDesc.NumParameters = 9;
+	rootSignatureDesc.NumParameters = 11;
 	rootSignatureDesc.pParameters = rootParams;
 	rootSignatureDesc.Flags = rootSignatureFlags;
 	rootSignatureDesc.NumStaticSamplers = 1;

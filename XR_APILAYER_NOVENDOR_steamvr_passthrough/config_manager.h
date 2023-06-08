@@ -79,8 +79,8 @@ struct Config_Main
 	int TemporalFilteringSampling = 3;
 
 	bool RequireSteamVRRuntime = true;
-
 	bool ShowSettingDescriptions = true;
+	bool UseLegacyD3D12Renderer = false;
 
 	EStereoPreset StereoPreset = StereoPreset_Medium;
 

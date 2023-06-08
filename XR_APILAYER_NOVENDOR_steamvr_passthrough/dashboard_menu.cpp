@@ -450,9 +450,11 @@ if (bIsActiveTab) { ImGui::PopStyleColor(1); bIsActiveTab = false; }
 		}
 
 		ImGui::SetNextItemOpen(true, ImGuiCond_Once);
-		if (ImGui::CollapsingHeader("UI Settings"))
+		if (ImGui::CollapsingHeader("Misc."))
 		{
 			ImGui::Checkbox("Show Descriptions", &mainConfig.ShowSettingDescriptions);
+			ImGui::Checkbox("Use legacy DirectX 12 renderer", &mainConfig.UseLegacyD3D12Renderer);
+			TextDescription("Uses the old native DirectX12 renderer for DirectX 12 applications. Not recommended since it is missing rendering features. Requires restart.");
 		}
 		IMGUI_BIG_SPACING;
 
