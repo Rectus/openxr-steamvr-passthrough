@@ -28,6 +28,7 @@ enum EMenuTab
 struct MenuDisplayValues
 {
 	bool bSessionActive = false;
+	bool bDepthBlendingActive = false;
 	ERenderAPI renderAPI = None;
 	std::string currentApplication;
 	int frameBufferWidth = 0;
@@ -43,6 +44,8 @@ struct MenuDisplayValues
 
 	bool bCorePassthroughActive = false;
 	int CoreCurrentMode = 0;
+
+	bool bVarjoDepthEstimationExtensionActive = false;
 };
 
 

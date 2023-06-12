@@ -305,6 +305,7 @@ namespace LAYER_NAMESPACE
 		XrInstance m_instance{ XR_NULL_HANDLE };
 		std::string m_applicationName;
 		std::vector<std::string> m_grantedExtensions;
+        std::vector<std::string> m_requestedExtensions;
 
 	protected:
 		OpenXrApi() = default;
@@ -329,6 +330,11 @@ namespace LAYER_NAMESPACE
 			return m_grantedExtensions;
 		}
 
+        const std::vector<std::string>& GetRequestedExtensions() const
+		{
+			return m_requestedExtensions;
+		}
+
 		void SetGetInstanceProcAddr(PFN_xrGetInstanceProcAddr pfn_xrGetInstanceProcAddr, XrInstance instance)
 		{
 			m_xrGetInstanceProcAddr = pfn_xrGetInstanceProcAddr;
@@ -338,6 +344,11 @@ namespace LAYER_NAMESPACE
 		void SetGrantedExtensions(std::vector<std::string>& grantedExtensions)
 		{
 			m_grantedExtensions = grantedExtensions;
+		}
+
+        void SetRequestedExtensions(std::vector<std::string>& requestedExtensions)
+		{
+			m_requestedExtensions = requestedExtensions;
 		}
 
 		// Specially-handled by the auto-generated code.

@@ -9,6 +9,18 @@
     "functions": {
       "xrNegotiateLoaderApiLayerInterface": "xrNegotiateLoaderApiLayerInterface"
     },
+	"instance_extensions": [
+		{
+			"name": "XR_VARJO_composition_layer_depth_test",
+			"extension_version": "2",
+			"entrypoints": []
+		},
+		{
+			"name": "XR_VARJO_environment_depth_estimation",
+			"extension_version": "1",
+			"entrypoints": []
+		}
+	],
     "disable_environment": "DISABLE_XR_APILAYER_NOVENDOR_steamvr_passthrough"
   }
 }

@@ -387,6 +387,35 @@ namespace LAYER_NAMESPACE
 		return result;
 	}
 
+	XrResult xrSetEnvironmentDepthEstimationVARJO(XrSession session, XrBool32 enabled)
+	{
+#if USE_TRACELOGGING
+		TraceLoggingWrite(g_traceProvider, "xrSetEnvironmentDepthEstimationVARJO");
+#endif
+
+		XrResult result;
+		try
+		{
+			result = LAYER_NAMESPACE::GetInstance()->xrSetEnvironmentDepthEstimationVARJO(session, enabled);
+		}
+		catch (std::exception exc)
+		{
+#if USE_TRACELOGGING
+			TraceLoggingWrite(g_traceProvider, "xrSetEnvironmentDepthEstimationVARJO_Error", TLArg(exc.what(), "Error"));
+#endif
+			ErrorLog("xrSetEnvironmentDepthEstimationVARJO: %s\n", exc.what());
+			result = XR_ERROR_RUNTIME_FAILURE;
+		}
+#if USE_TRACELOGGING
+		TraceLoggingWrite(g_traceProvider, "xrSetEnvironmentDepthEstimationVARJO_Result", TLArg(xr::ToCString(result), "Result"));
+#endif
+		if (XR_FAILED(result)) {
+			ErrorLog("xrSetEnvironmentDepthEstimationVARJO failed with %d\n", result);
+		}
+
+		return result;
+	}
+
 
 	// Auto-generated dispatcher handler.
 	XrResult OpenXrApi::xrGetInstanceProcAddr(XrInstance instance, const char* name, PFN_xrVoidFunction* function)
@@ -459,6 +488,12 @@ namespace LAYER_NAMESPACE
 		{
 			m_xrEndFrame = reinterpret_cast<PFN_xrEndFrame>(*function);
 			*function = reinterpret_cast<PFN_xrVoidFunction>(LAYER_NAMESPACE::xrEndFrame);
+		}
+		else if (apiName == "xrSetEnvironmentDepthEstimationVARJO")
+		{
+			m_xrSetEnvironmentDepthEstimationVARJO = reinterpret_cast<PFN_xrSetEnvironmentDepthEstimationVARJO>(*function);
+			*function = reinterpret_cast<PFN_xrVoidFunction>(LAYER_NAMESPACE::xrSetEnvironmentDepthEstimationVARJO);
+			result = XR_SUCCESS;
 		}
 
 

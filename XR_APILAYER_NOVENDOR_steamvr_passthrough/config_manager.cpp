@@ -32,6 +32,7 @@ void ConfigManager::ReadConfigFile()
 	{
 		ParseConfig_Main();
 		ParseConfig_Core();
+		ParseConfig_Extensions();
 		ParseConfig_Stereo();
 		ParseConfig_Depth();
 	}
@@ -44,6 +45,7 @@ void ConfigManager::UpdateConfigFile()
 {
 	UpdateConfig_Main();
 	UpdateConfig_Core();
+	UpdateConfig_Extensions();
 	UpdateConfig_Stereo();
 	UpdateConfig_Depth();
 
@@ -78,6 +80,7 @@ void ConfigManager::ResetToDefaults()
 {
 	m_configMain = Config_Main();
 	m_configCore = Config_Core();
+	m_configExtensions = Config_Extensions();
 	m_configCustomStereo = Config_Stereo();
 	m_configDepth = Config_Depth();
 	UpdateConfigFile();
@@ -329,6 +332,11 @@ void ConfigManager::ParseConfig_Core()
 	m_configCore.CoreForceMaskedInvertMask = m_iniData.GetBoolValue("Core", "CoreForceMaskedInvertMask", m_configCore.CoreForceMaskedInvertMask);
 }
 
+void ConfigManager::ParseConfig_Extensions()
+{
+	m_configExtensions.ExtVarjoDepthEstimation = m_iniData.GetBoolValue("Extensions", "ExtVarjoDepthEstimation", m_configExtensions.ExtVarjoDepthEstimation);
+}
+
 void ConfigManager::ParseConfig_Stereo()
 {
 	m_configCustomStereo.StereoUseMulticore = m_iniData.GetBoolValue("StereoCustom", "StereoUseMulticore", m_configCustomStereo.StereoUseMulticore);
@@ -427,6 +435,11 @@ void ConfigManager::UpdateConfig_Core()
 
 	m_iniData.SetBoolValue("Core", "CoreForceMaskedUseCameraImage", m_configCore.CoreForceMaskedUseCameraImage);
 	m_iniData.SetBoolValue("Core", "CoreForceMaskedInvertMask", m_configCore.CoreForceMaskedInvertMask);
+}
+
+void ConfigManager::UpdateConfig_Extensions()
+{
+	m_iniData.SetBoolValue("Extensions", "ExtVarjoDepthEstimation", m_configExtensions.ExtVarjoDepthEstimation);
 }
 
 void ConfigManager::UpdateConfig_Stereo()

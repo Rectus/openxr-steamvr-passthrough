@@ -86,8 +86,23 @@ namespace
 				g_traceProvider, "xrCreateInstance", TLArg(createInfo->enabledExtensionNames[i], "ExtensionName"));
 			}
 #endif
+			std::vector<std::string> extensions = GetRequestedExtensions();
+			for (uint32_t i = 0; i < extensions.size(); i++)
+			{
+				if (strncmp(extensions[i].c_str(), XR_VARJO_ENVIRONMENT_DEPTH_ESTIMATION_EXTENSION_NAME, strlen(XR_VARJO_ENVIRONMENT_DEPTH_ESTIMATION_EXTENSION_NAME)) == 0)
+				{
+					m_bVarjoDepthExtensionEnabled = true;
+					Log("Extension XR_VARJO_environment_depth_estimation enabled\n");
+				}
+			}
 			
 			XrResult result = OpenXrApi::xrCreateInstance(createInfo);
+
+			if (result != XR_SUCCESS)
+			{
+				ErrorLog("xrCreateInstance returned error %i.\n", result);
+				return result;
+			}
 
 			Log("Application %s creating OpenXR instance...\n", GetApplicationName().c_str());
 
@@ -149,6 +164,8 @@ namespace
 
 			m_openVRManager = std::make_shared<OpenVRManager>();
 			m_dashboardMenu = std::make_unique<DashboardMenu>(g_dllModule, m_configManager, m_openVRManager);
+
+			m_dashboardMenu->GetDisplayValues().bVarjoDepthEstimationExtensionActive = m_bVarjoDepthExtensionEnabled;
 
 			m_bSuccessfullyLoaded = true;
 			Log("OpenXR instance successfully created\n");
@@ -212,6 +229,8 @@ namespace
 				{
 				case XR_TYPE_GRAPHICS_BINDING_D3D11_KHR:
 				{
+					Log("Direct3D 11 renderer initializing...\n");
+
 					const XrGraphicsBindingD3D11KHR* dx11bindings = reinterpret_cast<const XrGraphicsBindingD3D11KHR*>(entry);
 					m_Renderer = std::make_shared<PassthroughRendererDX11>(dx11bindings->device, g_dllModule, m_configManager);
 
@@ -235,6 +254,7 @@ namespace
 
 					m_dashboardMenu->GetDisplayValues().bSessionActive = true;
 					m_dashboardMenu->GetDisplayValues().renderAPI = DirectX11;
+					m_bDepthSupportedByRenderer = true;
 					Log("Direct3D 11 renderer initialized\n");
 
 					return true;
@@ -242,6 +262,8 @@ namespace
 
 				case XR_TYPE_GRAPHICS_BINDING_D3D12_KHR:
 				{
+					Log("Direct3D 12 renderer initializing...\n");
+
 					const XrGraphicsBindingD3D12KHR* dx12bindings = reinterpret_cast<const XrGraphicsBindingD3D12KHR*>(entry);
 
 					ERenderAPI usedAPI = DirectX11;
@@ -250,6 +272,7 @@ namespace
 					{
 						m_Renderer = std::make_unique<PassthroughRendererDX12>(dx12bindings->device, dx12bindings->queue, g_dllModule, m_configManager);
 						usedAPI = DirectX12;
+						Log("Using legacy Direct3D 12 renderer\n");
 					}
 					else
 					{
@@ -276,6 +299,7 @@ namespace
 
 					m_dashboardMenu->GetDisplayValues().bSessionActive = true;
 					m_dashboardMenu->GetDisplayValues().renderAPI = DirectX12;
+					m_bDepthSupportedByRenderer = true;
 					Log("Direct3D 12 renderer initialized\n");
 
 					return true;
@@ -283,6 +307,8 @@ namespace
 
 				case XR_TYPE_GRAPHICS_BINDING_VULKAN_KHR: // same as XR_TYPE_GRAPHICS_BINDING_VULKAN2_KHR
 				{
+					Log("Vulkan renderer initializing...\n");
+
 					const XrGraphicsBindingVulkanKHR* vulkanbindings = reinterpret_cast<const XrGraphicsBindingVulkanKHR*>(entry);
 					m_Renderer = std::make_unique<PassthroughRendererVulkan>(*vulkanbindings, g_dllModule, m_configManager);
 					
@@ -306,6 +332,7 @@ namespace
 
 					m_dashboardMenu->GetDisplayValues().bSessionActive = true;
 					m_dashboardMenu->GetDisplayValues().renderAPI = Vulkan;
+					m_bDepthSupportedByRenderer = false;
 					Log("Vulkan renderer initialized\n");
 
 					return true;
@@ -834,7 +861,14 @@ namespace
 			
 			std::shared_ptr<DepthFrame> depthFrame = m_depthReconstruction->GetDepthFrame();
 
-			m_Renderer->RenderPassthroughFrame(layer, frame.get(), blendMode, leftIndex, rightIndex, depthFrame, m_depthReconstruction->GetDistortionParameters());
+			bool bDepthBlending = m_configManager->GetConfig_Depth().DepthReadFromApplication && 
+				((m_bVarjoDepthEnabled && 
+				(blendMode == AlphaBlendPremultiplied || blendMode == AlphaBlendUnpremultiplied)) || 
+				m_configManager->GetConfig_Depth().DepthForceComposition);
+
+			m_dashboardMenu->GetDisplayValues().bDepthBlendingActive = bDepthBlending;
+
+			m_Renderer->RenderPassthroughFrame(layer, frame.get(), blendMode, leftIndex, rightIndex, depthFrame, m_depthReconstruction->GetDistortionParameters(), bDepthBlending);
 
 
 			float renderTime = EndPerfTimer(preRenderTime.QuadPart);
@@ -895,6 +929,35 @@ namespace
 		}
 
 
+		XrResult xrSetEnvironmentDepthEstimationVARJO(XrSession session, XrBool32 enabled)
+		{
+			if (!m_bVarjoDepthExtensionEnabled)
+			{
+				ErrorLog("xrSetEnvironmentDepthEstimationVARJO called without enabling extension!\n");
+				return XR_ERROR_RUNTIME_FAILURE;
+			}
+
+			if (m_bDepthSupportedByRenderer && m_configManager->GetConfig_Extensions().ExtVarjoDepthEstimation && enabled)
+			{
+				m_bVarjoDepthEnabled = true;
+				return XR_SUCCESS;
+			}
+			else if ((!m_bDepthSupportedByRenderer || !m_configManager->GetConfig_Extensions().ExtVarjoDepthEstimation) && enabled)
+			{
+				if (!m_bDepthSupportedByRenderer)
+				{
+					ErrorLog("Varjo depth estimation unsupported by current renderer.\n");
+				}
+				return XR_ERROR_FEATURE_UNSUPPORTED;
+			}
+			else
+			{
+				m_bVarjoDepthEnabled = false;
+				return XR_SUCCESS;
+			}
+		}
+
+
 		private:
 
 		bool isSystemHandled(XrSystemId systemId) const { return systemId == m_systemId; }
@@ -913,6 +976,9 @@ namespace
 		bool m_bSuccessfullyLoaded = false;
 		bool m_bPassthroughAvailable = false;
 		bool m_bUsePassthrough = false;
+		bool m_bVarjoDepthExtensionEnabled = false;
+		bool m_bVarjoDepthEnabled = false;
+		bool m_bDepthSupportedByRenderer = false;
 
 		XrSwapchain m_swapChainLeft{XR_NULL_HANDLE};
 		XrSwapchain m_swapChainRight{XR_NULL_HANDLE};

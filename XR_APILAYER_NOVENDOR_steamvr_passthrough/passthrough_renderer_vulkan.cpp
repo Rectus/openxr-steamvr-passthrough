@@ -1705,7 +1705,7 @@ void PassthroughRendererVulkan::UpdateDescriptorSets(VkCommandBuffer commandBuff
 
 static bool g_bVulkanStereoErrorShown = false;
 
-void PassthroughRendererVulkan::RenderPassthroughFrame(const XrCompositionLayerProjection* layer, CameraFrame* frame, EPassthroughBlendMode blendMode, int leftSwapchainIndex, int rightSwapchainIndex, std::shared_ptr<DepthFrame> depthFrame, UVDistortionParameters& distortionParams)
+void PassthroughRendererVulkan::RenderPassthroughFrame(const XrCompositionLayerProjection* layer, CameraFrame* frame, EPassthroughBlendMode blendMode, int leftSwapchainIndex, int rightSwapchainIndex, std::shared_ptr<DepthFrame> depthFrame, UVDistortionParameters& distortionParams, bool bEnableDepthBlending)
 {
 
 	Config_Main& mainConf = m_configManager->GetConfig_Main();

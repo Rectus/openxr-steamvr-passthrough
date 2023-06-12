@@ -263,6 +263,7 @@ void DashboardMenu::TickMenu()
 
 	Config_Main& mainConfig = m_configManager->GetConfig_Main();
 	Config_Core& coreConfig = m_configManager->GetConfig_Core();
+	Config_Extensions& extConfig = m_configManager->GetConfig_Extensions();
 	Config_Stereo& stereoConfig = m_configManager->GetConfig_Stereo();
 	Config_Stereo& stereoCustomConfig = m_configManager->GetConfig_CustomStereo();
 	Config_Depth& depthConfig = m_configManager->GetConfig_Depth();
@@ -321,6 +322,11 @@ if (bIsActiveTab) { ImGui::PopStyleColor(1); bIsActiveTab = false; }
 	ImGui::Separator();
 	ImGui::Text("Passthrough:");
 	m_displayValues.bCorePassthroughActive ? ImGui::TextColored(colorTextGreen, "Active") : ImGui::TextColored(colorTextRed, "Inactive");
+
+	if (m_displayValues.bCorePassthroughActive && m_displayValues.bDepthBlendingActive)
+	{
+		ImGui::TextColored(colorTextGreen, "Depth Blending");
+	}
 
 	if (coreConfig.CoreForcePassthrough || depthConfig.DepthForceComposition)
 	{
@@ -525,6 +531,27 @@ if (bIsActiveTab) { ImGui::PopStyleColor(1); bIsActiveTab = false; }
 			ImGui::EndGroup();
 			EndSoftDisabled(!coreConfig.CorePassthroughEnable);
 		}
+
+		ImGui::SetNextItemOpen(true, ImGuiCond_Once);
+		if (ImGui::CollapsingHeader("Varjo Extensions"))
+		{
+			ImGui::PushFont(m_fixedFont);
+			ImGui::Text("Varjo Depth Estimation extension:");
+			ImGui::SameLine();
+			if (m_displayValues.bVarjoDepthEstimationExtensionActive)
+			{
+				ImGui::TextColored(colorTextGreen, "Active");
+			}
+			else
+			{
+				ImGui::TextColored(colorTextRed, "Inactive");
+			}
+			ImGui::PopFont();
+
+			ImGui::Checkbox("Enable Varjo Depth Estimation", &extConfig.ExtVarjoDepthEstimation);
+			TextDescription("Allow applications to use depth blending using the XR_VARJO_environment_depth_estimation extension. Requires a restart to apply.");	
+		}
+
 		ImGui::EndChild();
 	}
 

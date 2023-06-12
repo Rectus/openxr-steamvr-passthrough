@@ -11,7 +11,8 @@ override_functions = [
 	"xrAcquireSwapchainImage",
 	"xrReleaseSwapchainImage",
     "xrBeginFrame",
-    "xrEndFrame"
+    "xrEndFrame",
+    "xrSetEnvironmentDepthEstimationVARJO"
 ]
 
 # The list of OpenXR functions our layer will use from the runtime.
@@ -38,5 +39,7 @@ requested_functions = [
 
 # The list of OpenXR extensions our layer will either override or use.
 extensions = [
-    "XR_KHR_win32_convert_performance_counter_time"
+    "XR_KHR_win32_convert_performance_counter_time",
+    "XR_VARJO_composition_layer_depth_test",
+    "XR_VARJO_environment_depth_estimation"
 ]

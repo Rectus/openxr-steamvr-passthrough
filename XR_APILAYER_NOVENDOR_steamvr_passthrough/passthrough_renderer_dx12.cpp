@@ -1,4 +1,5 @@
 
+// Legacy DX12 renderer
 
 #include "pch.h"
 #include "passthrough_renderer.h"
@@ -1076,7 +1077,7 @@ void PassthroughRendererDX12::GenerateDepthMesh(uint32_t width, uint32_t height)
 
 
 
-void PassthroughRendererDX12::RenderPassthroughFrame(const XrCompositionLayerProjection* layer, CameraFrame* frame, EPassthroughBlendMode blendMode, int leftSwapchainIndex, int rightSwapchainIndex, std::shared_ptr<DepthFrame> depthFrame, UVDistortionParameters& distortionParams)
+void PassthroughRendererDX12::RenderPassthroughFrame(const XrCompositionLayerProjection* layer, CameraFrame* frame, EPassthroughBlendMode blendMode, int leftSwapchainIndex, int rightSwapchainIndex, std::shared_ptr<DepthFrame> depthFrame, UVDistortionParameters& distortionParams, bool bEnableDepthBlending)
 {
 	Config_Main& mainConf = m_configManager->GetConfig_Main();
 	Config_Core& coreConf = m_configManager->GetConfig_Core();
@@ -1088,7 +1089,7 @@ void PassthroughRendererDX12::RenderPassthroughFrame(const XrCompositionLayerPro
 		return;
 	}
 
-	bool bCompositeDepth = depthConf.DepthForceComposition && depthConf.DepthReadFromApplication && m_depthStencils[0].Get() != nullptr;
+	bool bCompositeDepth = bEnableDepthBlending && m_depthStencils[0].Get() != nullptr;
 	bool bDepthWrtite = depthConf.DepthWriteOutput && depthConf.DepthReadFromApplication;
 	bool bUseReversedDepth = (m_blendMode == Masked) ? coreConf.CoreForceMaskedUseCameraImage == frame->bHasReversedDepth : frame->bHasReversedDepth;
 

@@ -69,7 +69,7 @@ namespace LAYER_NAMESPACE {
         }
 
         // The list of extensions to remove or implicitly add.
-        std::vector<std::string> blockedExtensions;
+        std::vector<std::string> blockedExtensions = { XR_VARJO_COMPOSITION_LAYER_DEPTH_TEST_EXTENSION_NAME, XR_VARJO_ENVIRONMENT_DEPTH_ESTIMATION_EXTENSION_NAME };
         std::vector<std::string> implicitExtensions = { XR_KHR_WIN32_CONVERT_PERFORMANCE_COUNTER_TIME_EXTENSION_NAME };
 
         // Only request implicit extensions that are supported.
@@ -125,12 +125,14 @@ namespace LAYER_NAMESPACE {
 
         // Dump the requested extensions.
         XrInstanceCreateInfo chainInstanceCreateInfo = *instanceCreateInfo;
+        std::vector<std::string> requestedExtensions;
         std::vector<const char*> newEnabledExtensionNames;
         for (uint32_t i = 0; i < chainInstanceCreateInfo.enabledExtensionCount; i++) {
             const std::string_view ext(chainInstanceCreateInfo.enabledExtensionNames[i]);
 #if USE_TRACELOGGING
             TraceLoggingWrite(g_traceProvider, "xrCreateApiLayerInstance", TLArg(ext.data(), "ExtensionName"));
 #endif
+            requestedExtensions.push_back(std::string(ext));
 
             if (std::find(blockedExtensions.cbegin(), blockedExtensions.cend(), ext) == blockedExtensions.cend()) {
                 Log("Requested extension: %s\n", ext.data());
@@ -156,6 +158,7 @@ namespace LAYER_NAMESPACE {
             LAYER_NAMESPACE::GetInstance()->SetGetInstanceProcAddr(apiLayerInfo->nextInfo->nextGetInstanceProcAddr,
                                                                    *instance);
             LAYER_NAMESPACE::GetInstance()->SetGrantedExtensions(implicitExtensions);
+            LAYER_NAMESPACE::GetInstance()->SetRequestedExtensions(requestedExtensions);
 
             // Forward the xrCreateInstance() call to the layer.
             try {

@@ -107,6 +107,11 @@ struct Config_Core
 	bool CoreForceMaskedInvertMask = false;
 };
 
+struct Config_Extensions
+{
+	bool ExtVarjoDepthEstimation = true;
+};
+
 enum EStereoSGBM_Mode
 {
 	StereoMode_SGBM = 0,
@@ -136,8 +141,8 @@ struct Config_Stereo
 	int StereoFrameSkip = 0;
 	int StereoDownscaleFactor = 2;
 	bool StereoUseDisparityTemporalFiltering = false;
-	float StereoDisparityTemporalFilteringStrength = 0.9;
-	float StereoDisparityTemporalFilteringDistance = 1.0;
+	float StereoDisparityTemporalFilteringStrength = 0.9f;
+	float StereoDisparityTemporalFilteringDistance = 1.0f;
 
 	bool StereoDisparityBothEyes = true;
 	int StereoDisparityFilterWidth = 3;
@@ -190,6 +195,7 @@ public:
 
 	Config_Main& GetConfig_Main() { return m_configMain; }
 	Config_Core& GetConfig_Core() { return m_configCore; }
+	Config_Extensions& GetConfig_Extensions() { return m_configExtensions; }
 	Config_Stereo& GetConfig_Stereo() { return m_stereoPresets[m_configMain.StereoPreset]; }
 	Config_Stereo& GetConfig_CustomStereo() { return m_configCustomStereo; }
 	Config_Depth& GetConfig_Depth() { return m_configDepth; }
@@ -203,11 +209,13 @@ private:
 
 	void ParseConfig_Main();
 	void ParseConfig_Core();
+	void ParseConfig_Extensions();
 	void ParseConfig_Stereo();
 	void ParseConfig_Depth();
 
 	void UpdateConfig_Main();
 	void UpdateConfig_Core();
+	void UpdateConfig_Extensions();
 	void UpdateConfig_Stereo();
 	void UpdateConfig_Depth();
 
@@ -217,6 +225,7 @@ private:
 
 	Config_Main m_configMain;
 	Config_Core m_configCore;
+	Config_Extensions m_configExtensions;
 	Config_Stereo m_configCustomStereo;
 	Config_Stereo m_stereoPresets[6];
 	Config_Depth m_configDepth;
