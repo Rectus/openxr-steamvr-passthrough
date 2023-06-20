@@ -9,6 +9,7 @@
 #include "shaders\fullscreen_quad_vs.h"
 #include "shaders\passthrough_vs.h"
 #include "shaders\passthrough_stereo_vs.h"
+#include "shaders\passthrough_stereo_temporal_vs.h"
 
 #include "shaders\alpha_prepass_ps.h"
 #include "shaders\alpha_prepass_masked_ps.h"
@@ -152,6 +153,12 @@ bool PassthroughRendererDX11::InitRenderer()
 		return false;
 	}
 
+	if (FAILED(m_d3dDevice->CreateVertexShader(g_PassthroughStereoTemporalShaderVS, sizeof(g_PassthroughStereoTemporalShaderVS), nullptr, &m_stereoTemporalVertexShader)))
+	{
+		ErrorLog("g_PassthroughStereoTemporalShaderVS creation failure, temporal effects disabled.\n");
+		m_bIsTemporalSupported = false;
+	}
+
 	if (FAILED(m_d3dDevice->CreatePixelShader(g_PassthroughShaderPS, sizeof(g_PassthroughShaderPS), nullptr, &m_pixelShader)))
 	{
 		ErrorLog("g_PassthroughShaderPS creation failure!\n");
@@ -160,8 +167,8 @@ bool PassthroughRendererDX11::InitRenderer()
 
 	if (FAILED(m_d3dDevice->CreatePixelShader(g_PassthroughTemporalShaderPS, sizeof(g_PassthroughTemporalShaderPS), nullptr, &m_pixelShaderTemporal)))
 	{
-		ErrorLog("g_PassthroughTemporalShaderPS creation failure!\n");
-		return false;
+		ErrorLog("g_PassthroughTemporalShaderPS creation failure, temporal effects disabled.\n");
+		m_bIsTemporalSupported = false;
 	}
 
 	if (FAILED(m_d3dDevice->CreatePixelShader(g_AlphaPrepassShaderPS, sizeof(g_AlphaPrepassShaderPS), nullptr, &m_prepassShader)))
@@ -1061,7 +1068,15 @@ void PassthroughRendererDX11::RenderPassthroughFrame(const XrCompositionLayerPro
 		m_renderContext->IASetVertexBuffers(0, 1, m_gridMeshVertexBuffer.GetAddressOf(), strides, offsets);
 		m_renderContext->IASetIndexBuffer(m_gridMeshIndexBuffer.Get(), DXGI_FORMAT_R32_UINT, 0);
 		m_renderContext->IASetPrimitiveTopology(D3D11_PRIMITIVE_TOPOLOGY_TRIANGLELIST);
-		m_renderContext->VSSetShader(m_stereoVertexShader.Get(), nullptr, 0);
+		
+		if (stereoConf.StereoUseDisparityTemporalFiltering && m_bIsTemporalSupported)
+		{
+			m_renderContext->VSSetShader(m_stereoTemporalVertexShader.Get(), nullptr, 0);
+		}
+		else
+		{
+			m_renderContext->VSSetShader(m_stereoVertexShader.Get(), nullptr, 0);
+		}
 	}
 	else
 	{
@@ -1069,7 +1084,7 @@ void PassthroughRendererDX11::RenderPassthroughFrame(const XrCompositionLayerPro
 		m_renderContext->IASetVertexBuffers(0, 1, m_cylinderMeshVertexBuffer.GetAddressOf(), strides, offsets);
 		m_renderContext->IASetIndexBuffer(m_cylinderMeshIndexBuffer.Get(), DXGI_FORMAT_R32_UINT, 0);
 		m_renderContext->IASetPrimitiveTopology(D3D11_PRIMITIVE_TOPOLOGY_TRIANGLELIST);
-		m_renderContext->VSSetShader(m_vertexShader.Get(), nullptr, 0);
+		m_renderContext->VSSetShader(m_vertexShader.Get(), nullptr, 0);	
 	}
 
 	PSPassConstantBuffer psBuffer = {};
@@ -1211,7 +1226,7 @@ void PassthroughRendererDX11::RenderPassthroughView(const ERenderEye eye, const 
 			m_renderContext->UpdateSubresource(m_vsViewConstantBuffer[bufferIndex].Get(), 0, nullptr, &vsViewBuffer, 0, 0);
 		}
 	}
-	else if(stereoConf.StereoUseDisparityTemporalFiltering && frame->bIsFirstRender)
+	else if(stereoConf.StereoUseDisparityTemporalFiltering && m_bIsTemporalSupported && frame->bIsFirstRender)
 	{
 		vsViewBuffer.bWriteDisparityFilter = true;
 		m_renderContext->UpdateSubresource(m_vsViewConstantBuffer[bufferIndex].Get(), 0, nullptr, &vsViewBuffer, 0, 0);
@@ -1228,7 +1243,7 @@ void PassthroughRendererDX11::RenderPassthroughView(const ERenderEye eye, const 
 		m_renderContext->OMSetBlendState(m_blendStateDestAlpha.Get(), nullptr, UINT_MAX);
 	}	
 
-	if (mainConf.EnableTemporalFiltering)
+	if (mainConf.EnableTemporalFiltering && m_bIsTemporalSupported)
 	{
 		ID3D11ShaderResourceView* psSRVs[3];
 		m_renderContext->PSGetShaderResources(0, 2, psSRVs);
@@ -1304,7 +1319,14 @@ void PassthroughRendererDX11::RenderPassthroughView(const ERenderEye eye, const 
 
 		m_renderContext->IASetVertexBuffers(0, 1, m_gridMeshVertexBuffer.GetAddressOf(), strides, offsets);
 		m_renderContext->IASetIndexBuffer(m_gridMeshIndexBuffer.Get(), DXGI_FORMAT_R32_UINT, 0);
-		m_renderContext->VSSetShader(m_stereoVertexShader.Get(), nullptr, 0);
+		if (stereoConf.StereoUseDisparityTemporalFiltering && m_bIsTemporalSupported)
+		{
+			m_renderContext->VSSetShader(m_stereoTemporalVertexShader.Get(), nullptr, 0);
+		}
+		else
+		{
+			m_renderContext->VSSetShader(m_stereoVertexShader.Get(), nullptr, 0);
+		}
 		m_renderContext->RSSetState(m_rasterizerState.Get());
 	}
 }
@@ -1477,7 +1499,15 @@ void PassthroughRendererDX11::RenderMaskedPrepassView(const ERenderEye eye, cons
 	if (mainConf.ProjectionMode == Projection_StereoReconstruction)
 	{
 		m_renderContext->IASetPrimitiveTopology(D3D11_PRIMITIVE_TOPOLOGY_TRIANGLELIST);
-		m_renderContext->VSSetShader(m_stereoVertexShader.Get(), nullptr, 0);
+
+		if (stereoConf.StereoUseDisparityTemporalFiltering && m_bIsTemporalSupported)
+		{
+			m_renderContext->VSSetShader(m_stereoTemporalVertexShader.Get(), nullptr, 0);
+		}
+		else
+		{
+			m_renderContext->VSSetShader(m_stereoVertexShader.Get(), nullptr, 0);
+		}
 	}
 	else
 	{

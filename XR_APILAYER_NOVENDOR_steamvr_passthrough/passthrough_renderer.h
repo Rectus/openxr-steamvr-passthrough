@@ -117,6 +117,7 @@ protected:
 	std::shared_ptr<ConfigManager> m_configManager;
 	HMODULE m_dllModule;
 
+	bool m_bIsTemporalSupported = true;
 	bool m_bUsingDeferredContext = false;
 	int m_frameIndex = 0;
 
@@ -142,6 +143,7 @@ protected:
 	ComPtr<ID3D11VertexShader> m_fullscreenQuadShader;
 	ComPtr<ID3D11VertexShader> m_vertexShader;
 	ComPtr<ID3D11VertexShader> m_stereoVertexShader;
+	ComPtr<ID3D11VertexShader> m_stereoTemporalVertexShader;
 	ComPtr<ID3D11PixelShader> m_pixelShader;
 	ComPtr<ID3D11PixelShader> m_pixelShaderTemporal;
 	ComPtr<ID3D11PixelShader> m_prepassShader;

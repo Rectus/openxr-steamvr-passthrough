@@ -15,6 +15,8 @@ struct VS_OUTPUT
 SamplerState g_samplerState : register(s0);
 Texture2D<float2> g_disparityTexture : register(t0);
 
+Texture2D<float2> g_prevDisparityFilter : register(t1);
+RWTexture2D<float2> g_disparityFilter : register(u2);
 
 float gaussian(float2 value)
 {
@@ -122,9 +124,46 @@ VS_OUTPUT main(float3 inPosition : POSITION, uint vertexID : SV_VertexID)
     
     // Load unfiltered value so that invalid values are not filtered into the texture.
     float2 dispConf = g_disparityTexture.Load(uvPos);
+
+    //float2 dispConf = g_disparityTexture.SampleLevel(g_samplerState, disparityUVs, 0); 
+    //float2 dispConf = lanczos2(g_disparityTexture, disparityUVs, g_disparityTextureSize);
+    //float2 dispConf = catmull_rom_9tap(g_disparityTexture, g_samplerState, disparityUVs, g_disparityTextureSize);
     
-    float disparity = dispConf.x;
-    float confidence = dispConf.y;  
+    float disparity;
+    float confidence;
+    
+    
+    float4 disparityWorldCoords = DisparityToWorldCoords(dispConf.x, inPosition.xy);
+    float4 prevDisparityCoords = mul(g_prevWorldToCameraProjection, disparityWorldCoords);
+        
+    
+    float2 prevDisparityUVs = (prevDisparityCoords.xy / prevDisparityCoords.w * 0.5 + 0.5) * (g_vsUVBounds.zw - g_vsUVBounds.xy) + g_vsUVBounds.xy;
+    int3 prevUvPos = int3(floor(prevDisparityUVs * g_disparityTextureSize), 0);
+    
+    //float2 prevDispConf = g_prevDisparityFilter.Load(prevUvPos);
+    //float2 prevDispConf = g_prevDisparityFilter.SampleLevel(g_samplerState, prevDisparityUVs, 0);
+    //float2 prevDispConf = lanczos2(g_prevDisparityFilter, prevDisparityUVs, g_disparityTextureSize);
+    float2 prevDispConf = catmull_rom_9tap(g_prevDisparityFilter, g_samplerState, prevDisparityUVs, g_disparityTextureSize);
+        
+    float4 prevDisparityWorldCoords = mul(g_prevCameraProjectionToWorld, DisparityToWorldCoords(prevDispConf.x, inPosition.xy));
+     
+    disparityWorldCoords /= disparityWorldCoords.w;
+    prevDisparityWorldCoords /= prevDisparityWorldCoords.w;
+        
+    if (prevDispConf.y < 0.5 || (dispConf.y > 0.5 &&
+        length(disparityWorldCoords.xyz - prevDisparityWorldCoords.xyz) > g_disparityTemporalFilterDistance * 0.1))
+    {
+        disparity = dispConf.x;
+        confidence = dispConf.y;
+    }
+    else
+    {
+        float depthFactor = saturate(length(disparityWorldCoords.xyz - prevDisparityWorldCoords.xyz));
+        float frac = clamp(1 * (prevDispConf.y - dispConf.y) - depthFactor, 0, g_disparityTemporalFilterStrength);
+        disparity = lerp(dispConf.x, prevDispConf.x, frac);
+        confidence = lerp(dispConf.y, prevDispConf.y, frac);
+    }
+    
     
     output.projectionValidity = 1;
     
@@ -210,6 +249,11 @@ VS_OUTPUT main(float3 inPosition : POSITION, uint vertexID : SV_VertexID)
 
             disparity = outDisp / totalWeight;
         }
+    }
+    
+    if (g_bWriteDisparityFilter)
+    {
+        g_disparityFilter[uvPos.xy] = float2(disparity, confidence);
     }
     
     float4 worldSpacePoint = DisparityToWorldCoords(disparity, inPosition.xy); 

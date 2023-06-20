@@ -323,6 +323,11 @@ copy $(SolutionDir)\external\openvr\bin\win64\openvr_api.dll $(OutDir)
       <VariableName Condition="'$(Configuration)|$(Platform)'=='Release|x64'">g_PassthroughShaderPS</VariableName>
       <ShaderType Condition="'$(Configuration)|$(Platform)'=='Release|x64'">Pixel</ShaderType>
     </FxCompile>
+    <FxCompile Include="shaders\passthrough_stereo_temporal_vs.hlsl">
+      <HeaderFileOutput Condition="'$(Configuration)|$(Platform)'=='Release|x64'">shaders\passthrough_stereo_temporal_vs.h</HeaderFileOutput>
+      <VariableName Condition="'$(Configuration)|$(Platform)'=='Release|x64'">g_PassthroughStereoTemporalShaderVS</VariableName>
+      <ShaderType Condition="'$(Configuration)|$(Platform)'=='Release|x64'">Vertex</ShaderType>
+    </FxCompile>
     <FxCompile Include="shaders\passthrough_stereo_vs.hlsl">
       <HeaderFileOutput Condition="'$(Configuration)|$(Platform)'=='Debug|x64'">shaders\passthrough_stereo_vs.h</HeaderFileOutput>
       <VariableName Condition="'$(Configuration)|$(Platform)'=='Debug|x64'">g_PassthroughStereoShaderVS</VariableName>
