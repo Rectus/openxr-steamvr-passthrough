@@ -79,6 +79,7 @@ CameraManager::CameraManager(std::shared_ptr<IPassthroughRenderer> renderer, ERe
     m_renderFrame = std::make_shared<CameraFrame>();
     m_servedFrame = std::make_shared<CameraFrame>();
     m_underConstructionFrame = std::make_shared<CameraFrame>();
+    m_renderModels = std::make_shared<std::vector<RenderModel>>();
 }
 
 CameraManager::~CameraManager()
@@ -460,6 +461,11 @@ void CameraManager::ServeFrames()
         m_underConstructionFrame->bIsValid = true;
         m_underConstructionFrame->frameLayout = m_frameLayout;
 
+        if (mainConf.ProjectToRenderModels)
+        {
+            UpdateRenderModels();
+        }
+        m_underConstructionFrame->renderModels = m_renderModels;
 
         // Apply offset calibration to camera positions.
         XrMatrix4x4f origLeftCameraToTrackingPose = ToXRMatrix4x4(m_underConstructionFrame->header.trackedDevicePose.mDeviceToAbsoluteTracking);
@@ -485,6 +491,63 @@ void CameraManager::ServeFrames()
         }
 
         m_averageFrameRetrievalTime = UpdateAveragePerfTime(m_frameRetrievalTimes, EndPerfTimer(startFrameRetrievalTime), 20);
+    }
+}
+
+
+void CameraManager::UpdateRenderModels()
+{
+    vr::IVRSystem* vrSystem = m_openVRManager->GetVRSystem();
+    vr::IVRRenderModels* vrRenderModels = m_openVRManager->GetVRRenderModels();
+
+    for (int i = 1; i < vr::k_unMaxTrackedDeviceCount; i++)
+    {
+        if (!vrSystem->IsTrackedDeviceConnected(i))
+        {
+            break;
+        }
+
+        std::string modelName;
+        modelName.resize(vr::k_unMaxPropertyStringSize);
+
+        vr::TrackedPropertyError error;
+        uint32_t numBytes = m_openVRManager->GetVRSystem()->GetStringTrackedDeviceProperty(i, vr::Prop_RenderModelName_String, modelName.data(), vr::k_unMaxPropertyStringSize, &error);
+
+        bool bFoundModel = false;
+
+        for (RenderModel model : *m_renderModels)
+        {
+            if (model.deviceId == i)
+            {
+                if (strncmp(model.modelName.data(), modelName.data(), vr::k_unMaxPropertyStringSize) != 0)
+                {
+                    vr::RenderModel_t* newModel;
+
+                    if (vrRenderModels->LoadRenderModel_Async(modelName.data(), &newModel) == vr::VRRenderModelError_None)
+                    {
+                        model.modelName = modelName.data();
+                        MeshCreateRenderModel(model.mesh, newModel);
+                    }
+                }
+
+                bFoundModel = true;
+                break;
+            }
+        }
+
+        if (!bFoundModel)
+        {
+            vr::RenderModel_t* newModel;
+
+            if (vrRenderModels->LoadRenderModel_Async(modelName.data(), &newModel) == vr::VRRenderModelError_None)
+            {
+                RenderModel rm;
+                rm.deviceId = i;
+                rm.modelName = modelName;
+                MeshCreateRenderModel(rm.mesh, newModel);
+                m_renderModels->push_back(rm);
+            }
+        }
     }
 }
 
@@ -587,7 +650,7 @@ void CameraManager::UpdateProjectionMatrix(std::shared_ptr<CameraFrame>& frame)
 }
 
 
-void CameraManager::CalculateFrameProjection(std::shared_ptr<CameraFrame>& frame, const XrCompositionLayerProjection& layer, const XrTime& displayTime, const XrReferenceSpaceCreateInfo& refSpaceInfo, UVDistortionParameters& distortionParams)
+void CameraManager::CalculateFrameProjection(std::shared_ptr<CameraFrame>& frame, const XrCompositionLayerProjection& layer, float timeToPhotons, const XrReferenceSpaceCreateInfo& refSpaceInfo, UVDistortionParameters& distortionParams)
 {
     UpdateProjectionMatrix(frame);
 
@@ -627,6 +690,26 @@ void CameraManager::CalculateFrameProjection(std::shared_ptr<CameraFrame>& frame
 
     m_lastWorldToHMDProjectionLeft = frame->worldToHMDProjectionLeft; 
     m_lastWorldToHMDProjectionRight = frame->worldToHMDProjectionRight;
+
+
+    if (m_configManager->GetConfig_Main().ProjectToRenderModels)
+    {
+        LARGE_INTEGER time, freq;
+        QueryPerformanceCounter(&time);
+        QueryPerformanceFrequency(&freq);
+
+        float exposureRelativeTime = -(float)(time.QuadPart - frame->header.ulFrameExposureTime);
+        exposureRelativeTime /= ((float)freq.QuadPart);
+
+        vr::TrackedDevicePose_t trackedDevicePoseArray[vr::k_unMaxTrackedDeviceCount];
+
+        m_openVRManager->GetVRSystem()->GetDeviceToAbsoluteTrackingPose(vr::TrackingUniverseStanding, exposureRelativeTime, trackedDevicePoseArray, vr::k_unMaxTrackedDeviceCount);
+
+        for (RenderModel& model : *m_renderModels.get())
+        {
+            model.meshToWorldTransform = ToXRMatrix4x4(trackedDevicePoseArray[model.deviceId].mDeviceToAbsoluteTracking);
+        }
+    }
 }
 
 void CameraManager::CalculateFrameProjectionForEye(const ERenderEye eye, std::shared_ptr<CameraFrame>& frame, const XrCompositionLayerProjection& layer, const XrReferenceSpaceCreateInfo& refSpaceInfo, UVDistortionParameters& distortionParams)

@@ -71,6 +71,7 @@ bool OpenVRManager::InitRuntime()
     m_vrCompositor = vr::VRCompositor();
     m_vrTrackedCamera = vr::VRTrackedCamera();
     m_vrOverlay = vr::VROverlay();
+    m_vrRenderModels = vr::VRRenderModels();
 
     return true;
 }

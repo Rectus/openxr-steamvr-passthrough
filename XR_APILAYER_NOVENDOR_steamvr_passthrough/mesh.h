@@ -48,3 +48,4 @@ struct Mesh
 void MeshCreateCylinder(Mesh<VertexFormatBasic>& mesh, int numBoundaryVertices);
 void MeshCreateGrid(Mesh<VertexFormatBasic>& mesh, int width, int height);
 void MeshCreateHexGrid(Mesh<VertexFormatBasic>& mesh, int width, int height);
+void MeshCreateRenderModel(Mesh<VertexFormatBasic>& mesh, vr::RenderModel_t* renderModel);

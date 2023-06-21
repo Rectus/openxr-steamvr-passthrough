@@ -23,6 +23,7 @@
 #pragma once
 
 #include "framework/dispatch.gen.h"
+#include "mesh.h"
 
 namespace steamvr_passthrough
 {
@@ -67,6 +68,28 @@ enum EStereoFrameLayout
 	Mono = 0,
 	StereoVerticalLayout = 1, // Stereo frames are Bottom/Top (for left/right respectively)
 	StereoHorizontalLayout = 2 // Stereo frames are Left/Right
+};
+
+struct RenderModel
+{
+	RenderModel()
+		: deviceId(0)
+		, meshToWorldTransform()
+	{
+	}
+
+	RenderModel(uint32_t id, std::string name, Mesh<VertexFormatBasic> inMesh)
+		: deviceId(id)
+		, modelName(name)
+		, mesh(inMesh)
+		, meshToWorldTransform()
+	{
+	}
+
+	uint32_t deviceId;
+	std::string modelName;
+	Mesh<VertexFormatBasic> mesh;
+	XrMatrix4x4f meshToWorldTransform;
 };
 
 struct CameraFrame
@@ -127,6 +150,8 @@ struct CameraFrame
 	bool bHasFrameBuffer;
 	bool bHasReversedDepth;
 	bool bIsFirstRender;
+
+	std::shared_ptr<std::vector<RenderModel>> renderModels;
 };
 
 struct DepthFrame

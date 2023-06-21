@@ -37,6 +37,12 @@ public:
 		return m_vrOverlay;
 	}
 
+	inline vr::IVRRenderModels* GetVRRenderModels()
+	{
+		if (!CheckRuntimeIntialized()) { return nullptr; }
+		return m_vrRenderModels;
+	}
+
 	int GetHMDDeviceId() const
 	{
 		return m_hmdDeviceId;
@@ -68,5 +74,6 @@ private:
 	vr::IVRCompositor* m_vrCompositor;
 	vr::IVRTrackedCamera* m_vrTrackedCamera;
 	vr::IVROverlay* m_vrOverlay;
+	vr::IVRRenderModels* m_vrRenderModels;
 };
 

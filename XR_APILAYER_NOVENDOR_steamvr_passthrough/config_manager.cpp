@@ -289,6 +289,7 @@ void ConfigManager::ParseConfig_Main()
 {
 	m_configMain.EnablePassthrough = m_iniData.GetBoolValue("Main", "EnablePassthrough", m_configMain.EnablePassthrough);
 	m_configMain.ProjectionMode = (EProjectionMode)m_iniData.GetLongValue("Main", "ProjectionMode", m_configMain.ProjectionMode);
+	m_configMain.ProjectToRenderModels = m_iniData.GetBoolValue("Main", "ProjectToRenderModels", m_configMain.ProjectToRenderModels);
 
 	m_configMain.PassthroughOpacity = (float)m_iniData.GetDoubleValue("Main", "PassthroughOpacity", m_configMain.PassthroughOpacity);
 	m_configMain.ProjectionDistanceFar = (float)m_iniData.GetDoubleValue("Main", "ProjectionDistanceFar", m_configMain.ProjectionDistanceFar);
@@ -393,6 +394,7 @@ void ConfigManager::UpdateConfig_Main()
 {
 	m_iniData.SetBoolValue("Main", "EnablePassthrough", m_configMain.EnablePassthrough);
 	m_iniData.SetLongValue("Main", "ProjectionMode", (long)m_configMain.ProjectionMode);
+	m_iniData.SetBoolValue("Main", "ProjectToRenderModels", m_configMain.ProjectToRenderModels);
 
 	//m_iniData.SetBoolValue("Main", "ShowTestImage", m_configMain.ShowTestImage);
 	m_iniData.SetDoubleValue("Main", "PassthroughOpacity", m_configMain.PassthroughOpacity);

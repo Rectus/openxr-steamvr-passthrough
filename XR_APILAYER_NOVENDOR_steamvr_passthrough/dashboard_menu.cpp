@@ -384,6 +384,9 @@ if (bIsActiveTab) { ImGui::PopStyleColor(1); bIsActiveTab = false; }
 			}
 			TextDescriptionSpaced("Full depth estimation.");
 
+			ImGui::Checkbox("Project onto Render Models (Experimental)", &mainConfig.ProjectToRenderModels);
+			TextDescriptionSpaced("Project the passthough view to the correct distance on render models, such as controllers. Requires good camera calibration.");
+
 			ImGui::SetNextItemOpen(true, ImGuiCond_Once);
 			if (ImGui::TreeNode("Image Controls"))
 			{

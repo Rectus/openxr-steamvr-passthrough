@@ -834,8 +834,10 @@ namespace
 			float frameToPhotonsTime = GetPerfTimerDiff(frame->header.ulFrameExposureTime, displayTime.QuadPart);
 			m_dashboardMenu->GetDisplayValues().frameToPhotonsLatencyMS = UpdateAveragePerfTime(m_frameToPhotonTimes, frameToPhotonsTime, 20);
 
+
+			float timeToPhotons = GetPerfTimerDiff(preRenderTime.QuadPart, displayTime.QuadPart);
 			
-			m_cameraManager->CalculateFrameProjection(frame, *layer, frameEndInfo->displayTime, m_refSpaces[layer->space], m_depthReconstruction->GetDistortionParameters());
+			m_cameraManager->CalculateFrameProjection(frame, *layer, timeToPhotons, m_refSpaces[layer->space], m_depthReconstruction->GetDistortionParameters());
 	
 
 			int leftIndex = UpdateSwapchains(LEFT_EYE, layer);

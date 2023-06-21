@@ -7,6 +7,7 @@
 
 
 #include "shaders\fullscreen_quad_vs.h"
+#include "shaders\mesh_rigid_vs.h"
 #include "shaders\passthrough_vs.h"
 #include "shaders\passthrough_stereo_vs.h"
 #include "shaders\passthrough_stereo_temporal_vs.h"
@@ -54,6 +55,11 @@ struct VSViewConstantBuffer
 	float floorHeightOffset;
 	uint32_t cameraViewIndex;
 	uint32_t bWriteDisparityFilter;
+};
+
+struct VSMeshConstantBuffer
+{
+	XrMatrix4x4f meshToWorldTransform;
 };
 
 struct PSPassConstantBuffer
@@ -141,6 +147,12 @@ bool PassthroughRendererDX11::InitRenderer()
 		return false;
 	}
 
+	if (FAILED(m_d3dDevice->CreateVertexShader(g_MeshRigidShaderVS, sizeof(g_MeshRigidShaderVS), nullptr, &m_meshRigidVertexShader)))
+	{
+		ErrorLog("g_MeshRigidShaderVS creation failure!\n");
+		return false;
+	}
+
 	if (FAILED(m_d3dDevice->CreateVertexShader(g_PassthroughShaderVS, sizeof(g_PassthroughShaderVS), nullptr, &m_vertexShader)))
 	{
 		ErrorLog("g_PassthroughShaderVS creation failure!\n");
@@ -211,6 +223,15 @@ bool PassthroughRendererDX11::InitRenderer()
 		}
 	}
 
+	bufferDesc.ByteWidth = Align(sizeof(VSMeshConstantBuffer), 16);
+	for (int i = 0; i < vr::k_unMaxTrackedDeviceCount; i++)
+	{
+		if (FAILED(m_d3dDevice->CreateBuffer(&bufferDesc, nullptr, &m_vsMeshConstantBuffer[i])))
+		{
+			ErrorLog("m_vsMeshConstantBuffer creation failure!\n");
+			return false;
+		}
+	}
 
 	bufferDesc.ByteWidth = Align(sizeof(PSPassConstantBuffer), 16);
 	if (FAILED(m_d3dDevice->CreateBuffer(&bufferDesc, nullptr, &m_psPassConstantBuffer)))
@@ -907,6 +928,80 @@ void PassthroughRendererDX11::GenerateDepthMesh(uint32_t width, uint32_t height)
 }
 
 
+void PassthroughRendererDX11::UpdateRenderModels(CameraFrame* frame)
+{
+	for (RenderModel& model : *frame->renderModels)
+	{
+		bool bFound = false;
+		for (DX11RenderModel& dxModel : m_renderModels)
+		{
+			if (model.deviceId == dxModel.deviceId)
+			{
+				bFound = true;
+				if (!dxModel.meshPtr || &model.mesh != dxModel.meshPtr)
+				{
+					dxModel.meshPtr = &model.mesh;
+
+					D3D11_SUBRESOURCE_DATA vertexBufferData{};
+					vertexBufferData.pSysMem = model.mesh.vertices.data();
+
+					CD3D11_BUFFER_DESC vertexBufferDesc((UINT)model.mesh.vertices.size() * sizeof(VertexFormatBasic), D3D11_BIND_VERTEX_BUFFER);
+					if (FAILED(m_d3dDevice->CreateBuffer(&vertexBufferDesc, &vertexBufferData, &dxModel.vertexBuffer)))
+					{
+						ErrorLog("Render model vertex buffer creation error!\n");
+					}
+
+					D3D11_SUBRESOURCE_DATA indexBufferData{};
+					indexBufferData.pSysMem = model.mesh.triangles.data();
+
+					CD3D11_BUFFER_DESC indexBufferDesc((UINT)model.mesh.triangles.size() * sizeof(MeshTriangle), D3D11_BIND_INDEX_BUFFER);
+					if (FAILED(m_d3dDevice->CreateBuffer(&indexBufferDesc, &indexBufferData, &dxModel.indexBuffer)))
+					{
+						ErrorLog("Render model index buffer creation error!\n");
+					}
+
+					dxModel.numIndices = model.mesh.triangles.size() * sizeof(MeshTriangle);
+				}
+
+				dxModel.meshToWorldTransform = model.meshToWorldTransform;
+
+				break;
+			}
+		}
+
+		if (!bFound)
+		{
+			DX11RenderModel dxModel;
+
+			dxModel.deviceId = model.deviceId;
+			dxModel.meshPtr = &model.mesh;
+
+			D3D11_SUBRESOURCE_DATA vertexBufferData{};
+			vertexBufferData.pSysMem = model.mesh.vertices.data();
+
+			CD3D11_BUFFER_DESC vertexBufferDesc((UINT)model.mesh.vertices.size() * sizeof(VertexFormatBasic), D3D11_BIND_VERTEX_BUFFER);
+			if (FAILED(m_d3dDevice->CreateBuffer(&vertexBufferDesc, &vertexBufferData, &dxModel.vertexBuffer)))
+			{
+				ErrorLog("Render model vertex buffer creation error!\n");
+			}
+
+			D3D11_SUBRESOURCE_DATA indexBufferData{};
+			indexBufferData.pSysMem = model.mesh.triangles.data();
+
+			CD3D11_BUFFER_DESC indexBufferDesc((UINT)model.mesh.triangles.size() * sizeof(MeshTriangle), D3D11_BIND_INDEX_BUFFER);
+			if (FAILED(m_d3dDevice->CreateBuffer(&indexBufferDesc, &indexBufferData, &dxModel.indexBuffer)))
+			{
+				ErrorLog("Render model index buffer creation error!\n");
+			}
+
+			dxModel.numIndices = model.mesh.triangles.size() * sizeof(MeshTriangle);
+			dxModel.meshToWorldTransform = model.meshToWorldTransform;
+
+			m_renderModels.push_back(dxModel);
+		}
+	}
+}
+
 
 
 
@@ -947,6 +1042,11 @@ void PassthroughRendererDX11::RenderPassthroughFrame(const XrCompositionLayerPro
 			m_fovScale = distortionParams.fovScale;
 			SetupUVDistortionMap(distortionParams.uvDistortionMap);
 		}
+	}
+
+	if (mainConf.ProjectToRenderModels)
+	{
+		UpdateRenderModels(frame);
 	}
 
 	if (mainConf.EnableTemporalFiltering && m_cameraFilterSRV[leftSwapchainIndex] == nullptr)
@@ -1182,7 +1282,7 @@ void PassthroughRendererDX11::RenderPassthroughView(const ERenderEye eye, const 
 	
 	m_renderContext->UpdateSubresource(m_vsViewConstantBuffer[bufferIndex].Get(), 0, nullptr, &vsViewBuffer, 0, 0);
 	
-	ID3D11Buffer* vsBuffers[2] = { m_vsViewConstantBuffer[bufferIndex].Get(), m_vsPassConstantBuffer[m_frameIndex].Get() };
+	ID3D11Buffer* vsBuffers[3] = { m_vsViewConstantBuffer[bufferIndex].Get(), m_vsPassConstantBuffer[m_frameIndex].Get(), nullptr };
 	m_renderContext->VSSetConstantBuffers(0, 2, vsBuffers);
 	
 	PSViewConstantBuffer psViewBuffer = {};
@@ -1233,7 +1333,7 @@ void PassthroughRendererDX11::RenderPassthroughView(const ERenderEye eye, const 
 	}
 
 
-	// Main pass
+
 	if ((blendMode == AlphaBlendPremultiplied && !bCompositeDepth) || blendMode == Additive)
 	{
 		m_renderContext->OMSetBlendState(m_blendStateDestAlphaPremultiplied.Get(), nullptr, UINT_MAX);
@@ -1241,7 +1341,7 @@ void PassthroughRendererDX11::RenderPassthroughView(const ERenderEye eye, const 
 	else
 	{
 		m_renderContext->OMSetBlendState(m_blendStateDestAlpha.Get(), nullptr, UINT_MAX);
-	}	
+	}
 
 	if (mainConf.EnableTemporalFiltering && m_bIsTemporalSupported)
 	{
@@ -1251,11 +1351,68 @@ void PassthroughRendererDX11::RenderPassthroughView(const ERenderEye eye, const 
 		psSRVs[2] = m_cameraFilterSRV[prevUAVIndex].Get();
 		m_renderContext->PSSetShaderResources(0, 3, psSRVs);
 	}
-	
-	
+
 	m_renderContext->OMSetDepthStencilState(GET_DEPTH_STENCIL_STATE(bCompositeDepth, frame->bHasReversedDepth, bWriteDepth), 1);
 
 	m_renderContext->PSSetShader(mainConf.EnableTemporalFiltering ? m_pixelShaderTemporal.Get() : m_pixelShader.Get(), nullptr, 0);
+
+
+
+	// Project passthrough onto tracked devices
+	if (mainConf.ProjectToRenderModels)
+	{
+		m_renderContext->UpdateSubresource(m_vsViewConstantBuffer[bufferIndex].Get(), 0, nullptr, &vsViewBuffer, 0, 0);
+		m_renderContext->UpdateSubresource(m_psViewConstantBuffer.Get(), 0, nullptr, &psViewBuffer, 0, 0);
+
+		m_renderContext->VSSetShader(m_meshRigidVertexShader.Get(), nullptr, 0);
+
+		for (DX11RenderModel model : m_renderModels)
+		{
+			VSMeshConstantBuffer vsMeshBuffer;
+			vsMeshBuffer.meshToWorldTransform = model.meshToWorldTransform;
+			m_renderContext->UpdateSubresource(m_vsMeshConstantBuffer[model.deviceId].Get(), 0, nullptr, &vsMeshBuffer, 0, 0);
+			vsBuffers[2] = m_vsMeshConstantBuffer[model.deviceId].Get();
+			m_renderContext->VSSetConstantBuffers(0, 3, vsBuffers);
+
+			const UINT strides[] = { sizeof(float) * 3 };
+			const UINT offsets[] = { 0 };
+			m_renderContext->IASetVertexBuffers(0, 1, model.vertexBuffer.GetAddressOf(), strides, offsets);
+			m_renderContext->IASetIndexBuffer(model.indexBuffer.Get(), DXGI_FORMAT_R32_UINT, 0);
+
+			m_renderContext->DrawIndexed(model.numIndices, 0, 0);
+		}
+
+		m_renderContext->VSSetConstantBuffers(0, 2, vsBuffers);
+	}
+
+
+	// Main pass
+
+	const UINT strides[] = { sizeof(float) * 3 };
+	const UINT offsets[] = { 0 };
+
+	if (mainConf.ProjectionMode == Projection_StereoReconstruction)
+	{	
+		numIndices = (UINT)m_gridMesh.triangles.size() * 3;
+		m_renderContext->IASetVertexBuffers(0, 1, m_gridMeshVertexBuffer.GetAddressOf(), strides, offsets);
+		m_renderContext->IASetIndexBuffer(m_gridMeshIndexBuffer.Get(), DXGI_FORMAT_R32_UINT, 0);
+
+		if (stereoConf.StereoUseDisparityTemporalFiltering && m_bIsTemporalSupported)
+		{
+			m_renderContext->VSSetShader(m_stereoTemporalVertexShader.Get(), nullptr, 0);
+		}
+		else
+		{
+			m_renderContext->VSSetShader(m_stereoVertexShader.Get(), nullptr, 0);
+		}
+	}
+	else
+	{
+		numIndices = (UINT)m_cylinderMesh.triangles.size() * 3;
+		m_renderContext->IASetVertexBuffers(0, 1, m_cylinderMeshVertexBuffer.GetAddressOf(), strides, offsets);
+		m_renderContext->IASetIndexBuffer(m_cylinderMeshIndexBuffer.Get(), DXGI_FORMAT_R32_UINT, 0);
+		m_renderContext->VSSetShader(m_vertexShader.Get(), nullptr, 0);
+	}
 	
 	m_renderContext->DrawIndexed(numIndices, 0, 0);
 
@@ -1316,6 +1473,7 @@ void PassthroughRendererDX11::RenderPassthroughView(const ERenderEye eye, const 
 		m_renderContext->OMSetDepthStencilState(GET_DEPTH_STENCIL_STATE(bCompositeDepth, frame->bHasReversedDepth, depthConfig.DepthWriteOutput && depthConfig.DepthReadFromApplication), 1);
 
 		m_renderContext->DrawIndexed((UINT)m_cylinderMesh.triangles.size() * 3, 0, 0);
+
 
 		m_renderContext->IASetVertexBuffers(0, 1, m_gridMeshVertexBuffer.GetAddressOf(), strides, offsets);
 		m_renderContext->IASetIndexBuffer(m_gridMeshIndexBuffer.Get(), DXGI_FORMAT_R32_UINT, 0);

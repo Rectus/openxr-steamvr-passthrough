@@ -64,6 +64,8 @@ struct Config_Main
 	bool EnablePassthrough = true;
 	EProjectionMode ProjectionMode = Projection_Custom2D;
 
+	bool ProjectToRenderModels = false;
+
 	float PassthroughOpacity = 1.0f;
 	float ProjectionDistanceFar = 10.0f;
 	float FloorHeightOffset = 0.0f;

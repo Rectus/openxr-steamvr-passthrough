@@ -6,6 +6,7 @@
 #include "layer.h"
 #include "passthrough_renderer.h"
 #include "openvr_manager.h"
+#include "mesh.h"
 
 
 enum ETrackedCameraFrameType
@@ -42,10 +43,11 @@ public:
 	void UpdateStaticCameraParameters();
 	float GetFrameRetrievalPerfTime() { return m_averageFrameRetrievalTime; }
 	bool GetCameraFrame(std::shared_ptr<CameraFrame>& frame);
-	void CalculateFrameProjection(std::shared_ptr<CameraFrame>& frame, const XrCompositionLayerProjection& layer, const XrTime& displayTime, const XrReferenceSpaceCreateInfo& refSpaceInfo, UVDistortionParameters& distortionParams);
+	void CalculateFrameProjection(std::shared_ptr<CameraFrame>& frame, const XrCompositionLayerProjection& layer, float timeToPhotons, const XrReferenceSpaceCreateInfo& refSpaceInfo, UVDistortionParameters& distortionParams);
 
 private:
 	void ServeFrames();
+	void UpdateRenderModels();
 	void GetTrackedCameraEyePoses(XrMatrix4x4f& LeftPose, XrMatrix4x4f& RightPose);
 	XrMatrix4x4f GetHMDWorldToViewMatrix(const ERenderEye eye, const XrCompositionLayerProjection& layer, const XrReferenceSpaceCreateInfo& refSpaceInfo);
 	void UpdateProjectionMatrix(std::shared_ptr<CameraFrame>& frame);
@@ -108,5 +110,7 @@ private:
 
 	std::deque<float> m_frameRetrievalTimes;
 	float m_averageFrameRetrievalTime;
+
+	std::shared_ptr<std::vector<RenderModel>> m_renderModels;
 };
 

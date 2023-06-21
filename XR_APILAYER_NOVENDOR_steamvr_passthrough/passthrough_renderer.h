@@ -69,6 +69,24 @@ struct DX11TemporaryRenderTarget
 	ComPtr<ID3D11ShaderResourceView> SRV;
 };
 
+struct DX11RenderModel
+{
+	DX11RenderModel()
+		: deviceId(0)
+		, meshPtr(nullptr)
+		, numIndices(0)
+		, meshToWorldTransform()
+	{
+	}
+
+	uint32_t deviceId;
+	Mesh<VertexFormatBasic>* meshPtr; // Only for checking equality. May be invalid.
+	ComPtr<ID3D11Buffer> vertexBuffer;
+	ComPtr<ID3D11Buffer> indexBuffer;
+	uint32_t numIndices;
+	XrMatrix4x4f meshToWorldTransform;
+};
+
 
 
 class IPassthroughRenderer
@@ -109,6 +127,7 @@ protected:
 	void GenerateMesh();
 	void GenerateDepthMesh(uint32_t width, uint32_t height);
 	void SetupTemporalUAV(const ERenderEye eye, ID3D11Resource* rendertarget, const uint32_t imageIndex);
+	void UpdateRenderModels(CameraFrame* frame);
 
 	void RenderPassthroughView(const ERenderEye eye, const int32_t imageIndex, const XrCompositionLayerProjection* layer, CameraFrame* frame, EPassthroughBlendMode blendMode, UINT numIndices, bool bEnableDepthBlending);
 	void RenderMaskedPrepassView(const ERenderEye eye, const int32_t imageIndex, const XrCompositionLayerProjection* layer, CameraFrame* frame, UINT numIndices, bool bEnableDepthBlending);
@@ -142,6 +161,7 @@ protected:
 
 	ComPtr<ID3D11VertexShader> m_fullscreenQuadShader;
 	ComPtr<ID3D11VertexShader> m_vertexShader;
+	ComPtr<ID3D11VertexShader> m_meshRigidVertexShader;
 	ComPtr<ID3D11VertexShader> m_stereoVertexShader;
 	ComPtr<ID3D11VertexShader> m_stereoTemporalVertexShader;
 	ComPtr<ID3D11PixelShader> m_pixelShader;
@@ -152,6 +172,7 @@ protected:
 
 	ComPtr<ID3D11Buffer> m_vsViewConstantBuffer[NUM_SWAPCHAINS * 2];
 	ComPtr<ID3D11Buffer> m_vsPassConstantBuffer[NUM_SWAPCHAINS];
+	ComPtr<ID3D11Buffer> m_vsMeshConstantBuffer[vr::k_unMaxTrackedDeviceCount];
 	ComPtr<ID3D11Buffer> m_psPassConstantBuffer;
 	ComPtr<ID3D11Buffer> m_psMaskedConstantBuffer;
 	ComPtr<ID3D11Buffer> m_psViewConstantBuffer;
@@ -206,6 +227,8 @@ protected:
 	ComPtr<ID3D11Buffer> m_gridMeshVertexBuffer;
 	ComPtr<ID3D11Buffer> m_gridMeshIndexBuffer;
 	bool m_bUseHexagonGridMesh;
+
+	std::vector<DX11RenderModel> m_renderModels;
 
 	uint32_t m_cameraTextureWidth;
 	uint32_t m_cameraTextureHeight;

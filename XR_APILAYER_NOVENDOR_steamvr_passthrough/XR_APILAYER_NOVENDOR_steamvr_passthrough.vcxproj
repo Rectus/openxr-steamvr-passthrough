@@ -312,6 +312,11 @@ copy $(SolutionDir)\external\openvr\bin\win64\openvr_api.dll $(OutDir)
       <VariableName Condition="'$(Configuration)|$(Platform)'=='Release|x64'">g_FullscreenQuadShaderVS</VariableName>
       <HeaderFileOutput Condition="'$(Configuration)|$(Platform)'=='Release|x64'">shaders\fullscreen_quad_vs.h</HeaderFileOutput>
     </FxCompile>
+    <FxCompile Include="shaders\mesh_rigid_vs.hlsl">
+      <ShaderType Condition="'$(Configuration)|$(Platform)'=='Release|x64'">Vertex</ShaderType>
+      <HeaderFileOutput Condition="'$(Configuration)|$(Platform)'=='Release|x64'">shaders\mesh_rigid_vs.h</HeaderFileOutput>
+      <VariableName Condition="'$(Configuration)|$(Platform)'=='Release|x64'">g_MeshRigidShaderVS</VariableName>
+    </FxCompile>
     <FxCompile Include="shaders\passthrough_ps.hlsl">
       <VariableName Condition="'$(Configuration)|$(Platform)'=='Debug|x64'">g_PassthroughShaderPS</VariableName>
       <HeaderFileOutput Condition="'$(Configuration)|$(Platform)'=='Debug|x64'">shaders\passthrough_ps.h</HeaderFileOutput>
