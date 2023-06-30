@@ -307,8 +307,8 @@ void CameraManager::UpdateStaticCameraParameters()
     XrMatrix4x4f_Invert(&m_HMDToCameraLeft, &m_cameraToHMDLeft);
     XrMatrix4x4f_Invert(&m_HMDToCameraRight, &m_cameraToHMDRight);
 
-    XrMatrix4x4f_Multiply(&m_cameraLeftToRightPose, &m_HMDToCameraRight, &m_cameraToHMDLeft);
-    XrMatrix4x4f_Multiply(&m_cameraRightToLeftPose, &m_HMDToCameraLeft, &m_cameraToHMDRight);
+    XrMatrix4x4f_Multiply(&m_cameraLeftToRightPose, &m_cameraToHMDLeft, &m_HMDToCameraRight);
+    XrMatrix4x4f_Multiply(&m_cameraRightToLeftPose, &m_cameraToHMDRight, &m_HMDToCameraLeft);
 }
 
 bool CameraManager::GetCameraFrame(std::shared_ptr<CameraFrame>& frame)
@@ -828,7 +828,7 @@ void CameraManager::CalculateFrameProjectionForEye(const ERenderEye eye, std::sh
 
         frameProjection.m[10] = -m_projectionDistanceFar / (m_projectionDistanceFar - NEAR_PROJECTION_DISTANCE);
         frameProjection.m[11] = -1.0f;
-        frameProjection.m[12] = 2.0f * frameProjection.m[12] / (float)m_cameraFrameWidth;
+        frameProjection.m[12] = 0.0f;// 2.0f * frameProjection.m[12] / (float)m_cameraFrameWidth; // This would add the raight to left transform.
         frameProjection.m[13] = 0.0f;
         frameProjection.m[14] = -(m_projectionDistanceFar * NEAR_PROJECTION_DISTANCE) / (m_projectionDistanceFar - NEAR_PROJECTION_DISTANCE);
         frameProjection.m[15] = 0.0f;
@@ -841,44 +841,46 @@ void CameraManager::CalculateFrameProjectionForEye(const ERenderEye eye, std::sh
 
         if (eye == LEFT_EYE)
         {
+            XrMatrix4x4f rectifiedRotation = distortionParams.rectifiedRotationLeft;
+
+            // The right eye rotation matrices work for some reason with the y(?) axis rotation reversed.
+            rectifiedRotation.m[4] *= -1;
+            rectifiedRotation.m[6] *= -1;
+
+
             XrMatrix4x4f rectifiedRotationInverse;
-            XrMatrix4x4f_Transpose(&rectifiedRotationInverse, &distortionParams.rectifiedRotationLeft);
+            XrMatrix4x4f_Transpose(&rectifiedRotationInverse, &rectifiedRotation);
 
             XrMatrix4x4f tempMatrix;
             XrMatrix4x4f_Multiply(&tempMatrix, &rectifiedRotationInverse, &leftCameraFromTrackingPose);
             XrMatrix4x4f_Multiply(&frame->worldToCameraProjectionLeft, &frameProjection, &tempMatrix);
 
-            XrMatrix4x4f_Multiply(&tempMatrix, &distortionParams.rectifiedRotationLeft, &frameProjectionInverse);
+            XrMatrix4x4f_Multiply(&tempMatrix, &rectifiedRotation, &frameProjectionInverse);
             XrMatrix4x4f_Multiply(&frame->cameraProjectionToWorldLeft, &frame->cameraViewToWorldLeft, &tempMatrix);
         }
         else
         {
+            XrMatrix4x4f rightCameraFromTrackingPose;
+            XrMatrix4x4f_Invert(&rightCameraFromTrackingPose, &frame->cameraViewToWorldRight);
+
             XrMatrix4x4f rectifiedRotation = distortionParams.rectifiedRotationRight;
 
-            // The right eye rotation matrices work for some reason with the x and z axis rotations reversed.
-            rectifiedRotation.m[1] *= -1;
-            rectifiedRotation.m[4] *= -1;
-            rectifiedRotation.m[6] *= -1;
-            rectifiedRotation.m[9] *= -1;
+            XrMatrix4x4f rectifiedRotationInverse;
+            XrMatrix4x4f_Transpose(&rectifiedRotationInverse, &rectifiedRotation);       
             
             XrMatrix4x4f tempMatrix;
-            XrMatrix4x4f_Multiply(&tempMatrix, &rectifiedRotation, &leftCameraFromTrackingPose);
+            XrMatrix4x4f_Multiply(&tempMatrix, &rectifiedRotationInverse, &rightCameraFromTrackingPose);
             XrMatrix4x4f_Multiply(&frame->worldToCameraProjectionRight, &frameProjection, &tempMatrix);
-
-            XrMatrix4x4f rectifiedRotationInverse;
+            
 
             if (bIsStereo)
             {           
-                XrMatrix4x4f_Transpose(&rectifiedRotationInverse, &rectifiedRotation);
-
-                XrMatrix4x4f_Multiply(&tempMatrix, &rectifiedRotationInverse, &frameProjectionInverse);
-                XrMatrix4x4f_Multiply(&frame->cameraProjectionToWorldRight, &frame->cameraViewToWorldLeft, &tempMatrix);
+                XrMatrix4x4f_Multiply(&tempMatrix, &rectifiedRotation, &frameProjectionInverse);
+                XrMatrix4x4f_Multiply(&frame->cameraProjectionToWorldRight, &frame->cameraViewToWorldRight, &tempMatrix);
             }
             else
             {
-                XrMatrix4x4f_Transpose(&rectifiedRotationInverse, &distortionParams.rectifiedRotationLeft);
-
-                XrMatrix4x4f_Multiply(&tempMatrix, &rectifiedRotationInverse, &frameProjectionInverse);
+                XrMatrix4x4f_Multiply(&tempMatrix, &distortionParams.rectifiedRotationLeft, &frameProjectionInverse);
                 XrMatrix4x4f_Multiply(&frame->cameraProjectionToWorldRight, &frame->cameraViewToWorldLeft, &tempMatrix);
             }
         }
