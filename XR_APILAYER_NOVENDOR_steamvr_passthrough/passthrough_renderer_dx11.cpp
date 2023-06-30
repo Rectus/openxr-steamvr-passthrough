@@ -960,7 +960,7 @@ void PassthroughRendererDX11::UpdateRenderModels(CameraFrame* frame)
 						ErrorLog("Render model index buffer creation error!\n");
 					}
 
-					dxModel.numIndices = model.mesh.triangles.size() * sizeof(MeshTriangle);
+					dxModel.numIndices = model.mesh.triangles.size() * 3;
 				}
 
 				dxModel.meshToWorldTransform = model.meshToWorldTransform;
@@ -994,7 +994,7 @@ void PassthroughRendererDX11::UpdateRenderModels(CameraFrame* frame)
 				ErrorLog("Render model index buffer creation error!\n");
 			}
 
-			dxModel.numIndices = model.mesh.triangles.size() * sizeof(MeshTriangle);
+			dxModel.numIndices = model.mesh.triangles.size() * 3;
 			dxModel.meshToWorldTransform = model.meshToWorldTransform;
 
 			m_renderModels.push_back(dxModel);
