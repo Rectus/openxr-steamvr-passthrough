@@ -468,7 +468,7 @@ void DepthReconstruction::RunThread()
 
             if (m_bDisparityBothEyes)
             {
-                    m_confidenceRight = cv::Mat(m_rawDisparityRight.rows, m_rawDisparityRight.cols, CV_32F);
+                m_confidenceRight = cv::Mat(m_rawDisparityRight.rows, m_rawDisparityRight.cols, CV_32F);
 
                 for (int y = 0; y < m_rawDisparityRight.rows; y++)
                 {
@@ -487,11 +487,15 @@ void DepthReconstruction::RunThread()
         }
         else if(stereoConfig.StereoFiltering != StereoFiltering_None)
         {
+            cv::Rect leftROI = cv::Rect(0, 0, m_cvImageWidth + m_maxDisparity, m_cvImageHeight);
+
             if (!m_bDisparityBothEyes)
             {
                 m_stereoRightMatcher = cv::ximgproc::createRightMatcher(m_stereoLeftMatcher);
 
                 m_stereoRightMatcher->compute(m_scaledExtFrameRight, m_scaledExtFrameLeft, m_rawDisparityRight);
+
+                leftROI = cv::Rect();
             }
 
             m_wlsFilterLeft = cv::ximgproc::createDisparityWLSFilter(m_stereoLeftMatcher);
@@ -500,7 +504,7 @@ void DepthReconstruction::RunThread()
             m_wlsFilterLeft->setSigmaColor(stereoConfig.StereoWLS_Sigma);
             m_wlsFilterLeft->setDepthDiscontinuityRadius((int)ceil(stereoConfig.StereoWLS_ConfidenceRadius * stereoConfig.StereoBlockSize));
 
-            m_wlsFilterLeft->filter(m_rawDisparityLeft, m_scaledExtFrameLeft, m_filteredDisparityLeft, m_rawDisparityRight, cv::Rect(), m_scaledExtFrameRight);
+            m_wlsFilterLeft->filter(m_rawDisparityLeft, m_scaledExtFrameLeft, m_filteredDisparityLeft, m_rawDisparityRight, leftROI, m_scaledExtFrameRight);
 
 
             if (m_bDisparityBothEyes)
@@ -575,9 +579,26 @@ void DepthReconstruction::RunThread()
                         m_confidenceLeft(cv::Rect(m_maxDisparity, 0, m_cvImageWidth, m_cvImageHeight)).convertTo(rightIn[1], CV_16S, confFactor);
                     }
                 }
-                if (m_bDisparityBothEyes && (uint32_t)m_confidenceRight.size().width >= m_cvImageWidth + m_maxDisparity)
+                else
                 {
-                    m_confidenceRight(cv::Rect(m_maxDisparity, 0, m_cvImageWidth, m_cvImageHeight)).convertTo(rightIn[1], CV_16S, confFactor);
+                    leftIn[1] = cv::Mat::zeros(m_cvImageHeight, m_cvImageWidth, CV_16S);
+
+                    if (!m_bDisparityBothEyes)
+                    {
+                        rightIn[1] = cv::Mat::zeros(m_cvImageHeight, m_cvImageWidth, CV_16S);
+                    }
+                }
+
+                if (m_bDisparityBothEyes)
+                {
+                    if ((uint32_t)m_confidenceRight.size().width >= m_cvImageWidth + m_maxDisparity)
+                    {
+                        m_confidenceRight(cv::Rect(m_maxDisparity, 0, m_cvImageWidth, m_cvImageHeight)).convertTo(rightIn[1], CV_16S, confFactor);
+                    }
+                    else
+                    {
+                        rightIn[1] = cv::Mat::zeros(m_cvImageHeight, m_cvImageWidth, CV_16S);
+                    }
                 }
 
                 int fromTo[4] = { 0,0 , 1,1 };
