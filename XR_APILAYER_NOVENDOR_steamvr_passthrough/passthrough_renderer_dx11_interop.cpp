@@ -150,20 +150,22 @@ void PassthroughRendererDX11Interop::InitDepthBuffer(const ERenderEye eye, void*
 
 void PassthroughRendererDX11Interop::RenderPassthroughFrame(const XrCompositionLayerProjection* layer, CameraFrame* frame, EPassthroughBlendMode blendMode, int leftSwapchainIndex, int rightSwapchainIndex, std::shared_ptr<DepthFrame> depthFrame, UVDistortionParameters& distortionParams, bool bEnableDepthBlending)
 {
+	DX11FrameData& frameData = m_frameData[leftSwapchainIndex];
+
 	switch (m_applicationRenderAPI)
 	{
 	case DirectX12:
 	{
 		{
-			ID3D11Resource* rts[2] = { m_renderTargets[leftSwapchainIndex].Get(), m_renderTargets[rightSwapchainIndex + NUM_SWAPCHAINS].Get() };
+			ID3D11Resource* rts[2] = { frameData.renderTargets[0].Get(), frameData.renderTargets[1].Get() };
 			m_d3d11On12Device->AcquireWrappedResources(rts, 2);
 
 			ID3D11Resource* dts[2] = { 0 };
 
-			if (m_depthStencils[leftSwapchainIndex] && m_depthStencils[rightSwapchainIndex + NUM_SWAPCHAINS])
+			if (frameData.depthStencils[0] && frameData.depthStencils[1])
 			{
-				dts[0] = m_depthStencils[leftSwapchainIndex].Get();
-				dts[1] = m_depthStencils[rightSwapchainIndex + NUM_SWAPCHAINS].Get();
+				dts[0] = frameData.depthStencils[0].Get();
+				dts[1] = frameData.depthStencils[1].Get();
 
 				m_d3d11On12Device->AcquireWrappedResources(dts, 2);
 			}

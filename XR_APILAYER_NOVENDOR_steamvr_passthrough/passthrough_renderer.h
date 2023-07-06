@@ -88,6 +88,45 @@ struct DX11RenderModel
 };
 
 
+struct DX11FrameData
+{
+	DX11FrameData()
+	{
+		memset(temporaryRenderTargets, 0, sizeof(temporaryRenderTargets));
+	}
+
+	bool bInitialized = false;
+
+	ComPtr<ID3D11Resource> renderTargets[2];
+	ComPtr<ID3D11RenderTargetView> renderTargetViews[2];
+	ComPtr<ID3D11ShaderResourceView> renderTargetSRVs[2];
+
+	DX11TemporaryRenderTarget temporaryRenderTargets[2];
+
+	ComPtr<ID3D11Resource> depthStencils[2];
+	ComPtr<ID3D11DepthStencilView> depthStencilViews[2];
+
+	ComPtr<ID3D11Buffer> vsViewConstantBuffer[2];
+	ComPtr<ID3D11Buffer> vsPassConstantBuffer;
+	ComPtr<ID3D11Buffer> psViewConstantBuffer[2];
+	ComPtr<ID3D11Buffer> psPassConstantBuffer;
+	ComPtr<ID3D11Buffer> psMaskedConstantBuffer;
+	
+	ComPtr<ID3D11Texture2D> cameraFrameTexture;
+	ComPtr<ID3D11ShaderResourceView> cameraFrameSRV;
+
+	ComPtr<ID3D11UnorderedAccessView> cameraFilterUAV[2];
+	ComPtr<ID3D11ShaderResourceView> cameraFilterSRV[2];
+	ComPtr<ID3D11Texture2D> cameraFilterUAVTexture[2];
+
+	ComPtr<ID3D11Texture2D> disparityMap;
+	ComPtr<ID3D11ShaderResourceView> disparityMapSRV;
+
+	ComPtr<ID3D11UnorderedAccessView> disparityMapUAV;
+	ComPtr<ID3D11ShaderResourceView> disparityMapUAVSRV;
+	ComPtr<ID3D11Texture2D> disparityMapUAVTexture;
+};
+
 
 class IPassthroughRenderer
 {
@@ -120,10 +159,11 @@ public:
 protected:
 
 	void SetupDebugTexture(DebugTexture& texture);
-	void SetupFrameResource();
+	void SetupCameraFrameResource(const uint32_t imageIndex);
+	bool CheckInitFrameData(const uint32_t imageIndex);
 	void SetupDisparityMap(uint32_t width, uint32_t height);
 	void SetupUVDistortionMap(std::shared_ptr<std::vector<float>> uvDistortionMap);
-	DX11TemporaryRenderTarget& GetTemporaryRenderTarget(uint32_t bufferIndex);
+	DX11TemporaryRenderTarget& GetTemporaryRenderTarget(uint32_t frameIndex, uint32_t bufferIndex);
 	void GenerateMesh();
 	void GenerateDepthMesh(uint32_t width, uint32_t height);
 	void SetupTemporalUAV(const ERenderEye eye, ID3D11Resource* rendertarget, const uint32_t imageIndex);
@@ -139,20 +179,14 @@ protected:
 	bool m_bIsTemporalSupported = true;
 	bool m_bUsingDeferredContext = false;
 	int m_frameIndex = 0;
+	int m_prevFrameIndex = 0;
 
 	ComPtr<ID3D11Device> m_d3dDevice;
 	ComPtr<ID3D11DeviceContext> m_deviceContext;
 	ComPtr<ID3D11DeviceContext> m_renderContext;
+
+	std::vector<DX11FrameData> m_frameData;
 	
-
-	ComPtr<ID3D11Resource> m_renderTargets[NUM_SWAPCHAINS * 2];
-	ComPtr<ID3D11RenderTargetView> m_renderTargetViews[NUM_SWAPCHAINS * 2];
-	ComPtr<ID3D11ShaderResourceView> m_renderTargetSRVs[NUM_SWAPCHAINS * 2];
-
-	DX11TemporaryRenderTarget m_temportaryRenderTargets[NUM_SWAPCHAINS * 2];
-
-	ComPtr<ID3D11Resource> m_depthStencils[NUM_SWAPCHAINS * 2];
-	ComPtr<ID3D11DepthStencilView> m_depthStencilViews[NUM_SWAPCHAINS * 2];
 	ComPtr<ID3D11DepthStencilState> m_depthStencilStateDisabled;
 	ComPtr<ID3D11DepthStencilState> m_depthStencilStateLess;
 	ComPtr<ID3D11DepthStencilState> m_depthStencilStateLessWrite;
@@ -170,12 +204,9 @@ protected:
 	ComPtr<ID3D11PixelShader> m_maskedPrepassShader;
 	ComPtr<ID3D11PixelShader> m_maskedAlphaCopyShader;
 
-	ComPtr<ID3D11Buffer> m_vsViewConstantBuffer[NUM_SWAPCHAINS * 2];
-	ComPtr<ID3D11Buffer> m_vsPassConstantBuffer[NUM_SWAPCHAINS];
+	
 	ComPtr<ID3D11Buffer> m_vsMeshConstantBuffer[vr::k_unMaxTrackedDeviceCount];
-	ComPtr<ID3D11Buffer> m_psPassConstantBuffer;
-	ComPtr<ID3D11Buffer> m_psMaskedConstantBuffer;
-	ComPtr<ID3D11Buffer> m_psViewConstantBuffer;
+	
 	ComPtr<ID3D11SamplerState> m_defaultSampler;
 	ComPtr<ID3D11RasterizerState> m_rasterizerState;
 	ComPtr<ID3D11RasterizerState> m_rasterizerStateDepthBias;
@@ -192,22 +223,9 @@ protected:
 	ComPtr<ID3D11ShaderResourceView> m_debugTextureSRV;
 	ESelectedDebugTexture m_selectedDebugTexture;
 
-	ComPtr<ID3D11Texture2D> m_cameraFrameTexture[NUM_SWAPCHAINS];
 	ComPtr<ID3D11Texture2D> m_cameraFrameUploadTexture;
-	ComPtr<ID3D11ShaderResourceView> m_cameraFrameSRV[NUM_SWAPCHAINS];
-
-	ComPtr<ID3D11UnorderedAccessView> m_cameraFilterUAV[NUM_SWAPCHAINS * 2];
-	ComPtr<ID3D11ShaderResourceView> m_cameraFilterSRV[NUM_SWAPCHAINS * 2];
-	ComPtr<ID3D11Texture2D> m_cameraFilterUAVTexture[NUM_SWAPCHAINS * 2];
-
-	ComPtr<ID3D11Texture2D> m_disparityMap[NUM_SWAPCHAINS];
 	ComPtr<ID3D11Texture2D> m_disparityMapUploadTexture;
-	ComPtr<ID3D11ShaderResourceView> m_disparityMapSRV[NUM_SWAPCHAINS];
 	uint32_t m_disparityMapWidth;
-
-	ComPtr<ID3D11UnorderedAccessView> m_disparityMapUAV[NUM_SWAPCHAINS];
-	ComPtr<ID3D11ShaderResourceView> m_disparityMapUAVSRV[NUM_SWAPCHAINS];
-	ComPtr<ID3D11Texture2D> m_disparityMapUAVTexture[NUM_SWAPCHAINS];
 
 	ComPtr<ID3D11Texture2D> m_uvDistortionMap;
 	ComPtr<ID3D11ShaderResourceView> m_uvDistortionMapSRV;
