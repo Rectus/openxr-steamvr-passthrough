@@ -176,6 +176,14 @@ struct DepthFrame
 	bool bIsValid;
 };
 
+struct FrameRenderParameters
+{
+	bool bEnableDepthBlending = false;
+	bool bEnableDepthRange = false;
+	float DepthRangeMin = 0.0f;
+	float DepthRangeMax = std::numeric_limits<float>::infinity();
+};
+
 struct UVDistortionParameters
 {
 	UVDistortionParameters()

@@ -130,6 +130,7 @@ struct VSViewConstantBuffer
 struct PSPassConstantBuffer
 {
 	XrVector2f depthRange;
+	XrVector2f depthCutoffRange;
 	float opacity;
 	float brightness;
 	float contrast;
@@ -141,6 +142,7 @@ struct PSPassConstantBuffer
 	uint32_t bDebugValidStereo;
 	uint32_t bUseFisheyeCorrection;
 	uint32_t bIsFirstRenderOfCameraFrame;
+	uint32_t bUseDepthCutoffRange;
 };
 
 struct PSViewConstantBuffer
@@ -1077,7 +1079,7 @@ void PassthroughRendererDX12::GenerateDepthMesh(uint32_t width, uint32_t height)
 
 
 
-void PassthroughRendererDX12::RenderPassthroughFrame(const XrCompositionLayerProjection* layer, CameraFrame* frame, EPassthroughBlendMode blendMode, int leftSwapchainIndex, int rightSwapchainIndex, std::shared_ptr<DepthFrame> depthFrame, UVDistortionParameters& distortionParams, bool bEnableDepthBlending)
+void PassthroughRendererDX12::RenderPassthroughFrame(const XrCompositionLayerProjection* layer, CameraFrame* frame, EPassthroughBlendMode blendMode, int leftSwapchainIndex, int rightSwapchainIndex, std::shared_ptr<DepthFrame> depthFrame, UVDistortionParameters& distortionParams, FrameRenderParameters& renderParams)
 {
 	Config_Main& mainConf = m_configManager->GetConfig_Main();
 	Config_Core& coreConf = m_configManager->GetConfig_Core();
@@ -1089,7 +1091,7 @@ void PassthroughRendererDX12::RenderPassthroughFrame(const XrCompositionLayerPro
 		return;
 	}
 
-	bool bCompositeDepth = bEnableDepthBlending && m_depthStencils[0].Get() != nullptr;
+	bool bCompositeDepth = renderParams.bEnableDepthBlending && m_depthStencils[0].Get() != nullptr;
 	bool bDepthWrtite = depthConf.DepthWriteOutput && depthConf.DepthReadFromApplication;
 	bool bUseReversedDepth = (m_blendMode == Masked) ? coreConf.CoreForceMaskedUseCameraImage == frame->bHasReversedDepth : frame->bHasReversedDepth;
 
@@ -1287,6 +1289,7 @@ void PassthroughRendererDX12::RenderPassthroughFrame(const XrCompositionLayerPro
 
 	PSPassConstantBuffer* psPassBuffer = (PSPassConstantBuffer*)m_psPassConstantBufferCPUData[m_frameIndex];
 	psPassBuffer->depthRange = XrVector2f(NEAR_PROJECTION_DISTANCE, mainConf.ProjectionDistanceFar);
+	psPassBuffer->depthCutoffRange = XrVector2f(renderParams.DepthRangeMin, renderParams.DepthRangeMax);
 	psPassBuffer->opacity = mainConf.PassthroughOpacity;
 	psPassBuffer->brightness = mainConf.Brightness;
 	psPassBuffer->contrast = mainConf.Contrast;
@@ -1296,6 +1299,7 @@ void PassthroughRendererDX12::RenderPassthroughFrame(const XrCompositionLayerPro
 	psPassBuffer->bDebugDepth = mainConf.DebugDepth;
 	psPassBuffer->bDebugValidStereo = mainConf.DebugStereoValid;
 	psPassBuffer->bUseFisheyeCorrection = mainConf.ProjectionMode != Projection_RoomView2D;
+	psPassBuffer->bUseDepthCutoffRange = renderParams.bEnableDepthRange;
 
 	D3D12_GPU_DESCRIPTOR_HANDLE passCBVHandle = m_CBVSRVHeap->GetGPUDescriptorHandleForHeapStart();
 	passCBVHandle.ptr += (INDEX_CBV_PS_PASS_0 + m_frameIndex) * m_CBVSRVHeapDescSize;

@@ -65,6 +65,7 @@ struct VSMeshConstantBuffer
 struct PSPassConstantBuffer
 {
 	XrVector2f depthRange;
+	XrVector2f depthCutoffRange;
 	float opacity;
 	float brightness;
 	float contrast;
@@ -76,6 +77,7 @@ struct PSPassConstantBuffer
 	uint32_t bDebugValidStereo;
 	uint32_t bUseFisheyeCorrection;
 	uint32_t bIsFirstRenderOfCameraFrame;
+	uint32_t bUseDepthCutoffRange;
 };
 
 struct PSViewConstantBuffer
@@ -1008,7 +1010,7 @@ void PassthroughRendererDX11::UpdateRenderModels(CameraFrame* frame)
 						ErrorLog("Render model index buffer creation error!\n");
 					}
 
-					dxModel.numIndices = model.mesh.triangles.size() * 3;
+					dxModel.numIndices = (uint32_t)(model.mesh.triangles.size() * 3);
 				}
 
 				dxModel.meshToWorldTransform = model.meshToWorldTransform;
@@ -1042,7 +1044,7 @@ void PassthroughRendererDX11::UpdateRenderModels(CameraFrame* frame)
 				ErrorLog("Render model index buffer creation error!\n");
 			}
 
-			dxModel.numIndices = model.mesh.triangles.size() * 3;
+			dxModel.numIndices = (uint32_t)(model.mesh.triangles.size() * 3);
 			dxModel.meshToWorldTransform = model.meshToWorldTransform;
 
 			m_renderModels.push_back(dxModel);
@@ -1059,7 +1061,7 @@ void PassthroughRendererDX11::UpdateRenderModels(CameraFrame* frame)
 	m_depthStencilStateDisabled.Get() )
 
 
-void PassthroughRendererDX11::RenderPassthroughFrame(const XrCompositionLayerProjection* layer, CameraFrame* frame, EPassthroughBlendMode blendMode, int leftSwapchainIndex, int rightSwapchainIndex, std::shared_ptr<DepthFrame> depthFrame, UVDistortionParameters& distortionParams, bool bEnableDepthBlending)
+void PassthroughRendererDX11::RenderPassthroughFrame(const XrCompositionLayerProjection* layer, CameraFrame* frame, EPassthroughBlendMode blendMode, int leftSwapchainIndex, int rightSwapchainIndex, std::shared_ptr<DepthFrame> depthFrame, UVDistortionParameters& distortionParams, FrameRenderParameters& renderParams)
 {
 	// Assuming the left and right images use the same swapchain index.
 	assert(leftSwapchainIndex == rightSwapchainIndex);
@@ -1243,6 +1245,7 @@ void PassthroughRendererDX11::RenderPassthroughFrame(const XrCompositionLayerPro
 
 	PSPassConstantBuffer psBuffer = {};
 	psBuffer.depthRange = XrVector2f(NEAR_PROJECTION_DISTANCE, mainConf.ProjectionDistanceFar);
+	psBuffer.depthCutoffRange = XrVector2f(renderParams.DepthRangeMin, renderParams.DepthRangeMax);
 	psBuffer.opacity = mainConf.PassthroughOpacity;
 	psBuffer.brightness = mainConf.Brightness;
 	psBuffer.contrast = mainConf.Contrast;
@@ -1254,6 +1257,7 @@ void PassthroughRendererDX11::RenderPassthroughFrame(const XrCompositionLayerPro
 	psBuffer.bDebugValidStereo = mainConf.DebugStereoValid;
 	psBuffer.bUseFisheyeCorrection = mainConf.ProjectionMode != Projection_RoomView2D;
 	psBuffer.bIsFirstRenderOfCameraFrame = frame->bIsFirstRender;
+	psBuffer.bUseDepthCutoffRange = renderParams.bEnableDepthRange;
 
 	m_renderContext->UpdateSubresource(frameData.psPassConstantBuffer.Get(), 0, nullptr, &psBuffer, 0, 0);
 
@@ -1271,22 +1275,22 @@ void PassthroughRendererDX11::RenderPassthroughFrame(const XrCompositionLayerPro
 
 		m_renderContext->UpdateSubresource(frameData.psMaskedConstantBuffer.Get(), 0, nullptr, &maskedBuffer, 0, 0);
 
-		RenderMaskedPrepassView(LEFT_EYE, leftSwapchainIndex, layer, frame, numIndices, bEnableDepthBlending);
-		RenderPassthroughView(LEFT_EYE, leftSwapchainIndex, layer, frame, blendMode, numIndices, bEnableDepthBlending);
-		RenderMaskedPrepassView(RIGHT_EYE, rightSwapchainIndex, layer, frame, numIndices, bEnableDepthBlending);
-		RenderPassthroughView(RIGHT_EYE, rightSwapchainIndex, layer, frame, blendMode, numIndices, bEnableDepthBlending);
+		RenderMaskedPrepassView(LEFT_EYE, leftSwapchainIndex, layer, frame, numIndices, renderParams);
+		RenderPassthroughView(LEFT_EYE, leftSwapchainIndex, layer, frame, blendMode, numIndices, renderParams);
+		RenderMaskedPrepassView(RIGHT_EYE, rightSwapchainIndex, layer, frame, numIndices, renderParams);
+		RenderPassthroughView(RIGHT_EYE, rightSwapchainIndex, layer, frame, blendMode, numIndices, renderParams);
 	}
 	else
 	{
-		RenderPassthroughView(LEFT_EYE, leftSwapchainIndex, layer, frame, blendMode, numIndices, bEnableDepthBlending);
-		RenderPassthroughView(RIGHT_EYE, rightSwapchainIndex, layer, frame, blendMode, numIndices, bEnableDepthBlending);
+		RenderPassthroughView(LEFT_EYE, leftSwapchainIndex, layer, frame, blendMode, numIndices, renderParams);
+		RenderPassthroughView(RIGHT_EYE, rightSwapchainIndex, layer, frame, blendMode, numIndices, renderParams);
 	}
 
 	RenderFrameFinish();
 }
 
 
-void PassthroughRendererDX11::RenderPassthroughView(const ERenderEye eye, const int32_t swapchainIndex, const XrCompositionLayerProjection* layer, CameraFrame* frame, EPassthroughBlendMode blendMode, UINT numIndices, bool bEnableDepthBlending)
+void PassthroughRendererDX11::RenderPassthroughView(const ERenderEye eye, const int32_t swapchainIndex, const XrCompositionLayerProjection* layer, CameraFrame* frame, EPassthroughBlendMode blendMode, UINT numIndices, FrameRenderParameters& renderParams)
 {
 	if (swapchainIndex < 0) { return; }
 
@@ -1300,7 +1304,7 @@ void PassthroughRendererDX11::RenderPassthroughView(const ERenderEye eye, const 
 	if (!rendertarget) { return; }
 
 	Config_Depth& depthConfig = m_configManager->GetConfig_Depth();
-	bool bCompositeDepth = bEnableDepthBlending && depthStencil != nullptr;
+	bool bCompositeDepth = renderParams.bEnableDepthBlending && depthStencil != nullptr;
 	bool bWriteDepth = depthConfig.DepthWriteOutput && depthConfig.DepthReadFromApplication;
 
 	ID3D11UnorderedAccessView* UAVs[2] = { frameData.cameraFilterUAV[viewIndex].Get(), frameData.disparityMapUAV.Get() };
@@ -1544,7 +1548,7 @@ void PassthroughRendererDX11::RenderPassthroughView(const ERenderEye eye, const 
 }
 
 
-void PassthroughRendererDX11::RenderMaskedPrepassView(const ERenderEye eye, const int32_t swapchainIndex, const XrCompositionLayerProjection* layer, CameraFrame* frame, UINT numIndices, bool bEnableDepthBlending)
+void PassthroughRendererDX11::RenderMaskedPrepassView(const ERenderEye eye, const int32_t swapchainIndex, const XrCompositionLayerProjection* layer, CameraFrame* frame, UINT numIndices, FrameRenderParameters& renderParams)
 {
 	if (swapchainIndex < 0) { return; }
 
@@ -1557,7 +1561,7 @@ void PassthroughRendererDX11::RenderMaskedPrepassView(const ERenderEye eye, cons
 	if (!rendertarget) { return; }
 
 	Config_Depth& depthConfig = m_configManager->GetConfig_Depth();
-	bool bCompositeDepth = bEnableDepthBlending && depthStencil != nullptr;
+	bool bCompositeDepth = renderParams.bEnableDepthBlending && depthStencil != nullptr;
 	bool bWriteDepth = depthConfig.DepthWriteOutput && depthConfig.DepthReadFromApplication;
 
 	XrRect2Di rect = layer->views[viewIndex].subImage.imageRect;

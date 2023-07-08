@@ -336,6 +336,7 @@ void ConfigManager::ParseConfig_Core()
 void ConfigManager::ParseConfig_Extensions()
 {
 	m_configExtensions.ExtVarjoDepthEstimation = m_iniData.GetBoolValue("Extensions", "ExtVarjoDepthEstimation", m_configExtensions.ExtVarjoDepthEstimation);
+	m_configExtensions.ExtVarjoDepthComposition = m_iniData.GetBoolValue("Extensions", "ExtVarjoDepthComposition", m_configExtensions.ExtVarjoDepthComposition);
 }
 
 void ConfigManager::ParseConfig_Stereo()
@@ -442,6 +443,7 @@ void ConfigManager::UpdateConfig_Core()
 void ConfigManager::UpdateConfig_Extensions()
 {
 	m_iniData.SetBoolValue("Extensions", "ExtVarjoDepthEstimation", m_configExtensions.ExtVarjoDepthEstimation);
+	m_iniData.SetBoolValue("Extensions", "ExtVarjoDepthComposition", m_configExtensions.ExtVarjoDepthComposition);
 }
 
 void ConfigManager::UpdateConfig_Stereo()

@@ -46,6 +46,7 @@ struct MenuDisplayValues
 	int CoreCurrentMode = 0;
 
 	bool bVarjoDepthEstimationExtensionActive = false;
+	bool bVarjoDepthCompositionExtensionActive = false;
 };
 
 

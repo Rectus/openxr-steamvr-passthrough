@@ -142,6 +142,12 @@ float4 main(VS_OUTPUT input) : SV_TARGET
     {
         clip(input.projectionValidity);
     }
+    
+    if (g_bUseDepthCutoffRange)
+    {
+        clip(input.screenCoords.z - g_depthCutoffRange.x);
+        clip(g_depthCutoffRange.y - input.screenCoords.z);
+    }
 
 	// Convert from homogenous clip space coordinates to 0-1.
 	float2 outUvs = (input.clipSpaceCoords.xy / input.clipSpaceCoords.z) * float2(0.5, 0.5) + float2(0.5, 0.5);

@@ -58,6 +58,7 @@ struct VSViewConstantBuffer
 struct PSPassConstantBuffer
 {
 	XrVector2f depthRange;
+	XrVector2f depthCutoffRange;
 	float opacity;
 	float brightness;
 	float contrast;
@@ -69,6 +70,7 @@ struct PSPassConstantBuffer
 	uint32_t bDebugValidStereo;
 	uint32_t bUseFisheyeCorrection;
 	uint32_t bIsFirstRenderOfCameraFrame;
+	uint32_t bUseDepthCutoffRange;
 };
 
 struct PSViewConstantBuffer
@@ -1705,7 +1707,7 @@ void PassthroughRendererVulkan::UpdateDescriptorSets(VkCommandBuffer commandBuff
 
 static bool g_bVulkanStereoErrorShown = false;
 
-void PassthroughRendererVulkan::RenderPassthroughFrame(const XrCompositionLayerProjection* layer, CameraFrame* frame, EPassthroughBlendMode blendMode, int leftSwapchainIndex, int rightSwapchainIndex, std::shared_ptr<DepthFrame> depthFrame, UVDistortionParameters& distortionParams, bool bEnableDepthBlending)
+void PassthroughRendererVulkan::RenderPassthroughFrame(const XrCompositionLayerProjection* layer, CameraFrame* frame, EPassthroughBlendMode blendMode, int leftSwapchainIndex, int rightSwapchainIndex, std::shared_ptr<DepthFrame> depthFrame, UVDistortionParameters& distortionParams, FrameRenderParameters& renderParams)
 {
 
 	Config_Main& mainConf = m_configManager->GetConfig_Main();
@@ -1756,6 +1758,7 @@ void PassthroughRendererVulkan::RenderPassthroughFrame(const XrCompositionLayerP
 	{
 		PSPassConstantBuffer psPassBuffer = {};
 		psPassBuffer.depthRange = XrVector2f(NEAR_PROJECTION_DISTANCE, mainConf.ProjectionDistanceFar);
+		psPassBuffer.depthCutoffRange = XrVector2f(renderParams.DepthRangeMin, renderParams.DepthRangeMax);
 		psPassBuffer.opacity = mainConf.PassthroughOpacity;
 		psPassBuffer.brightness = mainConf.Brightness;
 		psPassBuffer.contrast = mainConf.Contrast;
@@ -1765,6 +1768,7 @@ void PassthroughRendererVulkan::RenderPassthroughFrame(const XrCompositionLayerP
 		psPassBuffer.bDebugDepth = mainConf.DebugDepth;
 		psPassBuffer.bDebugValidStereo = mainConf.DebugStereoValid;
 		psPassBuffer.bUseFisheyeCorrection = mainConf.ProjectionMode != Projection_RoomView2D;
+		psPassBuffer.bUseDepthCutoffRange = renderParams.bEnableDepthRange;
 
 		memcpy(m_psPassConstantBufferMappings[m_frameIndex], &psPassBuffer, sizeof(PSPassConstantBuffer));
 	}

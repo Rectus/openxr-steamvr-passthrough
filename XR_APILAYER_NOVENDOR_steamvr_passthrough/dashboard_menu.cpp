@@ -549,10 +549,24 @@ if (bIsActiveTab) { ImGui::PopStyleColor(1); bIsActiveTab = false; }
 			{
 				ImGui::TextColored(colorTextRed, "Inactive");
 			}
+
+			ImGui::Text("Varjo Depth Composition extension:");
+			ImGui::SameLine();
+			if (m_displayValues.bVarjoDepthCompositionExtensionActive)
+			{
+				ImGui::TextColored(colorTextGreen, "Active");
+			}
+			else
+			{
+				ImGui::TextColored(colorTextRed, "Inactive");
+			}
 			ImGui::PopFont();
 
-			ImGui::Checkbox("Enable Varjo Depth Estimation", &extConfig.ExtVarjoDepthEstimation);
-			TextDescription("Allow applications to use depth blending using the XR_VARJO_environment_depth_estimation extension. Requires a restart to apply.");	
+			ImGui::Checkbox("Enable Varjo Depth estimation", &extConfig.ExtVarjoDepthEstimation);
+			TextDescription("Allow applications to use depth blending using the XR_VARJO_environment_depth_estimation extension. Requires a restart to apply.");
+
+			ImGui::Checkbox("Enable Varjo Composition layer depth testing", &extConfig.ExtVarjoDepthComposition);
+			TextDescription("Allow applications to compose submitted layers based on depth using the XR_VARJO_composition_layer_depth_test extension. Requires a restart to apply.");
 		}
 
 		ImGui::EndChild();

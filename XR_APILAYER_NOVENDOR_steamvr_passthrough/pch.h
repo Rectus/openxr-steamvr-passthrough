@@ -36,6 +36,7 @@
 #include <thread>
 #include <mutex>
 #include <shared_mutex>
+#include <limits>
 
 using namespace std::chrono_literals;
 

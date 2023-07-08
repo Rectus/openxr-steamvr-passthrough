@@ -14,6 +14,7 @@ cbuffer psViewConstantBuffer : register(b2)
 cbuffer psPassConstantBuffer : register(b3)
 {
     float2 g_depthRange;
+    float2 g_depthCutoffRange;
     float g_opacity;
     float g_brightness;
     float g_contrast;
@@ -25,6 +26,7 @@ cbuffer psPassConstantBuffer : register(b3)
     bool g_bDebugValidStereo;
     bool g_bUseFisheyeCorrection;
     bool g_bIsFirstRenderOfCameraFrame;
+    bool g_bUseDepthCutoffRange;
 };
 
 cbuffer psMaskedConstantBuffer : register(b4)
@@ -51,6 +53,7 @@ cbuffer psViewConstantBuffer : register(b1)
 cbuffer psPassConstantBuffer : register(b0)
 {
     float2 g_depthRange;
+    float2 g_depthCutoffRange;
     float g_opacity;
     float g_brightness;
     float g_contrast;
@@ -62,6 +65,7 @@ cbuffer psPassConstantBuffer : register(b0)
     bool g_bDebugValidStereo;
     bool g_bUseFisheyeCorrection;
     bool g_bIsFirstRenderOfCameraFrame;
+    bool g_bUseDepthCutoffRange;
 };
 
 cbuffer psMaskedConstantBuffer : register(b2)

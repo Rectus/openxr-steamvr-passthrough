@@ -94,6 +94,11 @@ namespace
 					m_bVarjoDepthExtensionEnabled = true;
 					Log("Extension XR_VARJO_environment_depth_estimation enabled\n");
 				}
+				else if (strncmp(extensions[i].c_str(), XR_VARJO_COMPOSITION_LAYER_DEPTH_TEST_EXTENSION_NAME, strlen(XR_VARJO_COMPOSITION_LAYER_DEPTH_TEST_EXTENSION_NAME)) == 0)
+				{
+					m_bVarjoCompositionExtensionEnabled = true;
+					Log("Extension XR_VARJO_composition_layer_depth_test enabled\n");
+				}
 			}
 			
 			XrResult result = OpenXrApi::xrCreateInstance(createInfo);
@@ -166,6 +171,7 @@ namespace
 			m_dashboardMenu = std::make_unique<DashboardMenu>(g_dllModule, m_configManager, m_openVRManager);
 
 			m_dashboardMenu->GetDisplayValues().bVarjoDepthEstimationExtensionActive = m_bVarjoDepthExtensionEnabled;
+			m_dashboardMenu->GetDisplayValues().bVarjoDepthCompositionExtensionActive = m_bVarjoCompositionExtensionEnabled;
 
 			m_bSuccessfullyLoaded = true;
 			Log("OpenXR instance successfully created\n");
@@ -807,7 +813,7 @@ namespace
 
 		void RenderPassthroughOnAppLayer(const XrFrameEndInfo* frameEndInfo, uint32_t layerNum)
 		{
-			const XrCompositionLayerProjection* layer = (const XrCompositionLayerProjection*)frameEndInfo->layers[layerNum];
+			XrCompositionLayerProjection* layer = (XrCompositionLayerProjection*)frameEndInfo->layers[layerNum];
 			std::shared_ptr<CameraFrame> frame;
 
 			m_dashboardMenu->GetDisplayValues().frameBufferHeight = layer->views[0].subImage.imageRect.extent.height;
@@ -863,14 +869,47 @@ namespace
 			
 			std::shared_ptr<DepthFrame> depthFrame = m_depthReconstruction->GetDepthFrame();
 
-			bool bDepthBlending = m_configManager->GetConfig_Depth().DepthReadFromApplication && 
+			FrameRenderParameters renderParams;
+			renderParams.bEnableDepthRange = false;
+
+			renderParams.bEnableDepthBlending = m_configManager->GetConfig_Depth().DepthReadFromApplication &&
 				((m_bVarjoDepthEnabled && 
 				(blendMode == AlphaBlendPremultiplied || blendMode == AlphaBlendUnpremultiplied)) || 
 				m_configManager->GetConfig_Depth().DepthForceComposition);
 
-			m_dashboardMenu->GetDisplayValues().bDepthBlendingActive = bDepthBlending;
+			m_dashboardMenu->GetDisplayValues().bDepthBlendingActive = renderParams.bEnableDepthBlending;
 
-			m_Renderer->RenderPassthroughFrame(layer, frame.get(), blendMode, leftIndex, rightIndex, depthFrame, m_depthReconstruction->GetDistortionParameters(), bDepthBlending);
+			if (m_bVarjoCompositionExtensionEnabled)
+			{
+				auto header = (XrCompositionLayerDepthTestVARJO*)layer->next;
+				XrCompositionLayerDepthTestVARJO* prevHeader = nullptr;
+
+				while (header != nullptr)
+				{
+					if (header->type == XR_TYPE_COMPOSITION_LAYER_DEPTH_TEST_VARJO)
+					{
+						renderParams.bEnableDepthRange = true;
+						renderParams.DepthRangeMin = header->depthTestRangeNearZ;
+						renderParams.DepthRangeMax = header->depthTestRangeFarZ;
+						
+						// Hide header from runtime
+						if (prevHeader)
+						{
+							prevHeader->next = header->next;
+						}
+						else
+						{
+							layer->next = header->next;
+						}
+						break;
+					}
+					prevHeader = header;
+					header = (XrCompositionLayerDepthTestVARJO*)header->next;
+				}
+			}
+
+
+			m_Renderer->RenderPassthroughFrame(layer, frame.get(), blendMode, leftIndex, rightIndex, depthFrame, m_depthReconstruction->GetDistortionParameters(), renderParams);
 
 
 			float renderTime = EndPerfTimer(preRenderTime.QuadPart);
@@ -980,6 +1019,7 @@ namespace
 		bool m_bUsePassthrough = false;
 		bool m_bVarjoDepthExtensionEnabled = false;
 		bool m_bVarjoDepthEnabled = false;
+		bool m_bVarjoCompositionExtensionEnabled = false;
 		bool m_bDepthSupportedByRenderer = false;
 
 		XrSwapchain m_swapChainLeft{XR_NULL_HANDLE};

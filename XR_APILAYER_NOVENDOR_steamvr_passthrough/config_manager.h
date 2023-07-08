@@ -112,6 +112,7 @@ struct Config_Core
 struct Config_Extensions
 {
 	bool ExtVarjoDepthEstimation = true;
+	bool ExtVarjoDepthComposition = true;
 };
 
 enum EStereoSGBM_Mode

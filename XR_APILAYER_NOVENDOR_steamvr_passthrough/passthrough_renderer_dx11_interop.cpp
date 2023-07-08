@@ -26,7 +26,7 @@ bool PassthroughRendererDX11Interop::InitRenderer()
 	{
 		std::vector<D3D_FEATURE_LEVEL> featureLevels = { D3D_FEATURE_LEVEL_12_1, D3D_FEATURE_LEVEL_12_0, D3D_FEATURE_LEVEL_11_1,	D3D_FEATURE_LEVEL_11_0, D3D_FEATURE_LEVEL_10_1, D3D_FEATURE_LEVEL_10_0 };
 
-		if (FAILED(D3D11On12CreateDevice(m_d3d12Device.Get(), 0, featureLevels.data(), featureLevels.size(), reinterpret_cast<IUnknown**>(m_d3d12CommandQueue.GetAddressOf()), 1, 0, &m_d3dDevice, nullptr, nullptr)))
+		if (FAILED(D3D11On12CreateDevice(m_d3d12Device.Get(), 0, featureLevels.data(), (UINT)featureLevels.size(), reinterpret_cast<IUnknown**>(m_d3d12CommandQueue.GetAddressOf()), 1, 0, &m_d3dDevice, nullptr, nullptr)))
 		{
 			ErrorLog("Failed to create D3D11 to D3D12 interop device!\n");
 			return false;
@@ -148,7 +148,7 @@ void PassthroughRendererDX11Interop::InitDepthBuffer(const ERenderEye eye, void*
 }
 
 
-void PassthroughRendererDX11Interop::RenderPassthroughFrame(const XrCompositionLayerProjection* layer, CameraFrame* frame, EPassthroughBlendMode blendMode, int leftSwapchainIndex, int rightSwapchainIndex, std::shared_ptr<DepthFrame> depthFrame, UVDistortionParameters& distortionParams, bool bEnableDepthBlending)
+void PassthroughRendererDX11Interop::RenderPassthroughFrame(const XrCompositionLayerProjection* layer, CameraFrame* frame, EPassthroughBlendMode blendMode, int leftSwapchainIndex, int rightSwapchainIndex, std::shared_ptr<DepthFrame> depthFrame, UVDistortionParameters& distortionParams, FrameRenderParameters& renderParams)
 {
 	DX11FrameData& frameData = m_frameData[leftSwapchainIndex];
 
@@ -170,7 +170,7 @@ void PassthroughRendererDX11Interop::RenderPassthroughFrame(const XrCompositionL
 				m_d3d11On12Device->AcquireWrappedResources(dts, 2);
 			}
 
-			PassthroughRendererDX11::RenderPassthroughFrame(layer, frame, blendMode, leftSwapchainIndex, rightSwapchainIndex, depthFrame, distortionParams, bEnableDepthBlending);
+			PassthroughRendererDX11::RenderPassthroughFrame(layer, frame, blendMode, leftSwapchainIndex, rightSwapchainIndex, depthFrame, distortionParams, renderParams);
 
 			m_d3d11On12Device->ReleaseWrappedResources(rts, 2);
 
@@ -197,7 +197,7 @@ void PassthroughRendererDX11Interop::RenderPassthroughFrame(const XrCompositionL
 
 	default:
 	{
-		PassthroughRendererDX11::RenderPassthroughFrame(layer, frame, blendMode, leftSwapchainIndex, rightSwapchainIndex, depthFrame, distortionParams, bEnableDepthBlending);
+		PassthroughRendererDX11::RenderPassthroughFrame(layer, frame, blendMode, leftSwapchainIndex, rightSwapchainIndex, depthFrame, distortionParams, renderParams);
 		break;
 	}
 	}
