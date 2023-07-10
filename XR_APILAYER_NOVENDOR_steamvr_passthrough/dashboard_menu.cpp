@@ -307,7 +307,7 @@ if (bIsActiveTab) { ImGui::PopStyleColor(1); bIsActiveTab = false; }
 	TAB_BUTTON("Debug", TabDebug);
 
 
-	ImGui::BeginChild("Sep1", ImVec2(0, 40));
+	ImGui::BeginChild("Sep1", ImVec2(0, 20));
 	ImGui::EndChild();
 
 	ImGui::PushFont(m_smallFont);
@@ -328,12 +328,14 @@ if (bIsActiveTab) { ImGui::PopStyleColor(1); bIsActiveTab = false; }
 		ImGui::TextColored(colorTextGreen, "Depth Blending");
 	}
 
-	if (coreConfig.CoreForcePassthrough || depthConfig.DepthForceComposition)
+	if (coreConfig.CoreForcePassthrough || depthConfig.DepthForceComposition || depthConfig.DepthForceRangeTest)
 	{
 		ImGui::Separator();
 		ImGui::Text("Override:");
 		if (depthConfig.DepthForceComposition) { ImGui::TextColored(colorTextOrange, "Depth Composition"); }
+		if (depthConfig.DepthForceRangeTest) { ImGui::TextColored(colorTextOrange, "Depth Range"); }
 		if (coreConfig.CoreForcePassthrough) { ImGui::TextColored(colorTextOrange, "Passthrough Mode"); }	
+		
 	}
 
 	ImGui::Unindent();
@@ -851,6 +853,20 @@ if (bIsActiveTab) { ImGui::PopStyleColor(1); bIsActiveTab = false; }
 			ImGui::Checkbox("Force Depth Composition", &depthConfig.DepthForceComposition);
 			TextDescription("Enables composing the passthough by depth for applications that submit a depth buffer.");
 			EndSoftDisabled(!depthConfig.DepthReadFromApplication);
+
+			//ImGui::SetNextItemOpen(true, ImGuiCond_Once);
+			if (ImGui::TreeNode("Depth Range"))
+			{
+				ImGui::Checkbox("Force Depth Range testing", &depthConfig.DepthForceRangeTest);
+				TextDescription("Force passthrough to only render in a certain depth range.");
+
+				ImGui::PushItemWidth(ImGui::GetContentRegionAvail().x * 0.45f);
+				ScrollableSlider("Depth Range Min", &depthConfig.DepthForceRangeTestMin, 0.0f, 10.0f, "%.1f", 0.1f);
+				ScrollableSlider("Depth Range Max", &depthConfig.DepthForceRangeTestMax, 0.0f, 10.0f, "%.1f", 0.1f);
+				ImGui::PopItemWidth();
+
+				ImGui::TreePop();
+			}
 
 			//ImGui::SetNextItemOpen(true, ImGuiCond_Once);
 			if (ImGui::TreeNode("Advanced"))

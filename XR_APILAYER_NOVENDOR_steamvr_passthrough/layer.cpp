@@ -86,18 +86,19 @@ namespace
 				g_traceProvider, "xrCreateInstance", TLArg(createInfo->enabledExtensionNames[i], "ExtensionName"));
 			}
 #endif
+			bool bEnableVarjoDepthExtension = false;
+			bool bEnableVarjoCompositionExtension = false;
+
 			std::vector<std::string> extensions = GetRequestedExtensions();
 			for (uint32_t i = 0; i < extensions.size(); i++)
 			{
 				if (strncmp(extensions[i].c_str(), XR_VARJO_ENVIRONMENT_DEPTH_ESTIMATION_EXTENSION_NAME, strlen(XR_VARJO_ENVIRONMENT_DEPTH_ESTIMATION_EXTENSION_NAME)) == 0)
 				{
-					m_bVarjoDepthExtensionEnabled = true;
-					Log("Extension XR_VARJO_environment_depth_estimation enabled\n");
+					bEnableVarjoDepthExtension = true;
 				}
 				else if (strncmp(extensions[i].c_str(), XR_VARJO_COMPOSITION_LAYER_DEPTH_TEST_EXTENSION_NAME, strlen(XR_VARJO_COMPOSITION_LAYER_DEPTH_TEST_EXTENSION_NAME)) == 0)
 				{
-					m_bVarjoCompositionExtensionEnabled = true;
-					Log("Extension XR_VARJO_composition_layer_depth_test enabled\n");
+					bEnableVarjoCompositionExtension = true;
 				}
 			}
 			
@@ -170,8 +171,21 @@ namespace
 			m_openVRManager = std::make_shared<OpenVRManager>();
 			m_dashboardMenu = std::make_unique<DashboardMenu>(g_dllModule, m_configManager, m_openVRManager);
 
-			m_dashboardMenu->GetDisplayValues().bVarjoDepthEstimationExtensionActive = m_bVarjoDepthExtensionEnabled;
-			m_dashboardMenu->GetDisplayValues().bVarjoDepthCompositionExtensionActive = m_bVarjoCompositionExtensionEnabled;
+
+			if (bEnableVarjoDepthExtension && m_configManager->GetConfig_Extensions().ExtVarjoDepthEstimation)
+			{
+				m_bVarjoDepthExtensionEnabled = true;
+				m_dashboardMenu->GetDisplayValues().bVarjoDepthEstimationExtensionActive = true;
+				Log("Extension XR_VARJO_environment_depth_estimation enabled\n");
+			}
+
+			if (bEnableVarjoCompositionExtension && m_configManager->GetConfig_Extensions().ExtVarjoDepthComposition)
+			{
+				m_bVarjoCompositionExtensionEnabled = true;
+				m_dashboardMenu->GetDisplayValues().bVarjoDepthCompositionExtensionActive = true;
+				Log("Extension XR_VARJO_composition_layer_depth_test enabled\n");
+			}
+			
 
 			m_bSuccessfullyLoaded = true;
 			Log("OpenXR instance successfully created\n");
@@ -867,18 +881,21 @@ namespace
 				GetTestPattern(m_configManager->GetDebugTexture());
 			}
 			
+			Config_Depth& depthConf = m_configManager->GetConfig_Depth();
+
 			std::shared_ptr<DepthFrame> depthFrame = m_depthReconstruction->GetDepthFrame();
 
 			FrameRenderParameters renderParams;
 			renderParams.bEnableDepthRange = false;
 
-			renderParams.bEnableDepthBlending = m_configManager->GetConfig_Depth().DepthReadFromApplication &&
+			renderParams.bEnableDepthBlending = depthConf.DepthReadFromApplication &&
 				((m_bVarjoDepthEnabled && 
 				(blendMode == AlphaBlendPremultiplied || blendMode == AlphaBlendUnpremultiplied)) || 
-				m_configManager->GetConfig_Depth().DepthForceComposition);
+					depthConf.DepthForceComposition);
 
 			m_dashboardMenu->GetDisplayValues().bDepthBlendingActive = renderParams.bEnableDepthBlending;
 
+			
 			if (m_bVarjoCompositionExtensionEnabled)
 			{
 				auto header = (XrCompositionLayerDepthTestVARJO*)layer->next;
@@ -906,6 +923,13 @@ namespace
 					prevHeader = header;
 					header = (XrCompositionLayerDepthTestVARJO*)header->next;
 				}
+			}
+
+			if (depthConf.DepthForceRangeTest)
+			{
+				renderParams.bEnableDepthRange = true;
+				renderParams.DepthRangeMin = depthConf.DepthForceRangeTestMin;
+				renderParams.DepthRangeMax = depthConf.DepthForceRangeTestMax;
 			}
 
 

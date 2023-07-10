@@ -388,6 +388,11 @@ void ConfigManager::ParseConfig_Depth()
 	m_configDepth.DepthReadFromApplication = m_iniData.GetBoolValue("Depth", "DepthReadFromApplication", m_configDepth.DepthReadFromApplication);
 	m_configDepth.DepthWriteOutput = m_iniData.GetBoolValue("Depth", "DepthWriteOutput", m_configDepth.DepthWriteOutput);
 	m_configDepth.DepthForceComposition = m_iniData.GetBoolValue("Depth", "DepthForceComposition", m_configDepth.DepthForceComposition);
+
+	m_configDepth.DepthForceRangeTest = m_iniData.GetBoolValue("Depth", "DepthForceRangeTest", m_configDepth.DepthForceRangeTest);
+	m_configDepth.DepthForceRangeTestMin = (float)m_iniData.GetDoubleValue("Depth", "DepthForceRangeTestMin", m_configDepth.DepthForceRangeTestMin);
+	m_configDepth.DepthForceRangeTestMax = (float)m_iniData.GetDoubleValue("Depth", "DepthForceRangeTestMax", m_configDepth.DepthForceRangeTestMax);
+
 }
 
 
@@ -495,4 +500,8 @@ void ConfigManager::UpdateConfig_Depth()
 	m_iniData.SetBoolValue("Depth", "DepthReadFromApplication", m_configDepth.DepthReadFromApplication);
 	m_iniData.SetBoolValue("Depth", "DepthWriteOutput", m_configDepth.DepthWriteOutput);
 	m_iniData.SetBoolValue("Depth", "DepthForceComposition", m_configDepth.DepthForceComposition);
+
+	m_iniData.SetBoolValue("Depth", "DepthForceRangeTest", m_configDepth.DepthForceRangeTest);
+	m_iniData.SetDoubleValue("Depth", "DepthForceRangeTestMin", m_configDepth.DepthForceRangeTestMin);
+	m_iniData.SetDoubleValue("Depth", "DepthForceRangeTestMax", m_configDepth.DepthForceRangeTestMax);
 }

@@ -182,6 +182,10 @@ struct Config_Depth
 	bool DepthReadFromApplication = true;
 	bool DepthWriteOutput = true;
 	bool DepthForceComposition = false;
+
+	bool DepthForceRangeTest = false;
+	float DepthForceRangeTestMin = 0.0f;
+	float DepthForceRangeTestMax = 1.0f;
 };
 
 
