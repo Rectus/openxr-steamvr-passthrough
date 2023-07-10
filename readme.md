@@ -38,7 +38,6 @@ Using the 3D stereo mode may induce heavy flickering on the display. Exercise ca
 - The depth reconstruction from the 3D Room View is not supported. It is not currently accessible to developers.
 - The passthrough view has higher latency than the SteamVR compositor.
 - OpenGL applications are not currently supported.
-- The DirectX12 renderer isn't using shared textures for the camera frames. This limits performance.
 - The 3D reconstruction modes do not project the images correctly yet.
 - The 3D stereo reconstruction mode is not supported with Vulkan.
 
@@ -101,18 +100,14 @@ The following are required:
 - [OpenCV 4.7.0](https://github.com/opencv/opencv) (The project is setup for static linking by default - requires custom source build)
 - [OpenCV-Contrib](https://github.com/opencv/opencv_contrib) (The ximgproc module needs to be built along with OpenCV for WLS and FBS filtering support.)
 
-### Todo ###
+### Possible improvements ###
 
 - Add partial support for the `XR_FB_passthrough` extension
 - OpenGL support
 - Add edge shader modes
 - Add shared camera textures to DirectX 12 if possible (may only be possible by rendering with DirectX11 with 11On12)
-- Controller and hand depth projection + masking on 3D mode
+- Hand depth projection + masking on 3D mode
 - Improvements to 3D reconstruction
-- Support for Varjo OpenXR extensions for application controlled depth composition
-
-### Possible improvements ###
-
 - `XR_HTC_passthrough` extension support (no headsets or applications use this yet)
 - Linux support (does passthrough work on Linux?)
 - Passthrough override support for OpenVR apps (better as independent application)
