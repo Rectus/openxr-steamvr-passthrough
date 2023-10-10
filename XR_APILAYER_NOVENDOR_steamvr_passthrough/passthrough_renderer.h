@@ -169,8 +169,8 @@ protected:
 	void SetupTemporalUAV(const ERenderEye eye, ID3D11Resource* rendertarget, const uint32_t imageIndex);
 	void UpdateRenderModels(CameraFrame* frame);
 
-	void RenderPassthroughView(const ERenderEye eye, const int32_t imageIndex, const XrCompositionLayerProjection* layer, CameraFrame* frame, EPassthroughBlendMode blendMode, UINT numIndices, FrameRenderParameters& renderParams);
-	void RenderMaskedPrepassView(const ERenderEye eye, const int32_t imageIndex, const XrCompositionLayerProjection* layer, CameraFrame* frame, UINT numIndices, FrameRenderParameters& renderParams);
+	void RenderPassthroughView(const ERenderEye eye, const int32_t imageIndex, const XrCompositionLayerProjection* layer, CameraFrame* frame, std::shared_ptr<DepthFrame> depthFrame, EPassthroughBlendMode blendMode, UINT numIndices, FrameRenderParameters& renderParams);
+	void RenderMaskedPrepassView(const ERenderEye eye, const int32_t imageIndex, const XrCompositionLayerProjection* layer, CameraFrame* frame, std::shared_ptr<DepthFrame> depthFrame, UINT numIndices, FrameRenderParameters& renderParams);
 	void RenderFrameFinish();
 
 	std::shared_ptr<ConfigManager> m_configManager;

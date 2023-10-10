@@ -650,13 +650,25 @@ void CameraManager::UpdateProjectionMatrix(std::shared_ptr<CameraFrame>& frame)
 }
 
 
-void CameraManager::CalculateFrameProjection(std::shared_ptr<CameraFrame>& frame, const XrCompositionLayerProjection& layer, float timeToPhotons, const XrReferenceSpaceCreateInfo& refSpaceInfo, UVDistortionParameters& distortionParams)
+void CameraManager::CalculateFrameProjection(std::shared_ptr<CameraFrame>& frame, std::shared_ptr<DepthFrame> depthFrame, const XrCompositionLayerProjection& layer, float timeToPhotons, const XrReferenceSpaceCreateInfo& refSpaceInfo, UVDistortionParameters& distortionParams)
 {
     UpdateProjectionMatrix(frame);
 
     CalculateFrameProjectionForEye(LEFT_EYE, frame, layer, refSpaceInfo, distortionParams);
     CalculateFrameProjectionForEye(RIGHT_EYE, frame, layer, refSpaceInfo, distortionParams);
 
+    if (depthFrame->bIsFirstRender)
+    {
+        depthFrame->prevDispWorldToCameraProjectionLeft = m_lastDispWorldToCameraProjectionLeft;
+        depthFrame->prevDispWorldToCameraProjectionRight = m_lastDispWorldToCameraProjectionRight;
+        depthFrame->prevDisparityViewToWorldLeft = m_lastDisparityViewToWorldLeft;
+        depthFrame->prevDisparityViewToWorldRight = m_lastDisparityViewToWorldRight;
+
+        m_lastDispWorldToCameraProjectionLeft = frame->worldToCameraProjectionLeft;
+        m_lastDispWorldToCameraProjectionRight = frame->worldToCameraProjectionRight;
+        m_lastDisparityViewToWorldLeft = depthFrame->disparityViewToWorldLeft;
+        m_lastDisparityViewToWorldRight = depthFrame->disparityViewToWorldRight;
+    }
 
     if (frame->header.nFrameSequence != m_lastFrameSequence)
     {

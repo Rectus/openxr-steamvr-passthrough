@@ -43,7 +43,7 @@ public:
 	void UpdateStaticCameraParameters();
 	float GetFrameRetrievalPerfTime() { return m_averageFrameRetrievalTime; }
 	bool GetCameraFrame(std::shared_ptr<CameraFrame>& frame);
-	void CalculateFrameProjection(std::shared_ptr<CameraFrame>& frame, const XrCompositionLayerProjection& layer, float timeToPhotons, const XrReferenceSpaceCreateInfo& refSpaceInfo, UVDistortionParameters& distortionParams);
+	void CalculateFrameProjection(std::shared_ptr<CameraFrame>& frame, std::shared_ptr<DepthFrame> depthFrame, const XrCompositionLayerProjection& layer, float timeToPhotons, const XrReferenceSpaceCreateInfo& refSpaceInfo, UVDistortionParameters& distortionParams);
 
 private:
 	void ServeFrames();
@@ -107,6 +107,11 @@ private:
 	XrMatrix4x4f m_lastWorldToHMDProjectionLeft;
 	XrMatrix4x4f m_lastWorldToHMDProjectionRight;
 	uint32_t m_lastFrameSequence;
+
+	XrMatrix4x4f m_lastDispWorldToCameraProjectionLeft;
+	XrMatrix4x4f m_lastDispWorldToCameraProjectionRight;
+	XrMatrix4x4f m_lastDisparityViewToWorldLeft;
+	XrMatrix4x4f m_lastDisparityViewToWorldRight;
 
 	std::deque<float> m_frameRetrievalTimes;
 	float m_averageFrameRetrievalTime;
