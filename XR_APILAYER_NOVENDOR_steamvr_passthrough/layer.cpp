@@ -33,6 +33,7 @@
 #include <log.h>
 #include <util.h>
 #include <map>
+#include <queue>
 #include <shlobj_core.h>
 #include <pathcch.h>
 #include "lodepng.h"
@@ -601,27 +602,30 @@ namespace
 				return OpenXrApi::xrAcquireSwapchainImage(swapchain, acquireInfo, index);
 			}
 
-			// If the swapchain is held just act like it was reaquired.
-			auto It = m_heldSwapchains.find(swapchain);
-			if (It != m_heldSwapchains.end())
+			auto acq = m_acquiredSwapchains.find(swapchain);
+			if (acq == m_acquiredSwapchains.end())
 			{
-				m_heldSwapchains.erase(swapchain);
-				m_acquiredSwapchains[swapchain] = *index;
-				return XR_SUCCESS;
+				m_acquiredSwapchains.emplace(swapchain, std::queue<uint32_t>());
 			}
 
-			 XrResult result = OpenXrApi::xrAcquireSwapchainImage(swapchain, acquireInfo, index);
-			 if (XR_SUCCEEDED(result))
-			 {
-				 m_acquiredSwapchains[swapchain] = *index;
-				 //Log("Acquired: %i, %i\n", swapchain, *index);
-			 }
-			 else
-			 {
-				 ErrorLog("Error in xrAcquireSwapchainImage: %i\n", result);
-			 }
+			auto held = m_heldSwapchains.find(swapchain);
+			if (held == m_heldSwapchains.end())
+			{
+				m_heldSwapchains.emplace(swapchain, std::queue<uint32_t>());
+			}
 
-			 return result;
+			XrResult result = OpenXrApi::xrAcquireSwapchainImage(swapchain, acquireInfo, index);
+			if (XR_SUCCEEDED(result))
+			{
+				m_acquiredSwapchains[swapchain].push(*index);
+				//Log("Acquired: %i, %i\n", swapchain, *index);
+			}
+			else
+			{
+				ErrorLog("Error in xrAcquireSwapchainImage: %i\n", result);
+			}
+
+			return result;
 		}
 
 
@@ -633,13 +637,12 @@ namespace
 			}
 
 			// Delay releasing the swapchains until we can render the passthrough.
-			auto It = m_acquiredSwapchains.find(swapchain);
-
-			if (It != m_acquiredSwapchains.end())
+			auto acq = m_acquiredSwapchains.find(swapchain);
+			if (acq != m_acquiredSwapchains.end() && !acq->second.empty())
 			{
 				//Log("Held: %i, %i\n", swapchain, It->second);
-				m_heldSwapchains[swapchain] = It->second;
-				m_acquiredSwapchains.erase(It);
+				m_heldSwapchains[swapchain].push(acq->second.front());
+				acq->second.pop();
 				return XR_SUCCESS;
 			}
 			else
@@ -664,6 +667,7 @@ namespace
 		int UpdateSwapchains(const ERenderEye eye, const XrCompositionLayerProjection* layer)
 		{
 			XrSwapchain* storedSwapchain = (eye == LEFT_EYE) ? &m_swapChainLeft : &m_swapChainRight;
+			XrSwapchain* storedDepthSwapchain = (eye == LEFT_EYE) ? &m_depthSwapChainLeft : &m_depthSwapChainRight;
 			int viewIndex = (eye == LEFT_EYE) ? 0 : 1;
 
 			const XrSwapchain newSwapchain = layer->views[viewIndex].subImage.swapchain;
@@ -678,42 +682,39 @@ namespace
 			int64_t imageFormat = props->second.format;
 
 			auto held = m_heldSwapchains.find(newSwapchain);
-
-			if (held == m_heldSwapchains.end())
+			if (held == m_heldSwapchains.end() || held->second.empty())
 			{
 				return -1;
 			}
+
+			int imageIndex = held->second.back();
 
 			if (eye == LEFT_EYE)
 			{
 				m_dashboardMenu->GetDisplayValues().frameBufferFormat = props->second.format;
 			}
 
-			int imageIndex = held->second;
-
-			if (newSwapchain == *storedSwapchain)
+			if (newSwapchain != *storedSwapchain)
 			{
-				return imageIndex;
-			}
+				Log("Updating swapchain %u to %u with eye %u, index %u, arraySize %u\n", *storedSwapchain, newSwapchain, eye, imageIndex, props->second.arraySize);
 
-			Log("Updating swapchain %u to %u with eye %u, index %u, arraySize %u\n", *storedSwapchain, newSwapchain, eye, imageIndex, props->second.arraySize);
+				XrSwapchainImageD3D12KHR swapchainImages[3];
+				uint32_t numImages = 0;
 
-			XrSwapchainImageD3D12KHR swapchainImages[3];
-			uint32_t numImages = 0;
-
-			XrResult result = OpenXrApi::xrEnumerateSwapchainImages(newSwapchain, 3, &numImages, (XrSwapchainImageBaseHeader*)swapchainImages);
-			if (XR_SUCCEEDED(result))
-			{
-				for (uint32_t i = 0; i < numImages; i++)
+				XrResult result = OpenXrApi::xrEnumerateSwapchainImages(newSwapchain, 3, &numImages, (XrSwapchainImageBaseHeader*)swapchainImages);
+				if (XR_SUCCEEDED(result))
 				{
-					m_Renderer->InitRenderTarget(eye, swapchainImages[i].texture, i, props->second);
+					for (uint32_t i = 0; i < numImages; i++)
+					{
+						m_Renderer->InitRenderTarget(eye, swapchainImages[i].texture, i, props->second);
+					}
+					*storedSwapchain = newSwapchain;
 				}
-				*storedSwapchain = newSwapchain;
-			}
-			else
-			{
-				ErrorLog("Error in xrEnumerateSwapchainImages: %i\n", result);
-				return -1;
+				else
+				{
+					ErrorLog("Error in xrEnumerateSwapchainImages: %i\n", result);
+					return -1;
+				}
 			}
 
 			if (!m_configManager->GetConfig_Depth().DepthReadFromApplication)
@@ -733,7 +734,7 @@ namespace
 				depthInfo = (const XrCompositionLayerDepthInfoKHR*) depthInfo->next;
 			}
 
-			if (depthInfo != nullptr)
+			if (depthInfo != nullptr && depthInfo->subImage.swapchain != *storedDepthSwapchain)
 			{
 				auto depthProps = m_swapchainProperties.find(depthInfo->subImage.swapchain);
 
@@ -747,7 +748,7 @@ namespace
 					Log("Found depth swapchain %u for color swapchain %u, arraySize %u, depth range [%f:%f], Z-range[%g:%g]\n", depthInfo->subImage.swapchain, newSwapchain, depthProps->second.arraySize, depthInfo->minDepth, depthInfo->maxDepth, depthInfo->nearZ, depthInfo->farZ);
 
 					XrSwapchainImageD3D12KHR depthImages[3];
-					numImages = 0;
+					uint32_t numImages = 0;
 
 					XrResult result = OpenXrApi::xrEnumerateSwapchainImages(depthInfo->subImage.swapchain, 3, &numImages, (XrSwapchainImageBaseHeader*)depthImages);
 					if (XR_SUCCEEDED(result))
@@ -756,12 +757,27 @@ namespace
 						{
 							m_Renderer->InitDepthBuffer(eye, depthImages[i].texture, i, depthProps->second);
 						}
+						*storedDepthSwapchain = depthInfo->subImage.swapchain;
 					}
 					else
 					{
 						ErrorLog("Error in xrEnumerateSwapchainImages when enumerating depthbuffers: %i\n", result);
 					}
 				}
+			}
+
+			if (depthInfo != nullptr)
+			{
+				auto depth = m_heldSwapchains.find(*storedDepthSwapchain);
+				if (depth != m_heldSwapchains.end() && !depth->second.empty())
+				{
+					// TODO: Assuming that the depth image index is the same as for the color.
+					if (depth->second.back() != imageIndex)
+					{
+						ErrorLog("Depth swapchain image index mismatch %u, %u", depth->second.back(), imageIndex);
+					}
+				}
+
 			}
 
 			return imageIndex;
@@ -973,14 +989,18 @@ namespace
 					}
 				}
 
-				for (const auto& It : m_heldSwapchains)
+				for (auto& held : m_heldSwapchains)
 				{
-					result = OpenXrApi::xrReleaseSwapchainImage(It.first, nullptr);
-					if (XR_FAILED(result))
+					while (!held.second.empty())
 					{
-						ErrorLog("Error in xrReleaseSwapchainImage: %i\n", result);
+						held.second.pop();
+						result = OpenXrApi::xrReleaseSwapchainImage(held.first, nullptr);
+						if (XR_FAILED(result))
+						{
+							ErrorLog("Error in xrReleaseSwapchainImage: %i\n", result);
+						}
+						//Log("Released: %i, %i\n", held.first, held.second);
 					}
-					//Log("Released: %i, %i\n", It.first, It.second);
 				}
 
 				m_heldSwapchains.clear();
@@ -1049,10 +1069,13 @@ namespace
 		XrSwapchain m_swapChainLeft{XR_NULL_HANDLE};
 		XrSwapchain m_swapChainRight{XR_NULL_HANDLE};
 
+		XrSwapchain m_depthSwapChainLeft{ XR_NULL_HANDLE };
+		XrSwapchain m_depthSwapChainRight{ XR_NULL_HANDLE };
+
 		std::map<XrSpace, XrReferenceSpaceCreateInfo> m_refSpaces{};
 		std::map<XrSwapchain, XrSwapchainCreateInfo> m_swapchainProperties{};
-		std::map<XrSwapchain, uint32_t> m_acquiredSwapchains{};
-		std::map<XrSwapchain, uint32_t> m_heldSwapchains{};
+		std::map<XrSwapchain, std::queue<uint32_t>> m_acquiredSwapchains{};
+		std::map<XrSwapchain, std::queue<uint32_t>> m_heldSwapchains{};
 
 		std::deque<float> m_frameToRenderTimes;
 		std::deque<float> m_frameToPhotonTimes;
