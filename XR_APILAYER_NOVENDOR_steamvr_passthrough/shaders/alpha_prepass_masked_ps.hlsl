@@ -71,10 +71,11 @@ float main(VS_OUTPUT input) : SV_TARGET
 	
     float outAlpha = bInvertOutput ? 1.0 - max(distChroma, distLuma) : max(distChroma, distLuma);
 	
-    if (!g_bMaskedUseCamera)
-    {
-        outAlpha *= color.a;
-    }
+	// TODO: Make this an option so that applications that produce an alpha channel can be masked out in additon to the chroma key
+    //if (!g_bMaskedUseCamera)
+    //{
+    //    outAlpha *= color.a;
+    //}
 	
     return outAlpha;
 
