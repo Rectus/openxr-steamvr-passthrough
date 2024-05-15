@@ -1195,7 +1195,7 @@ void PassthroughRendererDX11::RenderPassthroughFrame(const XrCompositionLayerPro
 		// Use shared texture
 		psSRVs[0] = (ID3D11ShaderResourceView*)frame->frameTextureResource;
 	}
-	else if(!bGotDebugTexture)
+	else if(!bGotDebugTexture && frame->frameBuffer.get() != nullptr)
 	{
 		// Upload camera frame from CPU
 		UploadTexture(m_deviceContext, m_cameraFrameUploadTexture, (uint8_t*)frame->frameBuffer->data(), m_cameraTextureHeight, m_cameraTextureWidth * 4);
@@ -1203,6 +1203,10 @@ void PassthroughRendererDX11::RenderPassthroughFrame(const XrCompositionLayerPro
 		m_deviceContext->CopyResource(frameData.cameraFrameTexture.Get(), m_cameraFrameUploadTexture.Get());
 
 		psSRVs[0] = frameData.cameraFrameSRV.Get();
+	}
+	else if (!bGotDebugTexture) // No valid frame texture to render
+	{
+		return;
 	}
 
 	m_renderContext->PSSetShaderResources(0, 2, psSRVs);
