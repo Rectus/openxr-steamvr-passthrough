@@ -1125,11 +1125,15 @@ void PassthroughRendererVulkan::InitRenderTarget(const ERenderEye eye, void* ren
 }
 
 
-void PassthroughRendererVulkan::SetFrameSize(const uint32_t width, const uint32_t height, const uint32_t bufferSize)
+void PassthroughRendererVulkan::SetFrameSize(const uint32_t width, const uint32_t height, const uint32_t bufferSize, const uint32_t undistortedWidth, const uint32_t undistortedHeight, const uint32_t undistortedBufferSize)
 {
 	m_cameraTextureWidth = width;
 	m_cameraTextureHeight = height;
 	m_cameraFrameBufferSize = bufferSize;
+
+	m_cameraUndistortedTextureWidth = undistortedWidth;
+	m_cameraUndistortedTextureHeight = undistortedHeight;
+	m_cameraUndistortedFrameBufferSize = undistortedBufferSize;
 }
 
 
@@ -1853,7 +1857,7 @@ void PassthroughRendererVulkan::RenderPassthroughView(const ERenderEye eye, cons
 		vsViewBuffer.cameraProjectionToWorld = (eye == LEFT_EYE) ? frame->cameraProjectionToWorldLeft : frame->cameraProjectionToWorldRight;
 		vsViewBuffer.worldToCameraProjection = (eye == LEFT_EYE) ? frame->worldToCameraProjectionLeft : frame->worldToCameraProjectionRight;
 		vsViewBuffer.worldToHMDProjection = (eye == LEFT_EYE) ? frame->worldToHMDProjectionLeft : frame->worldToHMDProjectionRight;
-		vsViewBuffer.frameUVBounds = GetFrameUVBounds(eye, frame->frameLayout);
+		vsViewBuffer.frameUVBounds = GetFrameUVBounds(eye, StereoHorizontalLayout);
 		vsViewBuffer.hmdViewWorldPos = (eye == LEFT_EYE) ? frame->hmdViewPosWorldLeft : frame->hmdViewPosWorldRight;
 		vsViewBuffer.projectionDistance = mainConf.ProjectionDistanceFar;
 		vsViewBuffer.floorHeightOffset = mainConf.FloorHeightOffset;
@@ -1963,7 +1967,7 @@ void PassthroughRendererVulkan::RenderMaskedPrepassView(const ERenderEye eye, co
 	vsViewBuffer.cameraProjectionToWorld = (eye == LEFT_EYE) ? frame->cameraProjectionToWorldLeft : frame->cameraProjectionToWorldRight;
 	vsViewBuffer.worldToCameraProjection = (eye == LEFT_EYE) ? frame->worldToCameraProjectionLeft : frame->worldToCameraProjectionRight;
 	vsViewBuffer.worldToHMDProjection = (eye == LEFT_EYE) ? frame->worldToHMDProjectionLeft : frame->worldToHMDProjectionRight;
-	vsViewBuffer.frameUVBounds = GetFrameUVBounds(eye, frame->frameLayout);
+	vsViewBuffer.frameUVBounds = GetFrameUVBounds(eye, StereoHorizontalLayout);
 	vsViewBuffer.hmdViewWorldPos = (eye == LEFT_EYE) ? frame->hmdViewPosWorldLeft : frame->hmdViewPosWorldRight;
 	vsViewBuffer.projectionDistance = mainConf.ProjectionDistanceFar;
 	vsViewBuffer.floorHeightOffset = mainConf.FloorHeightOffset;

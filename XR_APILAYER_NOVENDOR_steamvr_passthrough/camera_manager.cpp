@@ -164,22 +164,52 @@ void CameraManager::DeinitCamera()
     }
 }
 
-void CameraManager::GetFrameSize(uint32_t& width, uint32_t& height, uint32_t& bufferSize) const
+void CameraManager::GetDistortedFrameSize(uint32_t& width, uint32_t& height, uint32_t& bufferSize) const
 {
     width = m_cameraTextureWidth;
     height = m_cameraTextureHeight;
     bufferSize = m_cameraFrameBufferSize;
 }
 
-void CameraManager::GetIntrinsics(const uint32_t cameraIndex, XrVector2f& focalLength, XrVector2f& center) const
+void CameraManager::GetUndistortedFrameSize(uint32_t& width, uint32_t& height, uint32_t& bufferSize) const
 {
+    width = m_cameraUndistortedTextureWidth;
+    height = m_cameraUndistortedTextureHeight;
+    bufferSize = m_cameraUndistortedFrameBufferSize;
+}
+
+void CameraManager::GetIntrinsics(const ERenderEye cameraEye, XrVector2f& focalLength, XrVector2f& center) const
+{
+    uint32_t cameraIndex = 0;
+
+    if (m_frameLayout == EStereoFrameLayout::StereoHorizontalLayout)
+    {
+        cameraIndex = (cameraEye == LEFT_EYE) ? 0 : 1;
+    }
+    else if (m_frameLayout == EStereoFrameLayout::StereoVerticalLayout)
+    {
+        // The camera indices are reversed for vertical layouts.
+        cameraIndex = (cameraEye == LEFT_EYE) ? 1 : 0;
+    }
+
     vr::IVRTrackedCamera* trackedCamera = m_openVRManager->GetVRTrackedCamera();
 
+    // OpenVR only provides camera inrinsics for the undistorted image dimesions for some reason.
     vr::EVRTrackedCameraError cameraError = trackedCamera->GetCameraIntrinsics(m_hmdDeviceId, cameraIndex, vr::VRTrackedCameraFrameType_MaximumUndistorted, (vr::HmdVector2_t*)&focalLength, (vr::HmdVector2_t*)&center);
     if (cameraError != vr::VRTrackedCameraError_None)
     {
         ErrorLog("GetCameraIntrinsics error %i on device Id %i\n", cameraError, m_hmdDeviceId);
     }
+
+    // Multiply the values by the distorted/undistorted ratio, since we need the values for the distorted image.
+    float xRatio = ((float)m_cameraFrameWidth) / m_cameraUndistortedFrameWidth;
+    float yRatio = ((float)m_cameraFrameHeight) / m_cameraUndistortedFrameHeight;
+
+    focalLength.x *= xRatio;
+    focalLength.y *= yRatio;
+
+    center.x *= xRatio;
+    center.y *= yRatio;
 }
 
 void CameraManager::GetDistortionCoefficients(ECameraDistortionCoefficients& coeffs) const
@@ -257,6 +287,17 @@ void CameraManager::UpdateStaticCameraParameters()
         ErrorLog("Invalid frame size received:Width = %u, Height = %u, Size = %u\n", m_cameraTextureWidth, m_cameraTextureHeight, m_cameraFrameBufferSize);
     }
 
+    cameraError = trackedCamera->GetCameraFrameSize(m_hmdDeviceId, vr::VRTrackedCameraFrameType_MaximumUndistorted, &m_cameraUndistortedTextureWidth, &m_cameraUndistortedTextureHeight, &m_cameraUndistortedFrameBufferSize);
+    if (cameraError != vr::VRTrackedCameraError_None)
+    {
+        ErrorLog("CameraFrameSize error %i on device Id %i\n", cameraError, m_hmdDeviceId);
+    }
+
+    if (m_cameraUndistortedTextureWidth == 0 || m_cameraUndistortedTextureHeight == 0 || m_cameraUndistortedFrameBufferSize == 0)
+    {
+        ErrorLog("Invalid frame size received:Width = %u, Height = %u, Size = %u\n", m_cameraUndistortedTextureWidth, m_cameraUndistortedTextureHeight, m_cameraUndistortedFrameBufferSize);
+    }
+
     vr::TrackedPropertyError propError;
 
     int32_t layout = (vr::EVRTrackedCameraFrameLayout)vrSystem->GetInt32TrackedDeviceProperty(m_hmdDeviceId, vr::Prop_CameraFrameLayout_Int32, &propError);
@@ -273,12 +314,18 @@ void CameraManager::UpdateStaticCameraParameters()
             m_frameLayout = EStereoFrameLayout::StereoVerticalLayout;
             m_cameraFrameWidth = m_cameraTextureWidth;
             m_cameraFrameHeight = m_cameraTextureHeight / 2;
+
+            m_cameraUndistortedFrameWidth = m_cameraUndistortedTextureWidth;
+            m_cameraUndistortedFrameHeight = m_cameraUndistortedTextureHeight / 2;
         }
         else
         {
             m_frameLayout = EStereoFrameLayout::StereoHorizontalLayout;
             m_cameraFrameWidth = m_cameraTextureWidth / 2;
             m_cameraFrameHeight = m_cameraTextureHeight;
+
+            m_cameraUndistortedFrameWidth = m_cameraUndistortedTextureWidth / 2;
+            m_cameraUndistortedFrameHeight = m_cameraUndistortedTextureHeight;
         }
     }
     else
@@ -286,6 +333,9 @@ void CameraManager::UpdateStaticCameraParameters()
         m_frameLayout = EStereoFrameLayout::Mono;
         m_cameraFrameWidth = m_cameraTextureWidth;
         m_cameraFrameHeight = m_cameraTextureHeight;
+
+        m_cameraUndistortedFrameWidth = m_cameraUndistortedTextureWidth;
+        m_cameraUndistortedFrameHeight = m_cameraUndistortedTextureHeight;
     }
 
     vr::HmdMatrix44_t vrHMDProjectionLeft = vrSystem->GetProjectionMatrix(vr::Hmd_Eye::Eye_Left, NEAR_PROJECTION_DISTANCE, m_projectionDistanceFar * 2.0f);
@@ -468,21 +518,42 @@ void CameraManager::ServeFrames()
         m_underConstructionFrame->renderModels = m_renderModels;
 
         // Apply offset calibration to camera positions.
-        XrMatrix4x4f origLeftCameraToTrackingPose = ToXRMatrix4x4(m_underConstructionFrame->header.trackedDevicePose.mDeviceToAbsoluteTracking);
-        XrMatrix4x4f headToTrackingPose, correctedLeftCameraToHMDPose;
-        XrMatrix4x4f_Multiply(&headToTrackingPose, &origLeftCameraToTrackingPose, &m_HMDToCameraLeft);
-        correctedLeftCameraToHMDPose = m_cameraToHMDLeft;
-        correctedLeftCameraToHMDPose.m[12] *= mainConf.DepthOffsetCalibration;
-        correctedLeftCameraToHMDPose.m[13] *= mainConf.DepthOffsetCalibration;
-        correctedLeftCameraToHMDPose.m[14] *= mainConf.DepthOffsetCalibration;
-        XrMatrix4x4f_Multiply(&m_underConstructionFrame->cameraViewToWorldLeft, &headToTrackingPose, &correctedLeftCameraToHMDPose);
+        XrMatrix4x4f origCamera0ToTrackingPose = ToXRMatrix4x4(m_underConstructionFrame->header.trackedDevicePose.mDeviceToAbsoluteTracking);
+        XrMatrix4x4f headToTrackingPose, correctedCamera0ToHMDPose;
 
-        XrMatrix4x4f rightToLeftPose = m_cameraRightToLeftPose;
-        rightToLeftPose.m[12] *= mainConf.DepthOffsetCalibration;
-        rightToLeftPose.m[13] *= mainConf.DepthOffsetCalibration;
-        rightToLeftPose.m[14] *= mainConf.DepthOffsetCalibration;
+        // For vertical layouts the device pose is for the right camera.
+        if (m_frameLayout == EStereoFrameLayout::StereoVerticalLayout)
+        {
+            XrMatrix4x4f_Multiply(&headToTrackingPose, &origCamera0ToTrackingPose, &m_HMDToCameraRight);
+            correctedCamera0ToHMDPose = m_cameraToHMDRight;
+            correctedCamera0ToHMDPose.m[12] *= mainConf.DepthOffsetCalibration;
+            correctedCamera0ToHMDPose.m[13] *= mainConf.DepthOffsetCalibration;
+            correctedCamera0ToHMDPose.m[14] *= mainConf.DepthOffsetCalibration;
+            XrMatrix4x4f_Multiply(&m_underConstructionFrame->cameraViewToWorldRight, &headToTrackingPose, &correctedCamera0ToHMDPose);
 
-        XrMatrix4x4f_Multiply(&m_underConstructionFrame->cameraViewToWorldRight, &m_underConstructionFrame->cameraViewToWorldLeft, &rightToLeftPose);
+            XrMatrix4x4f leftToRightPose = m_cameraLeftToRightPose;
+            leftToRightPose.m[12] *= mainConf.DepthOffsetCalibration;
+            leftToRightPose.m[13] *= mainConf.DepthOffsetCalibration;
+            leftToRightPose.m[14] *= mainConf.DepthOffsetCalibration;
+
+            XrMatrix4x4f_Multiply(&m_underConstructionFrame->cameraViewToWorldLeft, &m_underConstructionFrame->cameraViewToWorldRight, &leftToRightPose);
+        }
+        else
+        {
+            XrMatrix4x4f_Multiply(&headToTrackingPose, &origCamera0ToTrackingPose, &m_HMDToCameraLeft);
+            correctedCamera0ToHMDPose = m_cameraToHMDLeft;
+            correctedCamera0ToHMDPose.m[12] *= mainConf.DepthOffsetCalibration;
+            correctedCamera0ToHMDPose.m[13] *= mainConf.DepthOffsetCalibration;
+            correctedCamera0ToHMDPose.m[14] *= mainConf.DepthOffsetCalibration;
+            XrMatrix4x4f_Multiply(&m_underConstructionFrame->cameraViewToWorldLeft, &headToTrackingPose, &correctedCamera0ToHMDPose);
+
+            XrMatrix4x4f rightToLeftPose = m_cameraRightToLeftPose;
+            rightToLeftPose.m[12] *= mainConf.DepthOffsetCalibration;
+            rightToLeftPose.m[13] *= mainConf.DepthOffsetCalibration;
+            rightToLeftPose.m[14] *= mainConf.DepthOffsetCalibration;
+
+            XrMatrix4x4f_Multiply(&m_underConstructionFrame->cameraViewToWorldRight, &m_underConstructionFrame->cameraViewToWorldLeft, &rightToLeftPose);
+        }
 
         {
             std::lock_guard<std::mutex> lock(m_serveMutex);
@@ -600,8 +671,11 @@ void CameraManager::UpdateProjectionMatrix(std::shared_ptr<CameraFrame>& frame)
         // Push back far plane by 1.5x to account for the flat projection plane of the passthrough frame.
         m_projectionDistanceFar = mainConf.ProjectionDistanceFar * 1.5f;
 
+        // The camera indices are reversed for vertical layouts.
+        uint32_t leftIndex = (m_frameLayout == EStereoFrameLayout::StereoVerticalLayout) ? 1 : 0;
+
         vr::HmdMatrix44_t vrProjection;
-        vr::EVRTrackedCameraError error = trackedCamera->GetCameraProjection(m_hmdDeviceId, 0, vr::VRTrackedCameraFrameType_MaximumUndistorted, NEAR_PROJECTION_DISTANCE, m_projectionDistanceFar, &vrProjection);
+        vr::EVRTrackedCameraError error = trackedCamera->GetCameraProjection(m_hmdDeviceId, leftIndex, vr::VRTrackedCameraFrameType_MaximumUndistorted, NEAR_PROJECTION_DISTANCE, m_projectionDistanceFar, &vrProjection);
 
         if (error != vr::VRTrackedCameraError_None)
         {
@@ -620,7 +694,7 @@ void CameraManager::UpdateProjectionMatrix(std::shared_ptr<CameraFrame>& frame)
         else if (m_frameLayout == EStereoFrameLayout::StereoVerticalLayout)
         {
             XrMatrix4x4f_CreateScale(&scaleMatrix, 1.0f, 0.5f, 1.0f);
-            XrMatrix4x4f_CreateTranslation(&offsetMatrix, 0.0f, -0.5f, 0.0f);
+            XrMatrix4x4f_CreateTranslation(&offsetMatrix, 0.0f, 0.5f, 0.0f);
             XrMatrix4x4f_Multiply(&transMatrix, &offsetMatrix, &scaleMatrix);
         }
         else
@@ -633,7 +707,10 @@ void CameraManager::UpdateProjectionMatrix(std::shared_ptr<CameraFrame>& frame)
 
         if (bIsStereo)
         {
-            error = trackedCamera->GetCameraProjection(m_hmdDeviceId, 1, vr::VRTrackedCameraFrameType_MaximumUndistorted, NEAR_PROJECTION_DISTANCE, m_projectionDistanceFar, &vrProjection);
+            // The camera indices are reversed for vertical layouts.
+            uint32_t rightIndex = (m_frameLayout == EStereoFrameLayout::StereoVerticalLayout) ? 0 : 1;
+
+            error = trackedCamera->GetCameraProjection(m_hmdDeviceId, rightIndex, vr::VRTrackedCameraFrameType_MaximumUndistorted, NEAR_PROJECTION_DISTANCE, m_projectionDistanceFar, &vrProjection);
 
             if (error != vr::VRTrackedCameraError_None)
             {
@@ -788,12 +865,10 @@ void CameraManager::CalculateFrameProjectionForEye(const ERenderEye eye, std::sh
 
     if (mainConf.ProjectionMode == Projection_RoomView2D)
     {
-        XrMatrix4x4f leftCameraToTrackingPose = ToXRMatrix4x4(frame->header.trackedDevicePose.mDeviceToAbsoluteTracking);
-
         if (eye == LEFT_EYE)
         {
 
-            XrMatrix4x4f_Multiply(&frame->cameraProjectionToWorldLeft, &leftCameraToTrackingPose, &m_cameraProjectionInvFarLeft);
+            XrMatrix4x4f_Multiply(&frame->cameraProjectionToWorldLeft, &frame->cameraViewToWorldLeft, &m_cameraProjectionInvFarLeft);
 
             XrMatrix4x4f_Invert(&frame->worldToCameraProjectionLeft, &frame->cameraProjectionToWorldLeft);
         }
@@ -801,13 +876,11 @@ void CameraManager::CalculateFrameProjectionForEye(const ERenderEye eye, std::sh
         {
             if (bIsStereo)
             {
-                XrMatrix4x4f tempMatrix;
-                XrMatrix4x4f_Multiply(&tempMatrix, &leftCameraToTrackingPose, &m_cameraRightToLeftPose);
-                XrMatrix4x4f_Multiply(&frame->cameraProjectionToWorldRight, &tempMatrix, &m_cameraProjectionInvFarRight);
+                XrMatrix4x4f_Multiply(&frame->cameraProjectionToWorldRight, &frame->cameraViewToWorldRight, &m_cameraProjectionInvFarRight);
             }
             else
             {
-                XrMatrix4x4f_Multiply(&frame->cameraProjectionToWorldRight, &leftCameraToTrackingPose, &m_cameraProjectionInvFarLeft);
+                XrMatrix4x4f_Multiply(&frame->cameraProjectionToWorldRight, &frame->cameraViewToWorldLeft, &m_cameraProjectionInvFarLeft);
             }
 
             XrMatrix4x4f_Invert(&frame->worldToCameraProjectionRight, &frame->cameraProjectionToWorldRight);

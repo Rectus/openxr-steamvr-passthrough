@@ -129,6 +129,9 @@ PassthroughRendererDX11::PassthroughRendererDX11(ID3D11Device* device, HMODULE d
 	, m_cameraTextureWidth(0)
 	, m_cameraTextureHeight(0)
 	, m_cameraFrameBufferSize(0)
+	, m_cameraUndistortedTextureWidth(0)
+	, m_cameraUndistortedTextureHeight(0)
+	, m_cameraUndistortedFrameBufferSize(0)
 	, m_disparityMapWidth(0)
 	, m_fovScale(0.0f)
 	, m_selectedDebugTexture(DebugTexture_None)
@@ -513,6 +516,63 @@ void PassthroughRendererDX11::SetupCameraFrameResource(const uint32_t imageIndex
 }
 
 
+void PassthroughRendererDX11::SetupCameraUndistortedFrameResource(const uint32_t imageIndex)
+{
+	D3D11_TEXTURE2D_DESC textureDesc = {};
+	textureDesc.MipLevels = 1;
+	textureDesc.Format = DXGI_FORMAT_R8G8B8A8_UNORM_SRGB;
+	textureDesc.Width = m_cameraUndistortedTextureWidth;
+	textureDesc.Height = m_cameraUndistortedTextureHeight;
+	textureDesc.ArraySize = 1;
+	textureDesc.SampleDesc.Count = 1;
+	textureDesc.SampleDesc.Quality = 0;
+	textureDesc.BindFlags = D3D11_BIND_SHADER_RESOURCE;
+	textureDesc.Usage = D3D11_USAGE_DEFAULT;
+	textureDesc.CPUAccessFlags = 0;
+
+	D3D11_SHADER_RESOURCE_VIEW_DESC srvDesc = {};
+	srvDesc.ViewDimension = D3D11_SRV_DIMENSION_TEXTURE2D;
+	srvDesc.Format = textureDesc.Format;
+	srvDesc.Texture2D.MipLevels = 1;
+
+	if (!m_cameraUndistortedFrameUploadTexture)
+	{
+		D3D11_TEXTURE2D_DESC uploadTextureDesc = textureDesc;
+		uploadTextureDesc.BindFlags = 0;
+		uploadTextureDesc.Usage = D3D11_USAGE_STAGING;
+		uploadTextureDesc.CPUAccessFlags = D3D11_CPU_ACCESS_WRITE;
+
+		if (FAILED(m_d3dDevice->CreateTexture2D(&uploadTextureDesc, nullptr, &m_cameraUndistortedFrameUploadTexture)))
+		{
+			ErrorLog("Frame Resource CreateTexture2D error!\n");
+			return;
+		}
+
+		std::vector<uint8_t> image(m_cameraUndistortedFrameBufferSize);
+
+		D3D11_MAPPED_SUBRESOURCE res = {};
+		m_deviceContext->Map(m_cameraUndistortedFrameUploadTexture.Get(), 0, D3D11_MAP_WRITE, 0, &res);
+		memcpy(res.pData, image.data(), image.size());
+		m_deviceContext->Unmap(m_cameraUndistortedFrameUploadTexture.Get(), 0);
+	}
+
+	DX11FrameData& frameData = m_frameData[imageIndex];
+
+	if (FAILED(m_d3dDevice->CreateTexture2D(&textureDesc, nullptr, &frameData.cameraUndistortedFrameTexture)))
+	{
+		ErrorLog("Frame Resource CreateTexture2D error!\n");
+		return;
+	}
+	if (FAILED(m_d3dDevice->CreateShaderResourceView(frameData.cameraUndistortedFrameTexture.Get(), &srvDesc, &frameData.cameraUndistortedFrameSRV)))
+	{
+		ErrorLog("Frame Resource CreateShaderResourceView error!\n");
+		return;
+	}
+
+	m_deviceContext->CopyResource(frameData.cameraUndistortedFrameTexture.Get(), m_cameraUndistortedFrameUploadTexture.Get());
+}
+
+
 void PassthroughRendererDX11::SetupDisparityMap(uint32_t width, uint32_t height)
 {
 	D3D11_TEXTURE2D_DESC textureDesc = {};
@@ -834,6 +894,7 @@ bool PassthroughRendererDX11::CheckInitFrameData(const uint32_t imageIndex)
 	}
 
 	SetupCameraFrameResource(imageIndex);
+	SetupCameraUndistortedFrameResource(imageIndex);
 
 	frameData.bInitialized = true;
 
@@ -918,11 +979,15 @@ void PassthroughRendererDX11::InitDepthBuffer(const ERenderEye eye, void* depthB
 }
 
 
-void PassthroughRendererDX11::SetFrameSize(const uint32_t width, const uint32_t height, const uint32_t bufferSize)
+void PassthroughRendererDX11::SetFrameSize(const uint32_t width, const uint32_t height, const uint32_t bufferSize, const uint32_t undistortedWidth, const uint32_t undistortedHeight, const uint32_t undistortedBufferSize)
 {
 	m_cameraTextureWidth = width;
 	m_cameraTextureHeight = height;
 	m_cameraFrameBufferSize = bufferSize;
+
+	m_cameraUndistortedTextureWidth = undistortedWidth;
+	m_cameraUndistortedTextureHeight = undistortedHeight;
+	m_cameraUndistortedFrameBufferSize = undistortedBufferSize;
 }
 
 
@@ -1198,11 +1263,23 @@ void PassthroughRendererDX11::RenderPassthroughFrame(const XrCompositionLayerPro
 	else if(!bGotDebugTexture && frame->frameBuffer.get() != nullptr)
 	{
 		// Upload camera frame from CPU
-		UploadTexture(m_deviceContext, m_cameraFrameUploadTexture, (uint8_t*)frame->frameBuffer->data(), m_cameraTextureHeight, m_cameraTextureWidth * 4);
 
-		m_deviceContext->CopyResource(frameData.cameraFrameTexture.Get(), m_cameraFrameUploadTexture.Get());
+		if (frame->header.eFrameType == vr::VRTrackedCameraFrameType_Distorted)
+		{
+			UploadTexture(m_deviceContext, m_cameraFrameUploadTexture, (uint8_t*)frame->frameBuffer->data(), m_cameraTextureHeight, m_cameraTextureWidth * 4);
 
-		psSRVs[0] = frameData.cameraFrameSRV.Get();
+			m_deviceContext->CopyResource(frameData.cameraFrameTexture.Get(), m_cameraFrameUploadTexture.Get());
+
+			psSRVs[0] = frameData.cameraFrameSRV.Get();
+		}
+		else
+		{
+			UploadTexture(m_deviceContext, m_cameraUndistortedFrameUploadTexture, (uint8_t*)frame->frameBuffer->data(), m_cameraUndistortedTextureHeight, m_cameraUndistortedTextureWidth * 4);
+
+			m_deviceContext->CopyResource(frameData.cameraUndistortedFrameTexture.Get(), m_cameraUndistortedFrameUploadTexture.Get());
+
+			psSRVs[0] = frameData.cameraUndistortedFrameSRV.Get();
+		}
 	}
 	else if (!bGotDebugTexture) // No valid frame texture to render
 	{
@@ -1336,7 +1413,7 @@ void PassthroughRendererDX11::RenderPassthroughView(const ERenderEye eye, const 
 	vsViewBuffer.prevWorldToCameraProjection = (eye == LEFT_EYE) ? frame->prevWorldToCameraProjectionLeft : frame->prevWorldToCameraProjectionRight;
 	vsViewBuffer.prevWorldToHMDProjection = (eye == LEFT_EYE) ? frame->prevWorldToHMDProjectionLeft : frame->prevWorldToHMDProjectionRight;
 
-	vsViewBuffer.frameUVBounds = GetFrameUVBounds(eye, frame->frameLayout);
+	vsViewBuffer.frameUVBounds = GetFrameUVBounds(eye, StereoHorizontalLayout);
 	vsViewBuffer.hmdViewWorldPos = (eye == LEFT_EYE) ? frame->hmdViewPosWorldLeft : frame->hmdViewPosWorldRight;
 	vsViewBuffer.projectionDistance = mainConf.ProjectionDistanceFar;
 	vsViewBuffer.floorHeightOffset = mainConf.FloorHeightOffset;
@@ -1491,7 +1568,7 @@ void PassthroughRendererDX11::RenderPassthroughView(const ERenderEye eye, const 
 		m_renderContext->RSSetScissorRects(1, &crossScissor);
 
 		VSViewConstantBuffer vsCrossBuffer = vsViewBuffer;
-		vsCrossBuffer.frameUVBounds = GetFrameUVBounds(eye == LEFT_EYE ? RIGHT_EYE : LEFT_EYE, frame->frameLayout);
+		vsCrossBuffer.frameUVBounds = GetFrameUVBounds(eye == LEFT_EYE ? RIGHT_EYE : LEFT_EYE, StereoHorizontalLayout);
 		vsCrossBuffer.cameraProjectionToWorld = (eye != LEFT_EYE) ? frame->cameraProjectionToWorldLeft : frame->cameraProjectionToWorldRight;
 		vsCrossBuffer.worldToCameraProjection = (eye != LEFT_EYE) ? frame->worldToCameraProjectionLeft : frame->worldToCameraProjectionRight;
 		vsCrossBuffer.cameraViewIndex = (eye != LEFT_EYE) ? 0 : 1;
@@ -1582,7 +1659,7 @@ void PassthroughRendererDX11::RenderMaskedPrepassView(const ERenderEye eye, cons
 	vsViewBuffer.cameraProjectionToWorld = (eye == LEFT_EYE) ? frame->cameraProjectionToWorldLeft : frame->cameraProjectionToWorldRight;
 	vsViewBuffer.worldToCameraProjection = (eye == LEFT_EYE) ? frame->worldToCameraProjectionLeft : frame->worldToCameraProjectionRight;
 	vsViewBuffer.worldToHMDProjection = (eye == LEFT_EYE) ? frame->worldToHMDProjectionLeft : frame->worldToHMDProjectionRight;
-	vsViewBuffer.frameUVBounds = GetFrameUVBounds(eye, frame->frameLayout);
+	vsViewBuffer.frameUVBounds = GetFrameUVBounds(eye, StereoHorizontalLayout);
 	vsViewBuffer.hmdViewWorldPos = (eye == LEFT_EYE) ? frame->hmdViewPosWorldLeft : frame->hmdViewPosWorldRight;
 	vsViewBuffer.projectionDistance = mainConf.ProjectionDistanceFar;
 	vsViewBuffer.floorHeightOffset = mainConf.FloorHeightOffset;

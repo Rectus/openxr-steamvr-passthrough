@@ -90,7 +90,7 @@ std::shared_ptr<DepthFrame> DepthReconstruction::GetDepthFrame()
 void DepthReconstruction::InitReconstruction()
 {
     m_frameLayout = m_cameraManager->GetFrameLayout();
-    m_cameraManager->GetFrameSize(m_cameraTextureWidth, m_cameraTextureHeight, m_cameraFrameBufferSize);
+    m_cameraManager->GetDistortedFrameSize(m_cameraTextureWidth, m_cameraTextureHeight, m_cameraFrameBufferSize);
 
     if (m_frameLayout == StereoHorizontalLayout)
     {
@@ -111,8 +111,8 @@ void DepthReconstruction::InitReconstruction()
     m_cvImageHeight = m_cameraFrameHeight / m_downscaleFactor;
     m_cvImageWidth = m_cameraFrameWidth / m_downscaleFactor;
 
-    m_cameraManager->GetIntrinsics(0, m_cameraFocalLength[0], m_cameraCenter[0]);
-    m_cameraManager->GetIntrinsics(1, m_cameraFocalLength[1], m_cameraCenter[1]);
+    m_cameraManager->GetIntrinsics(LEFT_EYE, m_cameraFocalLength[0], m_cameraCenter[0]);
+    m_cameraManager->GetIntrinsics(RIGHT_EYE, m_cameraFocalLength[1], m_cameraCenter[1]);
     m_cameraLeftToRightTransform = m_cameraManager->GetLeftToRightCameraTransform();
 
     ECameraDistortionCoefficients distCoeffs = { 0 };
@@ -271,16 +271,17 @@ void DepthReconstruction::CreateDistortionMap()
 
             for (uint32_t x = 0; x < m_cameraFrameWidth * 2; x += 2)
             {
-                distMap[rowStart + x] = (m_leftMap1.at<float>(y, x / 2) - x / 2) / m_cameraFrameWidth;
-                distMap[rowStart + x + 1] = (m_leftMap2.at<float>(y, x / 2) - y) / m_cameraFrameHeight / 2;
+                distMap[rowStart + x] = (m_rightMap1.at<float>(y, x / 2) - x / 2) / m_cameraFrameWidth;
+                distMap[rowStart + x + 1] = (m_rightMap2.at<float>(y, x / 2) - y) / m_cameraFrameHeight / 2;
+                
             }
 
             rowStart = m_cameraFrameHeight * m_cameraTextureWidth * 2 + y * m_cameraTextureWidth * 2;
 
             for (uint32_t x = 0; x < m_cameraFrameWidth * 2; x += 2)
             {
-                distMap[rowStart + x] = (m_rightMap1.at<float>(y, x / 2) - x / 2) / m_cameraFrameWidth;
-                distMap[rowStart + x + 1] = (m_rightMap2.at<float>(y, x / 2) - y) / m_cameraFrameHeight / 2;
+                distMap[rowStart + x] = (m_leftMap1.at<float>(y, x / 2) - x / 2) / m_cameraFrameWidth;
+                distMap[rowStart + x + 1] = (m_leftMap2.at<float>(y, x / 2) - y) / m_cameraFrameHeight / 2;
             }
         }
     }

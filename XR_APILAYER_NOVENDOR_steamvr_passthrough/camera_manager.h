@@ -35,8 +35,9 @@ public:
 	bool InitCamera();
 	void DeinitCamera();
 
-	void GetFrameSize(uint32_t& width, uint32_t& height, uint32_t& bufferSize) const;
-	void GetIntrinsics(const uint32_t cameraIndex, XrVector2f& focalLength, XrVector2f& center) const;
+	void GetDistortedFrameSize(uint32_t& width, uint32_t& height, uint32_t& bufferSize) const;
+	void GetUndistortedFrameSize(uint32_t& width, uint32_t& height, uint32_t& bufferSize) const;
+	void GetIntrinsics(const ERenderEye cameraEye, XrVector2f& focalLength, XrVector2f& center) const;
 	void GetDistortionCoefficients(ECameraDistortionCoefficients& coeffs) const;
 	EStereoFrameLayout GetFrameLayout() const;
 	XrMatrix4x4f GetLeftToRightCameraTransform() const;
@@ -62,8 +63,15 @@ private:
 	uint32_t m_cameraTextureHeight;
 	uint32_t m_cameraFrameBufferSize;
 
+	uint32_t m_cameraUndistortedTextureWidth;
+	uint32_t m_cameraUndistortedTextureHeight;
+	uint32_t m_cameraUndistortedFrameBufferSize;
+
 	uint32_t m_cameraFrameWidth;
 	uint32_t m_cameraFrameHeight;
+
+	uint32_t m_cameraUndistortedFrameWidth;
+	uint32_t m_cameraUndistortedFrameHeight;
 
 	float m_projectionDistanceFar;
 	bool m_useAlternateProjectionCalc;

@@ -47,20 +47,24 @@ float4 main(VS_OUTPUT input) : SV_TARGET
 	// Convert from homogenous clip space coordinates to 0-1.
 	float2 outUvs = (input.clipSpaceCoords.xy / input.clipSpaceCoords.z) * float2(0.5, 0.5) + float2(0.5, 0.5);
 	
-	// Remap and clamp to frame UV bounds.
-	outUvs = outUvs * (g_uvBounds.zw - g_uvBounds.xy) + g_uvBounds.xy;
-	outUvs = clamp(outUvs, g_uvBounds.xy, g_uvBounds.zw);
-
     float2 correction = 0;
     
     if (g_bUseFisheyeCorrection)
     {
+        // Remap and clamp to frame UV bounds.
+        outUvs = outUvs * (g_uvBounds.zw - g_uvBounds.xy) + g_uvBounds.xy;
+        outUvs = clamp(outUvs, g_uvBounds.xy, g_uvBounds.zw);
+        
         correction = g_fisheyeCorrectionTexture.Sample(g_samplerState, outUvs);
         outUvs += correction;
     }
     else
     {
         outUvs.y = 1 - outUvs.y;
+        
+        // Remap and clamp to frame UV bounds.
+        outUvs = outUvs * (g_uvBounds.zw - g_uvBounds.xy) + g_uvBounds.xy;
+        outUvs = clamp(outUvs, g_uvBounds.xy, g_uvBounds.zw);
     }
       
     float3 rgbColor = g_cameraFrameTexture.Sample(g_samplerState, outUvs).xyz;

@@ -67,6 +67,10 @@ enum ECBV_SRVIndex
 	INDEX_SRV_CAMERAFRAME_1,
 	INDEX_SRV_CAMERAFRAME_2,
 
+	INDEX_SRV_CAMERAFRAME_UNDISTORTED_0,
+	INDEX_SRV_CAMERAFRAME_UNDISTORTED_1,
+	INDEX_SRV_CAMERAFRAME_UNDISTORTED_2,
+
 	INDEX_SRV_MASKED_INTERMEDIATE_0,
 	INDEX_SRV_MASKED_INTERMEDIATE_1,
 	INDEX_SRV_MASKED_INTERMEDIATE_2,
@@ -345,6 +349,7 @@ bool PassthroughRendererDX12::InitRenderer()
 	}
 
 	SetupFrameResource();
+	SetupUndistortedFrameResource();
 	GenerateMesh();
 
 	m_commandList->Close();
@@ -468,11 +473,55 @@ void PassthroughRendererDX12::SetupFrameResource()
 		m_d3dDevice->CreateShaderResourceView(m_cameraFrameRes[i].Get(), nullptr, srvHandle);
 	}
 
-	m_frameResUploadHeap = CreateBuffer(m_d3dDevice.Get(), m_cameraFrameBufferSize * NUM_SWAPCHAINS, D3D12_HEAP_TYPE_UPLOAD);
+	int heapSize = Align(m_cameraTextureWidth * 4, D3D12_TEXTURE_DATA_PITCH_ALIGNMENT) * m_cameraTextureHeight * NUM_SWAPCHAINS;
+	m_frameResUploadHeap = CreateBuffer(m_d3dDevice.Get(), heapSize, D3D12_HEAP_TYPE_UPLOAD);
 
 	for (int i = 0; i < NUM_SWAPCHAINS; i++)
 	{
 		UploadTexture(m_commandList.Get(), m_cameraFrameRes[i].Get(), m_frameResUploadHeap.Get(), m_cameraFrameBufferSize * i, image.data(), m_cameraTextureWidth, m_cameraTextureHeight, DXGI_FORMAT_R8G8B8A8_UNORM_SRGB, 4, 0);
+	}
+}
+
+
+void PassthroughRendererDX12::SetupUndistortedFrameResource()
+{
+	std::vector<uint8_t> image(m_cameraUndistortedFrameBufferSize);
+
+	D3D12_SUBRESOURCE_DATA textureData = {};
+	textureData.pData = image.data();
+	textureData.RowPitch = m_cameraUndistortedTextureWidth * 4;
+	textureData.SlicePitch = textureData.RowPitch * m_cameraUndistortedTextureHeight;
+
+	D3D12_RESOURCE_DESC textureDesc = {};
+	textureDesc.MipLevels = 1;
+	textureDesc.Format = DXGI_FORMAT_R8G8B8A8_UNORM_SRGB;
+	textureDesc.Width = m_cameraUndistortedTextureWidth;
+	textureDesc.Height = m_cameraUndistortedTextureHeight;
+	textureDesc.Flags = D3D12_RESOURCE_FLAG_NONE;
+	textureDesc.DepthOrArraySize = 1;
+	textureDesc.SampleDesc.Count = 1;
+	textureDesc.SampleDesc.Quality = 0;
+	textureDesc.Dimension = D3D12_RESOURCE_DIMENSION_TEXTURE2D;
+
+	D3D12_HEAP_PROPERTIES heapProp = {};
+	heapProp.Type = D3D12_HEAP_TYPE_DEFAULT;
+
+	for (int i = 0; i < NUM_SWAPCHAINS; i++)
+	{
+		m_d3dDevice->CreateCommittedResource(&heapProp, D3D12_HEAP_FLAG_NONE, &textureDesc, D3D12_RESOURCE_STATE_COPY_DEST, nullptr, IID_PPV_ARGS(&m_cameraUndisortedFrameRes[i]));
+
+		D3D12_CPU_DESCRIPTOR_HANDLE srvHandle = m_CBVSRVHeap->GetCPUDescriptorHandleForHeapStart();
+		srvHandle.ptr += (INDEX_SRV_CAMERAFRAME_UNDISTORTED_0 + i) * m_CBVSRVHeapDescSize;
+
+		m_d3dDevice->CreateShaderResourceView(m_cameraUndisortedFrameRes[i].Get(), nullptr, srvHandle);
+	}
+
+	int heapSize = Align(m_cameraUndistortedTextureWidth * 4, D3D12_TEXTURE_DATA_PITCH_ALIGNMENT) * m_cameraUndistortedTextureHeight * NUM_SWAPCHAINS;
+	m_undistortedFrameResUploadHeap = CreateBuffer(m_d3dDevice.Get(), heapSize, D3D12_HEAP_TYPE_UPLOAD);
+
+	for (int i = 0; i < NUM_SWAPCHAINS; i++)
+	{
+		UploadTexture(m_commandList.Get(), m_cameraUndisortedFrameRes[i].Get(), m_undistortedFrameResUploadHeap.Get(), m_cameraUndistortedFrameBufferSize * i, image.data(), m_cameraUndistortedTextureWidth, m_cameraUndistortedTextureHeight, DXGI_FORMAT_R8G8B8A8_UNORM_SRGB, 4, 0);
 	}
 }
 
@@ -1002,11 +1051,15 @@ void PassthroughRendererDX12::InitDepthBuffer(const ERenderEye eye, void* depthB
 }
 
 
-void PassthroughRendererDX12::SetFrameSize(const uint32_t width, const uint32_t height, const uint32_t bufferSize)
+void PassthroughRendererDX12::SetFrameSize(const uint32_t width, const uint32_t height, const uint32_t bufferSize, const uint32_t undistortedWidth, const uint32_t undistortedHeight, const uint32_t undistortedBufferSize)
 {
 	m_cameraTextureWidth = width;
 	m_cameraTextureHeight = height;
 	m_cameraFrameBufferSize = bufferSize;
+
+	m_cameraUndistortedTextureWidth = undistortedWidth;
+	m_cameraUndistortedTextureHeight = undistortedHeight;
+	m_cameraUndistortedFrameBufferSize = undistortedBufferSize;
 }
 
 
@@ -1273,7 +1326,7 @@ void PassthroughRendererDX12::RenderPassthroughFrame(const XrCompositionLayerPro
 		debugTextureSRVHandle.ptr += INDEX_SRV_DEBUG_TEXTURE * m_CBVSRVHeapDescSize;
 		m_commandList->SetGraphicsRootDescriptorTable(3, debugTextureSRVHandle);
 	}
-	else
+	else if(frame->header.eFrameType == vr::VRTrackedCameraFrameType_Distorted)
 	{
 		// Upload camera frame
 		TransitionResource(m_commandList.Get(), m_cameraFrameRes[m_frameIndex].Get(), D3D12_RESOURCE_STATE_PIXEL_SHADER_RESOURCE, D3D12_RESOURCE_STATE_COPY_DEST);
@@ -1284,6 +1337,19 @@ void PassthroughRendererDX12::RenderPassthroughFrame(const XrCompositionLayerPro
 
 		D3D12_GPU_DESCRIPTOR_HANDLE frameSRVHandle = m_CBVSRVHeap->GetGPUDescriptorHandleForHeapStart();
 		frameSRVHandle.ptr += (INDEX_SRV_CAMERAFRAME_0 + m_frameIndex) * m_CBVSRVHeapDescSize;
+		m_commandList->SetGraphicsRootDescriptorTable(3, frameSRVHandle);
+	}
+	else
+	{
+		// Upload camera frame
+		TransitionResource(m_commandList.Get(), m_cameraUndisortedFrameRes[m_frameIndex].Get(), D3D12_RESOURCE_STATE_PIXEL_SHADER_RESOURCE, D3D12_RESOURCE_STATE_COPY_DEST);
+
+		UploadTexture(m_commandList.Get(), m_cameraUndisortedFrameRes[m_frameIndex].Get(), m_undistortedFrameResUploadHeap.Get(), m_cameraUndistortedFrameBufferSize* m_frameIndex, frame->frameBuffer->data(), m_cameraUndistortedTextureWidth, m_cameraUndistortedTextureHeight, DXGI_FORMAT_R8G8B8A8_UNORM_SRGB, 4, 0);
+
+		TransitionResource(m_commandList.Get(), m_cameraUndisortedFrameRes[m_frameIndex].Get(), D3D12_RESOURCE_STATE_COPY_DEST, D3D12_RESOURCE_STATE_PIXEL_SHADER_RESOURCE);
+
+		D3D12_GPU_DESCRIPTOR_HANDLE frameSRVHandle = m_CBVSRVHeap->GetGPUDescriptorHandleForHeapStart();
+		frameSRVHandle.ptr += (INDEX_SRV_CAMERAFRAME_UNDISTORTED_0 + m_frameIndex) * m_CBVSRVHeapDescSize;
 		m_commandList->SetGraphicsRootDescriptorTable(3, frameSRVHandle);
 	}
 
@@ -1371,7 +1437,7 @@ void PassthroughRendererDX12::RenderPassthroughView(const ERenderEye eye, const 
 	vsViewBuffer->cameraProjectionToWorld = (eye == LEFT_EYE) ? frame->cameraProjectionToWorldLeft : frame->cameraProjectionToWorldRight;
 	vsViewBuffer->worldToCameraProjection = (eye == LEFT_EYE) ? frame->worldToCameraProjectionLeft : frame->worldToCameraProjectionRight;
 	vsViewBuffer->worldToHMDProjection = (eye == LEFT_EYE) ? frame->worldToHMDProjectionLeft : frame->worldToHMDProjectionRight;
-	vsViewBuffer->frameUVBounds = GetFrameUVBounds(eye, frame->frameLayout);
+	vsViewBuffer->frameUVBounds = GetFrameUVBounds(eye, StereoHorizontalLayout);
 	vsViewBuffer->hmdViewWorldPos = (eye == LEFT_EYE) ? frame->hmdViewPosWorldLeft : frame->hmdViewPosWorldRight;
 	vsViewBuffer->projectionDistance = mainConf.ProjectionDistanceFar;
 	vsViewBuffer->floorHeightOffset = mainConf.FloorHeightOffset;
@@ -1421,7 +1487,7 @@ void PassthroughRendererDX12::RenderPassthroughView(const ERenderEye eye, const 
 		vsCrossViewBuffer->cameraProjectionToWorld = (eye != LEFT_EYE) ? frame->cameraProjectionToWorldLeft : frame->cameraProjectionToWorldRight;
 		vsCrossViewBuffer->worldToCameraProjection = (eye != LEFT_EYE) ? frame->worldToCameraProjectionLeft : frame->worldToCameraProjectionRight;
 		vsCrossViewBuffer->worldToHMDProjection = (eye == LEFT_EYE) ? frame->worldToHMDProjectionLeft : frame->worldToHMDProjectionRight;
-		vsCrossViewBuffer->frameUVBounds = GetFrameUVBounds(eye == LEFT_EYE ? RIGHT_EYE : LEFT_EYE, frame->frameLayout);
+		vsCrossViewBuffer->frameUVBounds = GetFrameUVBounds(eye == LEFT_EYE ? RIGHT_EYE : LEFT_EYE, StereoHorizontalLayout);
 		vsCrossViewBuffer->hmdViewWorldPos = (eye == LEFT_EYE) ? frame->hmdViewPosWorldLeft : frame->hmdViewPosWorldRight;
 		vsCrossViewBuffer->projectionDistance = mainConf.ProjectionDistanceFar;
 		vsCrossViewBuffer->floorHeightOffset = mainConf.FloorHeightOffset;
@@ -1514,7 +1580,7 @@ void PassthroughRendererDX12::RenderMaskedPrepassView(const ERenderEye eye, cons
 	vsViewBuffer->cameraProjectionToWorld = (eye == LEFT_EYE) ? frame->cameraProjectionToWorldLeft : frame->cameraProjectionToWorldRight;
 	vsViewBuffer->worldToCameraProjection = (eye == LEFT_EYE) ? frame->worldToCameraProjectionLeft : frame->worldToCameraProjectionRight;
 	vsViewBuffer->worldToHMDProjection = (eye == LEFT_EYE) ? frame->worldToHMDProjectionLeft : frame->worldToHMDProjectionRight;
-	vsViewBuffer->frameUVBounds = GetFrameUVBounds(eye, frame->frameLayout);
+	vsViewBuffer->frameUVBounds = GetFrameUVBounds(eye, StereoHorizontalLayout);
 	vsViewBuffer->hmdViewWorldPos = (eye == LEFT_EYE) ? frame->hmdViewPosWorldLeft : frame->hmdViewPosWorldRight;
 	vsViewBuffer->projectionDistance = mainConf.ProjectionDistanceFar;
 	vsViewBuffer->floorHeightOffset = mainConf.FloorHeightOffset;
@@ -1574,9 +1640,13 @@ void PassthroughRendererDX12::RenderMaskedPrepassView(const ERenderEye eye, cons
 	{
 		cameraFrameSRVHandle.ptr += INDEX_SRV_DEBUG_TEXTURE * m_CBVSRVHeapDescSize;
 	}
-	else
+	else if(frame->header.eFrameType == vr::VRTrackedCameraFrameType_Distorted)
 	{
 		cameraFrameSRVHandle.ptr += (INDEX_SRV_CAMERAFRAME_0 + m_frameIndex) * m_CBVSRVHeapDescSize;
+	}
+	else
+	{
+		cameraFrameSRVHandle.ptr += (INDEX_SRV_CAMERAFRAME_UNDISTORTED_0 + m_frameIndex) * m_CBVSRVHeapDescSize;
 	}
 
 	if (m_configManager->GetConfig_Core().CoreForceMaskedUseCameraImage)

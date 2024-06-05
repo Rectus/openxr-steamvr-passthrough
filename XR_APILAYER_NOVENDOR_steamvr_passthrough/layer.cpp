@@ -242,6 +242,10 @@ namespace
 			uint32_t cameraTextureWidth;
 			uint32_t cameraTextureHeight;
 			uint32_t cameraFrameBufferSize;
+			uint32_t cameraUndistortedTextureWidth;
+			uint32_t cameraUndistortedTextureHeight;
+			uint32_t cameraUndistortedFrameBufferSize;
+
 			const XrBaseInStructure* entry = reinterpret_cast<const XrBaseInStructure*>(createInfo->next);
 
 			while (entry)
@@ -264,8 +268,9 @@ namespace
 						return false;
 					}
 					
-					m_cameraManager->GetFrameSize(cameraTextureWidth, cameraTextureHeight, cameraFrameBufferSize);
-					m_Renderer->SetFrameSize(cameraTextureWidth, cameraTextureHeight, cameraFrameBufferSize);
+					m_cameraManager->GetDistortedFrameSize(cameraTextureWidth, cameraTextureHeight, cameraFrameBufferSize);
+					m_cameraManager->GetUndistortedFrameSize(cameraUndistortedTextureWidth, cameraUndistortedTextureHeight, cameraUndistortedFrameBufferSize);
+					m_Renderer->SetFrameSize(cameraTextureWidth, cameraTextureHeight, cameraFrameBufferSize, cameraUndistortedTextureWidth, cameraUndistortedTextureHeight, cameraUndistortedFrameBufferSize);
 					if(!m_Renderer->InitRenderer())
 					{
 						return false;
@@ -309,8 +314,9 @@ namespace
 						return false;
 					}
 
-					m_cameraManager->GetFrameSize(cameraTextureWidth, cameraTextureHeight, cameraFrameBufferSize);
-					m_Renderer->SetFrameSize(cameraTextureWidth, cameraTextureHeight, cameraFrameBufferSize);
+					m_cameraManager->GetDistortedFrameSize(cameraTextureWidth, cameraTextureHeight, cameraFrameBufferSize);
+					m_cameraManager->GetUndistortedFrameSize(cameraUndistortedTextureWidth, cameraUndistortedTextureHeight, cameraUndistortedFrameBufferSize);
+					m_Renderer->SetFrameSize(cameraTextureWidth, cameraTextureHeight, cameraFrameBufferSize, cameraUndistortedTextureWidth, cameraUndistortedTextureHeight, cameraUndistortedFrameBufferSize);
 					if (!m_Renderer->InitRenderer())
 					{
 						return false;
@@ -342,8 +348,9 @@ namespace
 						return false;
 					}
 					
-					m_cameraManager->GetFrameSize(cameraTextureWidth, cameraTextureHeight, cameraFrameBufferSize);
-					m_Renderer->SetFrameSize(cameraTextureWidth, cameraTextureHeight, cameraFrameBufferSize);
+					m_cameraManager->GetDistortedFrameSize(cameraTextureWidth, cameraTextureHeight, cameraFrameBufferSize);
+					m_cameraManager->GetUndistortedFrameSize(cameraUndistortedTextureWidth, cameraUndistortedTextureHeight, cameraUndistortedFrameBufferSize);
+					m_Renderer->SetFrameSize(cameraTextureWidth, cameraTextureHeight, cameraFrameBufferSize, cameraUndistortedTextureWidth, cameraUndistortedTextureHeight, cameraUndistortedFrameBufferSize);
 					if (!m_Renderer->InitRenderer())
 					{
 						return false;
