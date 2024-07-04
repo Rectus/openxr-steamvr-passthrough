@@ -71,7 +71,7 @@ BEGIN
             VALUE "FileDescription", "Passthrough API Layer Setup"
             VALUE "FileVersion", "0.2.7.0"
             VALUE "InternalName", "passthrough-setup.exe"
-            VALUE "LegalCopyright", "Copyright (C) Rectus 2023"
+            VALUE "LegalCopyright", "Copyright (C) Rectus 2024"
             VALUE "OriginalFilename", "passthrough-setup.exe"
             VALUE "ProductName", "OpenXR SteamVR Passthrough API Layer"
             VALUE "ProductVersion", "0.2.7"
