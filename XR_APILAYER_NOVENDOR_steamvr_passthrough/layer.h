@@ -171,9 +171,14 @@ struct DepthFrame
 	XrMatrix4x4f disparityViewToWorldLeft;
 	XrMatrix4x4f disparityViewToWorldRight;
 	XrMatrix4x4f disparityToDepth;
+	XrMatrix4x4f prevDisparityViewToWorldLeft;
+	XrMatrix4x4f prevDisparityViewToWorldRight;
+	XrMatrix4x4f prevDispWorldToCameraProjectionLeft;
+	XrMatrix4x4f prevDispWorldToCameraProjectionRight;
 	uint32_t disparityTextureSize[2];
 	float disparityDownscaleFactor;
 	bool bIsValid;
+	bool bIsFirstRender;
 };
 
 struct FrameRenderParameters

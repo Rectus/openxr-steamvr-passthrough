@@ -880,7 +880,11 @@ namespace
 
 			float timeToPhotons = GetPerfTimerDiff(preRenderTime.QuadPart, displayTime.QuadPart);
 			
-			m_cameraManager->CalculateFrameProjection(frame, *layer, timeToPhotons, m_refSpaces[layer->space], m_depthReconstruction->GetDistortionParameters());
+			Config_Depth& depthConf = m_configManager->GetConfig_Depth();
+
+			std::shared_ptr<DepthFrame> depthFrame = m_depthReconstruction->GetDepthFrame();
+
+			m_cameraManager->CalculateFrameProjection(frame, depthFrame, *layer, timeToPhotons, m_refSpaces[layer->space], m_depthReconstruction->GetDistortionParameters());
 	
 
 			int leftIndex = UpdateSwapchains(LEFT_EYE, layer);
@@ -902,11 +906,7 @@ namespace
 				m_configManager->GetDebugTexture().CurrentTexture != DebugTexture_TestImage)
 			{
 				GetTestPattern(m_configManager->GetDebugTexture());
-			}
-			
-			Config_Depth& depthConf = m_configManager->GetConfig_Depth();
-
-			std::shared_ptr<DepthFrame> depthFrame = m_depthReconstruction->GetDepthFrame();
+			}		
 
 			FrameRenderParameters renderParams;
 			renderParams.bEnableDepthRange = false;
@@ -955,8 +955,9 @@ namespace
 				renderParams.DepthRangeMax = depthConf.DepthForceRangeTestMax;
 			}
 
-
 			m_Renderer->RenderPassthroughFrame(layer, frame.get(), blendMode, leftIndex, rightIndex, depthFrame, m_depthReconstruction->GetDistortionParameters(), renderParams);
+
+			depthFrame->bIsFirstRender = false;
 
 
 			float renderTime = EndPerfTimer(preRenderTime.QuadPart);

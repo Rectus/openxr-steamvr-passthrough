@@ -115,6 +115,24 @@ float4 DisparityToWorldCoords(float disparity, float2 clipCoords)
 }
 
 
+float4 PrevDisparityToWorldCoords(float disparity, float2 clipCoords)
+{
+    float2 texturePos = clipCoords * g_disparityTextureSize * float2(0.5, 1) * g_disparityDownscaleFactor;
+    
+    float scaledDisp = disparity * (g_viewIndex == 1 ? -1 : 1);
+    
+	// Convert to int16 range with 4 bit fixed decimal: 65536 / 2 / 16
+    scaledDisp = scaledDisp * 2048.0 * g_disparityDownscaleFactor;
+    float4 viewSpaceCoords = mul(g_disparityToDepth, float4(texturePos, scaledDisp, 1.0));
+    viewSpaceCoords.y = 1 - viewSpaceCoords.y;
+    viewSpaceCoords.z *= -1;
+    viewSpaceCoords /= viewSpaceCoords.w;
+    viewSpaceCoords.z = sign(viewSpaceCoords.z) * min(abs(viewSpaceCoords.z), g_projectionDistance);
+
+    return mul((g_vsUVBounds.x < 0.5) ? g_prevDisparityViewToWorldLeft : g_prevDisparityViewToWorldRight, viewSpaceCoords);
+}
+
+
 VS_OUTPUT main(float3 inPosition : POSITION, uint vertexID : SV_VertexID)
 {
 	VS_OUTPUT output;
@@ -134,10 +152,11 @@ VS_OUTPUT main(float3 inPosition : POSITION, uint vertexID : SV_VertexID)
     
     
     float4 disparityWorldCoords = DisparityToWorldCoords(dispConf.x, inPosition.xy);
-    float4 prevDisparityCoords = mul(g_prevWorldToCameraProjection, disparityWorldCoords);
-        
+    float4 prevDisparityCoords = mul(g_prevDispWorldToCameraProjection, disparityWorldCoords);
+    prevDisparityCoords /= prevDisparityCoords.w;
+    prevDisparityCoords.xy = (prevDisparityCoords.xy * 0.5 + 0.5);
     
-    float2 prevDisparityUVs = (prevDisparityCoords.xy / prevDisparityCoords.w * 0.5 + 0.5) * (g_vsUVBounds.zw - g_vsUVBounds.xy) + g_vsUVBounds.xy;
+    float2 prevDisparityUVs = prevDisparityCoords.xy * (g_vsUVBounds.zw - g_vsUVBounds.xy) + g_vsUVBounds.xy;
     int3 prevUvPos = int3(floor(prevDisparityUVs * g_disparityTextureSize), 0);
     
     //float2 prevDispConf = g_prevDisparityFilter.Load(prevUvPos);
@@ -145,24 +164,20 @@ VS_OUTPUT main(float3 inPosition : POSITION, uint vertexID : SV_VertexID)
     //float2 prevDispConf = lanczos2(g_prevDisparityFilter, prevDisparityUVs, g_disparityTextureSize);
     float2 prevDispConf = catmull_rom_9tap(g_prevDisparityFilter, g_samplerState, prevDisparityUVs, g_disparityTextureSize);
         
-    float4 prevDisparityWorldCoords = mul(g_prevCameraProjectionToWorld, DisparityToWorldCoords(prevDispConf.x, inPosition.xy));
+
+    float4 prevDisparityWorldCoords = PrevDisparityToWorldCoords(prevDispConf.x, prevDisparityCoords.xy);
      
-    disparityWorldCoords /= disparityWorldCoords.w;
     prevDisparityWorldCoords /= prevDisparityWorldCoords.w;
-        
-    if (prevDispConf.y < 0.5 || (dispConf.y > 0.5 &&
-        length(disparityWorldCoords.xyz - prevDisparityWorldCoords.xyz) > g_disparityTemporalFilterDistance * 0.1))
+    
+    bool bUsePrev = true;
+    
+    if (prevDispConf.y < 0.1 || prevDisparityCoords.x <= 0 || prevDisparityCoords.x >= 1 || prevDisparityCoords.y <= 0 || prevDisparityCoords.y >= 1)
     {
-        disparity = dispConf.x;
-        confidence = dispConf.y;
+        bUsePrev = false;
     }
-    else
-    {
-        float depthFactor = saturate(length(disparityWorldCoords.xyz - prevDisparityWorldCoords.xyz));
-        float frac = clamp(1 * (prevDispConf.y - dispConf.y) - depthFactor, 0, g_disparityTemporalFilterStrength);
-        disparity = lerp(dispConf.x, prevDispConf.x, frac);
-        confidence = lerp(dispConf.y, prevDispConf.y, frac);
-    }
+    
+    disparity = dispConf.x;
+    confidence = dispConf.y;
     
     
     output.projectionValidity = 1;
@@ -256,7 +271,14 @@ VS_OUTPUT main(float3 inPosition : POSITION, uint vertexID : SV_VertexID)
         g_disparityFilter[uvPos.xy] = float2(disparity, confidence);
     }
     
-    float4 worldSpacePoint = DisparityToWorldCoords(disparity, inPosition.xy); 
+    float4 worldSpacePoint = DisparityToWorldCoords(disparity, inPosition.xy);
+    worldSpacePoint /= worldSpacePoint.w;
+    
+    if (bUsePrev && length(worldSpacePoint.xyz - prevDisparityWorldCoords.xyz) < g_disparityTemporalFilterDistance)
+    {
+        float factor = saturate(min(g_disparityTemporalFilterStrength, (prevDispConf.y - dispConf.y + 0.5)));
+        worldSpacePoint.xyz = lerp(worldSpacePoint.xyz, prevDisparityWorldCoords.xyz, factor);
+    }
     
     // Clamp positions to floor height
     if ((worldSpacePoint.y / worldSpacePoint.w) < g_floorHeightOffset)

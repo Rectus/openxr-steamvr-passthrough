@@ -27,6 +27,8 @@ struct VSPassConstantBuffer
 {
 	XrMatrix4x4f disparityViewToWorldLeft;
 	XrMatrix4x4f disparityViewToWorldRight;
+	XrMatrix4x4f prevDisparityViewToWorldLeft;
+	XrMatrix4x4f prevDisparityViewToWorldRight;
 	XrMatrix4x4f disparityToDepth;
 	uint32_t disparityTextureSize[2];
 	float disparityDownscaleFactor;
@@ -49,12 +51,14 @@ struct VSViewConstantBuffer
 	XrMatrix4x4f prevCameraProjectionToWorld;
 	XrMatrix4x4f prevWorldToCameraProjection;
 	XrMatrix4x4f prevWorldToHMDProjection;
+	XrMatrix4x4f prevDispWorldToCameraProjection;
 	XrVector4f frameUVBounds;
 	XrVector3f hmdViewWorldPos;
 	float projectionDistance;
 	float floorHeightOffset;
 	uint32_t cameraViewIndex;
 	uint32_t bWriteDisparityFilter;
+	uint32_t bisFirstRender;
 };
 
 struct VSMeshConstantBuffer
@@ -1208,6 +1212,8 @@ void PassthroughRendererDX11::RenderPassthroughFrame(const XrCompositionLayerPro
 		VSPassConstantBuffer vsBuffer{};
 		vsBuffer.disparityViewToWorldLeft = depthFrame->disparityViewToWorldLeft;
 		vsBuffer.disparityViewToWorldRight = depthFrame->disparityViewToWorldRight;
+		vsBuffer.prevDisparityViewToWorldLeft = depthFrame->prevDisparityViewToWorldLeft;
+		vsBuffer.prevDisparityViewToWorldRight = depthFrame->prevDisparityViewToWorldRight;
 		vsBuffer.disparityToDepth = depthFrame->disparityToDepth;
 		vsBuffer.disparityDownscaleFactor = depthFrame->disparityDownscaleFactor;
 		vsBuffer.disparityTextureSize[0] = depthFrame->disparityTextureSize[0];
@@ -1356,22 +1362,22 @@ void PassthroughRendererDX11::RenderPassthroughFrame(const XrCompositionLayerPro
 
 		m_renderContext->UpdateSubresource(frameData.psMaskedConstantBuffer.Get(), 0, nullptr, &maskedBuffer, 0, 0);
 
-		RenderMaskedPrepassView(LEFT_EYE, leftSwapchainIndex, layer, frame, numIndices, renderParams);
-		RenderPassthroughView(LEFT_EYE, leftSwapchainIndex, layer, frame, blendMode, numIndices, renderParams);
-		RenderMaskedPrepassView(RIGHT_EYE, rightSwapchainIndex, layer, frame, numIndices, renderParams);
-		RenderPassthroughView(RIGHT_EYE, rightSwapchainIndex, layer, frame, blendMode, numIndices, renderParams);
+		RenderMaskedPrepassView(LEFT_EYE, leftSwapchainIndex, layer, frame, depthFrame, numIndices, renderParams);
+		RenderPassthroughView(LEFT_EYE, leftSwapchainIndex, layer, frame, depthFrame, blendMode, numIndices, renderParams);
+		RenderMaskedPrepassView(RIGHT_EYE, rightSwapchainIndex, layer, frame, depthFrame, numIndices, renderParams);
+		RenderPassthroughView(RIGHT_EYE, rightSwapchainIndex, layer, frame, depthFrame, blendMode, numIndices, renderParams);
 	}
 	else
 	{
-		RenderPassthroughView(LEFT_EYE, leftSwapchainIndex, layer, frame, blendMode, numIndices, renderParams);
-		RenderPassthroughView(RIGHT_EYE, rightSwapchainIndex, layer, frame, blendMode, numIndices, renderParams);
+		RenderPassthroughView(LEFT_EYE, leftSwapchainIndex, layer, frame, depthFrame, blendMode, numIndices, renderParams);
+		RenderPassthroughView(RIGHT_EYE, rightSwapchainIndex, layer, frame, depthFrame, blendMode, numIndices, renderParams);
 	}
 
 	RenderFrameFinish();
 }
 
 
-void PassthroughRendererDX11::RenderPassthroughView(const ERenderEye eye, const int32_t swapchainIndex, const XrCompositionLayerProjection* layer, CameraFrame* frame, EPassthroughBlendMode blendMode, UINT numIndices, FrameRenderParameters& renderParams)
+void PassthroughRendererDX11::RenderPassthroughView(const ERenderEye eye, const int32_t swapchainIndex, const XrCompositionLayerProjection* layer, CameraFrame* frame, std::shared_ptr<DepthFrame> depthFrame, EPassthroughBlendMode blendMode, UINT numIndices, FrameRenderParameters& renderParams)
 {
 	if (swapchainIndex < 0) { return; }
 
@@ -1413,12 +1419,14 @@ void PassthroughRendererDX11::RenderPassthroughView(const ERenderEye eye, const 
 	vsViewBuffer.prevWorldToCameraProjection = (eye == LEFT_EYE) ? frame->prevWorldToCameraProjectionLeft : frame->prevWorldToCameraProjectionRight;
 	vsViewBuffer.prevWorldToHMDProjection = (eye == LEFT_EYE) ? frame->prevWorldToHMDProjectionLeft : frame->prevWorldToHMDProjectionRight;
 
-	vsViewBuffer.frameUVBounds = GetFrameUVBounds(eye, StereoHorizontalLayout);
+	vsViewBuffer.frameUVBounds = GetFrameUVBounds(eye, frame->frameLayout);
 	vsViewBuffer.hmdViewWorldPos = (eye == LEFT_EYE) ? frame->hmdViewPosWorldLeft : frame->hmdViewPosWorldRight;
 	vsViewBuffer.projectionDistance = mainConf.ProjectionDistanceFar;
 	vsViewBuffer.floorHeightOffset = mainConf.FloorHeightOffset;
 	vsViewBuffer.cameraViewIndex = (eye == LEFT_EYE) ? 0 : 1;
-	vsViewBuffer.bWriteDisparityFilter = stereoConf.StereoUseDisparityTemporalFiltering && frame->bIsFirstRender;
+	vsViewBuffer.bWriteDisparityFilter = stereoConf.StereoUseDisparityTemporalFiltering && depthFrame->bIsFirstRender;
+	vsViewBuffer.bisFirstRender = stereoConf.StereoUseDisparityTemporalFiltering && depthFrame->bIsFirstRender;
+
 	
 	m_renderContext->UpdateSubresource(frameData.vsViewConstantBuffer[viewIndex].Get(), 0, nullptr, &vsViewBuffer, 0, 0);
 	
@@ -1466,7 +1474,7 @@ void PassthroughRendererDX11::RenderPassthroughView(const ERenderEye eye, const 
 			m_renderContext->UpdateSubresource(frameData.vsViewConstantBuffer[viewIndex].Get(), 0, nullptr, &vsViewBuffer, 0, 0);
 		}
 	}
-	else if(stereoConf.StereoUseDisparityTemporalFiltering && m_bIsTemporalSupported && frame->bIsFirstRender)
+	else if(stereoConf.StereoUseDisparityTemporalFiltering && m_bIsTemporalSupported && depthFrame->bIsFirstRender)
 	{
 		vsViewBuffer.bWriteDisparityFilter = true;
 		m_renderContext->UpdateSubresource(frameData.vsViewConstantBuffer[viewIndex].Get(), 0, nullptr, &vsViewBuffer, 0, 0);
@@ -1628,7 +1636,7 @@ void PassthroughRendererDX11::RenderPassthroughView(const ERenderEye eye, const 
 }
 
 
-void PassthroughRendererDX11::RenderMaskedPrepassView(const ERenderEye eye, const int32_t swapchainIndex, const XrCompositionLayerProjection* layer, CameraFrame* frame, UINT numIndices, FrameRenderParameters& renderParams)
+void PassthroughRendererDX11::RenderMaskedPrepassView(const ERenderEye eye, const int32_t swapchainIndex, const XrCompositionLayerProjection* layer, CameraFrame* frame, std::shared_ptr<DepthFrame> depthFrame, UINT numIndices, FrameRenderParameters& renderParams)
 {
 	if (swapchainIndex < 0) { return; }
 

@@ -641,6 +641,7 @@ void DepthReconstruction::RunThread()
             m_underConstructionDepthFrame->disparityTextureSize[1] = m_cvImageHeight;
             m_underConstructionDepthFrame->disparityDownscaleFactor = (float)m_downscaleFactor;
             m_underConstructionDepthFrame->bIsValid = true;
+            m_underConstructionDepthFrame->bIsFirstRender = true;
 
             {
                 std::lock_guard<std::mutex> lock(m_serveMutex);
