@@ -81,6 +81,9 @@ using namespace std::chrono_literals;
 #include <xr_linear.h>
 #include <loader_interfaces.h>
 
+// Link OpenVR as a static library for compatibility with utilities
+// that use modified versions of openvr_api.dll, such as OpenComposite.
+#define OPENVR_BUILD_STATIC
 #include <openvr.h>
 
 #include "check.h"

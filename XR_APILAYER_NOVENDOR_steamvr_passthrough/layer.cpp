@@ -127,6 +127,7 @@ namespace
 			Log("Using OpenXR runtime: %s\n", runtimeName.c_str());
 #endif
 
+#ifndef OPENVR_BUILD_STATIC
 			// Try to load the OpenVR DLL from the same directory the current DLL is in.
 			std::wstring dllPath(MAX_PATH, L'\0');
 			if (FAILED(GetModuleFileNameW(g_dllModule, (LPWSTR)dllPath.c_str(), (DWORD)dllPath.size())))
@@ -142,6 +143,7 @@ namespace
 				ErrorLog("Error loading OpenVR DLL: %lu\n", GetLastError());
 				return result;
 			}
+#endif
 
 			PWSTR path;
 			std::wstring filePath(PATHCCH_MAX_CCH, L'\0');
@@ -398,7 +400,7 @@ namespace
 			{
 				if (!m_bSuccessfullyLoaded)
 				{
-					ErrorLog("Loading failed, not attaching to session!");
+					ErrorLog("Loading failed, not attaching to session!\n");
 				}
 				else if (isSystemHandled(createInfo->systemId) && !isCurrentSession(*session))
 				{
