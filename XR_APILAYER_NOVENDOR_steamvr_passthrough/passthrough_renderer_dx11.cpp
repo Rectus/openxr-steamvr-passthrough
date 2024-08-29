@@ -1423,7 +1423,7 @@ void PassthroughRendererDX11::RenderPassthroughView(const ERenderEye eye, const 
 
 	if (m_viewDepthData[viewIndex].size() > depthSwapchainIndex)
 	{
-		ID3D11DepthStencilView* depthStencil = m_viewDepthData[viewIndex][depthSwapchainIndex].depthStencilView.Get();
+		depthStencil = m_viewDepthData[viewIndex][depthSwapchainIndex].depthStencilView.Get();
 	}
 
 	Config_Depth& depthConfig = m_configManager->GetConfig_Depth();
@@ -1690,7 +1690,7 @@ void PassthroughRendererDX11::RenderMaskedPrepassView(const ERenderEye eye, cons
 
 	if (m_viewDepthData[viewIndex].size() > depthSwapchainIndex)
 	{
-		ID3D11DepthStencilView* depthStencil = m_viewDepthData[viewIndex][depthSwapchainIndex].depthStencilView.Get();
+		depthStencil = m_viewDepthData[viewIndex][depthSwapchainIndex].depthStencilView.Get();
 	}
 
 	Config_Depth& depthConfig = m_configManager->GetConfig_Depth();
