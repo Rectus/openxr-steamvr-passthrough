@@ -23,6 +23,8 @@ struct VSPassConstantBuffer
 {
 	XrMatrix4x4f disparityViewToWorldLeft;
 	XrMatrix4x4f disparityViewToWorldRight;
+	XrMatrix4x4f prevDisparityViewToWorldLeft;
+	XrMatrix4x4f prevDisparityViewToWorldRight;
 	XrMatrix4x4f disparityToDepth;
 	uint32_t disparityTextureSize[2];
 	float disparityDownscaleFactor;
@@ -46,12 +48,14 @@ struct VSViewConstantBuffer
 	XrMatrix4x4f prevCameraProjectionToWorld;
 	XrMatrix4x4f prevWorldToCameraProjection;
 	XrMatrix4x4f prevWorldToHMDProjection;
+	XrMatrix4x4f prevDispWorldToCameraProjection;
 	XrVector4f frameUVBounds;
 	XrVector3f hmdViewWorldPos;
 	float projectionDistance;
 	float floorHeightOffset;
 	uint32_t cameraViewIndex;
 	uint32_t bWriteDisparityFilter;
+	uint32_t bisFirstRender;
 };
 
 
@@ -1939,7 +1943,7 @@ void PassthroughRendererVulkan::RenderMaskedPrepassView(const ERenderEye eye, co
 	XrRect2Di rect = layer->views[viewIndex].subImage.imageRect;
 
 	VkViewport viewport = { (float)rect.offset.x, (float)rect.offset.y, (float)rect.extent.width, (float)rect.extent.height, 0.0f, 1.0f };
-	VkRect2D scissor = { (uint32_t)rect.offset.x, (uint32_t)rect.offset.y, (uint32_t)(rect.offset.x + rect.extent.width), (uint32_t)(rect.offset.y + rect.extent.height) };
+	VkRect2D scissor = { rect.offset.x, rect.offset.y, (uint32_t)(rect.offset.x + rect.extent.width), (uint32_t)(rect.offset.y + rect.extent.height) };
 	//VkViewport viewport = { 0.0f, 0.0f, (float)rect.extent.width, (float)rect.extent.height, 0.0f, 1.0f };
 	//VkRect2D scissor = { {0, 0}, {(uint32_t)rect.extent.width, (uint32_t)rect.extent.height} };
 

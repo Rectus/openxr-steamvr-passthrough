@@ -127,7 +127,7 @@ void MeshCreateHexGrid(Mesh<VertexFormatBasic>& mesh, int width, int height)
 			}
 			else
 			{
-				mesh.vertices.emplace_back(x * stepX + 0.5 * stepX, y * stepY, z);
+				mesh.vertices.emplace_back(x * stepX + 0.5f * stepX, y * stepY, z);
 
 				if (x < width - 1 && y < height - 1)
 				{
@@ -146,14 +146,14 @@ void MeshCreateRenderModel(Mesh<VertexFormatBasic>& mesh, vr::RenderModel_t* ren
 	mesh.vertices.resize(renderModel->unVertexCount);
 	mesh.triangles.resize(renderModel->unTriangleCount);
 
-	for (int i = 0; i < renderModel->unVertexCount; i++)
+	for (unsigned int i = 0; i < renderModel->unVertexCount; i++)
 	{
 		mesh.vertices[i].position[0] = renderModel->rVertexData[i].vPosition.v[0];
 		mesh.vertices[i].position[1] = renderModel->rVertexData[i].vPosition.v[1];
 		mesh.vertices[i].position[2] = renderModel->rVertexData[i].vPosition.v[2];
 	}
 
-	for (int i = 0; i < renderModel->unTriangleCount; i++)
+	for (unsigned int i = 0; i < renderModel->unTriangleCount; i++)
 	{
 		mesh.triangles[i].a = renderModel->rIndexData[i * 3];
 		mesh.triangles[i].b = renderModel->rIndexData[i * 3 + 1];

@@ -101,6 +101,8 @@ struct VSPassConstantBuffer
 {
 	XrMatrix4x4f disparityViewToWorldLeft;
 	XrMatrix4x4f disparityViewToWorldRight;
+	XrMatrix4x4f prevDisparityViewToWorldLeft;
+	XrMatrix4x4f prevDisparityViewToWorldRight;
 	XrMatrix4x4f disparityToDepth;
 	uint32_t disparityTextureSize[2];
 	float disparityDownscaleFactor;
@@ -123,12 +125,14 @@ struct VSViewConstantBuffer
 	XrMatrix4x4f prevCameraProjectionToWorld;
 	XrMatrix4x4f prevWorldToCameraProjection;
 	XrMatrix4x4f prevWorldToHMDProjection;
+	XrMatrix4x4f prevDispWorldToCameraProjection;
 	XrVector4f frameUVBounds;
 	XrVector3f hmdViewWorldPos;
 	float projectionDistance;
 	float floorHeightOffset;
 	uint32_t cameraViewIndex;
 	uint32_t bWriteDisparityFilter;
+	uint32_t bisFirstRender;
 };
 
 struct PSPassConstantBuffer
@@ -320,7 +324,7 @@ bool PassthroughRendererDX12::InitRenderer()
 
 	m_CBVSRVHeapDescSize = m_d3dDevice->GetDescriptorHandleIncrementSize(D3D12_DESCRIPTOR_HEAP_TYPE_CBV_SRV_UAV);
 
-	m_vsPassConstantBuffer = InitBuffer(m_vsPassConstantBufferCPUData, NUM_SWAPCHAINS, 1, INDEX_CBV_VS_PASS_0);
+	m_vsPassConstantBuffer = InitBuffer(m_vsPassConstantBufferCPUData, NUM_SWAPCHAINS, 2, INDEX_CBV_VS_PASS_0);
 	m_vsViewConstantBuffer = InitBuffer(m_vsViewConstantBufferCPUData, NUM_SWAPCHAINS * 4, 2, INDEX_CBV_VS_VIEW_0);
 	m_psPassConstantBuffer = InitBuffer(m_psPassConstantBufferCPUData, NUM_SWAPCHAINS, 1, INDEX_CBV_PS_PASS_0);
 	m_psViewConstantBuffer = InitBuffer(m_psViewConstantBufferCPUData, NUM_SWAPCHAINS * 4, 1, INDEX_CBV_PS_VIEW_0);
