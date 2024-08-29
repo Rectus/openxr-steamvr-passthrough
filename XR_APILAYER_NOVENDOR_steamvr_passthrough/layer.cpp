@@ -673,7 +673,7 @@ namespace
 		}
 
 
-		int UpdateSwapchains(const ERenderEye eye, const XrCompositionLayerProjection* layer)
+		int UpdateSwapchains(const ERenderEye eye, const XrCompositionLayerProjection* layer, int& depthIndex)
 		{
 			XrSwapchain* storedSwapchain = (eye == LEFT_EYE) ? &m_swapChainLeft : &m_swapChainRight;
 			XrSwapchain* storedDepthSwapchain = (eye == LEFT_EYE) ? &m_depthSwapChainLeft : &m_depthSwapChainRight;
@@ -780,13 +780,12 @@ namespace
 				auto depth = m_heldSwapchains.find(*storedDepthSwapchain);
 				if (depth != m_heldSwapchains.end() && !depth->second.empty())
 				{
-					// TODO: Assuming that the depth image index is the same as for the color.
-					if (depth->second.back() != imageIndex)
-					{
-						ErrorLog("Depth swapchain image index mismatch %u, %u", depth->second.back(), imageIndex);
-					}
+					depthIndex = depth->second.back();
 				}
-
+				else
+				{
+					ErrorLog("Error: No valid depth swapchain found!\n");
+				}
 			}
 
 			return imageIndex;
@@ -889,8 +888,11 @@ namespace
 			m_cameraManager->CalculateFrameProjection(frame, depthFrame, *layer, timeToPhotons, m_refSpaces[layer->space], m_depthReconstruction->GetDistortionParameters());
 	
 
-			int leftIndex = UpdateSwapchains(LEFT_EYE, layer);
-			int rightIndex = UpdateSwapchains(RIGHT_EYE, layer);
+			int leftDepthIndex = 0;
+			int rightDepthIndex = 0;
+
+			int leftIndex = UpdateSwapchains(LEFT_EYE, layer, leftDepthIndex);
+			int rightIndex = UpdateSwapchains(RIGHT_EYE, layer, rightDepthIndex);
 
 			EPassthroughBlendMode blendMode = (EPassthroughBlendMode)frameEndInfo->environmentBlendMode;
 
@@ -957,7 +959,7 @@ namespace
 				renderParams.DepthRangeMax = depthConf.DepthForceRangeTestMax;
 			}
 
-			m_Renderer->RenderPassthroughFrame(layer, frame.get(), blendMode, leftIndex, rightIndex, depthFrame, m_depthReconstruction->GetDistortionParameters(), renderParams);
+			m_Renderer->RenderPassthroughFrame(layer, frame.get(), blendMode, leftIndex, rightIndex, leftDepthIndex, rightDepthIndex, depthFrame, m_depthReconstruction->GetDistortionParameters(), renderParams);
 
 			depthFrame->bIsFirstRender = false;
 

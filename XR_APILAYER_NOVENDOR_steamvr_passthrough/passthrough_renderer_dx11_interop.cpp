@@ -148,29 +148,34 @@ void PassthroughRendererDX11Interop::InitDepthBuffer(const ERenderEye eye, void*
 }
 
 
-void PassthroughRendererDX11Interop::RenderPassthroughFrame(const XrCompositionLayerProjection* layer, CameraFrame* frame, EPassthroughBlendMode blendMode, int leftSwapchainIndex, int rightSwapchainIndex, std::shared_ptr<DepthFrame> depthFrame, UVDistortionParameters& distortionParams, FrameRenderParameters& renderParams)
+void PassthroughRendererDX11Interop::RenderPassthroughFrame(const XrCompositionLayerProjection* layer, CameraFrame* frame, EPassthroughBlendMode blendMode, int leftSwapchainIndex, int rightSwapchainIndex, int leftDepthSwapchainIndex, int rightDepthSwapchainIndex, std::shared_ptr<DepthFrame> depthFrame, UVDistortionParameters& distortionParams, FrameRenderParameters& renderParams)
 {
-	DX11FrameData& frameData = m_frameData[leftSwapchainIndex];
+	//DX11FrameData& frameData = m_frameData[leftSwapchainIndex];
+	DX11ViewData& viewDataLeft = m_viewData[0][leftSwapchainIndex];
+	DX11ViewData& viewDataRight = m_viewData[1][rightSwapchainIndex];
 
 	switch (m_applicationRenderAPI)
 	{
 	case DirectX12:
 	{
 		{
-			ID3D11Resource* rts[2] = { frameData.renderTargets[0].Get(), frameData.renderTargets[1].Get() };
+			ID3D11Resource* rts[2] = { viewDataLeft.renderTarget.Get(), viewDataRight.renderTarget.Get() };
 			m_d3d11On12Device->AcquireWrappedResources(rts, 2);
 
 			ID3D11Resource* dts[2] = { 0 };
 
-			if (frameData.depthStencils[0] && frameData.depthStencils[1])
+			if (m_viewDepthData[0].size() > leftDepthSwapchainIndex 
+				&& m_viewDepthData[1].size() > rightDepthSwapchainIndex 
+				&& m_viewDepthData[0][leftDepthSwapchainIndex].depthStencil 
+				&& m_viewDepthData[1][rightDepthSwapchainIndex].depthStencil)
 			{
-				dts[0] = frameData.depthStencils[0].Get();
-				dts[1] = frameData.depthStencils[1].Get();
+				dts[0] = m_viewDepthData[0][leftDepthSwapchainIndex].depthStencil.Get();
+				dts[1] = m_viewDepthData[1][rightDepthSwapchainIndex].depthStencil.Get();
 
 				m_d3d11On12Device->AcquireWrappedResources(dts, 2);
 			}
 
-			PassthroughRendererDX11::RenderPassthroughFrame(layer, frame, blendMode, leftSwapchainIndex, rightSwapchainIndex, depthFrame, distortionParams, renderParams);
+			PassthroughRendererDX11::RenderPassthroughFrame(layer, frame, blendMode, leftSwapchainIndex, rightSwapchainIndex, leftDepthSwapchainIndex, rightDepthSwapchainIndex, depthFrame, distortionParams, renderParams);
 
 			m_d3d11On12Device->ReleaseWrappedResources(rts, 2);
 
@@ -197,7 +202,7 @@ void PassthroughRendererDX11Interop::RenderPassthroughFrame(const XrCompositionL
 
 	default:
 	{
-		PassthroughRendererDX11::RenderPassthroughFrame(layer, frame, blendMode, leftSwapchainIndex, rightSwapchainIndex, depthFrame, distortionParams, renderParams);
+		PassthroughRendererDX11::RenderPassthroughFrame(layer, frame, blendMode, leftSwapchainIndex, rightSwapchainIndex, rightSwapchainIndex, leftDepthSwapchainIndex, depthFrame, distortionParams, renderParams);
 		break;
 	}
 	}
