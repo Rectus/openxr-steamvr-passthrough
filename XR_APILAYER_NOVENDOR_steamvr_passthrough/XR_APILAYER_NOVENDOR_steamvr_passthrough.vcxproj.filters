@@ -208,9 +208,6 @@
     <CopyFileToFolders Include="..\external\openvr\bin\win64\openvr_api.pdb">
       <Filter>Libraries</Filter>
     </CopyFileToFolders>
-    <CopyFileToFolders Include="..\external\openvr\bin\win64\openvr_api.dll">
-      <Filter>Libraries</Filter>
-    </CopyFileToFolders>
   </ItemGroup>
   <ItemGroup>
     <ResourceCompile Include="XR_APILAYER_NOVENDOR_steamvr_passthrough.rc" />

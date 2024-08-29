@@ -21,7 +21,7 @@ using Microsoft::WRL::ComPtr;
 #define WINDOW_WIDTH 800
 #define WINDOW_HEIGHT 230
 
-#define OPENVR_DLL_NAME L"openvr_api.dll"
+//#define OPENVR_DLL_NAME L"openvr_api.dll"
 #define API_LAYER_DLL_NAME L"XR_APILAYER_NOVENDOR_steamvr_passthrough.dll"
 #define API_LAYER_JSON_NAME L"XR_APILAYER_NOVENDOR_steamvr_passthrough.json"
 #define OPENXR_API_LAYER_REG_KEY L"SOFTWARE\\Khronos\\OpenXR\\1\\ApiLayers\\Implicit"
@@ -85,16 +85,16 @@ int APIENTRY wWinMain(_In_ HINSTANCE hInstance, _In_opt_ HINSTANCE hPrevInstance
     std::string registryErrorMessage = "";
 
     WCHAR currentDir[MAX_PATH] = { 0 };
-    WCHAR openVRDLLPath[MAX_PATH] = { 0 };
+    //WCHAR openVRDLLPath[MAX_PATH] = { 0 };
     WCHAR apiLayerDLLPath[MAX_PATH] = { 0 };
     WCHAR apiLayerJSONPath[MAX_PATH] = { 0 };
     WCHAR currentAPILayerRegistryPath[MAX_PATH] = { 0 };
-    bool bFoundOpenVRDLL = true;
+    //bool bFoundOpenVRDLL = true;
     bool bFoundAPILayerDLL = true;
     bool bFoundAPILayerJSON = true;
 
     if (GetCurrentDirectoryW(MAX_PATH, currentDir) < 1){ return 1; }
-    if (PathCchCombine(openVRDLLPath, MAX_PATH, currentDir, OPENVR_DLL_NAME) != S_OK){ return 1; }
+    //if (PathCchCombine(openVRDLLPath, MAX_PATH, currentDir, OPENVR_DLL_NAME) != S_OK){ return 1; }
     if (PathCchCombine(apiLayerDLLPath, MAX_PATH, currentDir, API_LAYER_DLL_NAME) != S_OK) { return 1; }
     if (PathCchCombine(apiLayerJSONPath, MAX_PATH, currentDir, API_LAYER_JSON_NAME) != S_OK) { return 1; }
 
@@ -275,7 +275,7 @@ int APIENTRY wWinMain(_In_ HINSTANCE hInstance, _In_opt_ HINSTANCE hPrevInstance
 
         if (bUpdateState)
         {
-            bFoundOpenVRDLL = PathFileExistsW(openVRDLLPath);
+            //bFoundOpenVRDLL = PathFileExistsW(openVRDLLPath);
             bFoundAPILayerDLL = PathFileExistsW(apiLayerDLLPath);
             bFoundAPILayerJSON = PathFileExistsW(apiLayerJSONPath);
             
@@ -366,7 +366,7 @@ int APIENTRY wWinMain(_In_ HINSTANCE hInstance, _In_opt_ HINSTANCE hPrevInstance
                 bRegistryAccessError = true;
             }
 
-            if (!bFoundOpenVRDLL || !bFoundAPILayerDLL || !bFoundAPILayerJSON)
+            if (/*!bFoundOpenVRDLL ||*/ !bFoundAPILayerDLL || !bFoundAPILayerJSON)
             {
                 bEnableInstallButton = false;
             }
@@ -420,10 +420,10 @@ int APIENTRY wWinMain(_In_ HINSTANCE hInstance, _In_opt_ HINSTANCE hPrevInstance
 
         ImGui::BeginChild("Status");
 
-        if(!bFoundOpenVRDLL)
+        /*if(!bFoundOpenVRDLL)
         {
             ImGui::Text("openvr_api.dll missing from current directory!");
-        }
+        }*/
         if (!bFoundAPILayerDLL)
         {
             ImGui::Text("XR_APILAYER_NOVENDOR_steamvr_passthrough.dll missing from current directory!");
@@ -442,12 +442,12 @@ int APIENTRY wWinMain(_In_ HINSTANCE hInstance, _In_opt_ HINSTANCE hPrevInstance
 
         bool bCorrectlyInstalled = false;
 
-        if ((!bFoundOpenVRDLL || !bFoundAPILayerDLL || !bFoundAPILayerJSON) && (bMultipleKeysFound || bInvalidKeyFound))
+        if ((/*!bFoundOpenVRDLL ||*/ !bFoundAPILayerDLL || !bFoundAPILayerJSON) && (bMultipleKeysFound || bInvalidKeyFound))
         {
             ImGui::Text("Files missing and the install condition is invalid!"); 
             ImGui::Text("Press the uninstall button and redownload the layer.");
         }
-        else if (!bFoundOpenVRDLL || !bFoundAPILayerDLL || !bFoundAPILayerJSON)
+        else if (/*!bFoundOpenVRDLL ||*/ !bFoundAPILayerDLL || !bFoundAPILayerJSON)
         {
             ImGui::Text("Files missing! Please redownload the layer.");
         }

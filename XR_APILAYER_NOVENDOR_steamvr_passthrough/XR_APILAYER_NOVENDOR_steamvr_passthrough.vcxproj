@@ -93,6 +93,7 @@
       <Command>copy $(ProjectDir)\$(ProjectName).json $(OutDir)
 copy $(ProjectDir)\testpattern.png $(OutDir)
 copy $(ProjectDir)\passthrough_icon.png $(OutDir)
+copy $(SolutionDir)\readme.md $(OutDir)
 </Command>
     </PostBuildEvent>
     <PostBuildEvent>
@@ -152,7 +153,6 @@ copy $(ProjectDir)\passthrough_icon.png $(OutDir)
 copy $(ProjectDir)\testpattern.png $(OutDir)
 copy $(ProjectDir)\passthrough_icon.png $(OutDir)
 copy $(SolutionDir)\readme.md $(OutDir)
-copy $(SolutionDir)\external\openvr\bin\win64\openvr_api.dll $(OutDir)
 </Command>
     </PostBuildEvent>
     <PostBuildEvent>
@@ -253,9 +253,6 @@ copy $(SolutionDir)\external\openvr\bin\win64\openvr_api.dll $(OutDir)
     </ClCompile>
   </ItemGroup>
   <ItemGroup>
-    <CopyFileToFolders Include="..\external\openvr\bin\win64\openvr_api.dll">
-      <FileType>Document</FileType>
-    </CopyFileToFolders>
     <CopyFileToFolders Include="..\external\openvr\bin\win64\openvr_api.pdb">
       <FileType>Document</FileType>
       <ExcludedFromBuild Condition="'$(Configuration)|$(Platform)'=='Release|x64'">true</ExcludedFromBuild>

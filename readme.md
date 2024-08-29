@@ -35,11 +35,11 @@ Using the 3D stereo mode may induce heavy flickering on the display. Exercise ca
 - Only applications that use the core specification passthrough by submitting frames with `environmentBlendMode` set are supported.
 - Applications using the Meta `XR_FB_passthrough` extension are not currently supported.
 - The default passthrough view only supports a fixed depth reconstruction, while clamping the projection depth to the floor plane of the playspace. This works the same as the the SteamVR 2D Room View mode.
-- The depth reconstruction from the 3D Room View is not supported. It is not currently accessible to developers.
+- The depth reconstruction from the 3D Room View is not supported. It is not currently accessible to developers. A custom depth reconstruction is used instead.
 - The passthrough view has higher latency than the SteamVR compositor.
 - OpenGL applications are not currently supported.
-- The 3D reconstruction modes do not project the images correctly yet.
 - The 3D stereo reconstruction mode is not supported with Vulkan.
+- Depth blending requires the application to submit depth buffers using the `XR_KHR_composition_layer_depth` extension, which only a few do.
 
 ### Supported Headsets ###
 
@@ -92,7 +92,7 @@ The following are required:
 - Python 3 interpreter (installed via the Visual Studio Installer or externally available in your PATH).
 - [OpenXR SDK Source](https://github.com/KhronosGroup/OpenXR-SDK-Source) (Included as Git submodule)
 - [OpenXR SDK](https://github.com/KhronosGroup/OpenXR-SDK) (Included as Git submodule)
-- [OpenVR](https://github.com/ValveSoftware/openvr) (Included as Git submodule)
+- [OpenVR](https://github.com/ValveSoftware/openvr) (Included as Git submodule, the project is setup for static linking by default - requires custom source build)
 - [LodePNG](https://github.com/lvandeve/lodepng) (Included as Git submodule)
 - [SimpleINI](https://github.com/brofield/simpleini) (Included as Git submodule)
 - [Dear ImGui](https://github.com/ocornut/imgui) (Included as Git submodule)
@@ -105,7 +105,6 @@ The following are required:
 - Add partial support for the `XR_FB_passthrough` extension
 - OpenGL support
 - Add edge shader modes
-- Add shared camera textures to DirectX 12 if possible (may only be possible by rendering with DirectX11 with 11On12)
 - Hand depth projection + masking on 3D mode
 - Improvements to 3D reconstruction
 - `XR_HTC_passthrough` extension support (no headsets or applications use this yet)
