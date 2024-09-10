@@ -37,6 +37,7 @@
 #include <shlobj_core.h>
 #include <pathcch.h>
 #include "lodepng.h"
+#include "resource.h"
 
 HMODULE g_dllModule = NULL;
 
@@ -811,16 +812,26 @@ namespace
 
 		void GetTestPattern(DebugTexture& texture)
 		{
-			char path[MAX_PATH];
-
-			if (FAILED(GetModuleFileNameA(g_dllModule, path, sizeof(path))))
+			HRSRC resInfo = FindResource(g_dllModule, MAKEINTRESOURCE(IDB_PNG_TESTPATTERN), L"PNG");
+			if (resInfo == nullptr)
 			{
-				ErrorLog("Error opening test pattern.\n");
+				ErrorLog("Error finding test pattern resource.\n");
 				return;
 			}
+			HGLOBAL memory = LoadResource(g_dllModule, resInfo);
+			if (memory == nullptr)
+			{
+				ErrorLog("Error loading test pattern resource.\n");
+				return;
+			}
+			size_t data_size = SizeofResource(g_dllModule, resInfo);
+			void* data = LockResource(memory);
 
-			std::string pathStr = path;
-			std::string imgPath = pathStr.substr(0, pathStr.find_last_of("/\\")) + "\\testpattern.png";
+			if (data == nullptr)
+			{
+				ErrorLog("Error reading test pattern resource.\n");
+				return;
+			}
 
 			std::lock_guard<std::mutex> writelock(texture.RWMutex);
 			
@@ -830,7 +841,8 @@ namespace
 			}
 
 			unsigned width, height;
-			unsigned error = lodepng::decode(texture.Texture, width, height, imgPath.c_str());
+			unsigned error = lodepng::decode(texture.Texture, width, height, (uint8_t*)data, data_size);
+
 			if (error)
 			{
 				ErrorLog("Error decoding test pattern.\n");

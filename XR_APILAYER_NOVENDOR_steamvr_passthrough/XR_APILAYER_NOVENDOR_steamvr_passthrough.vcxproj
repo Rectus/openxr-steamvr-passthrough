@@ -150,8 +150,6 @@ copy $(SolutionDir)\readme.md $(OutDir)
     </Link>
     <PostBuildEvent>
       <Command>copy $(ProjectDir)\$(ProjectName).json $(OutDir)
-copy $(ProjectDir)\testpattern.png $(OutDir)
-copy $(ProjectDir)\passthrough_icon.png $(OutDir)
 copy $(SolutionDir)\readme.md $(OutDir)
 </Command>
     </PostBuildEvent>
@@ -369,6 +367,10 @@ copy $(SolutionDir)\readme.md $(OutDir)
   </ItemGroup>
   <ItemGroup>
     <ResourceCompile Include="XR_APILAYER_NOVENDOR_steamvr_passthrough.rc" />
+  </ItemGroup>
+  <ItemGroup>
+    <Image Include="passthrough_icon.png" />
+    <Image Include="testpattern.png" />
   </ItemGroup>
   <Import Project="$(VCTargetsPath)\Microsoft.Cpp.targets" />
   <ImportGroup Label="ExtensionTargets">

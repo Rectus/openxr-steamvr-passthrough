@@ -4,6 +4,8 @@
 #include "imgui.h"
 #include "imgui_internal.h"
 #include "imgui_impl_dx11.h"
+#include "lodepng.h"
+#include "resource.h"
 
 #include "fonts/roboto_medium.cpp"
 #include "fonts/cousine_regular.cpp"
@@ -1420,18 +1422,38 @@ void DashboardMenu::DestroyOverlay()
 
 void DashboardMenu::CreateThumbnail()
 {
-	char path[MAX_PATH];
-
-	if (FAILED(GetModuleFileNameA(m_dllModule, path, sizeof(path))))
+	HRSRC resInfo = FindResource(m_dllModule, MAKEINTRESOURCE(IDB_PNG_DASHBOARD_ICON), L"PNG");
+	if (resInfo == nullptr)
 	{
-		ErrorLog("Error opening icon.\n");
+		ErrorLog("Error finding icon resource.\n");
 		return;
 	}
+	HGLOBAL memory = LoadResource(m_dllModule, resInfo);
+	if (memory == nullptr)
+	{
+		ErrorLog("Error loading icon resource.\n");
+		return;
+	}
+	size_t data_size = SizeofResource(m_dllModule, resInfo);
+	void* data = LockResource(memory);
 
-	std::string pathStr = path;
-	std::string imgPath = pathStr.substr(0, pathStr.find_last_of("/\\")) + "\\passthrough_icon.png";
+	if (data == nullptr)
+	{
+		ErrorLog("Error reading icon resource.\n");
+		return;
+	}
+	std::vector<uint8_t> buffer;
+
+	uint32_t width, height;
+	uint32_t error = lodepng::decode(buffer, width, height, (uint8_t*)data, data_size);
+
+	if (error)
+	{
+		ErrorLog("Error decoding icon.\n");
+		return;
+	}
 	
-	m_openVRManager->GetVROverlay()->SetOverlayFromFile(m_thumbnailHandle, imgPath.c_str());
+	m_openVRManager->GetVROverlay()->SetOverlayRaw(m_thumbnailHandle, &buffer[0], width, height, 4);
 }
 
 
