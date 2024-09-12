@@ -36,7 +36,7 @@ XrMatrix4x4f CVMatToXrMatrix(cv::Mat& inMatrix)
 
 
 
-DepthReconstruction::DepthReconstruction(std::shared_ptr<ConfigManager> configManager, std::shared_ptr<OpenVRManager> openVRManager, std::shared_ptr<CameraManager> cameraManager)
+DepthReconstruction::DepthReconstruction(std::shared_ptr<ConfigManager> configManager, std::shared_ptr<OpenVRManager> openVRManager, std::shared_ptr<ICameraManager> cameraManager)
     : m_bRunThread(true)
     , m_configManager(configManager)
     , m_openVRManager(openVRManager)

@@ -8,11 +8,10 @@ using namespace steamvr_passthrough;
 using namespace steamvr_passthrough::log;
 
 
-
 inline XrMatrix4x4f ToXRMatrix4x4(vr::HmdMatrix44_t& input)
 {
-    XrMatrix4x4f output = 
-    { 
+    XrMatrix4x4f output =
+    {
         input.m[0][0], input.m[1][0], input.m[2][0], input.m[3][0],
         input.m[0][1], input.m[1][1], input.m[2][1], input.m[3][1],
         input.m[0][2], input.m[1][2], input.m[2][2], input.m[3][2],
@@ -63,11 +62,7 @@ inline XrMatrix4x4f ToXRMatrix4x4Inverted(vr::HmdMatrix34_t& input)
 }
 
 
-
-
-
-
-CameraManager::CameraManager(std::shared_ptr<IPassthroughRenderer> renderer, ERenderAPI renderAPI, std::shared_ptr<ConfigManager> configManager, std::shared_ptr<OpenVRManager> openVRManager)
+CameraManagerOpenCV::CameraManagerOpenCV(std::shared_ptr<IPassthroughRenderer> renderer, ERenderAPI renderAPI, std::shared_ptr<ConfigManager> configManager, std::shared_ptr<OpenVRManager> openVRManager)
     : m_renderer(renderer)
     , m_renderAPI(renderAPI)
     , m_configManager(configManager)
@@ -75,6 +70,7 @@ CameraManager::CameraManager(std::shared_ptr<IPassthroughRenderer> renderer, ERe
     , m_frameLayout(EStereoFrameLayout::Mono)
     , m_projectionDistanceFar(5.0f)
     , m_useAlternateProjectionCalc(false)
+    , m_videoCapture()
 {
     m_renderFrame = std::make_shared<CameraFrame>();
     m_servedFrame = std::make_shared<CameraFrame>();
@@ -82,7 +78,7 @@ CameraManager::CameraManager(std::shared_ptr<IPassthroughRenderer> renderer, ERe
     m_renderModels = std::make_shared<std::vector<RenderModel>>();
 }
 
-CameraManager::~CameraManager()
+CameraManagerOpenCV::~CameraManagerOpenCV()
 {
     DeinitCamera();
 
@@ -93,244 +89,132 @@ CameraManager::~CameraManager()
     }
 }
 
-bool CameraManager::InitCamera()
+bool CameraManagerOpenCV::InitCamera()
 {
     if (m_bCameraInitialized) { return true; }
 
     m_hmdDeviceId = m_openVRManager->GetHMDDeviceId();
-    vr::IVRTrackedCamera* trackedCamera = m_openVRManager->GetVRTrackedCamera();
 
-    if (!trackedCamera) 
-    {
-        ErrorLog("SteamVR Tracked Camera interface error!\n");
-        return false; 
-    }
+    //std::vector<int> props = { cv::CAP_PROP_FORMAT, CV_8UC4 };
 
-    bool bHasCamera = false;
-    vr::EVRTrackedCameraError error = trackedCamera->HasCamera(m_hmdDeviceId, &bHasCamera);
-    if (error != vr::VRTrackedCameraError_None)
+    if (!m_videoCapture.open(1, cv::CAP_ANY))
     {
-        ErrorLog("Error %i checking camera on device %i\n", error, m_hmdDeviceId);
+        ErrorLog("OpenCV VideoCapture failed to open!\n");
         return false;
     }
-    else if(!bHasCamera)
+    else
     {
-        ErrorLog("No passthrough camera found!\n");
-        return false;
+        int api = (int)m_videoCapture.get(cv::CAP_PROP_BACKEND);
+        Log("OpenCV Video capture opened using API: %d\n", api);
     }
 
     UpdateStaticCameraParameters();
-
-    vr::EVRTrackedCameraError cameraError = trackedCamera->AcquireVideoStreamingService(m_hmdDeviceId, &m_cameraHandle);
-
-    if (cameraError != vr::VRTrackedCameraError_None)
-    {
-        Log("AcquireVideoStreamingService error %i on device %i\n", (int)cameraError, m_hmdDeviceId);
-        return false;
-    }
 
     m_bCameraInitialized = true;
     m_bRunThread = true;
 
     if (!m_serveThread.joinable())
     {
-        m_serveThread = std::thread(&CameraManager::ServeFrames, this);
+        m_serveThread = std::thread(&CameraManagerOpenCV::ServeFrames, this);
     }
 
     return true;
 }
 
-void CameraManager::DeinitCamera()
+void CameraManagerOpenCV::DeinitCamera()
 {
     if (!m_bCameraInitialized) { return; }
     m_bCameraInitialized = false;
     m_bRunThread = false;
 
-    vr::IVRTrackedCamera* trackedCamera = m_openVRManager->GetVRTrackedCamera();
-
-    if (trackedCamera)
-    {
-        vr::EVRTrackedCameraError error = trackedCamera->ReleaseVideoStreamingService(m_cameraHandle);
-
-        if (error != vr::VRTrackedCameraError_None)
-        {
-            Log("ReleaseVideoStreamingService error %i\n", (int)error);
-        }
-    }
-
     if (m_serveThread.joinable())
     {
         m_serveThread.join();
     }
+
+    m_videoCapture.release();
 }
 
-void CameraManager::GetDistortedFrameSize(uint32_t& width, uint32_t& height, uint32_t& bufferSize) const
+void CameraManagerOpenCV::GetDistortedFrameSize(uint32_t& width, uint32_t& height, uint32_t& bufferSize) const
 {
     width = m_cameraTextureWidth;
     height = m_cameraTextureHeight;
     bufferSize = m_cameraFrameBufferSize;
 }
 
-void CameraManager::GetUndistortedFrameSize(uint32_t& width, uint32_t& height, uint32_t& bufferSize) const
+void CameraManagerOpenCV::GetUndistortedFrameSize(uint32_t& width, uint32_t& height, uint32_t& bufferSize) const
 {
     width = m_cameraUndistortedTextureWidth;
     height = m_cameraUndistortedTextureHeight;
     bufferSize = m_cameraUndistortedFrameBufferSize;
 }
 
-void CameraManager::GetIntrinsics(const ERenderEye cameraEye, XrVector2f& focalLength, XrVector2f& center) const
+void CameraManagerOpenCV::GetIntrinsics(const ERenderEye cameraEye, XrVector2f& focalLength, XrVector2f& center) const
 {
-    uint32_t cameraIndex = 0;
+    focalLength.x = 1.0f;
+    focalLength.y = 1.0f;
 
-    if (m_frameLayout == EStereoFrameLayout::StereoHorizontalLayout)
-    {
-        cameraIndex = (cameraEye == LEFT_EYE) ? 0 : 1;
-    }
-    else if (m_frameLayout == EStereoFrameLayout::StereoVerticalLayout)
-    {
-        // The camera indices are reversed for vertical layouts.
-        cameraIndex = (cameraEye == LEFT_EYE) ? 1 : 0;
-    }
-
-    vr::IVRTrackedCamera* trackedCamera = m_openVRManager->GetVRTrackedCamera();
-
-    // OpenVR only provides camera inrinsics for the undistorted image dimesions for some reason.
-    vr::EVRTrackedCameraError cameraError = trackedCamera->GetCameraIntrinsics(m_hmdDeviceId, cameraIndex, vr::VRTrackedCameraFrameType_MaximumUndistorted, (vr::HmdVector2_t*)&focalLength, (vr::HmdVector2_t*)&center);
-    if (cameraError != vr::VRTrackedCameraError_None)
-    {
-        ErrorLog("GetCameraIntrinsics error %i on device Id %i\n", cameraError, m_hmdDeviceId);
-    }
-
-    // Multiply the values by the distorted/undistorted ratio, since we need the values for the distorted image.
-    float xRatio = ((float)m_cameraFrameWidth) / m_cameraUndistortedFrameWidth;
-    float yRatio = ((float)m_cameraFrameHeight) / m_cameraUndistortedFrameHeight;
-
-    focalLength.x *= xRatio;
-    focalLength.y *= yRatio;
-
-    center.x *= xRatio;
-    center.y *= yRatio;
+    center.x = 0.0f;
+    center.y = 0.0f;
 }
 
-void CameraManager::GetDistortionCoefficients(ECameraDistortionCoefficients& coeffs) const
+void CameraManagerOpenCV::GetDistortionCoefficients(ECameraDistortionCoefficients& coeffs) const
 {
-    vr::TrackedPropertyError error;
-    uint32_t numBytes = m_openVRManager->GetVRSystem()->GetArrayTrackedDeviceProperty(m_hmdDeviceId, vr::Prop_CameraDistortionCoefficients_Float_Array, vr::k_unFloatPropertyTag, &coeffs, 16 * sizeof(double), &error);
-    if (error != vr::TrackedProp_Success || numBytes == 0)
-    {
-        ErrorLog("Failed to get tracked camera distortion coefficients, error [%i]\n", error);
-    }
+    
 }
 
-EStereoFrameLayout CameraManager::GetFrameLayout() const
+EStereoFrameLayout CameraManagerOpenCV::GetFrameLayout() const
 {
     return m_frameLayout;
 }
 
-XrMatrix4x4f CameraManager::GetLeftToRightCameraTransform() const
+XrMatrix4x4f CameraManagerOpenCV::GetLeftToRightCameraTransform() const
 {
     return m_cameraLeftToRightPose;
 }
 
-void CameraManager::GetTrackedCameraEyePoses(XrMatrix4x4f& LeftPose, XrMatrix4x4f& RightPose)
+void CameraManagerOpenCV::GetTrackedCameraEyePoses(XrMatrix4x4f& LeftPose, XrMatrix4x4f& RightPose)
 {
-    vr::IVRSystem* vrSystem = m_openVRManager->GetVRSystem();
-
-    vr::HmdMatrix34_t Buffer[2];
-    vr::TrackedPropertyError error;
-    bool bGotLeftCamera = true;
-    bool bGotRightCamera = true;
-
-    uint32_t numBytes = vrSystem->GetArrayTrackedDeviceProperty(m_hmdDeviceId, vr::Prop_CameraToHeadTransforms_Matrix34_Array, vr::k_unHmdMatrix34PropertyTag, &Buffer, sizeof(Buffer), &error);
-    if (error != vr::TrackedProp_Success || numBytes == 0)
-    {
-        ErrorLog("Failed to get tracked camera pose array, error [%i]\n",error);
-        bGotLeftCamera = false;
-        bGotRightCamera = false;
-    }
-
-    if (m_frameLayout == EStereoFrameLayout::StereoHorizontalLayout)
-    {
-        LeftPose = ToXRMatrix4x4(Buffer[0]);
-        RightPose = ToXRMatrix4x4(Buffer[1]);
-    }
-    else if (m_frameLayout == EStereoFrameLayout::StereoVerticalLayout)
-    {
-        // Vertical layouts have the right camera at index 0.
-        LeftPose = ToXRMatrix4x4(Buffer[1]);
-        RightPose = ToXRMatrix4x4(Buffer[0]);
-
-        // Hack to remove scaling from Vive Pro Eye matrix.
-        LeftPose.m[5] = abs(LeftPose.m[5]);
-        LeftPose.m[10] = abs(LeftPose.m[10]);
-    }
-    else
-    {
-        LeftPose = ToXRMatrix4x4(Buffer[0]);
-        RightPose = ToXRMatrix4x4(Buffer[0]);
-    }
+    XrMatrix4x4f_CreateIdentity(&LeftPose);
+    XrMatrix4x4f_CreateIdentity(&RightPose);
 }
 
-void CameraManager::UpdateStaticCameraParameters()
+void CameraManagerOpenCV::UpdateStaticCameraParameters()
 {
     vr::IVRSystem* vrSystem = m_openVRManager->GetVRSystem();
-    vr::IVRTrackedCamera* trackedCamera = m_openVRManager->GetVRTrackedCamera();
 
-    vr::EVRTrackedCameraError cameraError = trackedCamera->GetCameraFrameSize(m_hmdDeviceId, vr::VRTrackedCameraFrameType_Distorted, &m_cameraTextureWidth, &m_cameraTextureHeight, &m_cameraFrameBufferSize);
-    if (cameraError != vr::VRTrackedCameraError_None)
-    {
-        ErrorLog("CameraFrameSize error %i on device Id %i\n", cameraError, m_hmdDeviceId);
-    }
+    m_cameraTextureWidth = m_videoCapture.get(cv::CAP_PROP_FRAME_WIDTH);
+    m_cameraTextureHeight = m_videoCapture.get(cv::CAP_PROP_FRAME_HEIGHT);
+    m_cameraFrameBufferSize = m_cameraTextureWidth * m_cameraTextureHeight * 4;
 
     if (m_cameraTextureWidth == 0 || m_cameraTextureHeight == 0 || m_cameraFrameBufferSize == 0)
     {
         ErrorLog("Invalid frame size received:Width = %u, Height = %u, Size = %u\n", m_cameraTextureWidth, m_cameraTextureHeight, m_cameraFrameBufferSize);
     }
 
-    cameraError = trackedCamera->GetCameraFrameSize(m_hmdDeviceId, vr::VRTrackedCameraFrameType_MaximumUndistorted, &m_cameraUndistortedTextureWidth, &m_cameraUndistortedTextureHeight, &m_cameraUndistortedFrameBufferSize);
-    if (cameraError != vr::VRTrackedCameraError_None)
+    m_cameraUndistortedTextureWidth = m_cameraTextureWidth;
+    m_cameraUndistortedTextureHeight = m_cameraTextureHeight;
+    m_cameraUndistortedFrameBufferSize = m_cameraFrameBufferSize;
+
+
+    if (m_frameLayout == EStereoFrameLayout::StereoVerticalLayout)
     {
-        ErrorLog("CameraFrameSize error %i on device Id %i\n", cameraError, m_hmdDeviceId);
-    }
-
-    if (m_cameraUndistortedTextureWidth == 0 || m_cameraUndistortedTextureHeight == 0 || m_cameraUndistortedFrameBufferSize == 0)
-    {
-        ErrorLog("Invalid frame size received:Width = %u, Height = %u, Size = %u\n", m_cameraUndistortedTextureWidth, m_cameraUndistortedTextureHeight, m_cameraUndistortedFrameBufferSize);
-    }
-
-    vr::TrackedPropertyError propError;
-
-    int32_t layout = (vr::EVRTrackedCameraFrameLayout)vrSystem->GetInt32TrackedDeviceProperty(m_hmdDeviceId, vr::Prop_CameraFrameLayout_Int32, &propError);
-
-    if (propError != vr::TrackedProp_Success)
-    {
-        ErrorLog("GetTrackedCameraEyePoses error %i\n", propError);
-    }
-
-    if ((layout & vr::EVRTrackedCameraFrameLayout_Stereo) != 0)
-    {
-        if ((layout & vr::EVRTrackedCameraFrameLayout_VerticalLayout) != 0)
-        {
-            m_frameLayout = EStereoFrameLayout::StereoVerticalLayout;
             m_cameraFrameWidth = m_cameraTextureWidth;
             m_cameraFrameHeight = m_cameraTextureHeight / 2;
 
             m_cameraUndistortedFrameWidth = m_cameraUndistortedTextureWidth;
             m_cameraUndistortedFrameHeight = m_cameraUndistortedTextureHeight / 2;
-        }
-        else
-        {
-            m_frameLayout = EStereoFrameLayout::StereoHorizontalLayout;
-            m_cameraFrameWidth = m_cameraTextureWidth / 2;
-            m_cameraFrameHeight = m_cameraTextureHeight;
-
-            m_cameraUndistortedFrameWidth = m_cameraUndistortedTextureWidth / 2;
-            m_cameraUndistortedFrameHeight = m_cameraUndistortedTextureHeight;
-        }
     }
-    else
+    else if(m_frameLayout == EStereoFrameLayout::StereoHorizontalLayout)
     {
-        m_frameLayout = EStereoFrameLayout::Mono;
+        m_cameraFrameWidth = m_cameraTextureWidth / 2;
+        m_cameraFrameHeight = m_cameraTextureHeight;
+
+        m_cameraUndistortedFrameWidth = m_cameraUndistortedTextureWidth / 2;
+        m_cameraUndistortedFrameHeight = m_cameraUndistortedTextureHeight;
+    }
+    else // Mono
+    {
         m_cameraFrameWidth = m_cameraTextureWidth;
         m_cameraFrameHeight = m_cameraTextureHeight;
 
@@ -352,6 +236,9 @@ void CameraManager::UpdateStaticCameraParameters()
     m_viewToHMDRight = ToXRMatrix4x4(vrHMDViewRight);
     m_HMDToViewRight = ToXRMatrix4x4Inverted(vrHMDViewRight);
 
+    XrMatrix4x4f_CreateIdentity(&m_cameraToHMDLeft);
+    XrMatrix4x4f_CreateIdentity(&m_cameraToHMDRight);
+
     GetTrackedCameraEyePoses(m_cameraToHMDLeft, m_cameraToHMDRight);
 
     XrMatrix4x4f_Invert(&m_HMDToCameraLeft, &m_cameraToHMDLeft);
@@ -361,14 +248,14 @@ void CameraManager::UpdateStaticCameraParameters()
     XrMatrix4x4f_Multiply(&m_cameraRightToLeftPose, &m_cameraToHMDRight, &m_HMDToCameraLeft);
 }
 
-bool CameraManager::GetCameraFrame(std::shared_ptr<CameraFrame>& frame)
+bool CameraManagerOpenCV::GetCameraFrame(std::shared_ptr<CameraFrame>& frame)
 {
     if (!m_bCameraInitialized) { return false; }
 
     std::unique_lock<std::mutex> lock(m_serveMutex, std::try_to_lock);
     if (lock.owns_lock() && m_servedFrame->bIsValid)
     {
-        m_renderFrame->bIsValid = false;        
+        m_renderFrame->bIsValid = false;
         m_renderFrame->frameTextureResource = nullptr;
         m_renderFrame.swap(m_servedFrame);
 
@@ -384,25 +271,21 @@ bool CameraManager::GetCameraFrame(std::shared_ptr<CameraFrame>& frame)
     return false;
 }
 
-void CameraManager::ServeFrames()
+void CameraManagerOpenCV::ServeFrames()
 {
-    vr::IVRTrackedCamera* trackedCamera = m_openVRManager->GetVRTrackedCamera();
+    vr::IVRSystem* vrSystem = m_openVRManager->GetVRSystem();
+    
 
-    if (!trackedCamera)
+    if (!m_videoCapture.isOpened())
     {
         return;
-    }
-
-    ComPtr<ID3D11Device> d3dInteropDevice;
-
-    if (m_renderAPI == Vulkan)
-    {
-        D3D11CreateDevice(NULL, D3D_DRIVER_TYPE_HARDWARE, NULL, 0, NULL, 0, D3D11_SDK_VERSION, &d3dInteropDevice, NULL, NULL);
     }
 
     bool bHasFrame = false;
     uint32_t lastFrameSequence = 0;
     LARGE_INTEGER startFrameRetrievalTime;
+    vr::TrackedDevicePose_t trackedDevicePoseArray[1];
+    cv::Mat frameBuffer;
 
     while (m_bRunThread)
     {
@@ -413,103 +296,49 @@ void CameraManager::ServeFrames()
         // Wait for the old frame struct to be available in case someone is still reading from it.
         std::unique_lock writeLock(m_underConstructionFrame->readWriteMutex);
 
-        while (true)
+        startFrameRetrievalTime = StartPerfTimer();
+            
+        if (!m_videoCapture.grab())
         {
-            startFrameRetrievalTime = StartPerfTimer();
+            ErrorLog("Failed to grab VideoCapture.\n");
+        }
 
-            vr::EVRTrackedCameraFrameType frameType = m_configManager->GetConfig_Main().ProjectionMode == Projection_RoomView2D ? vr::VRTrackedCameraFrameType_MaximumUndistorted : vr::VRTrackedCameraFrameType_Distorted;
+        // TODO: Hardcoded to HMD
+        vrSystem->GetDeviceToAbsoluteTrackingPose(vr::TrackingUniverseStanding, 0.0f, trackedDevicePoseArray, 1);
 
-            vr::EVRTrackedCameraError error = trackedCamera->GetVideoStreamFrameBuffer(m_cameraHandle, frameType, nullptr, 0, &m_underConstructionFrame->header, sizeof(vr::CameraVideoStreamFrameHeader_t));
-
-            if (error == vr::VRTrackedCameraError_None)
-            {
-                if (!bHasFrame)
-                {
-                    break;
-                }
-                else if (m_underConstructionFrame->header.nFrameSequence != lastFrameSequence)
-                {
-                    break;
-                }
-            }
-            else if (error != vr::VRTrackedCameraError_NoFrameAvailable)
-            {
-                ErrorLog("GetVideoStreamFrameBuffer-header error %i\n", error);
-            }
-
-            if (!m_bRunThread) { return; }
-
-            std::this_thread::sleep_for(FRAME_POLL_INTERVAL);
-
-            if (!m_bRunThread) { return; }
+        if (!m_videoCapture.retrieve(frameBuffer))
+        {
+            ErrorLog("Failed to retrieve VideoCapture.\n");
         }
 
         if (!m_bRunThread) { return; }
 
-        Config_Main& mainConf = m_configManager->GetConfig_Main();
-
-        vr::EVRTrackedCameraFrameType frameType = mainConf.ProjectionMode == Projection_RoomView2D ? vr::VRTrackedCameraFrameType_MaximumUndistorted : vr::VRTrackedCameraFrameType_Distorted;
-
-        if (m_renderAPI == DirectX11)
+        if (m_underConstructionFrame->frameBuffer.get() == nullptr)
         {
-            std::shared_ptr<IPassthroughRenderer> renderer = m_renderer.lock();
-
-            if (!renderer.get())
-            {
-                continue;
-            }
-
-            vr::EVRTrackedCameraError error = trackedCamera->GetVideoStreamTextureD3D11(m_cameraHandle, frameType, renderer->GetRenderDevice(), &m_underConstructionFrame->frameTextureResource, nullptr, 0);
-            if (error != vr::VRTrackedCameraError_None)
-            {
-                ErrorLog("GetVideoStreamTextureD3D11 error %i\n", error);
-                continue;
-            }
-        }
-        else if (m_renderAPI == Vulkan)
-        {
-            ID3D11ShaderResourceView* srv;
-
-            vr::EVRTrackedCameraError error = trackedCamera->GetVideoStreamTextureD3D11(m_cameraHandle, frameType, d3dInteropDevice.Get(), (void**)&srv, nullptr, 0);
-            if (error != vr::VRTrackedCameraError_None)
-            {
-                ErrorLog("GetVideoStreamTextureD3D11 error %i\n", error);
-                continue;
-            }
-
-            ComPtr<IDXGIResource> dxgiRes;
-            ID3D11Resource* res;
-            srv->GetResource(&res);
-            res->QueryInterface(IID_PPV_ARGS(&dxgiRes));
-            dxgiRes->GetSharedHandle(&m_underConstructionFrame->frameTextureResource);
+            m_underConstructionFrame->frameBuffer = std::make_shared<std::vector<uint8_t>>(m_cameraFrameBufferSize);
         }
 
-        m_underConstructionFrame->bHasFrameBuffer = false;
+        cv::Mat paddedBuffer = cv::Mat(frameBuffer.rows, frameBuffer.cols, CV_8UC4);
+        int from_to[] = { 0,2, 1,1, 2,0, -1,3 };
+        cv::mixChannels(&frameBuffer, 1, &paddedBuffer, 1, from_to, frameBuffer.channels());
 
-        // TODO: Getting the framebuffer crashes under Vulkan
-        if(m_renderAPI == DirectX12 || 
-            (mainConf.ProjectionMode == Projection_StereoReconstruction && m_renderAPI != Vulkan))
-        {
-            if (m_underConstructionFrame->frameBuffer.get() == nullptr)
-            {
-                m_underConstructionFrame->frameBuffer = std::make_shared<std::vector<uint8_t>>(m_cameraFrameBufferSize);
-            }
+        memcpy(m_underConstructionFrame->frameBuffer->data(), paddedBuffer.data, m_cameraFrameBufferSize);
 
-            vr::EVRTrackedCameraError error = trackedCamera->GetVideoStreamFrameBuffer(m_cameraHandle, frameType, m_underConstructionFrame->frameBuffer->data(), (uint32_t)m_underConstructionFrame->frameBuffer->size(), nullptr, 0);
-            if (error != vr::VRTrackedCameraError_None)
-            {
-                ErrorLog("GetVideoStreamFrameBuffer error %i\n", error);
-                continue;
-            }
-
-            m_underConstructionFrame->bHasFrameBuffer = true;
-        }
+        m_underConstructionFrame->bHasFrameBuffer = true;
 
         bHasFrame = true;
-        lastFrameSequence = m_underConstructionFrame->header.nFrameSequence;
+        
+        lastFrameSequence = m_videoCapture.get(cv::CAP_PROP_POS_FRAMES);
+        m_underConstructionFrame->header.nFrameSequence = lastFrameSequence;
+        m_underConstructionFrame->header.nWidth = m_cameraTextureWidth;
+        m_underConstructionFrame->header.nHeight = m_cameraTextureHeight;
+        m_underConstructionFrame->header.nBytesPerPixel = 4;
+        m_underConstructionFrame->header.trackedDevicePose = trackedDevicePoseArray[0];
 
         m_underConstructionFrame->bIsValid = true;
         m_underConstructionFrame->frameLayout = m_frameLayout;
+
+        Config_Main& mainConf = m_configManager->GetConfig_Main();
 
         if (mainConf.ProjectToRenderModels)
         {
@@ -566,7 +395,7 @@ void CameraManager::ServeFrames()
 }
 
 
-void CameraManager::UpdateRenderModels()
+void CameraManagerOpenCV::UpdateRenderModels()
 {
     vr::IVRSystem* vrSystem = m_openVRManager->GetVRSystem();
     vr::IVRRenderModels* vrRenderModels = m_openVRManager->GetVRRenderModels();
@@ -624,7 +453,7 @@ void CameraManager::UpdateRenderModels()
 
 
 // Constructs a matrix from the roomscale origin to the HMD eye pose.
-XrMatrix4x4f CameraManager::GetHMDWorldToViewMatrix(const ERenderEye eye, const XrCompositionLayerProjection& layer, const XrReferenceSpaceCreateInfo& refSpaceInfo)
+XrMatrix4x4f CameraManagerOpenCV::GetHMDWorldToViewMatrix(const ERenderEye eye, const XrCompositionLayerProjection& layer, const XrReferenceSpaceCreateInfo& refSpaceInfo)
 {
     vr::IVRSystem* vrSystem = m_openVRManager->GetVRSystem();
 
@@ -636,7 +465,7 @@ XrMatrix4x4f CameraManager::GetHMDWorldToViewMatrix(const ERenderEye eye, const 
 
     // The application provided HMD pose used to make sure reprojection works correctly.
     XrMatrix4x4f_CreateTranslationRotationScale(&pose, &layer.views[viewNum].pose.position, &layer.views[viewNum].pose.orientation, &scale);
-    XrMatrix4x4f_Invert(&viewToTracking, &pose);    
+    XrMatrix4x4f_Invert(&viewToTracking, &pose);
 
     // Apply any pose the application might have configured in its reference spaces.
     XrMatrix4x4f_CreateTranslationRotationScale(&pose, &refSpaceInfo.poseInReferenceSpace.position, &refSpaceInfo.poseInReferenceSpace.orientation, &scale);
@@ -649,7 +478,7 @@ XrMatrix4x4f CameraManager::GetHMDWorldToViewMatrix(const ERenderEye eye, const 
         trackingToStage = ToXRMatrix4x4Inverted(mat);
 
         XrMatrix4x4f_Multiply(&pose, &refSpacePose, &trackingToStage);
-        XrMatrix4x4f_Multiply(&output,  &viewToTracking, &pose);
+        XrMatrix4x4f_Multiply(&output, &viewToTracking, &pose);
     }
     else
     {
@@ -659,11 +488,11 @@ XrMatrix4x4f CameraManager::GetHMDWorldToViewMatrix(const ERenderEye eye, const 
     return output;
 }
 
-void CameraManager::UpdateProjectionMatrix(std::shared_ptr<CameraFrame>& frame)
+void CameraManagerOpenCV::UpdateProjectionMatrix(std::shared_ptr<CameraFrame>& frame)
 {
     bool bIsStereo = m_frameLayout != EStereoFrameLayout::Mono;
 
-    vr::IVRTrackedCamera* trackedCamera = m_openVRManager->GetVRTrackedCamera();
+
     Config_Main& mainConf = m_configManager->GetConfig_Main();
 
     if (mainConf.ProjectionDistanceFar * 1.5f != m_projectionDistanceFar)
@@ -671,17 +500,10 @@ void CameraManager::UpdateProjectionMatrix(std::shared_ptr<CameraFrame>& frame)
         // Push back far plane by 1.5x to account for the flat projection plane of the passthrough frame.
         m_projectionDistanceFar = mainConf.ProjectionDistanceFar * 1.5f;
 
-        // The camera indices are reversed for vertical layouts.
-        uint32_t leftIndex = (m_frameLayout == EStereoFrameLayout::StereoVerticalLayout) ? 1 : 0;
 
-        vr::HmdMatrix44_t vrProjection;
-        vr::EVRTrackedCameraError error = trackedCamera->GetCameraProjection(m_hmdDeviceId, leftIndex, vr::VRTrackedCameraFrameType_MaximumUndistorted, NEAR_PROJECTION_DISTANCE, m_projectionDistanceFar, &vrProjection);
+        XrFovf fov = {-1.0f, 1.0f, 1.0f, -1.0f};
+        XrMatrix4x4f_CreateProjectionFov(&m_HMDViewToProjectionLeft, GRAPHICS_D3D, fov, NEAR_PROJECTION_DISTANCE, m_projectionDistanceFar);
 
-        if (error != vr::VRTrackedCameraError_None)
-        {
-            ErrorLog("CameraProjection error %i on device %i\n", error, m_hmdDeviceId);
-            return;
-        }
 
         XrMatrix4x4f scaleMatrix, offsetMatrix, transMatrix;
 
@@ -702,32 +524,25 @@ void CameraManager::UpdateProjectionMatrix(std::shared_ptr<CameraFrame>& frame)
             XrMatrix4x4f_CreateIdentity(&transMatrix);
         }
 
-        XrMatrix4x4f projectionMatrix = ToXRMatrix4x4Inverted(vrProjection);
-        XrMatrix4x4f_Multiply(&m_cameraProjectionInvFarLeft, &projectionMatrix, &transMatrix);
+        XrMatrix4x4f projectionMatrix, projectionMatrixInv;
+        XrMatrix4x4f_CreateProjectionFov(&projectionMatrix, GRAPHICS_D3D, fov, NEAR_PROJECTION_DISTANCE, m_projectionDistanceFar);
+        XrMatrix4x4f_Invert(&projectionMatrixInv, &projectionMatrix);
+
+        XrMatrix4x4f_Multiply(&m_cameraProjectionInvFarLeft, &projectionMatrixInv, &transMatrix);
 
         if (bIsStereo)
         {
-            // The camera indices are reversed for vertical layouts.
-            uint32_t rightIndex = (m_frameLayout == EStereoFrameLayout::StereoVerticalLayout) ? 0 : 1;
+            XrMatrix4x4f projectionMatrix, projectionMatrixInv;
+            XrMatrix4x4f_CreateProjectionFov(&projectionMatrix, GRAPHICS_D3D, fov, NEAR_PROJECTION_DISTANCE, m_projectionDistanceFar);
+            XrMatrix4x4f_Invert(&projectionMatrixInv, &projectionMatrix);
 
-            error = trackedCamera->GetCameraProjection(m_hmdDeviceId, rightIndex, vr::VRTrackedCameraFrameType_MaximumUndistorted, NEAR_PROJECTION_DISTANCE, m_projectionDistanceFar, &vrProjection);
-
-            if (error != vr::VRTrackedCameraError_None)
-            {
-                ErrorLog("CameraProjection error %i on device %i\n", error, m_hmdDeviceId);
-                return;
-            }
-
-
-            XrMatrix4x4f projectionMatrix = ToXRMatrix4x4Inverted(vrProjection);
-            XrMatrix4x4f_Multiply(&m_cameraProjectionInvFarRight, &projectionMatrix, &transMatrix);
-
+            XrMatrix4x4f_Multiply(&m_cameraProjectionInvFarRight, &projectionMatrixInv, &transMatrix);
         }
     }
 }
 
 
-void CameraManager::CalculateFrameProjection(std::shared_ptr<CameraFrame>& frame, std::shared_ptr<DepthFrame> depthFrame, const XrCompositionLayerProjection& layer, float timeToPhotons, const XrReferenceSpaceCreateInfo& refSpaceInfo, UVDistortionParameters& distortionParams)
+void CameraManagerOpenCV::CalculateFrameProjection(std::shared_ptr<CameraFrame>& frame, std::shared_ptr<DepthFrame> depthFrame, const XrCompositionLayerProjection& layer, float timeToPhotons, const XrReferenceSpaceCreateInfo& refSpaceInfo, UVDistortionParameters& distortionParams)
 {
     UpdateProjectionMatrix(frame);
 
@@ -777,7 +592,7 @@ void CameraManager::CalculateFrameProjection(std::shared_ptr<CameraFrame>& frame
     frame->prevWorldToHMDProjectionLeft = m_lastWorldToHMDProjectionLeft;
     frame->prevWorldToHMDProjectionRight = m_lastWorldToHMDProjectionRight;
 
-    m_lastWorldToHMDProjectionLeft = frame->worldToHMDProjectionLeft; 
+    m_lastWorldToHMDProjectionLeft = frame->worldToHMDProjectionLeft;
     m_lastWorldToHMDProjectionRight = frame->worldToHMDProjectionRight;
 
 
@@ -801,7 +616,7 @@ void CameraManager::CalculateFrameProjection(std::shared_ptr<CameraFrame>& frame
     }
 }
 
-void CameraManager::CalculateFrameProjectionForEye(const ERenderEye eye, std::shared_ptr<CameraFrame>& frame, const XrCompositionLayerProjection& layer, const XrReferenceSpaceCreateInfo& refSpaceInfo, UVDistortionParameters& distortionParams)
+void CameraManagerOpenCV::CalculateFrameProjectionForEye(const ERenderEye eye, std::shared_ptr<CameraFrame>& frame, const XrCompositionLayerProjection& layer, const XrReferenceSpaceCreateInfo& refSpaceInfo, UVDistortionParameters& distortionParams)
 {
     Config_Main& mainConf = m_configManager->GetConfig_Main();
 
@@ -809,7 +624,7 @@ void CameraManager::CalculateFrameProjectionForEye(const ERenderEye eye, std::sh
     uint32_t cameraId = (eye == RIGHT_EYE && bIsStereo) ? 1 : 0;
 
     XrMatrix4x4f hmdWorldToView = GetHMDWorldToViewMatrix(eye, layer, refSpaceInfo);
-    
+
     XrVector3f* hmdWorldPos = (eye == LEFT_EYE) ? &frame->hmdViewPosWorldLeft : &frame->hmdViewPosWorldRight;
     XrMatrix4x4f hmdViewToWorld;
     XrMatrix4x4f_Invert(&hmdViewToWorld, &hmdWorldToView);
@@ -858,7 +673,7 @@ void CameraManager::CalculateFrameProjectionForEye(const ERenderEye eye, std::sh
     XrMatrix4x4f_CreateProjectionFov(&hmdProjection, GRAPHICS_D3D, layer.views[(eye == LEFT_EYE) ? 0 : 1].fov, nearZ, farZ);
 
     // Handle infinite and reversed Z - XrMatrix4x4f_CreateProjectionFov sets it up wrong.
-    if (depthInfo && (farZ == (std::numeric_limits<float>::max)() || !std::isfinite(farZ) ))
+    if (depthInfo && (farZ == (std::numeric_limits<float>::max)() || !std::isfinite(farZ)))
     {
         hmdProjection.m[10] = 0;
         hmdProjection.m[14] = nearZ;
@@ -951,15 +766,15 @@ void CameraManager::CalculateFrameProjectionForEye(const ERenderEye eye, std::sh
             XrMatrix4x4f rectifiedRotation = distortionParams.rectifiedRotationRight;
 
             XrMatrix4x4f rectifiedRotationInverse;
-            XrMatrix4x4f_Transpose(&rectifiedRotationInverse, &rectifiedRotation);       
-            
+            XrMatrix4x4f_Transpose(&rectifiedRotationInverse, &rectifiedRotation);
+
             XrMatrix4x4f tempMatrix;
             XrMatrix4x4f_Multiply(&tempMatrix, &rectifiedRotationInverse, &rightCameraFromTrackingPose);
             XrMatrix4x4f_Multiply(&frame->worldToCameraProjectionRight, &frameProjection, &tempMatrix);
-            
+
 
             if (bIsStereo)
-            {           
+            {
                 XrMatrix4x4f_Multiply(&tempMatrix, &rectifiedRotation, &frameProjectionInverse);
                 XrMatrix4x4f_Multiply(&frame->cameraProjectionToWorldRight, &frame->cameraViewToWorldRight, &tempMatrix);
             }

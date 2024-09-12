@@ -13,7 +13,7 @@
 class DepthReconstruction
 {
 public:
-	DepthReconstruction(std::shared_ptr<ConfigManager> configManager, std::shared_ptr<OpenVRManager> openVRManager, std::shared_ptr<CameraManager> cameraManager);
+	DepthReconstruction(std::shared_ptr<ConfigManager> configManager, std::shared_ptr<OpenVRManager> openVRManager, std::shared_ptr<ICameraManager> cameraManager);
 	~DepthReconstruction();
 
 	std::shared_ptr<DepthFrame> GetDepthFrame();
@@ -34,7 +34,7 @@ private:
 
 	std::shared_ptr<ConfigManager> m_configManager;
 	std::shared_ptr<OpenVRManager> m_openVRManager;
-	std::shared_ptr<CameraManager> m_cameraManager;
+	std::shared_ptr<ICameraManager> m_cameraManager;
 
 	std::shared_ptr<DepthFrame> m_servedDepthFrame;
 	std::shared_ptr<DepthFrame> m_depthFrame;

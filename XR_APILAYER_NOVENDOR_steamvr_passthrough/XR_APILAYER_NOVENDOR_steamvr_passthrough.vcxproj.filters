@@ -106,7 +106,7 @@
     <ClCompile Include="passthrough_renderer_dx12.cpp">
       <Filter>Source Files</Filter>
     </ClCompile>
-    <ClCompile Include="camera_manager.cpp">
+    <ClCompile Include="camera_manager_openvr.cpp">
       <Filter>Source Files</Filter>
     </ClCompile>
     <ClCompile Include="passthrough_renderer_dx11.cpp">
@@ -152,6 +152,9 @@
       <Filter>Source Files</Filter>
     </ClCompile>
     <ClCompile Include="passthrough_renderer_dx11_interop.cpp">
+      <Filter>Source Files</Filter>
+    </ClCompile>
+    <ClCompile Include="camera_manager_opencv.cpp">
       <Filter>Source Files</Filter>
     </ClCompile>
   </ItemGroup>

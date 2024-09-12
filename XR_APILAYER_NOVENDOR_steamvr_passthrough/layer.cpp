@@ -264,7 +264,7 @@ namespace
 
 					if (!m_cameraManager.get())
 					{
-						m_cameraManager = std::make_shared<CameraManager>(m_Renderer, DirectX11, m_configManager, m_openVRManager);
+						m_cameraManager = std::make_shared<CameraManagerOpenCV>(m_Renderer, DirectX11, m_configManager, m_openVRManager);
 					}
 					if (!m_cameraManager->InitCamera())
 					{
@@ -310,7 +310,7 @@ namespace
 
 					if (!m_cameraManager.get())
 					{
-						m_cameraManager = std::make_unique<CameraManager>(m_Renderer, usedAPI, m_configManager, m_openVRManager);
+						m_cameraManager = std::make_unique<CameraManagerOpenVR>(m_Renderer, usedAPI, m_configManager, m_openVRManager);
 					}
 					if (!m_cameraManager->InitCamera())
 					{
@@ -344,7 +344,7 @@ namespace
 					
 					if (!m_cameraManager.get())
 					{
-						m_cameraManager = std::make_unique<CameraManager>(m_Renderer, Vulkan, m_configManager, m_openVRManager);
+						m_cameraManager = std::make_unique<CameraManagerOpenVR>(m_Renderer, Vulkan, m_configManager, m_openVRManager);
 					}
 					if (!m_cameraManager->InitCamera())
 					{
@@ -1077,7 +1077,7 @@ namespace
 		XrSession m_currentSession{XR_NULL_HANDLE};
 		std::shared_ptr<IPassthroughRenderer> m_Renderer;
 		std::shared_ptr<ConfigManager> m_configManager;
-		std::shared_ptr<CameraManager> m_cameraManager;
+		std::shared_ptr<ICameraManager> m_cameraManager;
 		std::unique_ptr<DashboardMenu> m_dashboardMenu;
 		std::shared_ptr<OpenVRManager> m_openVRManager;
 		std::shared_ptr<DepthReconstruction> m_depthReconstruction;
