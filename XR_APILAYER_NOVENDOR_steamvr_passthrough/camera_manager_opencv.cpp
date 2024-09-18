@@ -2,6 +2,7 @@
 #include "camera_manager.h"
 #include <log.h>
 #include "layer.h"
+#include <stdlib.h>
 
 
 using namespace steamvr_passthrough;
@@ -93,22 +94,40 @@ bool CameraManagerOpenCV::InitCamera()
 {
     if (m_bCameraInitialized) { return true; }
 
+    Config_Camera& cameraConf = m_configManager->GetConfig_Camera();
+
     m_hmdDeviceId = m_openVRManager->GetHMDDeviceId();
 
-    //std::vector<int> props = { cv::CAP_PROP_FORMAT, CV_8UC4 };
+    // Prevent long startup times on cams with many modes when using MSMF
+    _putenv_s("OPENCV_VIDEOIO_MSMF_ENABLE_HW_TRANSFORMS", "0");
 
-    if (!m_videoCapture.open(1, cv::CAP_ANY))
+    if (cameraConf.RequestCustomFrameSize)
+    {
+        std::vector<int> props = { cv::CAP_PROP_FRAME_WIDTH, cameraConf.CustomFrameWidth, cv::CAP_PROP_FRAME_HEIGHT,  cameraConf.CustomFrameHeight };
+        m_videoCapture.open(cameraConf.Camera0DeviceIndex, cv::CAP_ANY, props);
+    }
+    else
+    {
+        m_videoCapture.open(cameraConf.Camera0DeviceIndex, cv::CAP_ANY);
+    }
+
+    if (!m_videoCapture.isOpened())
     {
         ErrorLog("OpenCV VideoCapture failed to open!\n");
         return false;
     }
-    else
-    {
-        int api = (int)m_videoCapture.get(cv::CAP_PROP_BACKEND);
-        Log("OpenCV Video capture opened using API: %d\n", api);
-    }
+
+    Log("OpenCV Video capture opened using API: %s\n", m_videoCapture.getBackendName());
+
+    
+    m_videoCapture.set(cv::CAP_PROP_AUTO_EXPOSURE, cameraConf.AutoExposureEnable ? 1 : 0);
+    m_videoCapture.set(cv::CAP_PROP_EXPOSURE, cameraConf.ExposureValue);
 
     UpdateStaticCameraParameters();
+
+    double fps = m_videoCapture.get(cv::CAP_PROP_FPS);
+
+    Log("Camera initalized: %d x %d @ %.1f\n", m_cameraFrameWidth, m_cameraFrameHeight, fps);
 
     m_bCameraInitialized = true;
     m_bRunThread = true;
@@ -151,16 +170,20 @@ void CameraManagerOpenCV::GetUndistortedFrameSize(uint32_t& width, uint32_t& hei
 
 void CameraManagerOpenCV::GetIntrinsics(const ERenderEye cameraEye, XrVector2f& focalLength, XrVector2f& center) const
 {
-    focalLength.x = 1.0f;
-    focalLength.y = 1.0f;
-
-    center.x = 0.0f;
-    center.y = 0.0f;
+    Config_Camera& cameraConf = m_configManager->GetConfig_Camera();
+    focalLength.x = cameraConf.Camera0_IntrinsicsFocalX * m_cameraTextureWidth;
+    focalLength.y = cameraConf.Camera0_IntrinsicsFocalY * m_cameraTextureHeight;
+    center.x = cameraConf.Camera0_IntrinsicsCenterX * m_cameraTextureWidth;
+    center.y = cameraConf.Camera0_IntrinsicsCenterY * m_cameraTextureHeight;
 }
 
 void CameraManagerOpenCV::GetDistortionCoefficients(ECameraDistortionCoefficients& coeffs) const
 {
-    
+    Config_Camera& cameraConf = m_configManager->GetConfig_Camera();
+    coeffs.v[0] = cameraConf.Camera0_IntrinsicsDistR1;
+    coeffs.v[1] = cameraConf.Camera0_IntrinsicsDistR2;
+    coeffs.v[2] = cameraConf.Camera0_IntrinsicsDistT1;
+    coeffs.v[3] = cameraConf.Camera0_IntrinsicsDistT2;
 }
 
 EStereoFrameLayout CameraManagerOpenCV::GetFrameLayout() const
@@ -183,8 +206,8 @@ void CameraManagerOpenCV::UpdateStaticCameraParameters()
 {
     vr::IVRSystem* vrSystem = m_openVRManager->GetVRSystem();
 
-    m_cameraTextureWidth = m_videoCapture.get(cv::CAP_PROP_FRAME_WIDTH);
-    m_cameraTextureHeight = m_videoCapture.get(cv::CAP_PROP_FRAME_HEIGHT);
+    m_cameraTextureWidth = (int)m_videoCapture.get(cv::CAP_PROP_FRAME_WIDTH);
+    m_cameraTextureHeight = (int)m_videoCapture.get(cv::CAP_PROP_FRAME_HEIGHT);
     m_cameraFrameBufferSize = m_cameraTextureWidth * m_cameraTextureHeight * 4;
 
     if (m_cameraTextureWidth == 0 || m_cameraTextureHeight == 0 || m_cameraFrameBufferSize == 0)
@@ -284,12 +307,12 @@ void CameraManagerOpenCV::ServeFrames()
     bool bHasFrame = false;
     uint32_t lastFrameSequence = 0;
     LARGE_INTEGER startFrameRetrievalTime;
-    vr::TrackedDevicePose_t trackedDevicePoseArray[1];
+    vr::TrackedDevicePose_t trackedDevicePoseArray[vr::k_unMaxTrackedDeviceCount];
     cv::Mat frameBuffer;
 
     while (m_bRunThread)
     {
-        std::this_thread::sleep_for(POSTFRAME_SLEEP_INTERVAL);
+        //std::this_thread::sleep_for(POSTFRAME_SLEEP_INTERVAL);
 
         if (!m_bRunThread) { return; }
 
@@ -297,14 +320,16 @@ void CameraManagerOpenCV::ServeFrames()
         std::unique_lock writeLock(m_underConstructionFrame->readWriteMutex);
 
         startFrameRetrievalTime = StartPerfTimer();
+
+        Config_Main& mainConf = m_configManager->GetConfig_Main();
+        Config_Camera& cameraConf = m_configManager->GetConfig_Camera();
             
         if (!m_videoCapture.grab())
         {
             ErrorLog("Failed to grab VideoCapture.\n");
         }
 
-        // TODO: Hardcoded to HMD
-        vrSystem->GetDeviceToAbsoluteTrackingPose(vr::TrackingUniverseStanding, 0.0f, trackedDevicePoseArray, 1);
+        vrSystem->GetDeviceToAbsoluteTrackingPose(vr::TrackingUniverseStanding, cameraConf.FrameDelayOffset, trackedDevicePoseArray, vr::k_unMaxTrackedDeviceCount);
 
         if (!m_videoCapture.retrieve(frameBuffer))
         {
@@ -327,18 +352,46 @@ void CameraManagerOpenCV::ServeFrames()
         m_underConstructionFrame->bHasFrameBuffer = true;
 
         bHasFrame = true;
-        
-        lastFrameSequence = m_videoCapture.get(cv::CAP_PROP_POS_FRAMES);
+ 
+        lastFrameSequence = (int)m_videoCapture.get(cv::CAP_PROP_POS_FRAMES);
         m_underConstructionFrame->header.nFrameSequence = lastFrameSequence;
         m_underConstructionFrame->header.nWidth = m_cameraTextureWidth;
         m_underConstructionFrame->header.nHeight = m_cameraTextureHeight;
         m_underConstructionFrame->header.nBytesPerPixel = 4;
-        m_underConstructionFrame->header.trackedDevicePose = trackedDevicePoseArray[0];
+
+        
+        if (cameraConf.UseTrackedDevice)
+        {
+            int trackedDeviceIndex = 0;
+            char buffer[128] = { 0 };
+            for (int i = 0; i < vr::k_unMaxTrackedDeviceCount; i++)
+            {
+                if (!vrSystem->IsTrackedDeviceConnected(i))
+                {
+                    break;
+                }
+                vrSystem->GetStringTrackedDeviceProperty(i, vr::Prop_SerialNumber_String, buffer, 127);
+                if (strncmp(buffer, cameraConf.TrackedDeviceSerialNumber.data(), cameraConf.TrackedDeviceSerialNumber.size()) == 0)
+                {
+                    trackedDeviceIndex = i;
+                    break;
+                }
+
+            }
+            m_underConstructionFrame->header.trackedDevicePose = trackedDevicePoseArray[trackedDeviceIndex];
+        }
+        else
+        {
+            vr::HmdMatrix34_t pose = { 0 };
+            pose.m[0][0] = 1.0;
+            pose.m[1][1] = 1.0;
+            pose.m[2][2] = 1.0;
+            m_underConstructionFrame->header.trackedDevicePose.mDeviceToAbsoluteTracking = pose;
+        }
 
         m_underConstructionFrame->bIsValid = true;
         m_underConstructionFrame->frameLayout = m_frameLayout;
 
-        Config_Main& mainConf = m_configManager->GetConfig_Main();
 
         if (mainConf.ProjectToRenderModels)
         {
@@ -348,12 +401,19 @@ void CameraManagerOpenCV::ServeFrames()
 
         // Apply offset calibration to camera positions.
         XrMatrix4x4f origCamera0ToTrackingPose = ToXRMatrix4x4(m_underConstructionFrame->header.trackedDevicePose.mDeviceToAbsoluteTracking);
-        XrMatrix4x4f headToTrackingPose, correctedCamera0ToHMDPose;
+
+        XrMatrix4x4f headToTrackingPose, correctedCamera0ToHMDPose, cameraPose, transMatrix, rotMatrix, temp;
+
+        XrMatrix4x4f_CreateTranslation(&transMatrix, cameraConf.Camera0_TranslationX, cameraConf.Camera0_TranslationY, cameraConf.Camera0_TranslationZ);
+        XrMatrix4x4f_CreateRotation(&rotMatrix, cameraConf.Camera0_RotationX, cameraConf.Camera0_RotationY, cameraConf.Camera0_RotationZ);
+
+        XrMatrix4x4f_Multiply(&temp, &rotMatrix, &transMatrix);
+        XrMatrix4x4f_Multiply(&cameraPose, &origCamera0ToTrackingPose, &temp);
 
         // For vertical layouts the device pose is for the right camera.
         if (m_frameLayout == EStereoFrameLayout::StereoVerticalLayout)
         {
-            XrMatrix4x4f_Multiply(&headToTrackingPose, &origCamera0ToTrackingPose, &m_HMDToCameraRight);
+            XrMatrix4x4f_Multiply(&headToTrackingPose, &cameraPose, &m_HMDToCameraRight);
             correctedCamera0ToHMDPose = m_cameraToHMDRight;
             correctedCamera0ToHMDPose.m[12] *= mainConf.DepthOffsetCalibration;
             correctedCamera0ToHMDPose.m[13] *= mainConf.DepthOffsetCalibration;
@@ -369,7 +429,7 @@ void CameraManagerOpenCV::ServeFrames()
         }
         else
         {
-            XrMatrix4x4f_Multiply(&headToTrackingPose, &origCamera0ToTrackingPose, &m_HMDToCameraLeft);
+            XrMatrix4x4f_Multiply(&headToTrackingPose, &cameraPose, &m_HMDToCameraLeft);
             correctedCamera0ToHMDPose = m_cameraToHMDLeft;
             correctedCamera0ToHMDPose.m[12] *= mainConf.DepthOffsetCalibration;
             correctedCamera0ToHMDPose.m[13] *= mainConf.DepthOffsetCalibration;
@@ -502,7 +562,16 @@ void CameraManagerOpenCV::UpdateProjectionMatrix(std::shared_ptr<CameraFrame>& f
 
 
         XrFovf fov = {-1.0f, 1.0f, 1.0f, -1.0f};
-        XrMatrix4x4f_CreateProjectionFov(&m_HMDViewToProjectionLeft, GRAPHICS_D3D, fov, NEAR_PROJECTION_DISTANCE, m_projectionDistanceFar);
+        XrMatrix4x4f projectionMatrix;
+        XrMatrix4x4f_CreateProjectionFov(&projectionMatrix, GRAPHICS_D3D, fov, NEAR_PROJECTION_DISTANCE, m_projectionDistanceFar);
+
+        XrVector2f focalLength, center;
+        GetIntrinsics(ERenderEye::LEFT_EYE, focalLength, center);
+
+        projectionMatrix.m[0] = 2.0f * focalLength.x / (float)m_cameraTextureWidth;
+        projectionMatrix.m[5] = 2.0f * focalLength.y / (float)m_cameraTextureHeight;
+        projectionMatrix.m[8] = (1.0f - 2.0f * (center.x / (float)m_cameraTextureWidth));
+        projectionMatrix.m[9] = (1.0f - 2.0f * (center.y / (float)m_cameraTextureHeight));
 
 
         XrMatrix4x4f scaleMatrix, offsetMatrix, transMatrix;
@@ -524,8 +593,7 @@ void CameraManagerOpenCV::UpdateProjectionMatrix(std::shared_ptr<CameraFrame>& f
             XrMatrix4x4f_CreateIdentity(&transMatrix);
         }
 
-        XrMatrix4x4f projectionMatrix, projectionMatrixInv;
-        XrMatrix4x4f_CreateProjectionFov(&projectionMatrix, GRAPHICS_D3D, fov, NEAR_PROJECTION_DISTANCE, m_projectionDistanceFar);
+        XrMatrix4x4f projectionMatrixInv;
         XrMatrix4x4f_Invert(&projectionMatrixInv, &projectionMatrix);
 
         XrMatrix4x4f_Multiply(&m_cameraProjectionInvFarLeft, &projectionMatrixInv, &transMatrix);

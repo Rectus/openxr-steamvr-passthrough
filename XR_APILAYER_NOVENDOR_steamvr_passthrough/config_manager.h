@@ -2,12 +2,17 @@
 #include "SimpleIni.h"
 
 
+enum ECameraProvider
+{
+	CameraProvider_OpenVR = 0,
+	CameraProvider_OpenCV = 1
+};
+
 enum EProjectionMode
 {
 	Projection_RoomView2D = 0,
 	Projection_Custom2D = 1,
-	Projection_StereoReconstruction = 2,
-	Projection_TrackedWebcam = 3
+	Projection_StereoReconstruction = 2
 };
 
 enum ESelectedDebugTexture
@@ -63,6 +68,7 @@ enum EStereoPreset
 struct Config_Main
 {
 	bool EnablePassthrough = true;
+	ECameraProvider CameraProvider = CameraProvider_OpenVR;
 	EProjectionMode ProjectionMode = Projection_Custom2D;
 
 	bool ProjectToRenderModels = false;
@@ -95,6 +101,7 @@ struct Config_Main
 	void ParseConfig(CSimpleIniA& ini, const char* section)
 	{
 		EnablePassthrough = ini.GetBoolValue(section, "EnablePassthrough", EnablePassthrough);
+		CameraProvider = (ECameraProvider)ini.GetLongValue(section, "CameraProvider", CameraProvider);
 		ProjectionMode = (EProjectionMode)ini.GetLongValue(section, "ProjectionMode", ProjectionMode);
 		ProjectToRenderModels = ini.GetBoolValue(section, "ProjectToRenderModels", ProjectToRenderModels);
 
@@ -122,6 +129,7 @@ struct Config_Main
 	void UpdateConfig(CSimpleIniA& ini, const char* section)
 	{
 		ini.SetBoolValue(section, "EnablePassthrough", EnablePassthrough);
+		ini.SetLongValue(section, "CameraProvider", (long)CameraProvider);
 		ini.SetLongValue(section, "ProjectionMode", (long)ProjectionMode);
 		ini.SetBoolValue(section, "ProjectToRenderModels", ProjectToRenderModels);
 
@@ -517,6 +525,14 @@ public:
 	void DispatchUpdate();
 	void ResetToDefaults();
 
+	void SetRendererResetPending() { m_bRendererResetPending = true; }
+	bool CheckResetRendererResetPending()
+	{ 
+		bool bPending = m_bRendererResetPending;
+		m_bRendererResetPending = false; 
+		return bPending;
+	}
+
 	Config_Main& GetConfig_Main() { return m_configMain; }
 	Config_Camera& GetConfig_Camera() { return m_configCamera; }
 	Config_Core& GetConfig_Core() { return m_configCore; }
@@ -535,6 +551,7 @@ private:
 	std::wstring m_configFile;
 	CSimpleIniA m_iniData;
 	bool m_bConfigUpdated;
+	bool m_bRendererResetPending;
 
 	Config_Main m_configMain;
 	Config_Camera m_configCamera;

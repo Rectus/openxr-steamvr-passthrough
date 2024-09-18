@@ -147,6 +147,8 @@ PassthroughRendererDX11::PassthroughRendererDX11(ID3D11Device* device, HMODULE d
 
 bool PassthroughRendererDX11::InitRenderer()
 {
+	m_uvDistortionMap.Reset();
+
 	m_d3dDevice->GetImmediateContext(&m_deviceContext);
 
 
@@ -482,26 +484,23 @@ void PassthroughRendererDX11::SetupCameraFrameResource(const uint32_t imageIndex
 	srvDesc.Format = textureDesc.Format;
 	srvDesc.Texture2D.MipLevels = 1;
 
-	if (!m_cameraFrameUploadTexture)
+	D3D11_TEXTURE2D_DESC uploadTextureDesc = textureDesc;
+	uploadTextureDesc.BindFlags = 0;
+	uploadTextureDesc.Usage = D3D11_USAGE_STAGING;
+	uploadTextureDesc.CPUAccessFlags = D3D11_CPU_ACCESS_WRITE;
+
+	if (FAILED(m_d3dDevice->CreateTexture2D(&uploadTextureDesc, nullptr, &m_cameraFrameUploadTexture)))
 	{
-		D3D11_TEXTURE2D_DESC uploadTextureDesc = textureDesc;
-		uploadTextureDesc.BindFlags = 0;
-		uploadTextureDesc.Usage = D3D11_USAGE_STAGING;
-		uploadTextureDesc.CPUAccessFlags = D3D11_CPU_ACCESS_WRITE;
-
-		if (FAILED(m_d3dDevice->CreateTexture2D(&uploadTextureDesc, nullptr, &m_cameraFrameUploadTexture)))
-		{
-			ErrorLog("Frame Resource CreateTexture2D error!\n");
-			return;
-		}
-
-		std::vector<uint8_t> image(m_cameraFrameBufferSize);
-
-		D3D11_MAPPED_SUBRESOURCE res = {};
-		m_deviceContext->Map(m_cameraFrameUploadTexture.Get(), 0, D3D11_MAP_WRITE, 0, &res);
-		memcpy(res.pData, image.data(), image.size());
-		m_deviceContext->Unmap(m_cameraFrameUploadTexture.Get(), 0);
+		ErrorLog("Frame Resource CreateTexture2D error!\n");
+		return;
 	}
+
+	std::vector<uint8_t> image(m_cameraFrameBufferSize);
+
+	D3D11_MAPPED_SUBRESOURCE res = {};
+	m_deviceContext->Map(m_cameraFrameUploadTexture.Get(), 0, D3D11_MAP_WRITE, 0, &res);
+	memcpy(res.pData, image.data(), image.size());
+	m_deviceContext->Unmap(m_cameraFrameUploadTexture.Get(), 0);
 
 	DX11FrameData& frameData = m_frameData[imageIndex];
 
@@ -539,26 +538,23 @@ void PassthroughRendererDX11::SetupCameraUndistortedFrameResource(const uint32_t
 	srvDesc.Format = textureDesc.Format;
 	srvDesc.Texture2D.MipLevels = 1;
 
-	if (!m_cameraUndistortedFrameUploadTexture)
+	D3D11_TEXTURE2D_DESC uploadTextureDesc = textureDesc;
+	uploadTextureDesc.BindFlags = 0;
+	uploadTextureDesc.Usage = D3D11_USAGE_STAGING;
+	uploadTextureDesc.CPUAccessFlags = D3D11_CPU_ACCESS_WRITE;
+
+	if (FAILED(m_d3dDevice->CreateTexture2D(&uploadTextureDesc, nullptr, &m_cameraUndistortedFrameUploadTexture)))
 	{
-		D3D11_TEXTURE2D_DESC uploadTextureDesc = textureDesc;
-		uploadTextureDesc.BindFlags = 0;
-		uploadTextureDesc.Usage = D3D11_USAGE_STAGING;
-		uploadTextureDesc.CPUAccessFlags = D3D11_CPU_ACCESS_WRITE;
-
-		if (FAILED(m_d3dDevice->CreateTexture2D(&uploadTextureDesc, nullptr, &m_cameraUndistortedFrameUploadTexture)))
-		{
-			ErrorLog("Frame Resource CreateTexture2D error!\n");
-			return;
-		}
-
-		std::vector<uint8_t> image(m_cameraUndistortedFrameBufferSize);
-
-		D3D11_MAPPED_SUBRESOURCE res = {};
-		m_deviceContext->Map(m_cameraUndistortedFrameUploadTexture.Get(), 0, D3D11_MAP_WRITE, 0, &res);
-		memcpy(res.pData, image.data(), image.size());
-		m_deviceContext->Unmap(m_cameraUndistortedFrameUploadTexture.Get(), 0);
+		ErrorLog("Frame Resource CreateTexture2D error!\n");
+		return;
 	}
+
+	std::vector<uint8_t> image(m_cameraUndistortedFrameBufferSize);
+
+	D3D11_MAPPED_SUBRESOURCE res = {};
+	m_deviceContext->Map(m_cameraUndistortedFrameUploadTexture.Get(), 0, D3D11_MAP_WRITE, 0, &res);
+	memcpy(res.pData, image.data(), image.size());
+	m_deviceContext->Unmap(m_cameraUndistortedFrameUploadTexture.Get(), 0);
 
 	DX11FrameData& frameData = m_frameData[imageIndex];
 

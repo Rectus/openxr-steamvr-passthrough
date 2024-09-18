@@ -262,10 +262,21 @@ namespace
 					const XrGraphicsBindingD3D11KHR* dx11bindings = reinterpret_cast<const XrGraphicsBindingD3D11KHR*>(entry);
 					m_Renderer = std::make_shared<PassthroughRendererDX11>(dx11bindings->device, g_dllModule, m_configManager);
 
-					if (!m_cameraManager.get())
+					if (m_cameraManager.get())
+					{
+						m_cameraManager->DeinitCamera();
+						m_cameraManager.reset();
+					}
+					
+					if (m_configManager->GetConfig_Main().CameraProvider == CameraProvider_OpenVR)
+					{
+						m_cameraManager = std::make_shared<CameraManagerOpenVR>(m_Renderer, DirectX11, m_configManager, m_openVRManager);
+					}
+					else
 					{
 						m_cameraManager = std::make_shared<CameraManagerOpenCV>(m_Renderer, DirectX11, m_configManager, m_openVRManager);
 					}
+
 					if (!m_cameraManager->InitCamera())
 					{
 						return false;
@@ -282,6 +293,7 @@ namespace
 					m_depthReconstruction = std::make_shared<DepthReconstruction>(m_configManager, m_openVRManager, m_cameraManager);
 
 					m_dashboardMenu->GetDisplayValues().bSessionActive = true;
+					m_renderAPI = DirectX11;
 					m_dashboardMenu->GetDisplayValues().renderAPI = DirectX11;
 					m_bDepthSupportedByRenderer = true;
 					Log("Direct3D 11 renderer initialized\n");
@@ -308,10 +320,22 @@ namespace
 						m_Renderer = std::make_unique<PassthroughRendererDX11Interop>(dx12bindings->device, dx12bindings->queue, g_dllModule, m_configManager);
 					}
 
-					if (!m_cameraManager.get())
+
+					if (m_cameraManager.get())
 					{
-						m_cameraManager = std::make_unique<CameraManagerOpenVR>(m_Renderer, usedAPI, m_configManager, m_openVRManager);
+						m_cameraManager->DeinitCamera();
+						m_cameraManager.reset();
 					}
+
+					if (m_configManager->GetConfig_Main().CameraProvider == CameraProvider_OpenVR)
+					{
+						m_cameraManager = std::make_shared<CameraManagerOpenVR>(m_Renderer, usedAPI, m_configManager, m_openVRManager);
+					}
+					else
+					{
+						m_cameraManager = std::make_shared<CameraManagerOpenCV>(m_Renderer, usedAPI, m_configManager, m_openVRManager);
+					}
+
 					if (!m_cameraManager->InitCamera())
 					{
 						return false;
@@ -328,6 +352,7 @@ namespace
 					m_depthReconstruction = std::make_shared<DepthReconstruction>(m_configManager, m_openVRManager, m_cameraManager);
 
 					m_dashboardMenu->GetDisplayValues().bSessionActive = true;
+					m_renderAPI = DirectX12;
 					m_dashboardMenu->GetDisplayValues().renderAPI = DirectX12;
 					m_bDepthSupportedByRenderer = true;
 					Log("Direct3D 12 renderer initialized\n");
@@ -341,11 +366,22 @@ namespace
 
 					const XrGraphicsBindingVulkanKHR* vulkanbindings = reinterpret_cast<const XrGraphicsBindingVulkanKHR*>(entry);
 					m_Renderer = std::make_unique<PassthroughRendererVulkan>(*vulkanbindings, g_dllModule, m_configManager);
-					
-					if (!m_cameraManager.get())
+
+					if (m_cameraManager.get())
 					{
-						m_cameraManager = std::make_unique<CameraManagerOpenVR>(m_Renderer, Vulkan, m_configManager, m_openVRManager);
+						m_cameraManager->DeinitCamera();
+						m_cameraManager.reset();
 					}
+
+					if (m_configManager->GetConfig_Main().CameraProvider == CameraProvider_OpenVR)
+					{
+						m_cameraManager = std::make_shared<CameraManagerOpenVR>(m_Renderer, Vulkan, m_configManager, m_openVRManager);
+					}
+					else
+					{
+						m_cameraManager = std::make_shared<CameraManagerOpenCV>(m_Renderer, Vulkan, m_configManager, m_openVRManager);
+					}
+
 					if (!m_cameraManager->InitCamera())
 					{
 						return false;
@@ -362,6 +398,7 @@ namespace
 					m_depthReconstruction = std::make_shared<DepthReconstruction>(m_configManager, m_openVRManager, m_cameraManager);
 
 					m_dashboardMenu->GetDisplayValues().bSessionActive = true;
+					m_renderAPI = Vulkan;
 					m_dashboardMenu->GetDisplayValues().renderAPI = Vulkan;
 					m_bDepthSupportedByRenderer = false;
 					Log("Vulkan renderer initialized\n");
@@ -376,6 +413,46 @@ namespace
 			}
 			Log("Passthrough API layer: No supported graphics APIs detected!\n");
 			return false;
+		}
+
+		void ResetRenderer()
+		{
+			uint32_t cameraTextureWidth;
+			uint32_t cameraTextureHeight;
+			uint32_t cameraFrameBufferSize;
+			uint32_t cameraUndistortedTextureWidth;
+			uint32_t cameraUndistortedTextureHeight;
+			uint32_t cameraUndistortedFrameBufferSize;
+
+			if (m_cameraManager.get())
+			{
+				m_cameraManager->DeinitCamera();
+				m_cameraManager.reset();
+			}
+
+			if (m_configManager->GetConfig_Main().CameraProvider == CameraProvider_OpenVR)
+			{
+				m_cameraManager = std::make_shared<CameraManagerOpenVR>(m_Renderer, m_renderAPI, m_configManager, m_openVRManager);
+			}
+			else
+			{
+				m_cameraManager = std::make_shared<CameraManagerOpenCV>(m_Renderer, m_renderAPI, m_configManager, m_openVRManager);
+			}
+
+			if (!m_cameraManager->InitCamera())
+			{
+				return;
+			}
+
+			m_cameraManager->GetDistortedFrameSize(cameraTextureWidth, cameraTextureHeight, cameraFrameBufferSize);
+			m_cameraManager->GetUndistortedFrameSize(cameraUndistortedTextureWidth, cameraUndistortedTextureHeight, cameraUndistortedFrameBufferSize);
+			m_Renderer->SetFrameSize(cameraTextureWidth, cameraTextureHeight, cameraFrameBufferSize, cameraUndistortedTextureWidth, cameraUndistortedTextureHeight, cameraUndistortedFrameBufferSize);
+			if (!m_Renderer->InitRenderer())
+			{
+				return;
+			}
+
+			m_depthReconstruction = std::make_shared<DepthReconstruction>(m_configManager, m_openVRManager, m_cameraManager);
 		}
 
 
@@ -1034,6 +1111,12 @@ namespace
 			modifiedFrameEndInfo.environmentBlendMode = XR_ENVIRONMENT_BLEND_MODE_OPAQUE;
 
 			result = OpenXrApi::xrEndFrame(session, &modifiedFrameEndInfo);
+
+			if (m_configManager->CheckResetRendererResetPending())
+			{
+				ResetRenderer();
+			}
+			
 			return result;
 		}
 
@@ -1104,6 +1187,8 @@ namespace
 		std::deque<float> m_frameToRenderTimes;
 		std::deque<float> m_frameToPhotonTimes;
 		std::deque<float> m_passthroughRenderTimes;
+
+		ERenderAPI m_renderAPI = DirectX11;
 
     };
 

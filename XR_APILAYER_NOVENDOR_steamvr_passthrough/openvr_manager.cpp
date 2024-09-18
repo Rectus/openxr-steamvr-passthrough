@@ -163,5 +163,40 @@ void OpenVRManager::GetCameraDebugProperties(std::vector<DeviceDebugProperties>&
         deviceProps.bCameraSupportsCompatibilityModes = vrSystem->GetBoolTrackedDeviceProperty(deviceId, vr::Prop_CameraSupportsCompatibilityModes_Bool);
         deviceProps.CameraExposureTime = vrSystem->GetFloatTrackedDeviceProperty(deviceId, vr::Prop_CameraExposureTime_Float);
         deviceProps.CameraGlobalGain = vrSystem->GetFloatTrackedDeviceProperty(deviceId, vr::Prop_CameraGlobalGain_Float);
+    } 
+}
+
+void OpenVRManager::GetDeviceIdentProperties(std::vector<DeviceIdentProperties>& properties)
+{
+    properties.clear();
+
+    vr::IVRSystem* vrSystem = GetVRSystem();
+
+    char stringPropBuffer[256];
+
+    for (uint32_t deviceId = 0; deviceId < vr::k_unMaxTrackedDeviceCount; deviceId++)
+    {
+        if (vrSystem->GetTrackedDeviceClass(deviceId) == vr::TrackedDeviceClass_Invalid)
+        {
+            continue;
+        }
+
+        properties.push_back(DeviceIdentProperties());
+        DeviceIdentProperties& deviceProps = properties.at(properties.size() - 1);
+
+        deviceProps.DeviceId = deviceId;
+
+        memset(stringPropBuffer, 0, sizeof(stringPropBuffer));
+        uint32_t numChars = vrSystem->GetStringTrackedDeviceProperty(deviceId, vr::Prop_ManufacturerName_String, stringPropBuffer, sizeof(stringPropBuffer));
+        deviceProps.DeviceName.assign(stringPropBuffer);
+
+        memset(stringPropBuffer, 0, sizeof(stringPropBuffer));
+        numChars = vrSystem->GetStringTrackedDeviceProperty(deviceId, vr::Prop_ModelNumber_String, stringPropBuffer, sizeof(stringPropBuffer));
+        deviceProps.DeviceName.append(" ");
+        deviceProps.DeviceName.append(stringPropBuffer);
+
+        memset(stringPropBuffer, 0, sizeof(stringPropBuffer));
+        numChars = vrSystem->GetStringTrackedDeviceProperty(deviceId, vr::Prop_SerialNumber_String, stringPropBuffer, sizeof(stringPropBuffer));
+        deviceProps.DeviceSerial.assign(stringPropBuffer);
     }
 }

@@ -22,6 +22,7 @@ enum EMenuTab
 	TabApplication,
 	TabStereo,
 	TabOverrides,
+	TabCamera,
 	TabDebug
 };
 
@@ -100,5 +101,8 @@ private:
 
 	std::vector<DeviceDebugProperties> m_deviceDebugProps;
 	int m_currentDebugDevice;
+
+	std::vector<DeviceIdentProperties> m_deviceIdentProps;
+	int m_currentIdentDevice;
 };
 

@@ -49,6 +49,8 @@ public:
 	}
 
 	void GetCameraDebugProperties(std::vector<DeviceDebugProperties>& properties);
+	void GetDeviceIdentProperties(std::vector<DeviceIdentProperties>& properties);
+	
 
 private:
 	bool InitRuntime();

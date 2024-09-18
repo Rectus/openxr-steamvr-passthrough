@@ -256,6 +256,13 @@ struct DeviceDebugProperties
 	float CameraGlobalGain;
 };
 
+struct DeviceIdentProperties
+{
+	uint32_t DeviceId;
+	std::string DeviceName;
+	std::string DeviceSerial;
+};
+
 #define NEAR_PROJECTION_DISTANCE 0.05f
 
 
