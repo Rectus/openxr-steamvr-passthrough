@@ -104,5 +104,10 @@ private:
 
 	std::vector<DeviceIdentProperties> m_deviceIdentProps;
 	int m_currentIdentDevice;
+
+	std::vector<std::string> m_cameraDevices;
+
+	bool m_cameraTabBeenOpened = false;
+	bool m_debugTabBeenOpened = false;
 };
 

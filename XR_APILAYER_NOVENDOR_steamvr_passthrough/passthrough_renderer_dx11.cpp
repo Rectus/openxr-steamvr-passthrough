@@ -147,6 +147,7 @@ PassthroughRendererDX11::PassthroughRendererDX11(ID3D11Device* device, HMODULE d
 
 bool PassthroughRendererDX11::InitRenderer()
 {
+	m_frameData.clear();
 	m_uvDistortionMap.Reset();
 
 	m_d3dDevice->GetImmediateContext(&m_deviceContext);

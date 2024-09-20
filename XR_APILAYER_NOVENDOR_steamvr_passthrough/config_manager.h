@@ -533,6 +533,14 @@ public:
 		return bPending;
 	}
 
+	void SetCameraParamChangesPending() { m_bCameraParamChangesPending = true; }
+	bool CheckCameraParamChangesPending()
+	{
+		bool bPending = m_bCameraParamChangesPending;
+		m_bCameraParamChangesPending = false;
+		return bPending;
+	}
+
 	Config_Main& GetConfig_Main() { return m_configMain; }
 	Config_Camera& GetConfig_Camera() { return m_configCamera; }
 	Config_Core& GetConfig_Core() { return m_configCore; }
@@ -552,6 +560,7 @@ private:
 	CSimpleIniA m_iniData;
 	bool m_bConfigUpdated;
 	bool m_bRendererResetPending;
+	bool m_bCameraParamChangesPending;
 
 	Config_Main m_configMain;
 	Config_Camera m_configCamera;

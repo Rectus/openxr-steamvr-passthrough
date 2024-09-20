@@ -185,6 +185,7 @@ copy $(SolutionDir)\readme.md $(OutDir)
     <ClInclude Include="..\external\imgui\imgui.h" />
     <ClInclude Include="..\external\imgui\imgui_internal.h" />
     <ClInclude Include="..\external\lodepng\lodepng.h" />
+    <ClInclude Include="camera_enumerator.h" />
     <ClInclude Include="camera_manager.h" />
     <ClInclude Include="check.h" />
     <ClInclude Include="config_manager.h" />
@@ -230,6 +231,7 @@ copy $(SolutionDir)\readme.md $(OutDir)
       <PrecompiledHeader Condition="'$(Configuration)|$(Platform)'=='Debug|x64'">NotUsing</PrecompiledHeader>
       <PrecompiledHeader Condition="'$(Configuration)|$(Platform)'=='Release|x64'">NotUsing</PrecompiledHeader>
     </ClCompile>
+    <ClCompile Include="camera_enumerator.cpp" />
     <ClCompile Include="camera_manager_opencv.cpp" />
     <ClCompile Include="camera_manager_openvr.cpp" />
     <ClCompile Include="config_manager.cpp" />

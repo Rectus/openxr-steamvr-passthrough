@@ -424,6 +424,11 @@ namespace
 			uint32_t cameraUndistortedTextureHeight;
 			uint32_t cameraUndistortedFrameBufferSize;
 
+			m_swapChainLeft = XR_NULL_HANDLE;
+			m_swapChainRight = XR_NULL_HANDLE;
+			m_depthSwapChainLeft = XR_NULL_HANDLE;
+			m_depthSwapChainRight = XR_NULL_HANDLE;
+
 			if (m_cameraManager.get())
 			{
 				m_cameraManager->DeinitCamera();
