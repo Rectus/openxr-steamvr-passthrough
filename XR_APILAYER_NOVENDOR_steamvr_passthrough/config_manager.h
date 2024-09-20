@@ -5,7 +5,8 @@
 enum ECameraProvider
 {
 	CameraProvider_OpenVR = 0,
-	CameraProvider_OpenCV = 1
+	CameraProvider_OpenCV = 1,
+	CameraProvider_Augmented = 2
 };
 
 enum EProjectionMode

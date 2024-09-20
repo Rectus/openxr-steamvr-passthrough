@@ -63,7 +63,7 @@ inline XrMatrix4x4f ToXRMatrix4x4Inverted(vr::HmdMatrix34_t& input)
 }
 
 
-CameraManagerOpenCV::CameraManagerOpenCV(std::shared_ptr<IPassthroughRenderer> renderer, ERenderAPI renderAPI, std::shared_ptr<ConfigManager> configManager, std::shared_ptr<OpenVRManager> openVRManager)
+CameraManagerOpenCV::CameraManagerOpenCV(std::shared_ptr<IPassthroughRenderer> renderer, ERenderAPI renderAPI, std::shared_ptr<ConfigManager> configManager, std::shared_ptr<OpenVRManager> openVRManager, bool bIsAugmented)
     : m_renderer(renderer)
     , m_renderAPI(renderAPI)
     , m_configManager(configManager)
@@ -72,6 +72,7 @@ CameraManagerOpenCV::CameraManagerOpenCV(std::shared_ptr<IPassthroughRenderer> r
     , m_projectionDistanceFar(5.0f)
     , m_useAlternateProjectionCalc(false)
     , m_videoCapture()
+    , m_bIsAugmented(bIsAugmented)
 {
     m_renderFrame = std::make_shared<CameraFrame>();
     m_servedFrame = std::make_shared<CameraFrame>();

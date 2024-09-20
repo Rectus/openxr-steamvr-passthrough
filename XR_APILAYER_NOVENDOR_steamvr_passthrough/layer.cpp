@@ -242,12 +242,7 @@ namespace
 			const XrSessionCreateInfo* createInfo,
 			const XrSession* session)
 		{
-			uint32_t cameraTextureWidth;
-			uint32_t cameraTextureHeight;
-			uint32_t cameraFrameBufferSize;
-			uint32_t cameraUndistortedTextureWidth;
-			uint32_t cameraUndistortedTextureHeight;
-			uint32_t cameraUndistortedFrameBufferSize;
+			
 
 			const XrBaseInStructure* entry = reinterpret_cast<const XrBaseInStructure*>(createInfo->next);
 
@@ -262,35 +257,8 @@ namespace
 					const XrGraphicsBindingD3D11KHR* dx11bindings = reinterpret_cast<const XrGraphicsBindingD3D11KHR*>(entry);
 					m_Renderer = std::make_shared<PassthroughRendererDX11>(dx11bindings->device, g_dllModule, m_configManager);
 
-					if (m_cameraManager.get())
-					{
-						m_cameraManager->DeinitCamera();
-						m_cameraManager.reset();
-					}
+					SetupProcessingPipeline(DirectX11);
 					
-					if (m_configManager->GetConfig_Main().CameraProvider == CameraProvider_OpenVR)
-					{
-						m_cameraManager = std::make_shared<CameraManagerOpenVR>(m_Renderer, DirectX11, m_configManager, m_openVRManager);
-					}
-					else
-					{
-						m_cameraManager = std::make_shared<CameraManagerOpenCV>(m_Renderer, DirectX11, m_configManager, m_openVRManager);
-					}
-
-					if (!m_cameraManager->InitCamera())
-					{
-						return false;
-					}
-					
-					m_cameraManager->GetDistortedFrameSize(cameraTextureWidth, cameraTextureHeight, cameraFrameBufferSize);
-					m_cameraManager->GetUndistortedFrameSize(cameraUndistortedTextureWidth, cameraUndistortedTextureHeight, cameraUndistortedFrameBufferSize);
-					m_Renderer->SetFrameSize(cameraTextureWidth, cameraTextureHeight, cameraFrameBufferSize, cameraUndistortedTextureWidth, cameraUndistortedTextureHeight, cameraUndistortedFrameBufferSize);
-					if(!m_Renderer->InitRenderer())
-					{
-						return false;
-					}
-
-					m_depthReconstruction = std::make_shared<DepthReconstruction>(m_configManager, m_openVRManager, m_cameraManager);
 
 					m_dashboardMenu->GetDisplayValues().bSessionActive = true;
 					m_renderAPI = DirectX11;
@@ -320,39 +288,10 @@ namespace
 						m_Renderer = std::make_unique<PassthroughRendererDX11Interop>(dx12bindings->device, dx12bindings->queue, g_dllModule, m_configManager);
 					}
 
-
-					if (m_cameraManager.get())
-					{
-						m_cameraManager->DeinitCamera();
-						m_cameraManager.reset();
-					}
-
-					if (m_configManager->GetConfig_Main().CameraProvider == CameraProvider_OpenVR)
-					{
-						m_cameraManager = std::make_shared<CameraManagerOpenVR>(m_Renderer, usedAPI, m_configManager, m_openVRManager);
-					}
-					else
-					{
-						m_cameraManager = std::make_shared<CameraManagerOpenCV>(m_Renderer, usedAPI, m_configManager, m_openVRManager);
-					}
-
-					if (!m_cameraManager->InitCamera())
-					{
-						return false;
-					}
-
-					m_cameraManager->GetDistortedFrameSize(cameraTextureWidth, cameraTextureHeight, cameraFrameBufferSize);
-					m_cameraManager->GetUndistortedFrameSize(cameraUndistortedTextureWidth, cameraUndistortedTextureHeight, cameraUndistortedFrameBufferSize);
-					m_Renderer->SetFrameSize(cameraTextureWidth, cameraTextureHeight, cameraFrameBufferSize, cameraUndistortedTextureWidth, cameraUndistortedTextureHeight, cameraUndistortedFrameBufferSize);
-					if (!m_Renderer->InitRenderer())
-					{
-						return false;
-					}
-					
-					m_depthReconstruction = std::make_shared<DepthReconstruction>(m_configManager, m_openVRManager, m_cameraManager);
+					SetupProcessingPipeline(usedAPI);
 
 					m_dashboardMenu->GetDisplayValues().bSessionActive = true;
-					m_renderAPI = DirectX12;
+					m_renderAPI = usedAPI;
 					m_dashboardMenu->GetDisplayValues().renderAPI = DirectX12;
 					m_bDepthSupportedByRenderer = true;
 					Log("Direct3D 12 renderer initialized\n");
@@ -367,35 +306,7 @@ namespace
 					const XrGraphicsBindingVulkanKHR* vulkanbindings = reinterpret_cast<const XrGraphicsBindingVulkanKHR*>(entry);
 					m_Renderer = std::make_unique<PassthroughRendererVulkan>(*vulkanbindings, g_dllModule, m_configManager);
 
-					if (m_cameraManager.get())
-					{
-						m_cameraManager->DeinitCamera();
-						m_cameraManager.reset();
-					}
-
-					if (m_configManager->GetConfig_Main().CameraProvider == CameraProvider_OpenVR)
-					{
-						m_cameraManager = std::make_shared<CameraManagerOpenVR>(m_Renderer, Vulkan, m_configManager, m_openVRManager);
-					}
-					else
-					{
-						m_cameraManager = std::make_shared<CameraManagerOpenCV>(m_Renderer, Vulkan, m_configManager, m_openVRManager);
-					}
-
-					if (!m_cameraManager->InitCamera())
-					{
-						return false;
-					}
-					
-					m_cameraManager->GetDistortedFrameSize(cameraTextureWidth, cameraTextureHeight, cameraFrameBufferSize);
-					m_cameraManager->GetUndistortedFrameSize(cameraUndistortedTextureWidth, cameraUndistortedTextureHeight, cameraUndistortedFrameBufferSize);
-					m_Renderer->SetFrameSize(cameraTextureWidth, cameraTextureHeight, cameraFrameBufferSize, cameraUndistortedTextureWidth, cameraUndistortedTextureHeight, cameraUndistortedFrameBufferSize);
-					if (!m_Renderer->InitRenderer())
-					{
-						return false;
-					}
-
-					m_depthReconstruction = std::make_shared<DepthReconstruction>(m_configManager, m_openVRManager, m_cameraManager);
+					SetupProcessingPipeline(Vulkan);
 
 					m_dashboardMenu->GetDisplayValues().bSessionActive = true;
 					m_renderAPI = Vulkan;
@@ -415,7 +326,7 @@ namespace
 			return false;
 		}
 
-		void ResetRenderer()
+		bool SetupProcessingPipeline(ERenderAPI usedAPI)
 		{
 			uint32_t cameraTextureWidth;
 			uint32_t cameraTextureHeight;
@@ -424,40 +335,79 @@ namespace
 			uint32_t cameraUndistortedTextureHeight;
 			uint32_t cameraUndistortedFrameBufferSize;
 
-			m_swapChainLeft = XR_NULL_HANDLE;
-			m_swapChainRight = XR_NULL_HANDLE;
-			m_depthSwapChainLeft = XR_NULL_HANDLE;
-			m_depthSwapChainRight = XR_NULL_HANDLE;
-
 			if (m_cameraManager.get())
 			{
 				m_cameraManager->DeinitCamera();
 				m_cameraManager.reset();
 			}
 
+			if (m_augmentedCameraManager.get())
+			{
+				m_augmentedCameraManager->DeinitCamera();
+				m_augmentedCameraManager.reset();
+			}
+
 			if (m_configManager->GetConfig_Main().CameraProvider == CameraProvider_OpenVR)
 			{
-				m_cameraManager = std::make_shared<CameraManagerOpenVR>(m_Renderer, m_renderAPI, m_configManager, m_openVRManager);
+				m_cameraManager = std::make_shared<CameraManagerOpenVR>(m_Renderer, DirectX11, m_configManager, m_openVRManager);
+
+				if (!m_cameraManager->InitCamera())
+				{
+					return false;
+				}
+				m_cameraManager->GetDistortedFrameSize(cameraTextureWidth, cameraTextureHeight, cameraFrameBufferSize);
+				m_cameraManager->GetUndistortedFrameSize(cameraUndistortedTextureWidth, cameraUndistortedTextureHeight, cameraUndistortedFrameBufferSize);
+			}
+			else if (m_configManager->GetConfig_Main().CameraProvider == CameraProvider_Augmented)
+			{
+				m_cameraManager = std::make_shared<CameraManagerOpenVR>(m_Renderer, DirectX11, m_configManager, m_openVRManager);
+				m_augmentedCameraManager = std::make_shared<CameraManagerOpenCV>(m_Renderer, DirectX11, m_configManager, m_openVRManager, true);
+
+				if (!m_cameraManager->InitCamera() || !m_augmentedCameraManager->InitCamera())
+				{
+					return false;
+				}
+				m_augmentedCameraManager->GetDistortedFrameSize(cameraTextureWidth, cameraTextureHeight, cameraFrameBufferSize);
+				m_augmentedCameraManager->GetUndistortedFrameSize(cameraUndistortedTextureWidth, cameraUndistortedTextureHeight, cameraUndistortedFrameBufferSize);
 			}
 			else
 			{
-				m_cameraManager = std::make_shared<CameraManagerOpenCV>(m_Renderer, m_renderAPI, m_configManager, m_openVRManager);
+				m_cameraManager = std::make_shared<CameraManagerOpenCV>(m_Renderer, DirectX11, m_configManager, m_openVRManager);
+
+				if (!m_cameraManager->InitCamera())
+				{
+					return false;
+				}
+				m_cameraManager->GetDistortedFrameSize(cameraTextureWidth, cameraTextureHeight, cameraFrameBufferSize);
+				m_cameraManager->GetUndistortedFrameSize(cameraUndistortedTextureWidth, cameraUndistortedTextureHeight, cameraUndistortedFrameBufferSize);
 			}
 
-			if (!m_cameraManager->InitCamera())
-			{
-				return;
-			}
 
-			m_cameraManager->GetDistortedFrameSize(cameraTextureWidth, cameraTextureHeight, cameraFrameBufferSize);
-			m_cameraManager->GetUndistortedFrameSize(cameraUndistortedTextureWidth, cameraUndistortedTextureHeight, cameraUndistortedFrameBufferSize);
 			m_Renderer->SetFrameSize(cameraTextureWidth, cameraTextureHeight, cameraFrameBufferSize, cameraUndistortedTextureWidth, cameraUndistortedTextureHeight, cameraUndistortedFrameBufferSize);
 			if (!m_Renderer->InitRenderer())
 			{
-				return;
+				return false;
 			}
 
+
 			m_depthReconstruction = std::make_shared<DepthReconstruction>(m_configManager, m_openVRManager, m_cameraManager);
+
+			if (m_configManager->GetConfig_Main().CameraProvider == CameraProvider_Augmented)
+			{
+				m_augmentedDepthReconstruction = std::make_shared<DepthReconstruction>(m_configManager, m_openVRManager, m_augmentedCameraManager);
+			}
+
+			return true;
+		}
+
+		void ResetRenderer()
+		{
+			m_swapChainLeft = XR_NULL_HANDLE;
+			m_swapChainRight = XR_NULL_HANDLE;
+			m_depthSwapChainLeft = XR_NULL_HANDLE;
+			m_depthSwapChainRight = XR_NULL_HANDLE;
+
+			SetupProcessingPipeline(m_renderAPI);
 		}
 
 
@@ -522,7 +472,12 @@ namespace
 				{
 					m_cameraManager->DeinitCamera();
 				}
+				if (m_augmentedCameraManager.get())
+				{
+					m_augmentedCameraManager->DeinitCamera();
+				}
 				m_cameraManager.reset();
+				m_augmentedCameraManager.reset();
 				m_currentSession = XR_NULL_HANDLE;
 				m_currentInstance = XR_NULL_HANDLE;
 
@@ -952,9 +907,19 @@ namespace
 			m_dashboardMenu->GetDisplayValues().frameBufferWidth = layer->views[0].subImage.imageRect.extent.width;
 			m_dashboardMenu->GetDisplayValues().frameBufferFlags = layer->layerFlags;
 
-			if (!m_cameraManager->GetCameraFrame(frame))
+			if (m_configManager->GetConfig_Main().CameraProvider == CameraProvider_Augmented)
 			{
-				return;
+				if (!m_augmentedCameraManager->GetCameraFrame(frame))
+				{
+					return;
+				}
+			}
+			else
+			{
+				if (!m_cameraManager->GetCameraFrame(frame))
+				{
+					return;
+				}
 			}
 
 			std::shared_lock readLock(frame->readWriteMutex);
@@ -979,8 +944,14 @@ namespace
 
 			std::shared_ptr<DepthFrame> depthFrame = m_depthReconstruction->GetDepthFrame();
 
-			m_cameraManager->CalculateFrameProjection(frame, depthFrame, *layer, timeToPhotons, m_refSpaces[layer->space], m_depthReconstruction->GetDistortionParameters());
-	
+			if (m_configManager->GetConfig_Main().CameraProvider == CameraProvider_Augmented)
+			{
+				m_augmentedCameraManager->CalculateFrameProjection(frame, depthFrame, *layer, timeToPhotons, m_refSpaces[layer->space], m_augmentedDepthReconstruction->GetDistortionParameters());
+			}
+			else
+			{
+				m_cameraManager->CalculateFrameProjection(frame, depthFrame, *layer, timeToPhotons, m_refSpaces[layer->space], m_depthReconstruction->GetDistortionParameters());
+			}
 
 			int leftDepthIndex = 0;
 			int rightDepthIndex = 0;
@@ -1053,7 +1024,13 @@ namespace
 				renderParams.DepthRangeMax = depthConf.DepthForceRangeTestMax;
 			}
 
-			m_Renderer->RenderPassthroughFrame(layer, frame.get(), blendMode, leftIndex, rightIndex, leftDepthIndex, rightDepthIndex, depthFrame, m_depthReconstruction->GetDistortionParameters(), renderParams);
+			UVDistortionParameters& distParams =
+				m_configManager->GetConfig_Main().CameraProvider == CameraProvider_Augmented ?
+				m_augmentedDepthReconstruction->GetDistortionParameters() :
+				m_depthReconstruction->GetDistortionParameters();
+
+
+			m_Renderer->RenderPassthroughFrame(layer, frame.get(), blendMode, leftIndex, rightIndex, leftDepthIndex, rightDepthIndex, depthFrame, distParams, renderParams);
 
 			depthFrame->bIsFirstRender = false;
 
@@ -1071,6 +1048,11 @@ namespace
 			if (!isCurrentSession(session))
 			{
 				return OpenXrApi::xrEndFrame(session, frameEndInfo);
+			}
+
+			if (m_configManager->CheckResetRendererResetPending())
+			{
+				ResetRenderer();
 			}
 
 
@@ -1117,11 +1099,6 @@ namespace
 
 			result = OpenXrApi::xrEndFrame(session, &modifiedFrameEndInfo);
 
-			if (m_configManager->CheckResetRendererResetPending())
-			{
-				ResetRenderer();
-			}
-			
 			return result;
 		}
 
@@ -1166,9 +1143,11 @@ namespace
 		std::shared_ptr<IPassthroughRenderer> m_Renderer;
 		std::shared_ptr<ConfigManager> m_configManager;
 		std::shared_ptr<ICameraManager> m_cameraManager;
+		std::shared_ptr<ICameraManager> m_augmentedCameraManager;
 		std::unique_ptr<DashboardMenu> m_dashboardMenu;
 		std::shared_ptr<OpenVRManager> m_openVRManager;
 		std::shared_ptr<DepthReconstruction> m_depthReconstruction;
+		std::shared_ptr<DepthReconstruction> m_augmentedDepthReconstruction;
 
 		bool m_bSuccessfullyLoaded = false;
 		bool m_bPassthroughAvailable = false;

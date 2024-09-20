@@ -388,6 +388,14 @@ if (bIsActiveTab) { ImGui::PopStyleColor(1); bIsActiveTab = false; }
 			}
 			TextDescription("Use a regular webcam from the OpenCV camera interface. Requires manual configuration.");
 
+			if (ImGui::RadioButton("Augmented (Experimental)", mainConfig.CameraProvider == CameraProvider_Augmented))
+			{
+				mainConfig.CameraProvider = CameraProvider_Augmented;
+				mainConfig.ProjectionMode = Projection_StereoReconstruction;
+				m_configManager->SetRendererResetPending();
+			}
+			TextDescription("Use SteamVR for calculating depth, and a webcam for color data. Requires manual configuration.");
+
 
 			ImGui::Text("Projection Mode");
 			TextDescription("Method for projecting the passthrough cameras to the VR view.");

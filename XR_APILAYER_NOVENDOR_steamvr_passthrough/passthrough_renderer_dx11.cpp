@@ -149,6 +149,7 @@ bool PassthroughRendererDX11::InitRenderer()
 {
 	m_frameData.clear();
 	m_uvDistortionMap.Reset();
+	m_disparityMapWidth = 0;
 
 	m_d3dDevice->GetImmediateContext(&m_deviceContext);
 
@@ -1452,7 +1453,8 @@ void PassthroughRendererDX11::RenderPassthroughView(const ERenderEye eye, const 
 	vsViewBuffer.prevWorldToCameraProjection = (eye == LEFT_EYE) ? frame->prevWorldToCameraProjectionLeft : frame->prevWorldToCameraProjectionRight;
 	vsViewBuffer.prevWorldToHMDProjection = (eye == LEFT_EYE) ? frame->prevWorldToHMDProjectionLeft : frame->prevWorldToHMDProjectionRight;
 
-	vsViewBuffer.frameUVBounds = GetFrameUVBounds(eye, frame->frameLayout);
+	//TODO actual layout
+	vsViewBuffer.frameUVBounds = GetFrameUVBounds(eye, mainConf.CameraProvider == CameraProvider_Augmented ? StereoHorizontalLayout : frame->frameLayout);
 	vsViewBuffer.hmdViewWorldPos = (eye == LEFT_EYE) ? frame->hmdViewPosWorldLeft : frame->hmdViewPosWorldRight;
 	vsViewBuffer.projectionDistance = mainConf.ProjectionDistanceFar;
 	vsViewBuffer.floorHeightOffset = mainConf.FloorHeightOffset;

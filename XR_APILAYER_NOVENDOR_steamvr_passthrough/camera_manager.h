@@ -154,7 +154,7 @@ class CameraManagerOpenCV : public ICameraManager
 {
 public:
 
-	CameraManagerOpenCV(std::shared_ptr<IPassthroughRenderer> renderer, ERenderAPI renderAPI, std::shared_ptr<ConfigManager> configManager, std::shared_ptr<OpenVRManager> openVRManager);
+	CameraManagerOpenCV(std::shared_ptr<IPassthroughRenderer> renderer, ERenderAPI renderAPI, std::shared_ptr<ConfigManager> configManager, std::shared_ptr<OpenVRManager> openVRManager, bool bIsAugmented = false);
 	~CameraManagerOpenCV();
 
 	bool InitCamera();
@@ -182,6 +182,7 @@ private:
 	std::shared_ptr<ConfigManager> m_configManager;
 	std::shared_ptr<OpenVRManager> m_openVRManager;
 
+	bool m_bIsAugmented = false;
 	bool m_bCameraInitialized = false;
 
 	cv::VideoCapture m_videoCapture;
