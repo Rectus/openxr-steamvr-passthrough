@@ -795,7 +795,7 @@ void PassthroughRendererDX12::SetupIntermediateRenderTarget(uint32_t index, uint
 }
 
 
-bool PassthroughRendererDX12::InitPipeline()
+bool PassthroughRendererDX12::InitPipeline(bool bFlipTriangles)
 {
 	D3D12_SHADER_BYTECODE fullscreenQuadShaderVS = { g_FullscreenQuadShaderVS, sizeof(g_FullscreenQuadShaderVS) };
 	D3D12_SHADER_BYTECODE passthroughShaderVS = { g_PassthroughShaderVS, sizeof(g_PassthroughShaderVS) };
@@ -886,7 +886,7 @@ bool PassthroughRendererDX12::InitPipeline()
 	psoDesc.pRootSignature = m_rootSignature.Get();
 	psoDesc.InputLayout.pInputElementDescs = &vertexDesc;
 	psoDesc.InputLayout.NumElements = 1;
-	psoDesc.RasterizerState.FrontCounterClockwise = FALSE;
+	psoDesc.RasterizerState.FrontCounterClockwise = bFlipTriangles ? TRUE : FALSE;
 	psoDesc.RasterizerState.CullMode = D3D12_CULL_MODE_BACK;
 	psoDesc.RasterizerState.DepthClipEnable = FALSE;
 	psoDesc.RasterizerState.FillMode = D3D12_FILL_MODE_SOLID;
@@ -1160,7 +1160,7 @@ void PassthroughRendererDX12::RenderPassthroughFrame(const XrCompositionLayerPro
 		m_bUsingReversedDepth = bUseReversedDepth;
 		m_bWriteDepth = bDepthWrtite;
 
-		if (!InitPipeline())
+		if (!InitPipeline(frame->bIsRenderingMirrored))
 		{
 			return;
 		}

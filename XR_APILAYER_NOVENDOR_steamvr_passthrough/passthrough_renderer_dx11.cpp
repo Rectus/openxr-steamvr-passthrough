@@ -372,8 +372,23 @@ bool PassthroughRendererDX11::InitRenderer()
 		return false;
 	}
 
+	rasterizerDesc.FrontCounterClockwise = true;
+	if (FAILED(m_d3dDevice->CreateRasterizerState(&rasterizerDesc, m_rasterizerStateMirrored.GetAddressOf())))
+	{
+		ErrorLog("CreateRasterizerState failure!\n");
+		return false;
+	}
+
+	rasterizerDesc.FrontCounterClockwise = false;
 	rasterizerDesc.DepthBias = 16;
 	if (FAILED(m_d3dDevice->CreateRasterizerState(&rasterizerDesc, m_rasterizerStateDepthBias.GetAddressOf())))
+	{
+		ErrorLog("CreateRasterizerState failure!\n");
+		return false;
+	}
+
+	rasterizerDesc.FrontCounterClockwise = true;
+	if (FAILED(m_d3dDevice->CreateRasterizerState(&rasterizerDesc, m_rasterizerStateDepthBiasMirrored.GetAddressOf())))
 	{
 		ErrorLog("CreateRasterizerState failure!\n");
 		return false;
@@ -1322,7 +1337,7 @@ void PassthroughRendererDX11::RenderPassthroughFrame(const XrCompositionLayerPro
 	const UINT strides[] = { sizeof(float) * 3 };
 	const UINT offsets[] = { 0 };
 
-	m_renderContext->RSSetState(m_rasterizerState.Get());
+	m_renderContext->RSSetState(frame->bIsRenderingMirrored ? m_rasterizerStateMirrored.Get() : m_rasterizerState.Get());
 
 	m_renderContext->VSSetSamplers(0, 1, m_defaultSampler.GetAddressOf());
 	m_renderContext->PSSetSamplers(0, 1, m_defaultSampler.GetAddressOf());
@@ -1649,7 +1664,7 @@ void PassthroughRendererDX11::RenderPassthroughView(const ERenderEye eye, const 
 		m_renderContext->IASetVertexBuffers(0, 1, m_cylinderMeshVertexBuffer.GetAddressOf(), strides, offsets);
 		m_renderContext->IASetIndexBuffer(m_cylinderMeshIndexBuffer.Get(), DXGI_FORMAT_R32_UINT, 0);
 		m_renderContext->VSSetShader(m_vertexShader.Get(), nullptr, 0);
-		m_renderContext->RSSetState(m_rasterizerStateDepthBias.Get());
+		m_renderContext->RSSetState(frame->bIsRenderingMirrored ? m_rasterizerStateDepthBiasMirrored.Get() : m_rasterizerStateDepthBias.Get());
 
 		m_renderContext->OMSetBlendState(m_blendStateDestAlpha.Get(), nullptr, UINT_MAX);
 
@@ -1668,7 +1683,7 @@ void PassthroughRendererDX11::RenderPassthroughView(const ERenderEye eye, const 
 		{
 			m_renderContext->VSSetShader(m_stereoVertexShader.Get(), nullptr, 0);
 		}
-		m_renderContext->RSSetState(m_rasterizerState.Get());
+		m_renderContext->RSSetState(frame->bIsRenderingMirrored ? m_rasterizerStateMirrored.Get() : m_rasterizerState.Get());
 	}
 }
 

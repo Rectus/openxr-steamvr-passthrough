@@ -119,6 +119,7 @@ struct CameraFrame
 		, bHasFrameBuffer(false)
 		, bHasReversedDepth(false)
 		, bIsFirstRender(true)
+		, bIsRenderingMirrored(false)
 	{
 	}
 
@@ -150,6 +151,7 @@ struct CameraFrame
 	bool bHasFrameBuffer;
 	bool bHasReversedDepth;
 	bool bIsFirstRender;
+	bool bIsRenderingMirrored;
 
 	std::shared_ptr<std::vector<RenderModel>> renderModels;
 };

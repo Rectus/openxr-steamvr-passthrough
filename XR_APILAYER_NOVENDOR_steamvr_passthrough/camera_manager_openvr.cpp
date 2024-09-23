@@ -734,6 +734,9 @@ void CameraManagerOpenVR::CalculateFrameProjection(std::shared_ptr<CameraFrame>&
     CalculateFrameProjectionForEye(LEFT_EYE, frame, layer, refSpaceInfo, distortionParams);
     CalculateFrameProjectionForEye(RIGHT_EYE, frame, layer, refSpaceInfo, distortionParams);
 
+    // Detect the FOV being upside-down in order to prevent triangles from being backface culled
+    frame->bIsRenderingMirrored = (layer.views[0].fov.angleUp - layer.views[0].fov.angleDown) < 0.0f;
+
     if (depthFrame->bIsFirstRender)
     {
         depthFrame->prevDispWorldToCameraProjectionLeft = m_lastDispWorldToCameraProjectionLeft;

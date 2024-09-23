@@ -231,7 +231,9 @@ protected:
 	
 	ComPtr<ID3D11SamplerState> m_defaultSampler;
 	ComPtr<ID3D11RasterizerState> m_rasterizerState;
+	ComPtr<ID3D11RasterizerState> m_rasterizerStateMirrored;
 	ComPtr<ID3D11RasterizerState> m_rasterizerStateDepthBias;
+	ComPtr<ID3D11RasterizerState> m_rasterizerStateDepthBiasMirrored;
 
 	ComPtr<ID3D11BlendState> m_blendStateDestAlpha;
 	ComPtr<ID3D11BlendState> m_blendStateDestAlphaPremultiplied;
