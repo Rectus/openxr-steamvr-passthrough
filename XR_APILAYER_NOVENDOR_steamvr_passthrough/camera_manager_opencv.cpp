@@ -172,10 +172,10 @@ void CameraManagerOpenCV::GetUndistortedFrameSize(uint32_t& width, uint32_t& hei
 void CameraManagerOpenCV::GetIntrinsics(const ERenderEye cameraEye, XrVector2f& focalLength, XrVector2f& center) const
 {
     Config_Camera& cameraConf = m_configManager->GetConfig_Camera();
-    focalLength.x = cameraConf.Camera0_IntrinsicsFocalX * m_cameraTextureWidth;
-    focalLength.y = cameraConf.Camera0_IntrinsicsFocalY * m_cameraTextureHeight;
-    center.x = cameraConf.Camera0_IntrinsicsCenterX * m_cameraTextureWidth;
-    center.y = cameraConf.Camera0_IntrinsicsCenterY * m_cameraTextureHeight;
+    focalLength.x = cameraConf.Camera0_IntrinsicsFocalX / cameraConf.Camera0_IntrinsicsSensorPixelsX * m_cameraTextureWidth;
+    focalLength.y = cameraConf.Camera0_IntrinsicsFocalY / cameraConf.Camera0_IntrinsicsSensorPixelsY * m_cameraTextureHeight;
+    center.x = cameraConf.Camera0_IntrinsicsCenterX / cameraConf.Camera0_IntrinsicsSensorPixelsX * m_cameraTextureWidth;
+    center.y = cameraConf.Camera0_IntrinsicsCenterY / cameraConf.Camera0_IntrinsicsSensorPixelsY * m_cameraTextureHeight;
 }
 
 void CameraManagerOpenCV::GetDistortionCoefficients(ECameraDistortionCoefficients& coeffs) const
@@ -704,10 +704,11 @@ void CameraManagerOpenCV::CalculateFrameProjectionForEye(const ERenderEye eye, s
     XrMatrix4x4f hmdWorldToView = GetHMDWorldToViewMatrix(eye, layer, refSpaceInfo);
 
     XrVector3f* hmdWorldPos = (eye == LEFT_EYE) ? &frame->hmdViewPosWorldLeft : &frame->hmdViewPosWorldRight;
+    XrMatrix4x4f* cameraViewToWorld = (eye == LEFT_EYE) ? &frame->cameraViewToWorldLeft : &frame->cameraViewToWorldLeft;
     XrMatrix4x4f hmdViewToWorld;
     XrMatrix4x4f_Invert(&hmdViewToWorld, &hmdWorldToView);
     XrVector3f inPos{ 0,0,0 };
-    XrMatrix4x4f_TransformVector3f(hmdWorldPos, &hmdViewToWorld, &inPos);
+    XrMatrix4x4f_TransformVector3f(hmdWorldPos, cameraViewToWorld, &inPos);
 
 
     float nearZ = NEAR_PROJECTION_DISTANCE;

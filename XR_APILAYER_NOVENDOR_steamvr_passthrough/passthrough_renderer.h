@@ -325,7 +325,7 @@ private:
 	void SetupDisparityMap(uint32_t width, uint32_t height);
 	void SetupUVDistortionMap(std::shared_ptr<std::vector<float>> uvDistortionMap);
 	bool CreateRootSignature();
-	bool InitPipeline();
+	bool InitPipeline(bool bFlipTriangles);
 	void SetupIntermediateRenderTarget(uint32_t index, uint32_t width, uint32_t height);
 	void GenerateMesh();
 	void GenerateDepthMesh(uint32_t width, uint32_t height);

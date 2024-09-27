@@ -27,6 +27,7 @@ cbuffer psPassConstantBuffer : register(b3)
     bool g_bUseFisheyeCorrection;
     bool g_bIsFirstRenderOfCameraFrame;
     bool g_bUseDepthCutoffRange;
+    bool g_bClampCameraFrame;
 };
 
 cbuffer psMaskedConstantBuffer : register(b4)
@@ -66,6 +67,7 @@ cbuffer psPassConstantBuffer : register(b0)
     bool g_bUseFisheyeCorrection;
     bool g_bIsFirstRenderOfCameraFrame;
     bool g_bUseDepthCutoffRange;
+    bool g_bClampCameraFrame;
 };
 
 cbuffer psMaskedConstantBuffer : register(b2)

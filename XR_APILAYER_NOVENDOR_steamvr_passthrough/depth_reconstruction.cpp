@@ -403,8 +403,10 @@ void DepthReconstruction::RunThread()
         cv::remap(m_inputFrameLeft, m_rectifiedFrameLeft, m_leftMap1, m_leftMap2, filter, cv::BORDER_CONSTANT);
         cv::remap(m_inputFrameRight, m_rectifiedFrameRight, m_rightMap1, m_rightMap2, filter, cv::BORDER_CONSTANT);
         
-        cv::resize(m_rectifiedFrameLeft, m_scaledFrameLeft, cv::Size(m_cvImageWidth, m_cvImageHeight));
-        cv::resize(m_rectifiedFrameRight, m_scaledFrameRight, cv::Size(m_cvImageWidth, m_cvImageHeight));      
+        int resizeFilter = stereoConfig.StereoRectificationFiltering ? CV_INTER_AREA : CV_INTER_LINEAR;
+
+        cv::resize(m_rectifiedFrameLeft, m_scaledFrameLeft, cv::Size(m_cvImageWidth, m_cvImageHeight), resizeFilter);
+        cv::resize(m_rectifiedFrameRight, m_scaledFrameRight, cv::Size(m_cvImageWidth, m_cvImageHeight), resizeFilter);      
 
         m_scaledFrameLeft.copyTo(m_scaledExtFrameLeft(cv::Rect(m_maxDisparity, 0, m_cvImageWidth, m_cvImageHeight)));
         m_scaledFrameRight.copyTo(m_scaledExtFrameRight(cv::Rect(m_maxDisparity, 0, m_cvImageWidth, m_cvImageHeight)));

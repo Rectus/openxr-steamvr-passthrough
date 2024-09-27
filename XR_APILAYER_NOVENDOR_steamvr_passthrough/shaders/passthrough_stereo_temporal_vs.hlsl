@@ -310,7 +310,14 @@ VS_OUTPUT main(float3 inPosition : POSITION, uint vertexID : SV_VertexID)
     output.velocity = outCoords.xyz / outCoords.w - prevOutCoords.xyz / prevOutCoords.w;
 #endif
 	
-    
+    if (g_bClampCameraFrame)
+    {
+        float4 test = mul(g_worldToCameraProjection, worldSpacePoint);
+        if (test.z < 0.0)
+        {
+            output.projectionValidity = -1;
+        }
+    }
     
     
 #ifdef VULKAN

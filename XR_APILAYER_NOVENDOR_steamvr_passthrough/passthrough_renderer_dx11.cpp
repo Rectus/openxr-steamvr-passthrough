@@ -41,6 +41,7 @@ struct VSPassConstantBuffer
 	uint32_t bUseDisparityTemporalFilter;
 	float disparityTemporalFilterStrength;
 	float disparityTemporalFilterDistance;
+	uint32_t bClampCameraFrame;
 };
 
 struct VSViewConstantBuffer
@@ -82,6 +83,7 @@ struct PSPassConstantBuffer
 	uint32_t bUseFisheyeCorrection;
 	uint32_t bIsFirstRenderOfCameraFrame;
 	uint32_t bUseDepthCutoffRange;
+	uint32_t bClampCameraFrame;
 };
 
 struct PSViewConstantBuffer
@@ -1266,6 +1268,7 @@ void PassthroughRendererDX11::RenderPassthroughFrame(const XrCompositionLayerPro
 		vsBuffer.bUseDisparityTemporalFilter = stereoConf.StereoUseDisparityTemporalFiltering;
 		vsBuffer.disparityTemporalFilterStrength = stereoConf.StereoDisparityTemporalFilteringStrength;
 		vsBuffer.disparityTemporalFilterDistance = stereoConf.StereoDisparityTemporalFilteringDistance;
+		vsBuffer.bClampCameraFrame = m_configManager->GetConfig_Camera().ClampCameraFrame;
 		m_renderContext->UpdateSubresource(frameData.vsPassConstantBuffer.Get(), 0, nullptr, &vsBuffer, 0, 0);
 	}
 
@@ -1384,6 +1387,7 @@ void PassthroughRendererDX11::RenderPassthroughFrame(const XrCompositionLayerPro
 	psBuffer.bUseFisheyeCorrection = mainConf.ProjectionMode != Projection_RoomView2D;
 	psBuffer.bIsFirstRenderOfCameraFrame = frame->bIsFirstRender;
 	psBuffer.bUseDepthCutoffRange = renderParams.bEnableDepthRange;
+	psBuffer.bClampCameraFrame = m_configManager->GetConfig_Camera().ClampCameraFrame;
 
 	m_renderContext->UpdateSubresource(frameData.psPassConstantBuffer.Get(), 0, nullptr, &psBuffer, 0, 0);
 

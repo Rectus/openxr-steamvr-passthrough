@@ -158,6 +158,8 @@ VS_OUTPUT main(float3 inPosition : POSITION, uint vertexID : SV_VertexID)
     
     output.position = mul(g_worldToHMDProjection, worldSpacePoint);
     output.screenCoords = output.position.xyw;
+    
+    
 	
 #ifndef VULKAN
     float4 outCoords = mul(g_worldToCameraProjection, worldSpacePoint);
@@ -172,8 +174,14 @@ VS_OUTPUT main(float3 inPosition : POSITION, uint vertexID : SV_VertexID)
     output.velocity = outCoords.xyz / outCoords.w - prevOutCoords.xyz / prevOutCoords.w;
 #endif
 	
-    
-    
+    if (g_bClampCameraFrame)
+    {
+        float4 test = mul(g_worldToCameraProjection, worldSpacePoint);
+        if (test.z < 0.0)
+        {
+            output.projectionValidity = -1;
+        }
+    }
     
 #ifdef VULKAN
 	output.position.y *= -1.0;

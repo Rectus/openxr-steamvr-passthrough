@@ -37,6 +37,7 @@ struct VSPassConstantBuffer
 	uint32_t bUseDisparityTemporalFilter;
 	float disparityTemporalFilterStrength;
 	float disparityTemporalFilterDistance;
+	uint32_t bClampCameraFrame;
 };
 
 
@@ -75,6 +76,7 @@ struct PSPassConstantBuffer
 	uint32_t bUseFisheyeCorrection;
 	uint32_t bIsFirstRenderOfCameraFrame;
 	uint32_t bUseDepthCutoffRange;
+	uint32_t bClampCameraFrame;
 };
 
 struct PSViewConstantBuffer
@@ -1777,6 +1779,7 @@ void PassthroughRendererVulkan::RenderPassthroughFrame(const XrCompositionLayerP
 		psPassBuffer.bDebugValidStereo = mainConf.DebugStereoValid;
 		psPassBuffer.bUseFisheyeCorrection = mainConf.ProjectionMode != Projection_RoomView2D;
 		psPassBuffer.bUseDepthCutoffRange = renderParams.bEnableDepthRange;
+		psPassBuffer.bClampCameraFrame = m_configManager->GetConfig_Camera().ClampCameraFrame;
 
 		memcpy(m_psPassConstantBufferMappings[m_frameIndex], &psPassBuffer, sizeof(PSPassConstantBuffer));
 	}

@@ -36,6 +36,15 @@ VS_OUTPUT main(float3 inPosition : POSITION, uint vertexID : SV_VertexID)
 
 	output.projectionValidity = 1.0;
 	
+    if (g_bClampCameraFrame)
+    {
+        float4 test = mul(g_worldToCameraProjection, float4(inPosition + g_hmdViewWorldPos, 1.0));
+        if (test.z < -0.5)
+        {
+            output.projectionValidity = -1;
+        }
+    }
+	
 #ifndef VULKAN  
     float4 prevOutCoords = mul(g_prevWorldToCameraProjection, worldPos);
     

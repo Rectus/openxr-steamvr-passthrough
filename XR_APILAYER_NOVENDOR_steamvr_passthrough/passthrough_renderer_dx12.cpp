@@ -115,6 +115,7 @@ struct VSPassConstantBuffer
 	uint32_t bUseDisparityTemporalFilter;
 	float disparityTemporalFilterStrength;
 	float disparityTemporalFilterDistance;
+	uint32_t bClampCameraFrame;
 };
 
 struct VSViewConstantBuffer
@@ -151,6 +152,7 @@ struct PSPassConstantBuffer
 	uint32_t bUseFisheyeCorrection;
 	uint32_t bIsFirstRenderOfCameraFrame;
 	uint32_t bUseDepthCutoffRange;
+	uint32_t bClampCameraFrame;
 };
 
 struct PSViewConstantBuffer
@@ -1231,6 +1233,7 @@ void PassthroughRendererDX12::RenderPassthroughFrame(const XrCompositionLayerPro
 		vsPassBuffer->disparityFilterWidth = stereoConf.StereoDisparityFilterWidth;
 		vsPassBuffer->bProjectBorders = !stereoConf.StereoReconstructionFreeze;
 		vsPassBuffer->bFindDiscontinuities = stereoConf.StereoCutoutEnabled;
+		vsPassBuffer->bClampCameraFrame = m_configManager->GetConfig_Camera().ClampCameraFrame;
 
 		D3D12_GPU_DESCRIPTOR_HANDLE vsPassCBVHandle = m_CBVSRVHeap->GetGPUDescriptorHandleForHeapStart();
 		vsPassCBVHandle.ptr += (INDEX_CBV_VS_PASS_0 + m_frameIndex) * m_CBVSRVHeapDescSize;
@@ -1370,6 +1373,7 @@ void PassthroughRendererDX12::RenderPassthroughFrame(const XrCompositionLayerPro
 	psPassBuffer->bDebugValidStereo = mainConf.DebugStereoValid;
 	psPassBuffer->bUseFisheyeCorrection = mainConf.ProjectionMode != Projection_RoomView2D;
 	psPassBuffer->bUseDepthCutoffRange = renderParams.bEnableDepthRange;
+	psPassBuffer->bClampCameraFrame = m_configManager->GetConfig_Camera().ClampCameraFrame;
 
 	D3D12_GPU_DESCRIPTOR_HANDLE passCBVHandle = m_CBVSRVHeap->GetGPUDescriptorHandleForHeapStart();
 	passCBVHandle.ptr += (INDEX_CBV_PS_PASS_0 + m_frameIndex) * m_CBVSRVHeapDescSize;

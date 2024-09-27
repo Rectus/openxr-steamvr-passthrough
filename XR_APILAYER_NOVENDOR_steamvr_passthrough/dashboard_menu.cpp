@@ -371,31 +371,7 @@ if (bIsActiveTab) { ImGui::PopStyleColor(1); bIsActiveTab = false; }
 
 			IMGUI_BIG_SPACING;
 
-			ImGui::Text("Camera Provider");
-			TextDescription("Source for passthough camera images.");
-			if (ImGui::RadioButton("SteamVR", mainConfig.CameraProvider == CameraProvider_OpenVR))
-			{
-				mainConfig.CameraProvider = CameraProvider_OpenVR;
-				m_configManager->SetRendererResetPending();
-			}
-			TextDescription("Use the passthrough cameras on a compatible HMD. Uses the OpenVR Tracked Camera interface.");
-
-			if (ImGui::RadioButton("Webcam (Experimental)", mainConfig.CameraProvider == CameraProvider_OpenCV))
-			{
-				mainConfig.CameraProvider = CameraProvider_OpenCV;
-				mainConfig.ProjectionMode = Projection_Custom2D;
-				m_configManager->SetRendererResetPending();
-			}
-			TextDescription("Use a regular webcam from the OpenCV camera interface. Requires manual configuration.");
-
-			if (ImGui::RadioButton("Augmented (Experimental)", mainConfig.CameraProvider == CameraProvider_Augmented))
-			{
-				mainConfig.CameraProvider = CameraProvider_Augmented;
-				mainConfig.ProjectionMode = Projection_StereoReconstruction;
-				m_configManager->SetRendererResetPending();
-			}
-			TextDescription("Use SteamVR for calculating depth, and a webcam for color data. Requires manual configuration.");
-
+			if (mainConfig.CameraProvider != CameraProvider_OpenVR) { ImGui::BeginDisabled(); }
 
 			ImGui::Text("Projection Mode");
 			TextDescription("Method for projecting the passthrough cameras to the VR view.");
@@ -416,6 +392,8 @@ if (bIsActiveTab) { ImGui::PopStyleColor(1); bIsActiveTab = false; }
 				mainConfig.ProjectionMode = Projection_StereoReconstruction;
 			}
 			TextDescriptionSpaced("Full depth estimation.");
+
+			if (mainConfig.CameraProvider != CameraProvider_OpenVR) { ImGui::EndDisabled(); }
 
 			ImGui::Checkbox("Project onto Render Models (Experimental)", &mainConfig.ProjectToRenderModels);
 			TextDescriptionSpaced("Project the passthough view to the correct distance on render models, such as controllers. Requires good camera calibration.");
@@ -1002,167 +980,195 @@ if (bIsActiveTab) { ImGui::PopStyleColor(1); bIsActiveTab = false; }
 
 		ImGui::BeginChild("Camera Pane");
 
-		ImGui::SetNextItemOpen(true, ImGuiCond_Once);
 
-		//BeginSoftDisabled(mainConfig.CameraProvider != CameraProvider_OpenCV);
-
-		TextDescription("These settings are for the experimental webcam provider only.");
-
-		if (ImGui::Button("Apply Changes"))
+		ImGui::Text("Camera Provider");
+		TextDescription("Source for passthough camera images.");
+		if (ImGui::RadioButton("SteamVR", mainConfig.CameraProvider == CameraProvider_OpenVR))
 		{
+			mainConfig.CameraProvider = CameraProvider_OpenVR;
 			m_configManager->SetRendererResetPending();
 		}
+		TextDescription("Use the passthrough cameras on a compatible HMD. Uses the OpenVR Tracked Camera interface.");
 
-		IMGUI_BIG_SPACING;
-
-		ImGui::BeginChild("CameraSettings");
-
-		
-		ImGui::Text("Camera Selection");
-		if (ImGui::Button("Refresh###RefreshCams"))
+		if (ImGui::RadioButton("Webcam (Experimental)", mainConfig.CameraProvider == CameraProvider_OpenCV))
 		{
-			CameraEnumerator::EnumerateCameras(m_cameraDevices);
+			mainConfig.CameraProvider = CameraProvider_OpenCV;
+			mainConfig.ProjectionMode = Projection_Custom2D;
+			m_configManager->SetRendererResetPending();
 		}
+		TextDescription("Use a regular webcam from the OpenCV camera interface. Requires manual configuration.");
 
-		ImGui::SameLine();
-
-		std::string comboPreview = "No device";
-
-		if (m_cameraDevices.size() > cameraConfig.Camera0DeviceIndex)
+		if (ImGui::RadioButton("Augmented (Experimental)", mainConfig.CameraProvider == CameraProvider_Augmented))
 		{
-			comboPreview.assign(std::format("[{}] {}", cameraConfig.Camera0DeviceIndex, m_cameraDevices[cameraConfig.Camera0DeviceIndex]));
+			mainConfig.CameraProvider = CameraProvider_Augmented;
+			mainConfig.ProjectionMode = Projection_StereoReconstruction;
+			m_configManager->SetRendererResetPending();
 		}
+		TextDescription("Use SteamVR for calculating depth, and a webcam for color data. Requires a HMD with a stereo camera and manual configuration.");
+
+		ImGui::Checkbox("Clamp Camera Frame", &cameraConfig.ClampCameraFrame);
+		TextDescription("Only draw passthrough in the actual frame area. Without it the edge pixels are extended past it.");
 
 
-		if (ImGui::BeginCombo("Devices", comboPreview.c_str()))
+		ImGui::SetNextItemOpen(true, ImGuiCond_Once);
+		if (ImGui::CollapsingHeader("Webcam Configuration"))
 		{
-			for (int i = 0; i < m_cameraDevices.size(); i++)
+			TextDescription("These settings are for the experimental webcam provider only.");
+
+			if (ImGui::Button("Apply Changes"))
 			{
-				std::string comboValue = std::format("[{}] {}", i, m_cameraDevices[i]);
-
-				const bool bIsSelected = (cameraConfig.Camera0DeviceIndex == i);
-				if (ImGui::Selectable(comboValue.c_str(), bIsSelected))
-				{
-					cameraConfig.Camera0DeviceIndex = i;
-				}
-
-				if (bIsSelected)
-				{
-					ImGui::SetItemDefaultFocus();
-				}
+				m_configManager->SetRendererResetPending();
 			}
-			ImGui::EndCombo();
-		}
 
-		IMGUI_BIG_SPACING;
+			IMGUI_BIG_SPACING;
 
-		ImGui::Checkbox("Camera is Attached to Tracked Device", &cameraConfig.UseTrackedDevice);
-		TextDescription("Enable if the camera is attached to to a tracked device, such as a HMD or tracker.");
-
-		BeginSoftDisabled(!cameraConfig.UseTrackedDevice);
-
-		if (ImGui::Button("Refresh"))
-		{
-			m_openVRManager->GetDeviceIdentProperties(m_deviceIdentProps);
-		}
-
-		ImGui::SameLine();
-
-		std::string camComboPreview = "No device";
-
-		if (m_deviceIdentProps.size() > m_currentIdentDevice)
-		{
-			camComboPreview.assign(std::format("[{}] {} - {}", m_currentIdentDevice, m_deviceIdentProps[m_currentIdentDevice].DeviceName, m_deviceIdentProps[m_currentIdentDevice].DeviceSerial));
-		}
+			ImGui::BeginChild("CameraSettings");
 
 
-		if (ImGui::BeginCombo("Cameras", camComboPreview.c_str()))
-		{
-			for (int i = 0; i < m_deviceIdentProps.size(); i++)
+			ImGui::Text("Camera Selection");
+			if (ImGui::Button("Refresh###RefreshCams"))
 			{
-				std::string comboValue = std::format("[{}] {} - {}", i, m_deviceIdentProps[i].DeviceName, m_deviceIdentProps[m_currentIdentDevice].DeviceSerial);
-
-				const bool bIsSelected = (m_currentIdentDevice == i);
-				if (ImGui::Selectable(comboValue.c_str(), bIsSelected))
-				{
-					m_currentIdentDevice = i;
-
-					cameraConfig.TrackedDeviceSerialNumber = m_deviceIdentProps[i].DeviceSerial;
-				}
-
-				if (bIsSelected)
-				{
-					ImGui::SetItemDefaultFocus();
-				}
+				CameraEnumerator::EnumerateCameras(m_cameraDevices);
 			}
-			ImGui::EndCombo();
-		}
-		ImGui::Text("Device Serial Number set: %s", cameraConfig.TrackedDeviceSerialNumber);
 
-		TextDescription("Select the device the camera is attached to. The device is tracked by its serial number.");
+			ImGui::SameLine();
 
-		EndSoftDisabled(!cameraConfig.UseTrackedDevice);
+			std::string comboPreview = "No device";
 
-		IMGUI_BIG_SPACING;
-		
+			if (m_cameraDevices.size() > cameraConfig.Camera0DeviceIndex)
+			{
+				comboPreview.assign(std::format("[{}] {}", cameraConfig.Camera0DeviceIndex, m_cameraDevices[cameraConfig.Camera0DeviceIndex]));
+			}
 
-		ImGui::Checkbox("Auto Exposure", &cameraConfig.AutoExposureEnable);
-		TextDescription("");
 
-		bool prevAutoeExp = cameraConfig.AutoExposureEnable;
-		float prefExp = cameraConfig.ExposureValue;
+			if (ImGui::BeginCombo("Devices", comboPreview.c_str()))
+			{
+				for (int i = 0; i < m_cameraDevices.size(); i++)
+				{
+					std::string comboValue = std::format("[{}] {}", i, m_cameraDevices[i]);
 
-		BeginSoftDisabled(cameraConfig.AutoExposureEnable);
-		ScrollableSlider("Exposure", &cameraConfig.ExposureValue, -16.0f, 0.0f, "%.1f", 1.0f);
-		EndSoftDisabled(cameraConfig.AutoExposureEnable);
+					const bool bIsSelected = (cameraConfig.Camera0DeviceIndex == i);
+					if (ImGui::Selectable(comboValue.c_str(), bIsSelected))
+					{
+						cameraConfig.Camera0DeviceIndex = i;
+					}
 
-		if (prevAutoeExp != cameraConfig.AutoExposureEnable || prefExp != cameraConfig.ExposureValue)
-		{
-			m_configManager->SetCameraParamChangesPending();
-		}
+					if (bIsSelected)
+					{
+						ImGui::SetItemDefaultFocus();
+					}
+				}
+				ImGui::EndCombo();
+			}
 
-		IMGUI_BIG_SPACING;
+			IMGUI_BIG_SPACING;
 
-		ImGui::Text("To change these options accurately, please edit the config file in: \n%%APPDATA%%\\OpenXR SteamVR Passthrough\\config.ini");
+			ImGui::Checkbox("Camera is Attached to Tracked Device", &cameraConfig.UseTrackedDevice);
+			TextDescription("Enable if the camera is attached to to a tracked device, such as a HMD or tracker.");
 
-		ScrollableSlider("Frame Delay Offset (s)", &cameraConfig.FrameDelayOffset, -0.1f, 0.0f, "%.3f", 0.001f);
-		TextDescription("The delay from the camera capturing the image to it being received by the application. This may vary between cameras. Adjust until the view stops lagging when moving your head.");
+			BeginSoftDisabled(!cameraConfig.UseTrackedDevice);
 
-		ImGui::Checkbox("Request Custom Frame Size", &cameraConfig.RequestCustomFrameSize);
-		TextDescription("");
+			if (ImGui::Button("Refresh"))
+			{
+				m_openVRManager->GetDeviceIdentProperties(m_deviceIdentProps);
+			}
 
-		BeginSoftDisabled(!cameraConfig.RequestCustomFrameSize);
-		ScrollableSliderInt("Width###FrameWidth", &cameraConfig.CustomFrameWidth, 320, 2048, "%d", 1);
-		ScrollableSliderInt("Height###FrameHeight", &cameraConfig.CustomFrameHeight, 240, 1600, "%d", 1);
-		EndSoftDisabled(!cameraConfig.RequestCustomFrameSize);
+			ImGui::SameLine();
 
-		IMGUI_BIG_SPACING;
+			std::string camComboPreview = "No device";
 
-		ImGui::Text("Camera Offset (m)");
-		ScrollableSlider("X", &cameraConfig.Camera0_TranslationX, -0.5f, 0.5f, "%.3f", 0.001f);
-		ScrollableSlider("Y", &cameraConfig.Camera0_TranslationY, -0.5f, 0.5f, "%.3f", 0.001f);
-		ScrollableSlider("Z", &cameraConfig.Camera0_TranslationZ, -0.5f, 0.5f, "%.3f", 0.001f);
+			if (m_deviceIdentProps.size() > m_currentIdentDevice)
+			{
+				camComboPreview.assign(std::format("[{}] {} - {}", m_currentIdentDevice, m_deviceIdentProps[m_currentIdentDevice].DeviceName, m_deviceIdentProps[m_currentIdentDevice].DeviceSerial));
+			}
 
-		ImGui::Text("Camera Rotation (degrees)");
-		ScrollableSlider("RX", &cameraConfig.Camera0_RotationX, -180.0f, 180.0f, "%.0f", 5.0f);
-		ScrollableSlider("RY", &cameraConfig.Camera0_RotationY, -180.0f, 180.0f, "%.0f", 5.0f);
-		ScrollableSlider("RZ", &cameraConfig.Camera0_RotationZ, -180.0f, 180.0f, "%.0f", 5.0f);
 
-		ImGui::Text("Camera Intrinsics");
-		ScrollableSlider("Fx", &cameraConfig.Camera0_IntrinsicsFocalX, 0.1f, 2.0f, "%.4f", 0.01f);
-		ScrollableSlider("Fy", &cameraConfig.Camera0_IntrinsicsFocalY, 0.1f, 2.0f, "%.4f", 0.01f);
-		ScrollableSlider("Cx", &cameraConfig.Camera0_IntrinsicsCenterX, 0.0f, 1.0f, "%.4f", 0.01f);
-		ScrollableSlider("Cy", &cameraConfig.Camera0_IntrinsicsCenterY, 0.0f, 1.0f, "%.4f", 0.01f);
+			if (ImGui::BeginCombo("Cameras", camComboPreview.c_str()))
+			{
+				for (int i = 0; i < m_deviceIdentProps.size(); i++)
+				{
+					std::string comboValue = std::format("[{}] {} - {}", i, m_deviceIdentProps[i].DeviceName, m_deviceIdentProps[m_currentIdentDevice].DeviceSerial);
 
-		ImGui::Text("Camera Distortion");
-		ScrollableSlider("R1", &cameraConfig.Camera0_IntrinsicsDistR1, -1.0f, 1.0f, "%.4f", 0.01f);
-		ScrollableSlider("R2", &cameraConfig.Camera0_IntrinsicsDistR2, -1.0f, 1.0f, "%.4f", 0.01f);
-		ScrollableSlider("T1", &cameraConfig.Camera0_IntrinsicsDistT1, -1.0f, 1.0f, "%.4f", 0.01f);
-		ScrollableSlider("T2", &cameraConfig.Camera0_IntrinsicsDistT2, -1.0f, 1.0f, "%.4f", 0.01f);
+					const bool bIsSelected = (m_currentIdentDevice == i);
+					if (ImGui::Selectable(comboValue.c_str(), bIsSelected))
+					{
+						m_currentIdentDevice = i;
 
-		//EndSoftDisabled(mainConfig.CameraProvider != CameraProvider_OpenCV);
+						cameraConfig.TrackedDeviceSerialNumber = m_deviceIdentProps[i].DeviceSerial;
+					}
 
-		ImGui::EndChild();
+					if (bIsSelected)
+					{
+						ImGui::SetItemDefaultFocus();
+					}
+				}
+				ImGui::EndCombo();
+			}
+			ImGui::Text("Device Serial Number set: %s", cameraConfig.TrackedDeviceSerialNumber);
+
+			TextDescription("Select the device the camera is attached to. The device is tracked by its serial number.");
+
+			EndSoftDisabled(!cameraConfig.UseTrackedDevice);
+
+			IMGUI_BIG_SPACING;
+
+
+			ImGui::Checkbox("Auto Exposure", &cameraConfig.AutoExposureEnable);
+			TextDescription("");
+
+			bool prevAutoeExp = cameraConfig.AutoExposureEnable;
+			float prefExp = cameraConfig.ExposureValue;
+
+			BeginSoftDisabled(cameraConfig.AutoExposureEnable);
+			ScrollableSlider("Exposure", &cameraConfig.ExposureValue, -16.0f, 0.0f, "%.1f", 1.0f);
+			EndSoftDisabled(cameraConfig.AutoExposureEnable);
+
+			if (prevAutoeExp != cameraConfig.AutoExposureEnable || prefExp != cameraConfig.ExposureValue)
+			{
+				m_configManager->SetCameraParamChangesPending();
+			}
+
+			IMGUI_BIG_SPACING;
+
+			ImGui::Text("To change these options accurately, please edit the config file in: \n%%APPDATA%%\\OpenXR SteamVR Passthrough\\config.ini");
+
+			ScrollableSlider("Frame Delay Offset (s)", &cameraConfig.FrameDelayOffset, -0.1f, 0.0f, "%.3f", 0.001f);
+			TextDescription("The delay from the camera capturing the image to it being received by the application. This may vary between cameras. Adjust until the view stops lagging when moving your head.");
+
+			ImGui::Checkbox("Request Custom Frame Size", &cameraConfig.RequestCustomFrameSize);
+			TextDescription("");
+
+			BeginSoftDisabled(!cameraConfig.RequestCustomFrameSize);
+			ScrollableSliderInt("Width###FrameWidth", &cameraConfig.CustomFrameWidth, 320, 2048, "%d", 1);
+			ScrollableSliderInt("Height###FrameHeight", &cameraConfig.CustomFrameHeight, 240, 1600, "%d", 1);
+			EndSoftDisabled(!cameraConfig.RequestCustomFrameSize);
+
+			IMGUI_BIG_SPACING;
+
+			ImGui::Text("Camera Offset (m)");
+			ScrollableSlider("X", &cameraConfig.Camera0_TranslationX, -0.5f, 0.5f, "%.3f", 0.001f);
+			ScrollableSlider("Y", &cameraConfig.Camera0_TranslationY, -0.5f, 0.5f, "%.3f", 0.001f);
+			ScrollableSlider("Z", &cameraConfig.Camera0_TranslationZ, -0.5f, 0.5f, "%.3f", 0.001f);
+
+			ImGui::Text("Camera Rotation (degrees)");
+			ScrollableSlider("RX", &cameraConfig.Camera0_RotationX, -180.0f, 180.0f, "%.0f", 5.0f);
+			ScrollableSlider("RY", &cameraConfig.Camera0_RotationY, -180.0f, 180.0f, "%.0f", 5.0f);
+			ScrollableSlider("RZ", &cameraConfig.Camera0_RotationZ, -180.0f, 180.0f, "%.0f", 5.0f);
+
+			ImGui::Text("Camera Intrinsics");
+			ScrollableSlider("Fx", &cameraConfig.Camera0_IntrinsicsFocalX, 0.1f, 2.0f, "%.4f", 0.01f);
+			ScrollableSlider("Fy", &cameraConfig.Camera0_IntrinsicsFocalY, 0.1f, 2.0f, "%.4f", 0.01f);
+			ScrollableSlider("Cx", &cameraConfig.Camera0_IntrinsicsCenterX, 0.0f, 1.0f, "%.4f", 0.01f);
+			ScrollableSlider("Cy", &cameraConfig.Camera0_IntrinsicsCenterY, 0.0f, 1.0f, "%.4f", 0.01f);
+
+			ImGui::Text("Camera Distortion");
+			ScrollableSlider("R1", &cameraConfig.Camera0_IntrinsicsDistR1, -1.0f, 1.0f, "%.4f", 0.01f);
+			ScrollableSlider("R2", &cameraConfig.Camera0_IntrinsicsDistR2, -1.0f, 1.0f, "%.4f", 0.01f);
+			ScrollableSlider("T1", &cameraConfig.Camera0_IntrinsicsDistT1, -1.0f, 1.0f, "%.4f", 0.01f);
+			ScrollableSlider("T2", &cameraConfig.Camera0_IntrinsicsDistT2, -1.0f, 1.0f, "%.4f", 0.01f);
+
+			ImGui::EndChild();
+		}	
 
 		ImGui::EndChild();
 	}

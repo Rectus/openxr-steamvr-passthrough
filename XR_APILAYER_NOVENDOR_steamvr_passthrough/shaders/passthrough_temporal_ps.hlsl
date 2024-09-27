@@ -152,6 +152,12 @@ float4 main(VS_OUTPUT input) : SV_TARGET
 	// Convert from homogenous clip space coordinates to 0-1.
 	float2 outUvs = (input.clipSpaceCoords.xy / input.clipSpaceCoords.z) * float2(0.5, 0.5) + float2(0.5, 0.5);
 	
+    if (g_bClampCameraFrame)
+    {
+        clip(outUvs);
+        clip(1 - outUvs);
+    }
+    
 	// Remap and clamp to frame UV bounds.
 	outUvs = outUvs * (g_uvBounds.zw - g_uvBounds.xy) + g_uvBounds.xy;
 	outUvs = clamp(outUvs, g_uvBounds.xy, g_uvBounds.zw);
