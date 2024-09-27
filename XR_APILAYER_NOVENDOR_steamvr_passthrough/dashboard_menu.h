@@ -109,5 +109,7 @@ private:
 
 	bool m_cameraTabBeenOpened = false;
 	bool m_debugTabBeenOpened = false;
+
+	bool m_bIsKeyboardOpen = false;
 };
 

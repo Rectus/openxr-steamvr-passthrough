@@ -172,10 +172,10 @@ void CameraManagerOpenCV::GetUndistortedFrameSize(uint32_t& width, uint32_t& hei
 void CameraManagerOpenCV::GetIntrinsics(const ERenderEye cameraEye, XrVector2f& focalLength, XrVector2f& center) const
 {
     Config_Camera& cameraConf = m_configManager->GetConfig_Camera();
-    focalLength.x = cameraConf.Camera0_IntrinsicsFocalX / cameraConf.Camera0_IntrinsicsSensorPixelsX * m_cameraTextureWidth;
-    focalLength.y = cameraConf.Camera0_IntrinsicsFocalY / cameraConf.Camera0_IntrinsicsSensorPixelsY * m_cameraTextureHeight;
-    center.x = cameraConf.Camera0_IntrinsicsCenterX / cameraConf.Camera0_IntrinsicsSensorPixelsX * m_cameraTextureWidth;
-    center.y = cameraConf.Camera0_IntrinsicsCenterY / cameraConf.Camera0_IntrinsicsSensorPixelsY * m_cameraTextureHeight;
+    focalLength.x = cameraConf.Camera0_IntrinsicsFocalX / (float)cameraConf.Camera0_IntrinsicsSensorPixelsX * m_cameraTextureWidth;
+    focalLength.y = cameraConf.Camera0_IntrinsicsFocalY / (float)cameraConf.Camera0_IntrinsicsSensorPixelsY * m_cameraTextureHeight;
+    center.x = cameraConf.Camera0_IntrinsicsCenterX / (float)cameraConf.Camera0_IntrinsicsSensorPixelsX * m_cameraTextureWidth;
+    center.y = cameraConf.Camera0_IntrinsicsCenterY / (float)cameraConf.Camera0_IntrinsicsSensorPixelsY * m_cameraTextureHeight;
 }
 
 void CameraManagerOpenCV::GetDistortionCoefficients(ECameraDistortionCoefficients& coeffs) const

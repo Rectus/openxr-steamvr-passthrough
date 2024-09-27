@@ -66,6 +66,9 @@ void DashboardMenu::RunThread()
 	m_fixedFont = io.Fonts->AddFontFromMemoryCompressedTTF(cousine_regular_compressed_data, cousine_regular_compressed_size, 18);
 	ImGui::StyleColorsDark();
 
+	// TODO: Using single clicks since double clicks don't seem to be working (timing issue?)
+	io.ConfigDragClickToInputText = true;
+
 	SetupDX11();
 	ImGui_ImplDX11_Init(m_d3d11Device.Get(), m_d3d11DeviceContext.Get());
 	CreateOverlay();
@@ -85,6 +88,10 @@ void DashboardMenu::RunThread()
 
 	if (vrOverlay)
 	{
+		if (m_bIsKeyboardOpen)
+		{
+			vrOverlay->HideKeyboard();
+		}
 		vrOverlay->DestroyOverlay(m_overlayHandle);
 	}
 }
@@ -980,6 +987,7 @@ if (bIsActiveTab) { ImGui::PopStyleColor(1); bIsActiveTab = false; }
 
 		ImGui::BeginChild("Camera Pane");
 
+		ImGui::BeginChild("Camera Settings", ImVec2(0, -60));
 
 		ImGui::Text("Camera Provider");
 		TextDescription("Source for passthough camera images.");
@@ -1015,14 +1023,6 @@ if (bIsActiveTab) { ImGui::PopStyleColor(1); bIsActiveTab = false; }
 		{
 			TextDescription("These settings are for the experimental webcam provider only.");
 
-			if (ImGui::Button("Apply Changes"))
-			{
-				m_configManager->SetRendererResetPending();
-			}
-
-			IMGUI_BIG_SPACING;
-
-			ImGui::BeginChild("CameraSettings");
 
 
 			ImGui::Text("Camera Selection");
@@ -1130,8 +1130,6 @@ if (bIsActiveTab) { ImGui::PopStyleColor(1); bIsActiveTab = false; }
 
 			IMGUI_BIG_SPACING;
 
-			ImGui::Text("To change these options accurately, please edit the config file in: \n%%APPDATA%%\\OpenXR SteamVR Passthrough\\config.ini");
-
 			ScrollableSlider("Frame Delay Offset (s)", &cameraConfig.FrameDelayOffset, -0.1f, 0.0f, "%.3f", 0.001f);
 			TextDescription("The delay from the camera capturing the image to it being received by the application. This may vary between cameras. Adjust until the view stops lagging when moving your head.");
 
@@ -1139,36 +1137,48 @@ if (bIsActiveTab) { ImGui::PopStyleColor(1); bIsActiveTab = false; }
 			TextDescription("");
 
 			BeginSoftDisabled(!cameraConfig.RequestCustomFrameSize);
-			ScrollableSliderInt("Width###FrameWidth", &cameraConfig.CustomFrameWidth, 320, 2048, "%d", 1);
-			ScrollableSliderInt("Height###FrameHeight", &cameraConfig.CustomFrameHeight, 240, 1600, "%d", 1);
+			ImGui::DragInt("Width###FrameWidth", &cameraConfig.CustomFrameWidth, 1.0f, 1, 8192);
+			ImGui::DragInt("Height###FrameHeight", &cameraConfig.CustomFrameHeight, 1.0f, 1, 8192);
 			EndSoftDisabled(!cameraConfig.RequestCustomFrameSize);
 
 			IMGUI_BIG_SPACING;
 
 			ImGui::Text("Camera Offset (m)");
-			ScrollableSlider("X", &cameraConfig.Camera0_TranslationX, -0.5f, 0.5f, "%.3f", 0.001f);
-			ScrollableSlider("Y", &cameraConfig.Camera0_TranslationY, -0.5f, 0.5f, "%.3f", 0.001f);
-			ScrollableSlider("Z", &cameraConfig.Camera0_TranslationZ, -0.5f, 0.5f, "%.3f", 0.001f);
+			ImGui::DragFloat("X", &cameraConfig.Camera0_TranslationX, 0.001f, 0.0f, 0.0f, "%.3f");
+			ImGui::DragFloat("Y", &cameraConfig.Camera0_TranslationY, 0.001f, 0.0f, 0.0f, "%.3f");
+			ImGui::DragFloat("Z", &cameraConfig.Camera0_TranslationZ, 0.001f, 0.0f, 0.0f, "%.3f");
 
 			ImGui::Text("Camera Rotation (degrees)");
-			ScrollableSlider("RX", &cameraConfig.Camera0_RotationX, -180.0f, 180.0f, "%.0f", 5.0f);
-			ScrollableSlider("RY", &cameraConfig.Camera0_RotationY, -180.0f, 180.0f, "%.0f", 5.0f);
-			ScrollableSlider("RZ", &cameraConfig.Camera0_RotationZ, -180.0f, 180.0f, "%.0f", 5.0f);
+			ImGui::DragFloat("RX", &cameraConfig.Camera0_RotationX, 1.0f, -180.0f, 180.0f, "%.0f");
+			ImGui::DragFloat("RY", &cameraConfig.Camera0_RotationY, 1.0f, -180.0f, 180.0f, "%.0f");
+			ImGui::DragFloat("RZ", &cameraConfig.Camera0_RotationZ, 1.0f, -180.0f, 180.0f, "%.0f");
 
 			ImGui::Text("Camera Intrinsics");
-			ScrollableSlider("Fx", &cameraConfig.Camera0_IntrinsicsFocalX, 0.1f, 2.0f, "%.4f", 0.01f);
-			ScrollableSlider("Fy", &cameraConfig.Camera0_IntrinsicsFocalY, 0.1f, 2.0f, "%.4f", 0.01f);
-			ScrollableSlider("Cx", &cameraConfig.Camera0_IntrinsicsCenterX, 0.0f, 1.0f, "%.4f", 0.01f);
-			ScrollableSlider("Cy", &cameraConfig.Camera0_IntrinsicsCenterY, 0.0f, 1.0f, "%.4f", 0.01f);
+			ImGui::DragFloat("Fx", &cameraConfig.Camera0_IntrinsicsFocalX, 0.001f, 0.0f, 0.0f, "%.5f");
+			ImGui::DragFloat("Fy", &cameraConfig.Camera0_IntrinsicsFocalY, 0.001f, 0.0f, 0.0f, "%.5f");
+			ImGui::DragFloat("Cx", &cameraConfig.Camera0_IntrinsicsCenterX, 0.001f, 0.0f, 0.0f, "%.5f");
+			ImGui::DragFloat("Cy", &cameraConfig.Camera0_IntrinsicsCenterY, 0.001f, 0.0f, 0.0f, "%.5f");
+
+			ImGui::DragInt("Sensor Pixels X", &cameraConfig.Camera0_IntrinsicsSensorPixelsX,1.0f, 1, 8192);
+			ImGui::DragInt("Sensor Pixels Y", &cameraConfig.Camera0_IntrinsicsSensorPixelsY, 1.0f, 1, 8192);
 
 			ImGui::Text("Camera Distortion");
-			ScrollableSlider("R1", &cameraConfig.Camera0_IntrinsicsDistR1, -1.0f, 1.0f, "%.4f", 0.01f);
-			ScrollableSlider("R2", &cameraConfig.Camera0_IntrinsicsDistR2, -1.0f, 1.0f, "%.4f", 0.01f);
-			ScrollableSlider("T1", &cameraConfig.Camera0_IntrinsicsDistT1, -1.0f, 1.0f, "%.4f", 0.01f);
-			ScrollableSlider("T2", &cameraConfig.Camera0_IntrinsicsDistT2, -1.0f, 1.0f, "%.4f", 0.01f);
+			ImGui::DragFloat("R1", &cameraConfig.Camera0_IntrinsicsDistR1, 0.001f, 0.0f, 0.0f, "%.5f");
+			ImGui::DragFloat("R2", &cameraConfig.Camera0_IntrinsicsDistR2, 0.001f, 0.0f, 0.0f, "%.5f");
+			ImGui::DragFloat("T1", &cameraConfig.Camera0_IntrinsicsDistT1, 0.001f, 0.0f, 0.0f, "%.5f");
+			ImGui::DragFloat("T2", &cameraConfig.Camera0_IntrinsicsDistT2, 0.001f, 0.0f, 0.0f, "%.5f");
 
-			ImGui::EndChild();
-		}	
+		}
+
+		ImGui::EndChild();
+
+		ImGui::Spacing();
+		ImGui::Spacing();
+
+		if (ImGui::Button("Apply Camera Parameters"))
+		{
+			m_configManager->SetRendererResetPending();
+		}
 
 		ImGui::EndChild();
 	}
@@ -1571,6 +1581,18 @@ if (bIsActiveTab) { ImGui::PopStyleColor(1); bIsActiveTab = false; }
 	{
 		ErrorLog("SteamVR had an error on updating overlay (%d)\n", error);
 	}
+
+
+	if (!m_bIsKeyboardOpen && io.WantTextInput)
+	{
+		m_openVRManager->GetVROverlay()->ShowKeyboardForOverlay(m_overlayHandle, vr::k_EGamepadTextInputModeNormal, vr::k_EGamepadTextInputLineModeMultipleLines, vr::KeyboardFlag_Modal | vr::KeyboardFlag_Minimal | vr::KeyboardFlag_ShowArrowKeys, "", 255, "", 0);
+		m_bIsKeyboardOpen = true;
+	}
+	else if (m_bIsKeyboardOpen && !io.WantTextInput)
+	{
+		m_openVRManager->GetVROverlay()->HideKeyboard();
+		m_bIsKeyboardOpen = false;
+	}
 }
 
 
@@ -1692,6 +1714,7 @@ void DashboardMenu::HandleEvents()
 		vr::VREvent_Overlay_t& overlayData = (vr::VREvent_Overlay_t&)event.data;
 		vr::VREvent_Mouse_t& mouseData = (vr::VREvent_Mouse_t&)event.data;
 		vr::VREvent_Scroll_t& scrollData = (vr::VREvent_Scroll_t&)event.data;
+		vr::VREvent_Keyboard_t& keyboardData = (vr::VREvent_Keyboard_t&)event.data;
 
 		switch (event.eventType)
 		{
@@ -1770,6 +1793,50 @@ void DashboardMenu::HandleEvents()
 			//bThumbnailNeedsUpdate = true;
 			break;
 
+		case vr::VREvent_KeyboardCharInput:
+
+			if (keyboardData.cNewInput[0] == 0x0A || keyboardData.cNewInput[0] == 0x0D)
+			{
+				io.AddKeyEvent(ImGuiKey_Enter, true);
+				io.AddKeyEvent(ImGuiKey_Enter, false);
+			}
+			else if (keyboardData.cNewInput[0] == 0x08)
+			{
+				io.AddKeyEvent(ImGuiKey_Backspace, true);
+				io.AddKeyEvent(ImGuiKey_Backspace, false);
+			}
+			else if (keyboardData.cNewInput[0] == 0x1b && keyboardData.cNewInput[1] == 0x5b && keyboardData.cNewInput[2] == 0x44)
+			{
+				io.AddKeyEvent(ImGuiKey_LeftArrow, true);
+				io.AddKeyEvent(ImGuiKey_LeftArrow, false);
+			}
+			else if (keyboardData.cNewInput[0] == 0x1b && keyboardData.cNewInput[1] == 0x5b && keyboardData.cNewInput[2] == 0x43)
+			{
+				io.AddKeyEvent(ImGuiKey_RightArrow, true);
+				io.AddKeyEvent(ImGuiKey_RightArrow, false);
+			}
+			else
+			{
+				io.AddInputCharactersUTF8(keyboardData.cNewInput);
+			}
+
+			break;
+
+		case vr::VREvent_KeyboardDone:
+
+			io.AddKeyEvent(ImGuiKey_Enter, true);
+			io.AddKeyEvent(ImGuiKey_Enter, false);
+			break;
+
+		case vr::VREvent_KeyboardClosed_Global:
+
+			if (m_bIsKeyboardOpen && keyboardData.overlayHandle == m_overlayHandle)
+			{
+				io.AddKeyEvent(ImGuiKey_Enter, true);
+				io.AddKeyEvent(ImGuiKey_Enter, false);
+				m_bIsKeyboardOpen = false;
+			}
+			break;
 		}
 	}
 }

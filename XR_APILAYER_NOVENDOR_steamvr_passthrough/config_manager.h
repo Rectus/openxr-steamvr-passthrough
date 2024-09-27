@@ -189,8 +189,8 @@ struct Config_Camera
 	float Camera0_IntrinsicsDistR2 = 0.0f;
 	float Camera0_IntrinsicsDistT1 = 0.0f;
 	float Camera0_IntrinsicsDistT2 = 0.0f;
-	float Camera0_IntrinsicsSensorPixelsX = 1.0f;
-	float Camera0_IntrinsicsSensorPixelsY = 1.0f;
+	int Camera0_IntrinsicsSensorPixelsX = 1;
+	int Camera0_IntrinsicsSensorPixelsY = 1;
 
 	void ParseConfig(CSimpleIniA& ini, const char* section)
 	{
@@ -224,8 +224,8 @@ struct Config_Camera
 		Camera0_IntrinsicsDistR2 = (float)ini.GetDoubleValue(section, "Camera0_IntrinsicsDistR2", Camera0_IntrinsicsDistR2);
 		Camera0_IntrinsicsDistT1 = (float)ini.GetDoubleValue(section, "Camera0_IntrinsicsDistT1", Camera0_IntrinsicsDistT1);
 		Camera0_IntrinsicsDistT2 = (float)ini.GetDoubleValue(section, "Camera0_IntrinsicsDistT2", Camera0_IntrinsicsDistT2);
-		Camera0_IntrinsicsSensorPixelsX = (float)ini.GetDoubleValue(section, "Camera0_IntrinsicsSensorPixelsX", Camera0_IntrinsicsSensorPixelsX);
-		Camera0_IntrinsicsSensorPixelsY = (float)ini.GetDoubleValue(section, "Camera0_IntrinsicsSensorPixelsY", Camera0_IntrinsicsSensorPixelsY);
+		Camera0_IntrinsicsSensorPixelsX = (int)ini.GetLongValue(section, "Camera0_IntrinsicsSensorPixelsX", Camera0_IntrinsicsSensorPixelsX);
+		Camera0_IntrinsicsSensorPixelsY = (int)ini.GetLongValue(section, "Camera0_IntrinsicsSensorPixelsY", Camera0_IntrinsicsSensorPixelsY);
 	}
 
 	void UpdateConfig(CSimpleIniA& ini, const char* section)
@@ -260,8 +260,8 @@ struct Config_Camera
 		ini.SetDoubleValue(section, "Camera0_IntrinsicsDistR2", Camera0_IntrinsicsDistR2);
 		ini.SetDoubleValue(section, "Camera0_IntrinsicsDistT1", Camera0_IntrinsicsDistT1);
 		ini.SetDoubleValue(section, "Camera0_IntrinsicsDistT2", Camera0_IntrinsicsDistT2);
-		ini.SetDoubleValue(section, "Camera0_IntrinsicsSensorPixelsX", Camera0_IntrinsicsSensorPixelsX);
-		ini.SetDoubleValue(section, "Camera0_IntrinsicsSensorPixelsY", Camera0_IntrinsicsSensorPixelsY);
+		ini.SetLongValue(section, "Camera0_IntrinsicsSensorPixelsX", Camera0_IntrinsicsSensorPixelsX);
+		ini.SetLongValue(section, "Camera0_IntrinsicsSensorPixelsY", Camera0_IntrinsicsSensorPixelsY);
 	}
 };
 
