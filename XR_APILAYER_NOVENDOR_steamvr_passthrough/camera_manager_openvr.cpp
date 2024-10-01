@@ -164,6 +164,24 @@ void CameraManagerOpenVR::DeinitCamera()
     }
 }
 
+void CameraManagerOpenVR::GetCameraDisplayStats(uint32_t& width, uint32_t& height, float& fps, std::string& API) const
+{
+    if (m_bCameraInitialized)
+    {
+        width = m_cameraTextureWidth;
+        height = m_cameraTextureHeight;
+        fps = 0;
+        API = "OpenVR - Active";
+    }
+    else
+    {
+        width = 0;
+        height = 0;
+        fps = 0;
+        API = "OpenVR - Inactive";
+    }
+}
+
 void CameraManagerOpenVR::GetDistortedFrameSize(uint32_t& width, uint32_t& height, uint32_t& bufferSize) const
 {
     width = m_cameraTextureWidth;
@@ -813,11 +831,11 @@ void CameraManagerOpenVR::CalculateFrameProjectionForEye(const ERenderEye eye, s
 
     XrMatrix4x4f hmdWorldToView = GetHMDWorldToViewMatrix(eye, layer, refSpaceInfo);
     
-    XrVector3f* hmdWorldPos = (eye == LEFT_EYE) ? &frame->hmdViewPosWorldLeft : &frame->hmdViewPosWorldRight;
+    XrVector3f* projectionOriginWorld = (eye == LEFT_EYE) ? &frame->projectionOriginWorldLeft : &frame->projectionOriginWorldRight;
     XrMatrix4x4f hmdViewToWorld;
     XrMatrix4x4f_Invert(&hmdViewToWorld, &hmdWorldToView);
     XrVector3f inPos{ 0,0,0 };
-    XrMatrix4x4f_TransformVector3f(hmdWorldPos, &hmdViewToWorld, &inPos);
+    XrMatrix4x4f_TransformVector3f(projectionOriginWorld, &hmdViewToWorld, &inPos);
 
 
     float nearZ = NEAR_PROJECTION_DISTANCE;

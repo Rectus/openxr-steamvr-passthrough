@@ -77,7 +77,7 @@ struct Config_Main
 	float PassthroughOpacity = 1.0f;
 	float ProjectionDistanceFar = 10.0f;
 	float FloorHeightOffset = 0.0f;
-	float FieldOfViewScale = 0.9f;
+	float FieldOfViewScale = 1.0f;
 	float DepthOffsetCalibration = 1.0f;
 
 	float Brightness = 0.0f;
@@ -167,10 +167,10 @@ struct Config_Camera
 	bool RequestCustomFrameSize = false;
 	int CustomFrameWidth = 0;
 	int CustomFrameHeight = 0;
-	float FrameDelayOffset = 0.0f;
+	float FrameDelayOffset = 0.08f;
 
 	bool AutoExposureEnable = false;
-	float ExposureValue = -8.0f;
+	float ExposureValue = -7.0f;
 
 	int Camera0DeviceIndex = 0;
 
@@ -181,10 +181,10 @@ struct Config_Camera
 	float Camera0_RotationY = 0.0f;
 	float Camera0_RotationZ = 0.0f;
 
-	float Camera0_IntrinsicsFocalX = 2.0f;
-	float Camera0_IntrinsicsFocalY = 2.0f;
-	float Camera0_IntrinsicsCenterX = 2.0f;
-	float Camera0_IntrinsicsCenterY = 2.0f;
+	float Camera0_IntrinsicsFocalX = 1.0f;
+	float Camera0_IntrinsicsFocalY = 1.0f;
+	float Camera0_IntrinsicsCenterX = 0.5f;
+	float Camera0_IntrinsicsCenterY = 0.5f;
 	float Camera0_IntrinsicsDistR1 = 0.0f;
 	float Camera0_IntrinsicsDistR2 = 0.0f;
 	float Camera0_IntrinsicsDistT1 = 0.0f;
@@ -366,7 +366,7 @@ struct Config_Stereo
 	bool StereoRectificationFiltering = false;
 	bool StereoUseColor = false;
 	bool StereoUseBWInputAlpha= false;
-	bool StereoUseHexagonGridMesh = true;
+	bool StereoUseHexagonGridMesh = false;
 	bool StereoFillHoles = true;
 	int StereoFrameSkip = 0;
 	int StereoDownscaleFactor = 2;

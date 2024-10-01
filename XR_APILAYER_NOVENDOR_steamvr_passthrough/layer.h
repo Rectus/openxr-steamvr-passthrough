@@ -112,8 +112,8 @@ struct CameraFrame
 		, prevWorldToCameraProjectionRight()
 		, prevWorldToHMDProjectionLeft()
 		, prevWorldToHMDProjectionRight()
-		, hmdViewPosWorldLeft()
-		, hmdViewPosWorldRight()
+		, projectionOriginWorldLeft()
+		, projectionOriginWorldRight()
 		, frameLayout(Mono)
 		, bIsValid(false)
 		, bHasFrameBuffer(false)
@@ -144,8 +144,8 @@ struct CameraFrame
 	XrMatrix4x4f prevWorldToHMDProjectionLeft;
 	XrMatrix4x4f prevWorldToHMDProjectionRight;
 
-	XrVector3f hmdViewPosWorldLeft;
-	XrVector3f hmdViewPosWorldRight;	
+	XrVector3f projectionOriginWorldLeft;
+	XrVector3f projectionOriginWorldRight;	
 	EStereoFrameLayout frameLayout;
 	bool bIsValid;
 	bool bHasFrameBuffer;

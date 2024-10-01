@@ -35,6 +35,7 @@ public:
 	virtual bool InitCamera() = 0;
 	virtual void DeinitCamera() = 0;
 
+	virtual void GetCameraDisplayStats(uint32_t& width, uint32_t& height, float& fps, std::string& API) const = 0;
 	virtual void GetDistortedFrameSize(uint32_t& width, uint32_t& height, uint32_t& bufferSize) const = 0;
 	virtual void GetUndistortedFrameSize(uint32_t& width, uint32_t& height, uint32_t& bufferSize) const = 0;
 	virtual void GetIntrinsics(const ERenderEye cameraEye, XrVector2f& focalLength, XrVector2f& center) const = 0;
@@ -57,6 +58,7 @@ public:
 	bool InitCamera();
 	void DeinitCamera();
 
+	void GetCameraDisplayStats(uint32_t& width, uint32_t& height, float& fps, std::string& API) const;
 	void GetDistortedFrameSize(uint32_t& width, uint32_t& height, uint32_t& bufferSize) const;
 	void GetUndistortedFrameSize(uint32_t& width, uint32_t& height, uint32_t& bufferSize) const;
 	void GetIntrinsics(const ERenderEye cameraEye, XrVector2f& focalLength, XrVector2f& center) const;
@@ -160,6 +162,7 @@ public:
 	bool InitCamera();
 	void DeinitCamera();
 
+	void GetCameraDisplayStats(uint32_t& width, uint32_t& height, float& fps, std::string& API) const;
 	void GetDistortedFrameSize(uint32_t& width, uint32_t& height, uint32_t& bufferSize) const;
 	void GetUndistortedFrameSize(uint32_t& width, uint32_t& height, uint32_t& bufferSize) const;
 	void GetIntrinsics(const ERenderEye cameraEye, XrVector2f& focalLength, XrVector2f& center) const;

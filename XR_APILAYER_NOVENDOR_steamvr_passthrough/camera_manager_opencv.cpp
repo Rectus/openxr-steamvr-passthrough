@@ -155,6 +155,24 @@ void CameraManagerOpenCV::DeinitCamera()
     m_videoCapture.release();
 }
 
+void CameraManagerOpenCV::GetCameraDisplayStats(uint32_t& width, uint32_t& height, float& fps, std::string& API) const
+{
+    if (m_videoCapture.isOpened())
+    {
+        width = m_cameraTextureWidth;
+        height = m_cameraTextureHeight;
+        fps = (float)m_videoCapture.get(cv::CAP_PROP_FPS);
+        API = std::format("OpenCV - {}", m_videoCapture.getBackendName());
+    }
+    else
+    {
+        width = 0;
+        height = 0;
+        fps = 0;
+        API = "OpenCV - Inactive";
+    }
+}
+
 void CameraManagerOpenCV::GetDistortedFrameSize(uint32_t& width, uint32_t& height, uint32_t& bufferSize) const
 {
     width = m_cameraTextureWidth;
@@ -337,7 +355,7 @@ void CameraManagerOpenCV::ServeFrames()
             continue;
         }
 
-        vrSystem->GetDeviceToAbsoluteTrackingPose(vr::TrackingUniverseStanding, cameraConf.FrameDelayOffset, trackedDevicePoseArray, vr::k_unMaxTrackedDeviceCount);
+        vrSystem->GetDeviceToAbsoluteTrackingPose(vr::TrackingUniverseStanding, -cameraConf.FrameDelayOffset, trackedDevicePoseArray, vr::k_unMaxTrackedDeviceCount);
 
         if (!m_videoCapture.retrieve(frameBuffer))
         {
@@ -703,12 +721,12 @@ void CameraManagerOpenCV::CalculateFrameProjectionForEye(const ERenderEye eye, s
 
     XrMatrix4x4f hmdWorldToView = GetHMDWorldToViewMatrix(eye, layer, refSpaceInfo);
 
-    XrVector3f* hmdWorldPos = (eye == LEFT_EYE) ? &frame->hmdViewPosWorldLeft : &frame->hmdViewPosWorldRight;
+    XrVector3f* projectionOriginWorld = (eye == LEFT_EYE) ? &frame->projectionOriginWorldLeft : &frame->projectionOriginWorldRight;
     XrMatrix4x4f* cameraViewToWorld = (eye == LEFT_EYE) ? &frame->cameraViewToWorldLeft : &frame->cameraViewToWorldLeft;
     XrMatrix4x4f hmdViewToWorld;
     XrMatrix4x4f_Invert(&hmdViewToWorld, &hmdWorldToView);
     XrVector3f inPos{ 0,0,0 };
-    XrMatrix4x4f_TransformVector3f(hmdWorldPos, cameraViewToWorld, &inPos);
+    XrMatrix4x4f_TransformVector3f(projectionOriginWorld, cameraViewToWorld, &inPos);
 
 
     float nearZ = NEAR_PROJECTION_DISTANCE;

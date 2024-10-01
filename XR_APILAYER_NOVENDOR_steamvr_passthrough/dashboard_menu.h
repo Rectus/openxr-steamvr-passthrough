@@ -48,6 +48,11 @@ struct MenuDisplayValues
 
 	bool bVarjoDepthEstimationExtensionActive = false;
 	bool bVarjoDepthCompositionExtensionActive = false;
+
+	uint32_t CameraFrameWidth = 0;
+	uint32_t CameraFrameHeight = 0;
+	float CameraFrameRate = 0.0f;
+	std::string CameraAPI;
 };
 
 

@@ -357,7 +357,15 @@ if (bIsActiveTab) { ImGui::PopStyleColor(1); bIsActiveTab = false; }
 	ImGui::EndChild();
 	if (ImGui::Button("Reset To Defaults", tabButtonSize))
 	{
+		EProjectionMode mode = mainConfig.ProjectionMode;
+		ECameraProvider cam = mainConfig.CameraProvider;
+
 		m_configManager->ResetToDefaults();
+
+		if (mainConfig.ProjectionMode != mode || mainConfig.CameraProvider != cam)
+		{
+			m_configManager->SetRendererResetPending();
+		}
 	}
 
 	ImGui::EndChild();
@@ -976,6 +984,7 @@ if (bIsActiveTab) { ImGui::PopStyleColor(1); bIsActiveTab = false; }
 	}
 
 
+
 	if (m_activeTab == TabCamera)
 	{
 		if (!m_cameraTabBeenOpened)
@@ -989,41 +998,52 @@ if (bIsActiveTab) { ImGui::PopStyleColor(1); bIsActiveTab = false; }
 
 		ImGui::BeginChild("Camera Settings", ImVec2(0, -60));
 
-		ImGui::Text("Camera Provider");
-		TextDescription("Source for passthough camera images.");
-		if (ImGui::RadioButton("SteamVR", mainConfig.CameraProvider == CameraProvider_OpenVR))
+
+		ImGui::SetNextItemOpen(true, ImGuiCond_Once);
+		if (ImGui::CollapsingHeader("Status###CameraStatus"))
 		{
-			mainConfig.CameraProvider = CameraProvider_OpenVR;
-			m_configManager->SetRendererResetPending();
+			ImGui::PushFont(m_fixedFont);
+			ImGui::Text("Current Camera API: %s, %u x %u @ %.0f fps", m_displayValues.CameraAPI, m_displayValues.CameraFrameWidth, m_displayValues.CameraFrameHeight, m_displayValues.CameraFrameRate);
+			IMGUI_BIG_SPACING;
+			ImGui::PopFont();
 		}
-		TextDescription("Use the passthrough cameras on a compatible HMD. Uses the OpenVR Tracked Camera interface.");
 
-		if (ImGui::RadioButton("Webcam (Experimental)", mainConfig.CameraProvider == CameraProvider_OpenCV))
+		ImGui::SetNextItemOpen(true, ImGuiCond_Once);
+		if (ImGui::CollapsingHeader("Common"))
 		{
-			mainConfig.CameraProvider = CameraProvider_OpenCV;
-			mainConfig.ProjectionMode = Projection_Custom2D;
-			m_configManager->SetRendererResetPending();
+			ImGui::Text("Camera Provider");
+			TextDescription("Source for passthough camera images.");
+			if (ImGui::RadioButton("SteamVR", mainConfig.CameraProvider == CameraProvider_OpenVR))
+			{
+				mainConfig.CameraProvider = CameraProvider_OpenVR;
+				m_configManager->SetRendererResetPending();
+			}
+			TextDescription("Use the passthrough cameras on a compatible HMD. Uses the OpenVR Tracked Camera interface.");
+
+			if (ImGui::RadioButton("Webcam (Experimental)", mainConfig.CameraProvider == CameraProvider_OpenCV))
+			{
+				mainConfig.CameraProvider = CameraProvider_OpenCV;
+				mainConfig.ProjectionMode = Projection_Custom2D;
+				m_configManager->SetRendererResetPending();
+			}
+			TextDescription("Use a regular webcam from the OpenCV camera interface. Requires manual configuration.");
+
+			if (ImGui::RadioButton("Augmented (Experimental)", mainConfig.CameraProvider == CameraProvider_Augmented))
+			{
+				mainConfig.CameraProvider = CameraProvider_Augmented;
+				mainConfig.ProjectionMode = Projection_StereoReconstruction;
+				m_configManager->SetRendererResetPending();
+			}
+			TextDescription("Use SteamVR for calculating depth, and a webcam for color data. Requires a HMD with a stereo camera and manual configuration.");
+
+			ImGui::Checkbox("Clamp Camera Frame", &cameraConfig.ClampCameraFrame);
+			TextDescription("Only draw passthrough in the actual frame area. Without it the edge pixels are extended past it.");
 		}
-		TextDescription("Use a regular webcam from the OpenCV camera interface. Requires manual configuration.");
-
-		if (ImGui::RadioButton("Augmented (Experimental)", mainConfig.CameraProvider == CameraProvider_Augmented))
-		{
-			mainConfig.CameraProvider = CameraProvider_Augmented;
-			mainConfig.ProjectionMode = Projection_StereoReconstruction;
-			m_configManager->SetRendererResetPending();
-		}
-		TextDescription("Use SteamVR for calculating depth, and a webcam for color data. Requires a HMD with a stereo camera and manual configuration.");
-
-		ImGui::Checkbox("Clamp Camera Frame", &cameraConfig.ClampCameraFrame);
-		TextDescription("Only draw passthrough in the actual frame area. Without it the edge pixels are extended past it.");
-
 
 		ImGui::SetNextItemOpen(true, ImGuiCond_Once);
 		if (ImGui::CollapsingHeader("Webcam Configuration"))
 		{
 			TextDescription("These settings are for the experimental webcam provider only.");
-
-
 
 			ImGui::Text("Camera Selection");
 			if (ImGui::Button("Refresh###RefreshCams"))
@@ -1114,13 +1134,12 @@ if (bIsActiveTab) { ImGui::PopStyleColor(1); bIsActiveTab = false; }
 
 
 			ImGui::Checkbox("Auto Exposure", &cameraConfig.AutoExposureEnable);
-			TextDescription("");
 
 			bool prevAutoeExp = cameraConfig.AutoExposureEnable;
 			float prefExp = cameraConfig.ExposureValue;
 
 			BeginSoftDisabled(cameraConfig.AutoExposureEnable);
-			ScrollableSlider("Exposure", &cameraConfig.ExposureValue, -16.0f, 0.0f, "%.1f", 1.0f);
+			ImGui::DragFloat("Exposure", &cameraConfig.ExposureValue, 0.1f, 0.0f, 0.0f, "%.1f");
 			EndSoftDisabled(cameraConfig.AutoExposureEnable);
 
 			if (prevAutoeExp != cameraConfig.AutoExposureEnable || prefExp != cameraConfig.ExposureValue)
@@ -1130,11 +1149,11 @@ if (bIsActiveTab) { ImGui::PopStyleColor(1); bIsActiveTab = false; }
 
 			IMGUI_BIG_SPACING;
 
-			ScrollableSlider("Frame Delay Offset (s)", &cameraConfig.FrameDelayOffset, -0.1f, 0.0f, "%.3f", 0.001f);
+			ImGui::DragFloat("Frame Delay Offset (s)", &cameraConfig.FrameDelayOffset, 0.001f, 0.0f, 1.0f, "%.3f");
 			TextDescription("The delay from the camera capturing the image to it being received by the application. This may vary between cameras. Adjust until the view stops lagging when moving your head.");
 
-			ImGui::Checkbox("Request Custom Frame Size", &cameraConfig.RequestCustomFrameSize);
-			TextDescription("");
+			ImGui::Checkbox("Request Custom Resolution", &cameraConfig.RequestCustomFrameSize);
+			TextDescription("Set a resolution to use. The system may select the closest matching available one. If turned off, the system will attempt to select the best available resolution.");
 
 			BeginSoftDisabled(!cameraConfig.RequestCustomFrameSize);
 			ImGui::DragInt("Width###FrameWidth", &cameraConfig.CustomFrameWidth, 1.0f, 1, 8192);

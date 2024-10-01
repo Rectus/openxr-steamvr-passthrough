@@ -97,7 +97,7 @@ void ConfigManager::SetupStereoPresets()
 	m_stereoPresets[1].StereoRectificationFiltering = false;
 	m_stereoPresets[1].StereoUseColor = false;
 	m_stereoPresets[1].StereoUseBWInputAlpha = false;
-	m_stereoPresets[1].StereoUseHexagonGridMesh = true;
+	m_stereoPresets[1].StereoUseHexagonGridMesh = false;
 	m_stereoPresets[1].StereoFillHoles = false;
 	m_stereoPresets[1].StereoFrameSkip = 0;
 	m_stereoPresets[1].StereoDownscaleFactor = 6;
@@ -136,7 +136,7 @@ void ConfigManager::SetupStereoPresets()
 	m_stereoPresets[2].StereoRectificationFiltering = false;
 	m_stereoPresets[2].StereoUseColor = false;
 	m_stereoPresets[2].StereoUseBWInputAlpha = false;
-	m_stereoPresets[2].StereoUseHexagonGridMesh = true;
+	m_stereoPresets[2].StereoUseHexagonGridMesh = false;
 	m_stereoPresets[2].StereoFillHoles = true;
 	m_stereoPresets[2].StereoFrameSkip = 0;
 	m_stereoPresets[2].StereoDownscaleFactor = 4;
@@ -175,7 +175,7 @@ void ConfigManager::SetupStereoPresets()
 	m_stereoPresets[3].StereoRectificationFiltering = false;
 	m_stereoPresets[3].StereoUseColor = false;
 	m_stereoPresets[3].StereoUseBWInputAlpha = false;
-	m_stereoPresets[3].StereoUseHexagonGridMesh = true;
+	m_stereoPresets[3].StereoUseHexagonGridMesh = false;
 	m_stereoPresets[3].StereoFillHoles = true;
 	m_stereoPresets[3].StereoFrameSkip = 0;
 	m_stereoPresets[3].StereoDownscaleFactor = 4;
@@ -214,7 +214,7 @@ void ConfigManager::SetupStereoPresets()
 	m_stereoPresets[4].StereoRectificationFiltering = false;
 	m_stereoPresets[4].StereoUseColor = false;
 	m_stereoPresets[4].StereoUseBWInputAlpha = false;
-	m_stereoPresets[4].StereoUseHexagonGridMesh = true;
+	m_stereoPresets[4].StereoUseHexagonGridMesh = false;
 	m_stereoPresets[4].StereoFillHoles = true;
 	m_stereoPresets[4].StereoFrameSkip = 0;
 	m_stereoPresets[4].StereoDownscaleFactor = 3;
@@ -253,7 +253,7 @@ void ConfigManager::SetupStereoPresets()
 	m_stereoPresets[5].StereoRectificationFiltering = false;
 	m_stereoPresets[5].StereoUseColor = true;
 	m_stereoPresets[5].StereoUseBWInputAlpha = false;
-	m_stereoPresets[5].StereoUseHexagonGridMesh = true;
+	m_stereoPresets[5].StereoUseHexagonGridMesh = false;
 	m_stereoPresets[5].StereoFillHoles = true;
 	m_stereoPresets[5].StereoFrameSkip = 0;
 	m_stereoPresets[5].StereoDownscaleFactor = 2;

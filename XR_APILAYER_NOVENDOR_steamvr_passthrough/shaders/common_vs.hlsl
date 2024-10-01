@@ -11,12 +11,13 @@ cbuffer vsViewConstantBuffer : register(b0)
     float4x4 g_prevWorldToHMDProjection;
     float4x4 g_prevDispWorldToCameraProjection;
     float4 g_vsUVBounds;
-    float3 g_hmdViewWorldPos;
+    float3 g_projectionOriginWorld;
     float g_projectionDistance;
     float g_floorHeightOffset;
     uint g_viewIndex;
     bool g_bWriteDisparityFilter;
     bool g_bIsFirstRender;
+    bool g_bClampCameraFrame;
 };
 
 cbuffer vsPassConstantBuffer : register(b1)
@@ -37,5 +38,4 @@ cbuffer vsPassConstantBuffer : register(b1)
     bool g_bUseDisparityTemporalFilter;
     float g_disparityTemporalFilterStrength;
     float g_disparityTemporalFilterDistance;
-    bool g_bClampCameraFrame;
 };

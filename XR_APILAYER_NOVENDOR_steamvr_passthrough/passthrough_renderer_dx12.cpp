@@ -115,7 +115,6 @@ struct VSPassConstantBuffer
 	uint32_t bUseDisparityTemporalFilter;
 	float disparityTemporalFilterStrength;
 	float disparityTemporalFilterDistance;
-	uint32_t bClampCameraFrame;
 };
 
 struct VSViewConstantBuffer
@@ -128,12 +127,13 @@ struct VSViewConstantBuffer
 	XrMatrix4x4f prevWorldToHMDProjection;
 	XrMatrix4x4f prevDispWorldToCameraProjection;
 	XrVector4f frameUVBounds;
-	XrVector3f hmdViewWorldPos;
+	XrVector3f projectionOriginWorld;
 	float projectionDistance;
 	float floorHeightOffset;
 	uint32_t cameraViewIndex;
 	uint32_t bWriteDisparityFilter;
 	uint32_t bisFirstRender;
+	uint32_t bClampCameraFrame;
 };
 
 struct PSPassConstantBuffer
@@ -1233,7 +1233,6 @@ void PassthroughRendererDX12::RenderPassthroughFrame(const XrCompositionLayerPro
 		vsPassBuffer->disparityFilterWidth = stereoConf.StereoDisparityFilterWidth;
 		vsPassBuffer->bProjectBorders = !stereoConf.StereoReconstructionFreeze;
 		vsPassBuffer->bFindDiscontinuities = stereoConf.StereoCutoutEnabled;
-		vsPassBuffer->bClampCameraFrame = m_configManager->GetConfig_Camera().ClampCameraFrame;
 
 		D3D12_GPU_DESCRIPTOR_HANDLE vsPassCBVHandle = m_CBVSRVHeap->GetGPUDescriptorHandleForHeapStart();
 		vsPassCBVHandle.ptr += (INDEX_CBV_VS_PASS_0 + m_frameIndex) * m_CBVSRVHeapDescSize;
@@ -1446,10 +1445,11 @@ void PassthroughRendererDX12::RenderPassthroughView(const ERenderEye eye, const 
 	vsViewBuffer->worldToCameraProjection = (eye == LEFT_EYE) ? frame->worldToCameraProjectionLeft : frame->worldToCameraProjectionRight;
 	vsViewBuffer->worldToHMDProjection = (eye == LEFT_EYE) ? frame->worldToHMDProjectionLeft : frame->worldToHMDProjectionRight;
 	vsViewBuffer->frameUVBounds = GetFrameUVBounds(eye, StereoHorizontalLayout);
-	vsViewBuffer->hmdViewWorldPos = (eye == LEFT_EYE) ? frame->hmdViewPosWorldLeft : frame->hmdViewPosWorldRight;
+	vsViewBuffer->projectionOriginWorld = (eye == LEFT_EYE) ? frame->projectionOriginWorldLeft : frame->projectionOriginWorldRight;
 	vsViewBuffer->projectionDistance = mainConf.ProjectionDistanceFar;
 	vsViewBuffer->floorHeightOffset = mainConf.FloorHeightOffset;
 	vsViewBuffer->cameraViewIndex = (eye == LEFT_EYE) ? 0 : 1;
+	vsViewBuffer->bClampCameraFrame = m_configManager->GetConfig_Camera().ClampCameraFrame;
 
 	D3D12_GPU_DESCRIPTOR_HANDLE cbvVSHandle = m_CBVSRVHeap->GetGPUDescriptorHandleForHeapStart();
 	cbvVSHandle.ptr += (INDEX_CBV_VS_VIEW_0 + bufferIndex) * m_CBVSRVHeapDescSize;
@@ -1496,10 +1496,11 @@ void PassthroughRendererDX12::RenderPassthroughView(const ERenderEye eye, const 
 		vsCrossViewBuffer->worldToCameraProjection = (eye != LEFT_EYE) ? frame->worldToCameraProjectionLeft : frame->worldToCameraProjectionRight;
 		vsCrossViewBuffer->worldToHMDProjection = (eye == LEFT_EYE) ? frame->worldToHMDProjectionLeft : frame->worldToHMDProjectionRight;
 		vsCrossViewBuffer->frameUVBounds = GetFrameUVBounds(eye == LEFT_EYE ? RIGHT_EYE : LEFT_EYE, StereoHorizontalLayout);
-		vsCrossViewBuffer->hmdViewWorldPos = (eye == LEFT_EYE) ? frame->hmdViewPosWorldLeft : frame->hmdViewPosWorldRight;
+		vsCrossViewBuffer->projectionOriginWorld = (eye == LEFT_EYE) ? frame->projectionOriginWorldLeft : frame->projectionOriginWorldRight;
 		vsCrossViewBuffer->projectionDistance = mainConf.ProjectionDistanceFar;
 		vsCrossViewBuffer->floorHeightOffset = mainConf.FloorHeightOffset;
 		vsCrossViewBuffer->cameraViewIndex = (eye != LEFT_EYE) ? 0 : 1;
+		vsCrossViewBuffer->bClampCameraFrame = m_configManager->GetConfig_Camera().ClampCameraFrame;
 
 		D3D12_GPU_DESCRIPTOR_HANDLE cbvCrossVSHandle = m_CBVSRVHeap->GetGPUDescriptorHandleForHeapStart();
 		cbvCrossVSHandle.ptr += (INDEX_CBV_VS_VIEW_0 + crossBufferIndex) * m_CBVSRVHeapDescSize;
@@ -1589,10 +1590,11 @@ void PassthroughRendererDX12::RenderMaskedPrepassView(const ERenderEye eye, cons
 	vsViewBuffer->worldToCameraProjection = (eye == LEFT_EYE) ? frame->worldToCameraProjectionLeft : frame->worldToCameraProjectionRight;
 	vsViewBuffer->worldToHMDProjection = (eye == LEFT_EYE) ? frame->worldToHMDProjectionLeft : frame->worldToHMDProjectionRight;
 	vsViewBuffer->frameUVBounds = GetFrameUVBounds(eye, StereoHorizontalLayout);
-	vsViewBuffer->hmdViewWorldPos = (eye == LEFT_EYE) ? frame->hmdViewPosWorldLeft : frame->hmdViewPosWorldRight;
+	vsViewBuffer->projectionOriginWorld = (eye == LEFT_EYE) ? frame->projectionOriginWorldLeft : frame->projectionOriginWorldRight;
 	vsViewBuffer->projectionDistance = mainConf.ProjectionDistanceFar;
 	vsViewBuffer->floorHeightOffset = mainConf.FloorHeightOffset;
 	vsViewBuffer->cameraViewIndex = (eye == LEFT_EYE) ? 0 : 1;
+	vsViewBuffer->bClampCameraFrame = m_configManager->GetConfig_Camera().ClampCameraFrame;
 
 	D3D12_GPU_DESCRIPTOR_HANDLE cbvVSHandle = m_CBVSRVHeap->GetGPUDescriptorHandleForHeapStart();
 	cbvVSHandle.ptr += (INDEX_CBV_VS_VIEW_0 + bufferIndex) * m_CBVSRVHeapDescSize;

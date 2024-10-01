@@ -355,6 +355,9 @@ namespace
 				{
 					return false;
 				}
+				MenuDisplayValues& vals = m_dashboardMenu->GetDisplayValues();
+				m_cameraManager->GetCameraDisplayStats(vals.CameraFrameWidth, vals.CameraFrameHeight, vals.CameraFrameRate, vals.CameraAPI);
+
 				m_cameraManager->GetDistortedFrameSize(cameraTextureWidth, cameraTextureHeight, cameraFrameBufferSize);
 				m_cameraManager->GetUndistortedFrameSize(cameraUndistortedTextureWidth, cameraUndistortedTextureHeight, cameraUndistortedFrameBufferSize);
 			}
@@ -367,6 +370,9 @@ namespace
 				{
 					return false;
 				}
+				MenuDisplayValues& vals = m_dashboardMenu->GetDisplayValues();
+				m_augmentedCameraManager->GetCameraDisplayStats(vals.CameraFrameWidth, vals.CameraFrameHeight, vals.CameraFrameRate, vals.CameraAPI);
+
 				m_augmentedCameraManager->GetDistortedFrameSize(cameraTextureWidth, cameraTextureHeight, cameraFrameBufferSize);
 				m_augmentedCameraManager->GetUndistortedFrameSize(cameraUndistortedTextureWidth, cameraUndistortedTextureHeight, cameraUndistortedFrameBufferSize);
 			}
@@ -378,6 +384,9 @@ namespace
 				{
 					return false;
 				}
+				MenuDisplayValues& vals = m_dashboardMenu->GetDisplayValues();
+				m_cameraManager->GetCameraDisplayStats(vals.CameraFrameWidth, vals.CameraFrameHeight, vals.CameraFrameRate, vals.CameraAPI);
+
 				m_cameraManager->GetDistortedFrameSize(cameraTextureWidth, cameraTextureHeight, cameraFrameBufferSize);
 				m_cameraManager->GetUndistortedFrameSize(cameraUndistortedTextureWidth, cameraUndistortedTextureHeight, cameraUndistortedFrameBufferSize);
 			}

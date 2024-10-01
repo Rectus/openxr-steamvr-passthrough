@@ -17,11 +17,11 @@ VS_OUTPUT main(float3 inPosition : POSITION, uint vertexID : SV_VertexID)
 {
 	VS_OUTPUT output;
 
-	float heightOffset = min(g_floorHeightOffset, g_hmdViewWorldPos.y);
+	float heightOffset = min(g_floorHeightOffset, g_projectionOriginWorld.y);
 	inPosition.xz *= g_projectionDistance;
-	inPosition.xz += g_hmdViewWorldPos.xz;
-	inPosition.y *= max(g_projectionDistance * 2.0, g_hmdViewWorldPos.y + g_projectionDistance - heightOffset);
-	inPosition.y += min(heightOffset, g_hmdViewWorldPos.y - 0.1);
+	inPosition.xz += g_projectionOriginWorld.xz;
+	inPosition.y *= max(g_projectionDistance * 2.0, g_projectionOriginWorld.y + g_projectionDistance - heightOffset);
+	inPosition.y += min(heightOffset, g_projectionOriginWorld.y - 0.1);
 
     float4 clipSpacePos = mul(g_worldToCameraProjection, float4(inPosition, 1.0));
 
@@ -38,7 +38,7 @@ VS_OUTPUT main(float3 inPosition : POSITION, uint vertexID : SV_VertexID)
 	
     if (g_bClampCameraFrame)
     {
-        float4 test = mul(g_worldToCameraProjection, float4(inPosition + g_hmdViewWorldPos, 1.0));
+        float4 test = mul(g_worldToCameraProjection, float4(inPosition + g_projectionOriginWorld, 1.0));
         if (test.z < -0.5)
         {
             output.projectionValidity = -1;

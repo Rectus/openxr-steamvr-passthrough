@@ -145,14 +145,14 @@ VS_OUTPUT main(float3 inPosition : POSITION, uint vertexID : SV_VertexID)
     // Clamp positions to floor height
     if ((worldSpacePoint.y / worldSpacePoint.w) < g_floorHeightOffset)
     {
-        float3 ray = normalize(worldSpacePoint.xyz / worldSpacePoint.w - g_hmdViewWorldPos);
+        float3 ray = normalize(worldSpacePoint.xyz / worldSpacePoint.w - g_projectionOriginWorld);
         
-        float num = (dot(float3(0, 1, 0), float3(0, g_floorHeightOffset, 0)) - dot(float3(0, 1, 0), g_hmdViewWorldPos));
+        float num = (dot(float3(0, 1, 0), float3(0, g_floorHeightOffset, 0)) - dot(float3(0, 1, 0), g_projectionOriginWorld));
         float denom = dot(float3(0, 1, 0), ray);
 
         if (denom < 0)
         {
-            worldSpacePoint = float4(g_hmdViewWorldPos + ray * num / denom, 1);
+            worldSpacePoint = float4(g_projectionOriginWorld + ray * num / denom, 1);
         }
     }
     
