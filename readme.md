@@ -25,6 +25,7 @@ Using the 3D stereo mode may induce heavy flickering on the display. Exercise ca
 - EXPERIMENTAL: Supports 3D stereo reconstruction to estimate projection depth, using OpenCV. Includes support for Weighted Least Squares disparity filtering, and Fast Bilateral Solver filtering.
 - Supports custom fisheye lens rectification instead of using the OpenVR pre-rectified output.
 - Supports compositing the passthrough based on scene depth, for applications that supply depth buffers.
+- EXPERIMENTAL: Support for monocular webcam input. This can be used alone or in conjunction with the depth provided by a stereoscopic HMD camera. The camera can either be attached to a tracked SteamVR device, or be set up in a static position. Manual calibration is required.
 
 
 ### Limitations ###
@@ -51,6 +52,7 @@ Using the 3D stereo mode may induce heavy flickering on the display. Exercise ca
 - Varjo XR headsets - Unknown
 - Windows Mixed Reality headsets - Unsupported, no passthrough support in driver
 - Oculus/Meta headsets - Unsupported, no passthrough support in driver
+- PSVR2 - Unsupported, no passthrough support in driver
 
 The SteamVR settings UI will misconfigure the original HTC Vive camera if the frame rate is not set the right way. To correctly set it, click the right end of the slider instead of dragging it. The USB drivers may need to be reset if the camera is incorrectly configured.
 
@@ -84,6 +86,7 @@ The Masked mode allows setting a chroma key color that gets replaced with the pa
 
 The settings can also be edited from `%APPDATA%\OpenXR SteamVR Passthrough\config.ini`
 
+See the project [Wiki](https://github.com/Rectus/openxr-steamvr-passthrough/wiki) for more information.
 
 ### Building from source ###
 The following are required:
@@ -97,7 +100,7 @@ The following are required:
 - [SimpleINI](https://github.com/brofield/simpleini) (Included as Git submodule)
 - [Dear ImGui](https://github.com/ocornut/imgui) (Included as Git submodule)
 - [Vulkan SDK](https://vulkan.lunarg.com/sdk/home) (Uses the VULKAN_SDK environment variable)
-- [OpenCV 4.7.0](https://github.com/opencv/opencv) (The project is setup for static linking by default - requires custom source build)
+- [OpenCV 4.10.0](https://github.com/opencv/opencv) (The project is setup for static linking by default - requires custom source build)
 - [OpenCV-Contrib](https://github.com/opencv/opencv_contrib) (The ximgproc module needs to be built along with OpenCV for WLS and FBS filtering support.)
 
 ### Possible improvements ###
