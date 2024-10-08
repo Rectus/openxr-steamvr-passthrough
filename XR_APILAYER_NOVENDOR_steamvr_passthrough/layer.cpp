@@ -349,7 +349,7 @@ namespace
 
 			if (m_configManager->GetConfig_Main().CameraProvider == CameraProvider_OpenVR)
 			{
-				m_cameraManager = std::make_shared<CameraManagerOpenVR>(m_Renderer, DirectX11, m_configManager, m_openVRManager);
+				m_cameraManager = std::make_shared<CameraManagerOpenVR>(m_Renderer, usedAPI, m_configManager, m_openVRManager);
 
 				if (!m_cameraManager->InitCamera())
 				{
@@ -363,8 +363,8 @@ namespace
 			}
 			else if (m_configManager->GetConfig_Main().CameraProvider == CameraProvider_Augmented)
 			{
-				m_cameraManager = std::make_shared<CameraManagerOpenVR>(m_Renderer, DirectX11, m_configManager, m_openVRManager);
-				m_augmentedCameraManager = std::make_shared<CameraManagerOpenCV>(m_Renderer, DirectX11, m_configManager, m_openVRManager, true);
+				m_cameraManager = std::make_shared<CameraManagerOpenVR>(m_Renderer, usedAPI, m_configManager, m_openVRManager);
+				m_augmentedCameraManager = std::make_shared<CameraManagerOpenCV>(m_Renderer, usedAPI, m_configManager, m_openVRManager, true);
 
 				if (!m_cameraManager->InitCamera() || !m_augmentedCameraManager->InitCamera())
 				{
@@ -378,7 +378,7 @@ namespace
 			}
 			else
 			{
-				m_cameraManager = std::make_shared<CameraManagerOpenCV>(m_Renderer, DirectX11, m_configManager, m_openVRManager);
+				m_cameraManager = std::make_shared<CameraManagerOpenCV>(m_Renderer, usedAPI, m_configManager, m_openVRManager);
 
 				if (!m_cameraManager->InitCamera())
 				{

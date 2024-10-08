@@ -59,7 +59,6 @@ struct VSViewConstantBuffer
 	uint32_t cameraViewIndex;
 	uint32_t bWriteDisparityFilter;
 	uint32_t bisFirstRender;
-	uint32_t bClampCameraFrame;
 };
 
 struct VSMeshConstantBuffer
@@ -1479,7 +1478,6 @@ void PassthroughRendererDX11::RenderPassthroughView(const ERenderEye eye, const 
 	vsViewBuffer.cameraViewIndex = (eye == LEFT_EYE) ? 0 : 1;
 	vsViewBuffer.bWriteDisparityFilter = stereoConf.StereoUseDisparityTemporalFiltering && depthFrame->bIsFirstRender;
 	vsViewBuffer.bisFirstRender = stereoConf.StereoUseDisparityTemporalFiltering && depthFrame->bIsFirstRender;
-	vsViewBuffer.bClampCameraFrame = m_configManager->GetConfig_Camera().ClampCameraFrame;
 	
 	m_renderContext->UpdateSubresource(viewData.vsViewConstantBuffer.Get(), 0, nullptr, &vsViewBuffer, 0, 0);
 	
@@ -1734,7 +1732,6 @@ void PassthroughRendererDX11::RenderMaskedPrepassView(const ERenderEye eye, cons
 	vsViewBuffer.projectionDistance = mainConf.ProjectionDistanceFar;
 	vsViewBuffer.floorHeightOffset = mainConf.FloorHeightOffset;
 	vsViewBuffer.cameraViewIndex = (eye == LEFT_EYE) ? 0 : 1;
-	vsViewBuffer.bClampCameraFrame = m_configManager->GetConfig_Camera().ClampCameraFrame;
 
 	m_renderContext->UpdateSubresource(viewData.vsViewConstantBuffer.Get(), 0, nullptr, &vsViewBuffer, 0, 0);
 

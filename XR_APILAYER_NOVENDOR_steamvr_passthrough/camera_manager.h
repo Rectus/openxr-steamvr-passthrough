@@ -177,7 +177,6 @@ public:
 private:
 	void ServeFrames();
 	void UpdateRenderModels();
-	void GetTrackedCameraEyePoses(XrMatrix4x4f& LeftPose, XrMatrix4x4f& RightPose);
 	XrMatrix4x4f GetHMDWorldToViewMatrix(const ERenderEye eye, const XrCompositionLayerProjection& layer, const XrReferenceSpaceCreateInfo& refSpaceInfo);
 	void UpdateProjectionMatrix(std::shared_ptr<CameraFrame>& frame);
 	void CalculateFrameProjectionForEye(const ERenderEye eye, std::shared_ptr<CameraFrame>& frame, const XrCompositionLayerProjection& layer, const XrReferenceSpaceCreateInfo& refSpaceInfo, UVDistortionParameters& distortionParams);
@@ -189,6 +188,7 @@ private:
 	bool m_bCameraInitialized = false;
 
 	cv::VideoCapture m_videoCapture;
+	uint32_t m_lastFrameTimestamp;
 
 	uint32_t m_cameraTextureWidth;
 	uint32_t m_cameraTextureHeight;
@@ -230,14 +230,6 @@ private:
 
 	XrMatrix4x4f m_cameraProjectionInvFarLeft{};
 	XrMatrix4x4f m_cameraProjectionInvFarRight{};
-
-	XrMatrix4x4f m_cameraToHMDLeft{};
-	XrMatrix4x4f m_cameraToHMDRight{};
-	XrMatrix4x4f m_HMDToCameraLeft{};
-	XrMatrix4x4f m_HMDToCameraRight{};
-
-	XrMatrix4x4f m_cameraLeftToRightPose{};
-	XrMatrix4x4f m_cameraRightToLeftPose{};
 
 	XrMatrix4x4f m_lastCameraProjectionToWorldLeft;
 	XrMatrix4x4f m_lastCameraProjectionToWorldRight;

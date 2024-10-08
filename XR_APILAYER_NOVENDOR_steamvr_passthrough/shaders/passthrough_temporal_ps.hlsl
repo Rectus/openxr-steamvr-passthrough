@@ -5,10 +5,10 @@
 struct VS_OUTPUT
 {
 	float4 position : SV_POSITION;
-	float3 clipSpaceCoords : TEXCOORD0;
+	float4 clipSpaceCoords : TEXCOORD0;
 	float3 screenCoords : TEXCOORD1;
 	float projectionValidity : TEXCOORD2;
-    float3 prevClipSpaceCoords : TEXCOORD3;
+    float4 prevClipSpaceCoords : TEXCOORD3;
     float3 velocity : TEXCOORD4;
 };
 
@@ -150,10 +150,11 @@ float4 main(VS_OUTPUT input) : SV_TARGET
     }
 
 	// Convert from homogenous clip space coordinates to 0-1.
-	float2 outUvs = (input.clipSpaceCoords.xy / input.clipSpaceCoords.z) * float2(0.5, 0.5) + float2(0.5, 0.5);
+	float2 outUvs = (input.clipSpaceCoords.xy / input.clipSpaceCoords.w) * float2(0.5, 0.5) + float2(0.5, 0.5);
 	
     if (g_bClampCameraFrame)
     {
+        clip(input.clipSpaceCoords.z);
         clip(outUvs);
         clip(1 - outUvs);
     }
@@ -217,7 +218,7 @@ float4 main(VS_OUTPUT input) : SV_TARGET
     maxColor = max(maxColor, sample);
       
     
-    float2 prevScreenUvs = (input.prevClipSpaceCoords.xy / input.prevClipSpaceCoords.z) * float2(0.5, 0.5) + float2(0.5, 0.5);
+    float2 prevScreenUvs = (input.prevClipSpaceCoords.xy / input.prevClipSpaceCoords.w) * float2(0.5, 0.5) + float2(0.5, 0.5);
     prevScreenUvs.y = 1 - prevScreenUvs.y;
     
     float2 newScreenUvs = (input.screenCoords.xy / input.screenCoords.z) * float2(0.5, 0.5) + float2(0.5, 0.5);

@@ -1,4 +1,5 @@
 #pragma once
+#include "layer.h"
 #include "SimpleIni.h"
 
 
@@ -167,10 +168,13 @@ struct Config_Camera
 	bool RequestCustomFrameSize = false;
 	int CustomFrameWidth = 0;
 	int CustomFrameHeight = 0;
+	int CustomFrameRate = 0;
 	float FrameDelayOffset = 0.08f;
 
 	bool AutoExposureEnable = false;
 	float ExposureValue = -7.0f;
+
+	EStereoFrameLayout CameraFrameLayout = Mono;
 
 	int Camera0DeviceIndex = 0;
 
@@ -192,6 +196,24 @@ struct Config_Camera
 	int Camera0_IntrinsicsSensorPixelsX = 1;
 	int Camera0_IntrinsicsSensorPixelsY = 1;
 
+	float Camera1_TranslationX = 0.0f;
+	float Camera1_TranslationY = 0.0f;
+	float Camera1_TranslationZ = 0.0f;
+	float Camera1_RotationX = 0.0f;
+	float Camera1_RotationY = 0.0f;
+	float Camera1_RotationZ = 0.0f;
+
+	float Camera1_IntrinsicsFocalX = 1.0f;
+	float Camera1_IntrinsicsFocalY = 1.0f;
+	float Camera1_IntrinsicsCenterX = 0.5f;
+	float Camera1_IntrinsicsCenterY = 0.5f;
+	float Camera1_IntrinsicsDistR1 = 0.0f;
+	float Camera1_IntrinsicsDistR2 = 0.0f;
+	float Camera1_IntrinsicsDistT1 = 0.0f;
+	float Camera1_IntrinsicsDistT2 = 0.0f;
+	int Camera1_IntrinsicsSensorPixelsX = 1;
+	int Camera1_IntrinsicsSensorPixelsY = 1;
+
 	void ParseConfig(CSimpleIniA& ini, const char* section)
 	{
 		ClampCameraFrame = ini.GetBoolValue(section, "ClampCameraFrame", ClampCameraFrame);
@@ -202,10 +224,13 @@ struct Config_Camera
 		RequestCustomFrameSize = ini.GetBoolValue(section, "RequestCustomFrameSize", RequestCustomFrameSize);
 		CustomFrameWidth = (int)ini.GetLongValue(section, "CustomFrameWidth", CustomFrameWidth);
 		CustomFrameHeight = (int)ini.GetLongValue(section, "CustomFrameHeight", CustomFrameHeight);
+		CustomFrameRate = (int)ini.GetLongValue(section, "CustomFrameRate", CustomFrameRate);
 		FrameDelayOffset = (float)ini.GetDoubleValue(section, "FrameDelayOffset", FrameDelayOffset);
 
 		AutoExposureEnable = ini.GetBoolValue(section, "AutoExposureEnable", AutoExposureEnable);
 		ExposureValue = (float)ini.GetDoubleValue(section, "ExposureValue", ExposureValue);
+
+		CameraFrameLayout = (EStereoFrameLayout)ini.GetLongValue(section, "CameraFrameLayout", CameraFrameLayout);
 
 		Camera0DeviceIndex = (int)ini.GetLongValue(section, "Camera0DeviceIndex", Camera0DeviceIndex);
 
@@ -226,6 +251,24 @@ struct Config_Camera
 		Camera0_IntrinsicsDistT2 = (float)ini.GetDoubleValue(section, "Camera0_IntrinsicsDistT2", Camera0_IntrinsicsDistT2);
 		Camera0_IntrinsicsSensorPixelsX = (int)ini.GetLongValue(section, "Camera0_IntrinsicsSensorPixelsX", Camera0_IntrinsicsSensorPixelsX);
 		Camera0_IntrinsicsSensorPixelsY = (int)ini.GetLongValue(section, "Camera0_IntrinsicsSensorPixelsY", Camera0_IntrinsicsSensorPixelsY);
+
+		Camera1_TranslationX = (float)ini.GetDoubleValue(section, "Camera1_TranslationX", Camera1_TranslationX);
+		Camera1_TranslationY = (float)ini.GetDoubleValue(section, "Camera1_TranslationY", Camera1_TranslationY);
+		Camera1_TranslationZ = (float)ini.GetDoubleValue(section, "Camera1_TranslationZ", Camera1_TranslationZ);
+		Camera1_RotationX = (float)ini.GetDoubleValue(section, "Camera1_RotationX", Camera1_RotationX);
+		Camera1_RotationY = (float)ini.GetDoubleValue(section, "Camera1_RotationY", Camera1_RotationY);
+		Camera1_RotationZ = (float)ini.GetDoubleValue(section, "Camera1_RotationZ", Camera1_RotationZ);
+
+		Camera1_IntrinsicsFocalX = (float)ini.GetDoubleValue(section, "Camera1_IntrinsicsFocalX", Camera1_IntrinsicsFocalX);
+		Camera1_IntrinsicsFocalY = (float)ini.GetDoubleValue(section, "Camera1_IntrinsicsFocalY", Camera1_IntrinsicsFocalY);
+		Camera1_IntrinsicsCenterX = (float)ini.GetDoubleValue(section, "Camera1_IntrinsicsCenterX", Camera1_IntrinsicsCenterX);
+		Camera1_IntrinsicsCenterY = (float)ini.GetDoubleValue(section, "Camera1_IntrinsicsCenterY", Camera1_IntrinsicsCenterY);
+		Camera1_IntrinsicsDistR1 = (float)ini.GetDoubleValue(section, "Camera1_IntrinsicsDistR1", Camera1_IntrinsicsDistR1);
+		Camera1_IntrinsicsDistR2 = (float)ini.GetDoubleValue(section, "Camera1_IntrinsicsDistR2", Camera1_IntrinsicsDistR2);
+		Camera1_IntrinsicsDistT1 = (float)ini.GetDoubleValue(section, "Camera1_IntrinsicsDistT1", Camera1_IntrinsicsDistT1);
+		Camera1_IntrinsicsDistT2 = (float)ini.GetDoubleValue(section, "Camera1_IntrinsicsDistT2", Camera1_IntrinsicsDistT2);
+		Camera1_IntrinsicsSensorPixelsX = (int)ini.GetLongValue(section, "Camera1_IntrinsicsSensorPixelsX", Camera1_IntrinsicsSensorPixelsX);
+		Camera1_IntrinsicsSensorPixelsY = (int)ini.GetLongValue(section, "Camera1_IntrinsicsSensorPixelsY", Camera1_IntrinsicsSensorPixelsY);
 	}
 
 	void UpdateConfig(CSimpleIniA& ini, const char* section)
@@ -238,10 +281,13 @@ struct Config_Camera
 		ini.SetBoolValue(section, "RequestCustomFrameSize", RequestCustomFrameSize);
 		ini.SetLongValue(section, "CustomFrameWidth", (long)CustomFrameWidth);
 		ini.SetLongValue(section, "CustomFrameHeight", (long)CustomFrameHeight);
+		ini.SetLongValue(section, "CustomFrameRate", (long)CustomFrameRate);
 		ini.SetDoubleValue(section, "FrameDelayOffset", FrameDelayOffset);
 
 		ini.SetBoolValue(section, "AutoExposureEnable", AutoExposureEnable);
 		ini.SetDoubleValue(section, "ExposureValue", ExposureValue);
+
+		ini.SetLongValue(section, "CameraFrameLayout", (long)CameraFrameLayout);
 
 		ini.SetLongValue(section, "Camera0DeviceIndex", (long)Camera0DeviceIndex);
 
@@ -262,6 +308,24 @@ struct Config_Camera
 		ini.SetDoubleValue(section, "Camera0_IntrinsicsDistT2", Camera0_IntrinsicsDistT2);
 		ini.SetLongValue(section, "Camera0_IntrinsicsSensorPixelsX", Camera0_IntrinsicsSensorPixelsX);
 		ini.SetLongValue(section, "Camera0_IntrinsicsSensorPixelsY", Camera0_IntrinsicsSensorPixelsY);
+
+		ini.SetDoubleValue(section, "Camera1_TranslationX", Camera1_TranslationX);
+		ini.SetDoubleValue(section, "Camera1_TranslationY", Camera1_TranslationY);
+		ini.SetDoubleValue(section, "Camera1_TranslationZ", Camera1_TranslationZ);
+		ini.SetDoubleValue(section, "Camera1_RotationX", Camera1_RotationX);
+		ini.SetDoubleValue(section, "Camera1_RotationY", Camera1_RotationY);
+		ini.SetDoubleValue(section, "Camera1_RotationZ", Camera1_RotationZ);
+
+		ini.SetDoubleValue(section, "Camera1_IntrinsicsFocalX", Camera1_IntrinsicsFocalX);
+		ini.SetDoubleValue(section, "Camera1_IntrinsicsFocalY", Camera1_IntrinsicsFocalY);
+		ini.SetDoubleValue(section, "Camera1_IntrinsicsCenterX", Camera1_IntrinsicsCenterX);
+		ini.SetDoubleValue(section, "Camera1_IntrinsicsCenterY", Camera1_IntrinsicsCenterY);
+		ini.SetDoubleValue(section, "Camera1_IntrinsicsDistR1", Camera1_IntrinsicsDistR1);
+		ini.SetDoubleValue(section, "Camera1_IntrinsicsDistR2", Camera1_IntrinsicsDistR2);
+		ini.SetDoubleValue(section, "Camera1_IntrinsicsDistT1", Camera1_IntrinsicsDistT1);
+		ini.SetDoubleValue(section, "Camera1_IntrinsicsDistT2", Camera1_IntrinsicsDistT2);
+		ini.SetLongValue(section, "Camera1_IntrinsicsSensorPixelsX", Camera1_IntrinsicsSensorPixelsX);
+		ini.SetLongValue(section, "Camera1_IntrinsicsSensorPixelsY", Camera1_IntrinsicsSensorPixelsY);
 	}
 };
 

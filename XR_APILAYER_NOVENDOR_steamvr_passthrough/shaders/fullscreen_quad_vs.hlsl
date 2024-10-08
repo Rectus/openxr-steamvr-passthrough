@@ -3,7 +3,7 @@
 struct VS_OUTPUT
 {
     float4 position : SV_POSITION;
-    float3 clipSpaceCoords : TEXCOORD0;
+    float4 clipSpaceCoords : TEXCOORD0;
     float3 screenCoords : TEXCOORD1;
     float projectionValidity : TEXCOORD2;
 };
@@ -17,7 +17,7 @@ VS_OUTPUT main(float3 inPosition : POSITION, uint vertexID : SV_VertexID)
 
     output.position = float4(clipCoords, 0, 1);
     
-    output.clipSpaceCoords = float3(clipCoords, 1);
+    output.clipSpaceCoords = float4(clipCoords, 1, 1);
     output.screenCoords = float3(clipCoords, 1);
     output.projectionValidity = 1;
 

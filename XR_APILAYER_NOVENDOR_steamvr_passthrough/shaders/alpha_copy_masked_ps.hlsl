@@ -5,7 +5,7 @@
 struct VS_OUTPUT
 {
 	float4 position : SV_POSITION;
-	float3 clipSpaceCoords : TEXCOORD0;
+	float4 clipSpaceCoords : TEXCOORD0;
 	float3 screenCoords : TEXCOORD1;
 	float projectionValidity : TEXCOORD2;
 };

@@ -17,7 +17,6 @@ cbuffer vsViewConstantBuffer : register(b0)
     uint g_viewIndex;
     bool g_bWriteDisparityFilter;
     bool g_bIsFirstRender;
-    bool g_bClampCameraFrame;
 };
 
 cbuffer vsPassConstantBuffer : register(b1)

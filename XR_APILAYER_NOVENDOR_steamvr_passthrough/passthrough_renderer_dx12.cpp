@@ -133,7 +133,6 @@ struct VSViewConstantBuffer
 	uint32_t cameraViewIndex;
 	uint32_t bWriteDisparityFilter;
 	uint32_t bisFirstRender;
-	uint32_t bClampCameraFrame;
 };
 
 struct PSPassConstantBuffer
@@ -1449,7 +1448,6 @@ void PassthroughRendererDX12::RenderPassthroughView(const ERenderEye eye, const 
 	vsViewBuffer->projectionDistance = mainConf.ProjectionDistanceFar;
 	vsViewBuffer->floorHeightOffset = mainConf.FloorHeightOffset;
 	vsViewBuffer->cameraViewIndex = (eye == LEFT_EYE) ? 0 : 1;
-	vsViewBuffer->bClampCameraFrame = m_configManager->GetConfig_Camera().ClampCameraFrame;
 
 	D3D12_GPU_DESCRIPTOR_HANDLE cbvVSHandle = m_CBVSRVHeap->GetGPUDescriptorHandleForHeapStart();
 	cbvVSHandle.ptr += (INDEX_CBV_VS_VIEW_0 + bufferIndex) * m_CBVSRVHeapDescSize;
@@ -1500,7 +1498,6 @@ void PassthroughRendererDX12::RenderPassthroughView(const ERenderEye eye, const 
 		vsCrossViewBuffer->projectionDistance = mainConf.ProjectionDistanceFar;
 		vsCrossViewBuffer->floorHeightOffset = mainConf.FloorHeightOffset;
 		vsCrossViewBuffer->cameraViewIndex = (eye != LEFT_EYE) ? 0 : 1;
-		vsCrossViewBuffer->bClampCameraFrame = m_configManager->GetConfig_Camera().ClampCameraFrame;
 
 		D3D12_GPU_DESCRIPTOR_HANDLE cbvCrossVSHandle = m_CBVSRVHeap->GetGPUDescriptorHandleForHeapStart();
 		cbvCrossVSHandle.ptr += (INDEX_CBV_VS_VIEW_0 + crossBufferIndex) * m_CBVSRVHeapDescSize;
@@ -1594,7 +1591,6 @@ void PassthroughRendererDX12::RenderMaskedPrepassView(const ERenderEye eye, cons
 	vsViewBuffer->projectionDistance = mainConf.ProjectionDistanceFar;
 	vsViewBuffer->floorHeightOffset = mainConf.FloorHeightOffset;
 	vsViewBuffer->cameraViewIndex = (eye == LEFT_EYE) ? 0 : 1;
-	vsViewBuffer->bClampCameraFrame = m_configManager->GetConfig_Camera().ClampCameraFrame;
 
 	D3D12_GPU_DESCRIPTOR_HANDLE cbvVSHandle = m_CBVSRVHeap->GetGPUDescriptorHandleForHeapStart();
 	cbvVSHandle.ptr += (INDEX_CBV_VS_VIEW_0 + bufferIndex) * m_CBVSRVHeapDescSize;

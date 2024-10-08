@@ -56,7 +56,6 @@ struct VSViewConstantBuffer
 	uint32_t cameraViewIndex;
 	uint32_t bWriteDisparityFilter;
 	uint32_t bisFirstRender;
-	uint32_t bClampCameraFrame;
 };
 
 
@@ -1869,7 +1868,6 @@ void PassthroughRendererVulkan::RenderPassthroughView(const ERenderEye eye, cons
 		vsViewBuffer.projectionDistance = mainConf.ProjectionDistanceFar;
 		vsViewBuffer.floorHeightOffset = mainConf.FloorHeightOffset;
 		vsViewBuffer.cameraViewIndex = viewIndex;
-		vsViewBuffer.bClampCameraFrame = m_configManager->GetConfig_Camera().ClampCameraFrame;
 
 		memcpy(m_vsViewConstantBufferMappings[bufferIndex], &vsViewBuffer, sizeof(VSViewConstantBuffer));
 
@@ -1980,7 +1978,6 @@ void PassthroughRendererVulkan::RenderMaskedPrepassView(const ERenderEye eye, co
 	vsViewBuffer.projectionDistance = mainConf.ProjectionDistanceFar;
 	vsViewBuffer.floorHeightOffset = mainConf.FloorHeightOffset;
 	vsViewBuffer.cameraViewIndex = viewIndex;
-	vsViewBuffer.bClampCameraFrame = m_configManager->GetConfig_Camera().ClampCameraFrame;
 
 	memcpy(m_vsViewConstantBufferMappings[bufferIndex], &vsViewBuffer, sizeof(VSViewConstantBuffer));
 

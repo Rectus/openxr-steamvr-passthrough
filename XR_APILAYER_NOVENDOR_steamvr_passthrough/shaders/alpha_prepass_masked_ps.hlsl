@@ -5,7 +5,7 @@
 struct VS_OUTPUT
 {
 	float4 position : SV_POSITION;
-	float3 clipSpaceCoords : TEXCOORD0;
+	float4 clipSpaceCoords : TEXCOORD0;
 	float3 screenCoords : TEXCOORD1;
 	float projectionValidity : TEXCOORD2;
 };
@@ -34,7 +34,7 @@ float main(VS_OUTPUT input) : SV_TARGET
 
 	if (g_bMaskedUseCamera)
 	{
-		float2 outUvs = input.clipSpaceCoords.xy / input.clipSpaceCoords.z;
+		float2 outUvs = input.clipSpaceCoords.xy / input.clipSpaceCoords.w;
 		outUvs = outUvs * float2(0.5, 0.5) + float2(0.5, 0.5);
 		outUvs = outUvs * (g_uvBounds.zw - g_uvBounds.xy) + g_uvBounds.xy;
 		outUvs = clamp(outUvs, g_uvBounds.xy, g_uvBounds.zw);

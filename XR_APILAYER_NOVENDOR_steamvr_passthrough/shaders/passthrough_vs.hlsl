@@ -4,7 +4,7 @@
 struct VS_OUTPUT
 {
 	float4 position : SV_POSITION;
-	float3 clipSpaceCoords : TEXCOORD0;
+	float4 clipSpaceCoords : TEXCOORD0;
 	float3 screenCoords : TEXCOORD1;
 	float projectionValidity : TEXCOORD2;
     float3 prevClipSpaceCoords : TEXCOORD3;
@@ -26,7 +26,7 @@ VS_OUTPUT main(float3 inPosition : POSITION, uint vertexID : SV_VertexID)
 
     float4 clipSpacePos = mul(g_worldToCameraProjection, float4(projectionPos, 1.0));
 
-    output.clipSpaceCoords = clipSpacePos.xyw;
+    output.clipSpaceCoords = clipSpacePos;
 	
     float4 worldPos = mul(g_cameraProjectionToWorld, clipSpacePos);
     output.position = mul(g_worldToHMDProjection, worldPos);
@@ -36,15 +36,6 @@ VS_OUTPUT main(float3 inPosition : POSITION, uint vertexID : SV_VertexID)
     output.prevClipSpaceCoords = mul(g_prevWorldToHMDProjection, worldPos).xyw;
 
 	output.projectionValidity = 1.0;
-	
-    if (g_bClampCameraFrame)
-    {
-        float4 test = mul(g_worldToCameraProjection, float4(projectionPos, 1.0));
-        if (dot(normalize(test.xyz), float3(0,0,1)) < -0.5)
-        {
-            output.projectionValidity = -1;
-        }
-    }
 	
 #ifndef VULKAN  
     float4 prevOutCoords = mul(g_prevWorldToCameraProjection, worldPos);
