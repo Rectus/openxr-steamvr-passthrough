@@ -1045,7 +1045,7 @@ if (bIsActiveTab) { ImGui::PopStyleColor(1); bIsActiveTab = false; }
 			TextDescription("Use SteamVR for calculating depth, and a webcam for color data. Requires a HMD with a stereo camera and manual configuration.");
 
 			ImGui::Checkbox("Clamp Camera Frame", &cameraConfig.ClampCameraFrame);
-			TextDescription("Only draw passthrough in the actual frame area. Without it the edge pixels are extended past it.");
+			TextDescription("Only draws passthrough in the actual frame area. When turned off the edge pixels are extended past the frame into a 360 degree view.");
 		}
 
 		ImGui::SetNextItemOpen(true, ImGuiCond_Once);
@@ -1190,18 +1190,13 @@ if (bIsActiveTab) { ImGui::PopStyleColor(1); bIsActiveTab = false; }
 			ImGui::SetNextItemOpen(true, ImGuiCond_Once);
 			if (ImGui::CollapsingHeader("Left Camera"))
 			{
-
-				//ImGui::Text("Camera Offset (m)");
+				ImGui::Text("Camera Extrinsics");
 				ImGui::DragFloat3("Camera Offset (m)", cameraConfig.Camera0_Translation, 0.001f, 0.0f, 0.0f, "%.3f");
-
-				//ImGui::Text("Camera Rotation (degrees)");
 				ImGui::DragFloat3("Camera Rotation (degrees)", cameraConfig.Camera0_Rotation, 1.0f, -180.0f, 180.0f, "%.0f");
 				ImGui::Text("Camera Intrinsics");
 				ImGui::DragFloat2("Focal Length", cameraConfig.Camera0_IntrinsicsFocal, 0.001f, 0.0f, 0.0f, "%.5f");
 				ImGui::DragFloat2("Center", cameraConfig.Camera0_IntrinsicsCenter, 0.001f, 0.0f, 0.0f, "%.5f");
 				ImGui::DragInt2("Sensor Pixels", cameraConfig.Camera0_IntrinsicsSensorPixels, 1.0f, 1, 8192);
-
-				//ImGui::Text("Camera Distortion");
 				ImGui::DragFloat4("Distortion", cameraConfig.Camera0_IntrinsicsDist, 0.001f, 0.0f, 0.0f, "%.5f");
 
 			}
@@ -1209,22 +1204,22 @@ if (bIsActiveTab) { ImGui::PopStyleColor(1); bIsActiveTab = false; }
 			ImGui::SetNextItemOpen(true, ImGuiCond_Once);
 			if (ImGui::CollapsingHeader("Right Camera"))
 			{
-
-				//ImGui::Text("Camera Offset (m)");
+				ImGui::Text("Camera Extrinsics");
 				ImGui::DragFloat3("Camera Offset (m)###RightOffset", cameraConfig.Camera1_Translation, 0.001f, 0.0f, 0.0f, "%.3f");
-
-				//ImGui::Text("Camera Rotation (degrees)");
 				ImGui::DragFloat3("Camera Rotation (degrees)###RightRotation", cameraConfig.Camera1_Rotation, 1.0f, -180.0f, 180.0f, "%.0f");
 
 				ImGui::Text("Camera Intrinsics");
 				ImGui::DragFloat2("Focal Length###RightF", cameraConfig.Camera1_IntrinsicsFocal, 0.001f, 0.0f, 0.0f, "%.5f");
 				ImGui::DragFloat2("Center###RightC", cameraConfig.Camera1_IntrinsicsCenter, 0.001f, 0.0f, 0.0f, "%.5f");
 				ImGui::DragInt2("Sensor Pixels###RightPx", cameraConfig.Camera1_IntrinsicsSensorPixels, 1.0f, 1, 8192);
-
-				//ImGui::Text("Camera Distortion");
 				ImGui::DragFloat4("Distortion##RightDist", cameraConfig.Camera1_IntrinsicsDist, 0.001f, 0.0f, 0.0f, "%.5f");
 			}
+		}
+		IMGUI_BIG_SPACING;
 
+		ImGui::SetNextItemOpen(true, ImGuiCond_Once);
+		if (ImGui::CollapsingHeader("SteamVR Camera Configuration"))
+		{
 			IMGUI_BIG_SPACING;
 
 			ImGui::Checkbox("Enable Custom Calibration for SteamVR Camera", &cameraConfig.OpenVRCustomCalibration);
@@ -1236,38 +1231,26 @@ if (bIsActiveTab) { ImGui::PopStyleColor(1); bIsActiveTab = false; }
 			ImGui::SetNextItemOpen(true, ImGuiCond_Once);
 			if (ImGui::CollapsingHeader("SteamVR Camera 0"))
 			{
-
-				//ImGui::Text("Camera Offset (m)");
+				ImGui::Text("Camera Extrinsics");
 				ImGui::DragFloat3("Camera Offset (m)###OpenVROffset", cameraConfig.OpenVR_Camera0_Translation, 0.001f, 0.0f, 0.0f, "%.3f");
-
-				//ImGui::Text("Camera Rotation (degrees)");
 				ImGui::DragFloat3("Camera Rotation (degrees)###OpenVRRot", cameraConfig.OpenVR_Camera0_Rotation, 1.0f, -180.0f, 180.0f, "%.0f");
 				ImGui::Text("Camera Intrinsics");
 				ImGui::DragFloat2("Focal Length###OpenVRF", cameraConfig.OpenVR_Camera0_IntrinsicsFocal, 0.001f, 0.0f, 0.0f, "%.5f");
 				ImGui::DragFloat2("Center###OpenVRC", cameraConfig.OpenVR_Camera0_IntrinsicsCenter, 0.001f, 0.0f, 0.0f, "%.5f");
 				ImGui::DragInt2("Sensor Pixels###OpenVRPx", cameraConfig.OpenVR_Camera0_IntrinsicsSensorPixels, 1.0f, 1, 8192);
-
-				//ImGui::Text("Camera Distortion");
 				ImGui::DragFloat4("Distortion###OpenVRDist", cameraConfig.OpenVR_Camera0_IntrinsicsDist, 0.001f, 0.0f, 0.0f, "%.5f");
-
 			}
 
 			ImGui::SetNextItemOpen(true, ImGuiCond_Once);
 			if (ImGui::CollapsingHeader("SteamVR Camera 1"))
 			{
-
-				//ImGui::Text("Camera Offset (m)");
+				ImGui::Text("Camera Extrinsics");
 				ImGui::DragFloat3("Camera Offset (m)###OpenVRRightOffset", cameraConfig.OpenVR_Camera1_Translation, 0.001f, 0.0f, 0.0f, "%.3f");
-
-				//ImGui::Text("Camera Rotation (degrees)");
 				ImGui::DragFloat3("Camera Rotation (degrees)###OpenVRRightRotation", cameraConfig.OpenVR_Camera1_Rotation, 1.0f, -180.0f, 180.0f, "%.0f");
-
 				ImGui::Text("Camera Intrinsics");
 				ImGui::DragFloat2("Focal Length###OpenVRRightF", cameraConfig.OpenVR_Camera1_IntrinsicsFocal, 0.001f, 0.0f, 0.0f, "%.5f");
 				ImGui::DragFloat2("Center###OpenVRRightC", cameraConfig.OpenVR_Camera1_IntrinsicsCenter, 0.001f, 0.0f, 0.0f, "%.5f");
 				ImGui::DragInt2("Sensor Pixels###OpenVRRightPx", cameraConfig.OpenVR_Camera1_IntrinsicsSensorPixels, 1.0f, 1, 8192);
-
-				//ImGui::Text("Camera Distortion");
 				ImGui::DragFloat4("Distortion##OpenVRRightDist", cameraConfig.OpenVR_Camera1_IntrinsicsDist, 0.001f, 0.0f, 0.0f, "%.5f");
 			}
 

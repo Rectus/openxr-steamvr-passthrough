@@ -198,45 +198,113 @@ void CameraManagerOpenVR::GetUndistortedFrameSize(uint32_t& width, uint32_t& hei
 
 void CameraManagerOpenVR::GetIntrinsics(const ERenderEye cameraEye, XrVector2f& focalLength, XrVector2f& center) const
 {
-    uint32_t cameraIndex = 0;
+    Config_Camera& cameraConf = m_configManager->GetConfig_Camera();
 
-    if (m_frameLayout == EStereoFrameLayout::StereoHorizontalLayout)
+    if (!cameraConf.OpenVRCustomCalibration)
     {
-        cameraIndex = (cameraEye == LEFT_EYE) ? 0 : 1;
+        uint32_t cameraIndex = 0;
+
+        if (m_frameLayout == EStereoFrameLayout::StereoHorizontalLayout)
+        {
+            cameraIndex = (cameraEye == LEFT_EYE) ? 0 : 1;
+        }
+        else if (m_frameLayout == EStereoFrameLayout::StereoVerticalLayout)
+        {
+            // The camera indices are reversed for vertical layouts.
+            cameraIndex = (cameraEye == LEFT_EYE) ? 1 : 0;
+        }
+
+        vr::IVRTrackedCamera* trackedCamera = m_openVRManager->GetVRTrackedCamera();
+
+        // OpenVR only provides camera inrinsics for the undistorted image dimesions for some reason.
+        vr::EVRTrackedCameraError cameraError = trackedCamera->GetCameraIntrinsics(m_hmdDeviceId, cameraIndex, vr::VRTrackedCameraFrameType_MaximumUndistorted, (vr::HmdVector2_t*)&focalLength, (vr::HmdVector2_t*)&center);
+        if (cameraError != vr::VRTrackedCameraError_None)
+        {
+            ErrorLog("GetCameraIntrinsics error %i on device Id %i\n", cameraError, m_hmdDeviceId);
+        }
+
+        // Multiply the values by the distorted/undistorted ratio, since we need the values for the distorted image.
+        float xRatio = ((float)m_cameraFrameWidth) / m_cameraUndistortedFrameWidth;
+        float yRatio = ((float)m_cameraFrameHeight) / m_cameraUndistortedFrameHeight;
+
+        focalLength.x *= xRatio;
+        focalLength.y *= yRatio;
+
+        center.x *= xRatio;
+        center.y *= yRatio;
     }
-    else if (m_frameLayout == EStereoFrameLayout::StereoVerticalLayout)
+    else
     {
-        // The camera indices are reversed for vertical layouts.
-        cameraIndex = (cameraEye == LEFT_EYE) ? 1 : 0;
+        if (m_frameLayout == EStereoFrameLayout::Mono || 
+            (m_frameLayout == EStereoFrameLayout::StereoHorizontalLayout && cameraEye == LEFT_EYE) || 
+            (m_frameLayout == EStereoFrameLayout::StereoVerticalLayout && cameraEye == RIGHT_EYE))
+        {
+            focalLength.x = cameraConf.OpenVR_Camera0_IntrinsicsFocal[0] / (float)cameraConf.OpenVR_Camera0_IntrinsicsSensorPixels[0] * m_cameraTextureWidth;
+            focalLength.y = cameraConf.OpenVR_Camera0_IntrinsicsFocal[1] / (float)cameraConf.OpenVR_Camera0_IntrinsicsSensorPixels[1] * m_cameraTextureHeight;
+            center.x = cameraConf.OpenVR_Camera0_IntrinsicsCenter[0] / (float)cameraConf.OpenVR_Camera0_IntrinsicsSensorPixels[0] * m_cameraTextureWidth;
+            center.y = cameraConf.OpenVR_Camera0_IntrinsicsCenter[1] / (float)cameraConf.OpenVR_Camera0_IntrinsicsSensorPixels[1] * m_cameraTextureHeight;
+        }
+        else
+        {
+            focalLength.x = cameraConf.OpenVR_Camera1_IntrinsicsFocal[0] / (float)cameraConf.OpenVR_Camera1_IntrinsicsSensorPixels[0] * m_cameraTextureWidth;
+            focalLength.y = cameraConf.OpenVR_Camera1_IntrinsicsFocal[1] / (float)cameraConf.OpenVR_Camera1_IntrinsicsSensorPixels[1] * m_cameraTextureHeight;
+            center.x = cameraConf.OpenVR_Camera1_IntrinsicsCenter[0] / (float)cameraConf.OpenVR_Camera1_IntrinsicsSensorPixels[0] * m_cameraTextureWidth;
+            center.y = cameraConf.OpenVR_Camera1_IntrinsicsCenter[1] / (float)cameraConf.OpenVR_Camera1_IntrinsicsSensorPixels[1] * m_cameraTextureHeight;
+        }
+
+        if (m_frameLayout == EStereoFrameLayout::StereoVerticalLayout)
+        {
+            focalLength.y /= 2.0f;
+            center.y /= 2.0f;
+        }
+        else if (m_frameLayout == EStereoFrameLayout::StereoHorizontalLayout)
+        {
+            focalLength.x /= 2.0f;
+            center.x /= 2.0f;
+        }
+
     }
-
-    vr::IVRTrackedCamera* trackedCamera = m_openVRManager->GetVRTrackedCamera();
-
-    // OpenVR only provides camera inrinsics for the undistorted image dimesions for some reason.
-    vr::EVRTrackedCameraError cameraError = trackedCamera->GetCameraIntrinsics(m_hmdDeviceId, cameraIndex, vr::VRTrackedCameraFrameType_MaximumUndistorted, (vr::HmdVector2_t*)&focalLength, (vr::HmdVector2_t*)&center);
-    if (cameraError != vr::VRTrackedCameraError_None)
-    {
-        ErrorLog("GetCameraIntrinsics error %i on device Id %i\n", cameraError, m_hmdDeviceId);
-    }
-
-    // Multiply the values by the distorted/undistorted ratio, since we need the values for the distorted image.
-    float xRatio = ((float)m_cameraFrameWidth) / m_cameraUndistortedFrameWidth;
-    float yRatio = ((float)m_cameraFrameHeight) / m_cameraUndistortedFrameHeight;
-
-    focalLength.x *= xRatio;
-    focalLength.y *= yRatio;
-
-    center.x *= xRatio;
-    center.y *= yRatio;
 }
 
 void CameraManagerOpenVR::GetDistortionCoefficients(ECameraDistortionCoefficients& coeffs) const
 {
-    vr::TrackedPropertyError error;
-    uint32_t numBytes = m_openVRManager->GetVRSystem()->GetArrayTrackedDeviceProperty(m_hmdDeviceId, vr::Prop_CameraDistortionCoefficients_Float_Array, vr::k_unFloatPropertyTag, &coeffs, 16 * sizeof(double), &error);
-    if (error != vr::TrackedProp_Success || numBytes == 0)
+    Config_Camera& cameraConf = m_configManager->GetConfig_Camera();
+
+    if (!cameraConf.OpenVRCustomCalibration)
     {
-        ErrorLog("Failed to get tracked camera distortion coefficients, error [%i]\n", error);
+        vr::TrackedPropertyError error;
+        uint32_t numBytes = m_openVRManager->GetVRSystem()->GetArrayTrackedDeviceProperty(m_hmdDeviceId, vr::Prop_CameraDistortionCoefficients_Float_Array, vr::k_unFloatPropertyTag, &coeffs, 16 * sizeof(double), &error);
+        if (error != vr::TrackedProp_Success || numBytes == 0)
+        {
+            ErrorLog("Failed to get tracked camera distortion coefficients, error [%i]\n", error);
+        }
+    }
+    else
+    {
+        if (m_frameLayout == EStereoFrameLayout::StereoVerticalLayout)
+        {
+            coeffs.v[0] = cameraConf.OpenVR_Camera1_IntrinsicsDist[0];
+            coeffs.v[1] = cameraConf.OpenVR_Camera1_IntrinsicsDist[1];
+            coeffs.v[2] = cameraConf.OpenVR_Camera1_IntrinsicsDist[2];
+            coeffs.v[3] = cameraConf.OpenVR_Camera1_IntrinsicsDist[3];
+
+            coeffs.v[8] = cameraConf.OpenVR_Camera0_IntrinsicsDist[0];
+            coeffs.v[9] = cameraConf.OpenVR_Camera0_IntrinsicsDist[1];
+            coeffs.v[10] = cameraConf.OpenVR_Camera0_IntrinsicsDist[2];
+            coeffs.v[11] = cameraConf.OpenVR_Camera0_IntrinsicsDist[3];
+        }
+        else
+        {
+            coeffs.v[0] = cameraConf.OpenVR_Camera0_IntrinsicsDist[0];
+            coeffs.v[1] = cameraConf.OpenVR_Camera0_IntrinsicsDist[1];
+            coeffs.v[2] = cameraConf.OpenVR_Camera0_IntrinsicsDist[2];
+            coeffs.v[3] = cameraConf.OpenVR_Camera0_IntrinsicsDist[3];
+
+            coeffs.v[8] = cameraConf.OpenVR_Camera1_IntrinsicsDist[0];
+            coeffs.v[9] = cameraConf.OpenVR_Camera1_IntrinsicsDist[1];
+            coeffs.v[10] = cameraConf.OpenVR_Camera1_IntrinsicsDist[2];
+            coeffs.v[11] = cameraConf.OpenVR_Camera1_IntrinsicsDist[3];
+        }
     }
 }
 
@@ -252,40 +320,70 @@ XrMatrix4x4f CameraManagerOpenVR::GetLeftToRightCameraTransform() const
 
 void CameraManagerOpenVR::GetTrackedCameraEyePoses(XrMatrix4x4f& LeftPose, XrMatrix4x4f& RightPose)
 {
-    vr::IVRSystem* vrSystem = m_openVRManager->GetVRSystem();
+    Config_Camera& cameraConf = m_configManager->GetConfig_Camera();
 
-    vr::HmdMatrix34_t Buffer[2];
-    vr::TrackedPropertyError error;
-    bool bGotLeftCamera = true;
-    bool bGotRightCamera = true;
-
-    uint32_t numBytes = vrSystem->GetArrayTrackedDeviceProperty(m_hmdDeviceId, vr::Prop_CameraToHeadTransforms_Matrix34_Array, vr::k_unHmdMatrix34PropertyTag, &Buffer, sizeof(Buffer), &error);
-    if (error != vr::TrackedProp_Success || numBytes == 0)
+    if (!cameraConf.OpenVRCustomCalibration)
     {
-        ErrorLog("Failed to get tracked camera pose array, error [%i]\n",error);
-        bGotLeftCamera = false;
-        bGotRightCamera = false;
-    }
+        vr::IVRSystem* vrSystem = m_openVRManager->GetVRSystem();
 
-    if (m_frameLayout == EStereoFrameLayout::StereoHorizontalLayout)
-    {
-        LeftPose = ToXRMatrix4x4(Buffer[0]);
-        RightPose = ToXRMatrix4x4(Buffer[1]);
-    }
-    else if (m_frameLayout == EStereoFrameLayout::StereoVerticalLayout)
-    {
-        // Vertical layouts have the right camera at index 0.
-        LeftPose = ToXRMatrix4x4(Buffer[1]);
-        RightPose = ToXRMatrix4x4(Buffer[0]);
+        vr::HmdMatrix34_t Buffer[2];
+        vr::TrackedPropertyError error;
+        bool bGotLeftCamera = true;
+        bool bGotRightCamera = true;
 
-        // Hack to remove scaling from Vive Pro Eye matrix.
-        LeftPose.m[5] = abs(LeftPose.m[5]);
-        LeftPose.m[10] = abs(LeftPose.m[10]);
+        uint32_t numBytes = vrSystem->GetArrayTrackedDeviceProperty(m_hmdDeviceId, vr::Prop_CameraToHeadTransforms_Matrix34_Array, vr::k_unHmdMatrix34PropertyTag, &Buffer, sizeof(Buffer), &error);
+        if (error != vr::TrackedProp_Success || numBytes == 0)
+        {
+            ErrorLog("Failed to get tracked camera pose array, error [%i]\n", error);
+            bGotLeftCamera = false;
+            bGotRightCamera = false;
+        }
+
+        if (m_frameLayout == EStereoFrameLayout::StereoHorizontalLayout)
+        {
+            LeftPose = ToXRMatrix4x4(Buffer[0]);
+            RightPose = ToXRMatrix4x4(Buffer[1]);
+        }
+        else if (m_frameLayout == EStereoFrameLayout::StereoVerticalLayout)
+        {
+            // Vertical layouts have the right camera at index 0.
+            LeftPose = ToXRMatrix4x4(Buffer[1]);
+            RightPose = ToXRMatrix4x4(Buffer[0]);
+
+            // Hack to remove scaling from Vive Pro Eye matrix.
+            LeftPose.m[5] = abs(LeftPose.m[5]);
+            LeftPose.m[10] = abs(LeftPose.m[10]);
+        }
+        else
+        {
+            LeftPose = ToXRMatrix4x4(Buffer[0]);
+            RightPose = ToXRMatrix4x4(Buffer[0]);
+        }
     }
     else
     {
-        LeftPose = ToXRMatrix4x4(Buffer[0]);
-        RightPose = ToXRMatrix4x4(Buffer[0]);
+        XrMatrix4x4f camera0Pose, camera1Pose, transMatrix, rotMatrix;
+
+        XrMatrix4x4f_CreateTranslation(&transMatrix, cameraConf.OpenVR_Camera0_Translation[0], cameraConf.OpenVR_Camera0_Translation[1], cameraConf.OpenVR_Camera0_Translation[2]);
+        XrMatrix4x4f_CreateRotation(&rotMatrix, cameraConf.OpenVR_Camera0_Rotation[0], cameraConf.OpenVR_Camera0_Rotation[1], cameraConf.OpenVR_Camera0_Rotation[2]);
+
+        XrMatrix4x4f_Multiply(&camera0Pose, &rotMatrix, &transMatrix);
+
+        XrMatrix4x4f_CreateTranslation(&transMatrix, cameraConf.OpenVR_Camera1_Translation[0], cameraConf.OpenVR_Camera1_Translation[1], cameraConf.OpenVR_Camera1_Translation[2]);
+        XrMatrix4x4f_CreateRotation(&rotMatrix, cameraConf.OpenVR_Camera1_Rotation[0], cameraConf.OpenVR_Camera1_Rotation[1], cameraConf.OpenVR_Camera1_Rotation[2]);
+
+        XrMatrix4x4f_Multiply(&camera1Pose, &rotMatrix, &transMatrix); 
+
+        if (m_frameLayout == EStereoFrameLayout::StereoVerticalLayout)
+        {
+            XrMatrix4x4f_Invert(&LeftPose, &camera1Pose);
+            XrMatrix4x4f_Invert(&RightPose, &camera0Pose);
+        }
+        else
+        {
+            XrMatrix4x4f_Invert(&LeftPose, &camera0Pose);
+            XrMatrix4x4f_Invert(&RightPose, &camera1Pose);
+        }
     }
 }
 
