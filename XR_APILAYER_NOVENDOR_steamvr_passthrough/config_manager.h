@@ -166,8 +166,8 @@ struct Config_Camera
 	std::string TrackedDeviceSerialNumber = "";
 
 	bool RequestCustomFrameSize = false;
-	int CustomFrameWidth = 0;
-	int CustomFrameHeight = 0;
+	int CustomFrameDimensions[2] = { 0 };
+
 	int CustomFrameRate = 0;
 	float FrameDelayOffset = 0.08f;
 
@@ -178,41 +178,35 @@ struct Config_Camera
 
 	int Camera0DeviceIndex = 0;
 
-	float Camera0_TranslationX = 0.0f;
-	float Camera0_TranslationY = 0.0f;
-	float Camera0_TranslationZ = 0.0f;
-	float Camera0_RotationX = 0.0f;
-	float Camera0_RotationY = 0.0f;
-	float Camera0_RotationZ = 0.0f;
+	float Camera0_Translation[3] = { 0.0f };
+	float Camera0_Rotation[3] = { 0.0f };
+	float Camera0_IntrinsicsFocal[2] = { 1.0f, 1.0f };
+	float Camera0_IntrinsicsCenter[2] = { 0.5f, 0.5f };
+	float Camera0_IntrinsicsDist[4] = { 0.0f };
+	int Camera0_IntrinsicsSensorPixels[2] = { 1, 1 };
 
-	float Camera0_IntrinsicsFocalX = 1.0f;
-	float Camera0_IntrinsicsFocalY = 1.0f;
-	float Camera0_IntrinsicsCenterX = 0.5f;
-	float Camera0_IntrinsicsCenterY = 0.5f;
-	float Camera0_IntrinsicsDistR1 = 0.0f;
-	float Camera0_IntrinsicsDistR2 = 0.0f;
-	float Camera0_IntrinsicsDistT1 = 0.0f;
-	float Camera0_IntrinsicsDistT2 = 0.0f;
-	int Camera0_IntrinsicsSensorPixelsX = 1;
-	int Camera0_IntrinsicsSensorPixelsY = 1;
+	float Camera1_Translation[3] = { 0.0f };
+	float Camera1_Rotation[3] = { 0.0f };
+	float Camera1_IntrinsicsFocal[2] = { 1.0f, 1.0f };
+	float Camera1_IntrinsicsCenter[2] = { 0.5f, 0.5f };
+	float Camera1_IntrinsicsDist[4] = { 0.0f };
+	int Camera1_IntrinsicsSensorPixels[2] = { 1, 1 };
 
-	float Camera1_TranslationX = 0.0f;
-	float Camera1_TranslationY = 0.0f;
-	float Camera1_TranslationZ = 0.0f;
-	float Camera1_RotationX = 0.0f;
-	float Camera1_RotationY = 0.0f;
-	float Camera1_RotationZ = 0.0f;
+	bool OpenVRCustomCalibration = false;
 
-	float Camera1_IntrinsicsFocalX = 1.0f;
-	float Camera1_IntrinsicsFocalY = 1.0f;
-	float Camera1_IntrinsicsCenterX = 0.5f;
-	float Camera1_IntrinsicsCenterY = 0.5f;
-	float Camera1_IntrinsicsDistR1 = 0.0f;
-	float Camera1_IntrinsicsDistR2 = 0.0f;
-	float Camera1_IntrinsicsDistT1 = 0.0f;
-	float Camera1_IntrinsicsDistT2 = 0.0f;
-	int Camera1_IntrinsicsSensorPixelsX = 1;
-	int Camera1_IntrinsicsSensorPixelsY = 1;
+	float OpenVR_Camera0_Translation[3] = { 0.0f };
+	float OpenVR_Camera0_Rotation[3] = { 0.0f };
+	float OpenVR_Camera0_IntrinsicsFocal[2] = { 1.0f, 1.0f };
+	float OpenVR_Camera0_IntrinsicsCenter[2] = { 0.5f, 0.5f };
+	float OpenVR_Camera0_IntrinsicsDist[4] = { 0.0f };
+	int OpenVR_Camera0_IntrinsicsSensorPixels[2] = { 1, 1 };
+
+	float OpenVR_Camera1_Translation[3] = { 0.0f };
+	float OpenVR_Camera1_Rotation[3] = { 0.0f };
+	float OpenVR_Camera1_IntrinsicsFocal[2] = { 1.0f, 1.0f };
+	float OpenVR_Camera1_IntrinsicsCenter[2] = { 0.5f, 0.5f };
+	float OpenVR_Camera1_IntrinsicsDist[4] = { 0.0f };
+	int OpenVR_Camera1_IntrinsicsSensorPixels[2] = { 1, 1 };
 
 	void ParseConfig(CSimpleIniA& ini, const char* section)
 	{
@@ -222,8 +216,8 @@ struct Config_Camera
 		TrackedDeviceSerialNumber = ini.GetValue(section, "TrackedDeviceSerialNumber", TrackedDeviceSerialNumber.data());
 
 		RequestCustomFrameSize = ini.GetBoolValue(section, "RequestCustomFrameSize", RequestCustomFrameSize);
-		CustomFrameWidth = (int)ini.GetLongValue(section, "CustomFrameWidth", CustomFrameWidth);
-		CustomFrameHeight = (int)ini.GetLongValue(section, "CustomFrameHeight", CustomFrameHeight);
+		CustomFrameDimensions[0] = (int)ini.GetLongValue(section, "CustomFrameWidth", CustomFrameDimensions[0]);
+		CustomFrameDimensions[1] = (int)ini.GetLongValue(section, "CustomFrameHeight", CustomFrameDimensions[1]);
 		CustomFrameRate = (int)ini.GetLongValue(section, "CustomFrameRate", CustomFrameRate);
 		FrameDelayOffset = (float)ini.GetDoubleValue(section, "FrameDelayOffset", FrameDelayOffset);
 
@@ -234,41 +228,79 @@ struct Config_Camera
 
 		Camera0DeviceIndex = (int)ini.GetLongValue(section, "Camera0DeviceIndex", Camera0DeviceIndex);
 
-		Camera0_TranslationX = (float)ini.GetDoubleValue(section, "Camera0_TranslationX", Camera0_TranslationX);
-		Camera0_TranslationY = (float)ini.GetDoubleValue(section, "Camera0_TranslationY", Camera0_TranslationY);
-		Camera0_TranslationZ = (float)ini.GetDoubleValue(section, "Camera0_TranslationZ", Camera0_TranslationZ);
-		Camera0_RotationX = (float)ini.GetDoubleValue(section, "Camera0_RotationX", Camera0_RotationX);
-		Camera0_RotationY = (float)ini.GetDoubleValue(section, "Camera0_RotationY", Camera0_RotationY);
-		Camera0_RotationZ = (float)ini.GetDoubleValue(section, "Camera0_RotationZ", Camera0_RotationZ);
+		Camera0_Translation[0] = (float)ini.GetDoubleValue(section, "Camera0_TranslationX", Camera0_Translation[0]);
+		Camera0_Translation[1] = (float)ini.GetDoubleValue(section, "Camera0_TranslationY", Camera0_Translation[1]);
+		Camera0_Translation[2] = (float)ini.GetDoubleValue(section, "Camera0_TranslationZ", Camera0_Translation[2]);
+		Camera0_Rotation[0] = (float)ini.GetDoubleValue(section, "Camera0_RotationX", Camera0_Rotation[0]);
+		Camera0_Rotation[1] = (float)ini.GetDoubleValue(section, "Camera0_RotationY", Camera0_Rotation[1]);
+		Camera0_Rotation[2] = (float)ini.GetDoubleValue(section, "Camera0_RotationZ", Camera0_Rotation[2]);
 
-		Camera0_IntrinsicsFocalX = (float)ini.GetDoubleValue(section, "Camera0_IntrinsicsFocalX", Camera0_IntrinsicsFocalX);
-		Camera0_IntrinsicsFocalY = (float)ini.GetDoubleValue(section, "Camera0_IntrinsicsFocalY", Camera0_IntrinsicsFocalY);
-		Camera0_IntrinsicsCenterX = (float)ini.GetDoubleValue(section, "Camera0_IntrinsicsCenterX", Camera0_IntrinsicsCenterX);
-		Camera0_IntrinsicsCenterY = (float)ini.GetDoubleValue(section, "Camera0_IntrinsicsCenterY", Camera0_IntrinsicsCenterY);
-		Camera0_IntrinsicsDistR1 = (float)ini.GetDoubleValue(section, "Camera0_IntrinsicsDistR1", Camera0_IntrinsicsDistR1);
-		Camera0_IntrinsicsDistR2 = (float)ini.GetDoubleValue(section, "Camera0_IntrinsicsDistR2", Camera0_IntrinsicsDistR2);
-		Camera0_IntrinsicsDistT1 = (float)ini.GetDoubleValue(section, "Camera0_IntrinsicsDistT1", Camera0_IntrinsicsDistT1);
-		Camera0_IntrinsicsDistT2 = (float)ini.GetDoubleValue(section, "Camera0_IntrinsicsDistT2", Camera0_IntrinsicsDistT2);
-		Camera0_IntrinsicsSensorPixelsX = (int)ini.GetLongValue(section, "Camera0_IntrinsicsSensorPixelsX", Camera0_IntrinsicsSensorPixelsX);
-		Camera0_IntrinsicsSensorPixelsY = (int)ini.GetLongValue(section, "Camera0_IntrinsicsSensorPixelsY", Camera0_IntrinsicsSensorPixelsY);
+		Camera0_IntrinsicsFocal[0] = (float)ini.GetDoubleValue(section, "Camera0_IntrinsicsFocalX", Camera0_IntrinsicsFocal[0]);
+		Camera0_IntrinsicsFocal[1] = (float)ini.GetDoubleValue(section, "Camera0_IntrinsicsFocalY", Camera0_IntrinsicsFocal[1]);
+		Camera0_IntrinsicsCenter[0] = (float)ini.GetDoubleValue(section, "Camera0_IntrinsicsCenterX", Camera0_IntrinsicsCenter[0]);
+		Camera0_IntrinsicsCenter[1] = (float)ini.GetDoubleValue(section, "Camera0_IntrinsicsCenterY", Camera0_IntrinsicsCenter[1]);
+		Camera0_IntrinsicsDist[0] = (float)ini.GetDoubleValue(section, "Camera0_IntrinsicsDistR1", Camera0_IntrinsicsDist[0]);
+		Camera0_IntrinsicsDist[1] = (float)ini.GetDoubleValue(section, "Camera0_IntrinsicsDistR2", Camera0_IntrinsicsDist[1]);
+		Camera0_IntrinsicsDist[2] = (float)ini.GetDoubleValue(section, "Camera0_IntrinsicsDistT1", Camera0_IntrinsicsDist[2]);
+		Camera0_IntrinsicsDist[3] = (float)ini.GetDoubleValue(section, "Camera0_IntrinsicsDistT2", Camera0_IntrinsicsDist[3]);
+		Camera0_IntrinsicsSensorPixels[0] = (int)ini.GetLongValue(section, "Camera0_IntrinsicsSensorPixelsX", Camera0_IntrinsicsSensorPixels[0]);
+		Camera0_IntrinsicsSensorPixels[1] = (int)ini.GetLongValue(section, "Camera0_IntrinsicsSensorPixelsY", Camera0_IntrinsicsSensorPixels[1]);
 
-		Camera1_TranslationX = (float)ini.GetDoubleValue(section, "Camera1_TranslationX", Camera1_TranslationX);
-		Camera1_TranslationY = (float)ini.GetDoubleValue(section, "Camera1_TranslationY", Camera1_TranslationY);
-		Camera1_TranslationZ = (float)ini.GetDoubleValue(section, "Camera1_TranslationZ", Camera1_TranslationZ);
-		Camera1_RotationX = (float)ini.GetDoubleValue(section, "Camera1_RotationX", Camera1_RotationX);
-		Camera1_RotationY = (float)ini.GetDoubleValue(section, "Camera1_RotationY", Camera1_RotationY);
-		Camera1_RotationZ = (float)ini.GetDoubleValue(section, "Camera1_RotationZ", Camera1_RotationZ);
+		Camera1_Translation[0] = (float)ini.GetDoubleValue(section, "Camera1_TranslationX", Camera1_Translation[0]);
+		Camera1_Translation[1] = (float)ini.GetDoubleValue(section, "Camera1_TranslationY", Camera1_Translation[1]);
+		Camera1_Translation[2] = (float)ini.GetDoubleValue(section, "Camera1_TranslationZ", Camera1_Translation[2]);
+		Camera1_Rotation[0] = (float)ini.GetDoubleValue(section, "Camera1_RotationX", Camera1_Rotation[0]);
+		Camera1_Rotation[1] = (float)ini.GetDoubleValue(section, "Camera1_RotationY", Camera1_Rotation[1]);
+		Camera1_Rotation[2] = (float)ini.GetDoubleValue(section, "Camera1_RotationZ", Camera1_Rotation[2]);
 
-		Camera1_IntrinsicsFocalX = (float)ini.GetDoubleValue(section, "Camera1_IntrinsicsFocalX", Camera1_IntrinsicsFocalX);
-		Camera1_IntrinsicsFocalY = (float)ini.GetDoubleValue(section, "Camera1_IntrinsicsFocalY", Camera1_IntrinsicsFocalY);
-		Camera1_IntrinsicsCenterX = (float)ini.GetDoubleValue(section, "Camera1_IntrinsicsCenterX", Camera1_IntrinsicsCenterX);
-		Camera1_IntrinsicsCenterY = (float)ini.GetDoubleValue(section, "Camera1_IntrinsicsCenterY", Camera1_IntrinsicsCenterY);
-		Camera1_IntrinsicsDistR1 = (float)ini.GetDoubleValue(section, "Camera1_IntrinsicsDistR1", Camera1_IntrinsicsDistR1);
-		Camera1_IntrinsicsDistR2 = (float)ini.GetDoubleValue(section, "Camera1_IntrinsicsDistR2", Camera1_IntrinsicsDistR2);
-		Camera1_IntrinsicsDistT1 = (float)ini.GetDoubleValue(section, "Camera1_IntrinsicsDistT1", Camera1_IntrinsicsDistT1);
-		Camera1_IntrinsicsDistT2 = (float)ini.GetDoubleValue(section, "Camera1_IntrinsicsDistT2", Camera1_IntrinsicsDistT2);
-		Camera1_IntrinsicsSensorPixelsX = (int)ini.GetLongValue(section, "Camera1_IntrinsicsSensorPixelsX", Camera1_IntrinsicsSensorPixelsX);
-		Camera1_IntrinsicsSensorPixelsY = (int)ini.GetLongValue(section, "Camera1_IntrinsicsSensorPixelsY", Camera1_IntrinsicsSensorPixelsY);
+		Camera1_IntrinsicsFocal[0] = (float)ini.GetDoubleValue(section, "Camera1_IntrinsicsFocalX", Camera1_IntrinsicsFocal[0]);
+		Camera1_IntrinsicsFocal[1] = (float)ini.GetDoubleValue(section, "Camera1_IntrinsicsFocalY", Camera1_IntrinsicsFocal[1]);
+		Camera1_IntrinsicsCenter[0] = (float)ini.GetDoubleValue(section, "Camera1_IntrinsicsCenterX", Camera1_IntrinsicsCenter[0]);
+		Camera1_IntrinsicsCenter[1] = (float)ini.GetDoubleValue(section, "Camera1_IntrinsicsCenterY", Camera1_IntrinsicsCenter[1]);
+		Camera1_IntrinsicsDist[0] = (float)ini.GetDoubleValue(section, "Camera1_IntrinsicsDistR1", Camera1_IntrinsicsDist[0]);
+		Camera1_IntrinsicsDist[1] = (float)ini.GetDoubleValue(section, "Camera1_IntrinsicsDistR2", Camera1_IntrinsicsDist[1]);
+		Camera1_IntrinsicsDist[2] = (float)ini.GetDoubleValue(section, "Camera1_IntrinsicsDistT1", Camera1_IntrinsicsDist[2]);
+		Camera1_IntrinsicsDist[3] = (float)ini.GetDoubleValue(section, "Camera1_IntrinsicsDistT2", Camera1_IntrinsicsDist[3]);
+		Camera1_IntrinsicsSensorPixels[0] = (int)ini.GetLongValue(section, "Camera1_IntrinsicsSensorPixelsX", Camera1_IntrinsicsSensorPixels[0]);
+		Camera1_IntrinsicsSensorPixels[1] = (int)ini.GetLongValue(section, "Camera1_IntrinsicsSensorPixelsY", Camera1_IntrinsicsSensorPixels[1]);
+
+		OpenVRCustomCalibration = ini.GetBoolValue(section, "OpenVRCustomCalibration", OpenVRCustomCalibration);
+
+		OpenVR_Camera0_Translation[0] = (float)ini.GetDoubleValue(section, "OpenVR_Camera0_TranslationX", OpenVR_Camera0_Translation[0]);
+		OpenVR_Camera0_Translation[1] = (float)ini.GetDoubleValue(section, "OpenVR_Camera0_TranslationY", OpenVR_Camera0_Translation[1]);
+		OpenVR_Camera0_Translation[2] = (float)ini.GetDoubleValue(section, "OpenVR_Camera0_TranslationZ", OpenVR_Camera0_Translation[2]);
+		OpenVR_Camera0_Rotation[0] = (float)ini.GetDoubleValue(section, "OpenVR_Camera0_RotationX", OpenVR_Camera0_Rotation[0]);
+		OpenVR_Camera0_Rotation[1] = (float)ini.GetDoubleValue(section, "OpenVR_Camera0_RotationY", OpenVR_Camera0_Rotation[1]);
+		OpenVR_Camera0_Rotation[2] = (float)ini.GetDoubleValue(section, "OpenVR_Camera0_RotationZ", OpenVR_Camera0_Rotation[2]);
+
+		OpenVR_Camera0_IntrinsicsFocal[0] = (float)ini.GetDoubleValue(section, "OpenVR_Camera0_IntrinsicsFocalX", OpenVR_Camera0_IntrinsicsFocal[0]);
+		OpenVR_Camera0_IntrinsicsFocal[1] = (float)ini.GetDoubleValue(section, "OpenVR_Camera0_IntrinsicsFocalY", OpenVR_Camera0_IntrinsicsFocal[1]);
+		OpenVR_Camera0_IntrinsicsCenter[0] = (float)ini.GetDoubleValue(section, "OpenVR_Camera0_IntrinsicsCenterX", OpenVR_Camera0_IntrinsicsCenter[0]);
+		OpenVR_Camera0_IntrinsicsCenter[1] = (float)ini.GetDoubleValue(section, "OpenVR_Camera0_IntrinsicsCenterY", OpenVR_Camera0_IntrinsicsCenter[1]);
+		OpenVR_Camera0_IntrinsicsDist[0] = (float)ini.GetDoubleValue(section, "OpenVR_Camera0_IntrinsicsDistR1", OpenVR_Camera0_IntrinsicsDist[0]);
+		OpenVR_Camera0_IntrinsicsDist[1] = (float)ini.GetDoubleValue(section, "OpenVR_Camera0_IntrinsicsDistR2", OpenVR_Camera0_IntrinsicsDist[1]);
+		OpenVR_Camera0_IntrinsicsDist[2] = (float)ini.GetDoubleValue(section, "OpenVR_Camera0_IntrinsicsDistT1", OpenVR_Camera0_IntrinsicsDist[2]);
+		OpenVR_Camera0_IntrinsicsDist[3] = (float)ini.GetDoubleValue(section, "OpenVR_Camera0_IntrinsicsDistT2", OpenVR_Camera0_IntrinsicsDist[3]);
+		OpenVR_Camera0_IntrinsicsSensorPixels[0] = (int)ini.GetLongValue(section, "OpenVR_Camera0_IntrinsicsSensorPixelsX", OpenVR_Camera0_IntrinsicsSensorPixels[0]);
+		OpenVR_Camera0_IntrinsicsSensorPixels[1] = (int)ini.GetLongValue(section, "OpenVR_Camera0_IntrinsicsSensorPixelsY", OpenVR_Camera0_IntrinsicsSensorPixels[1]);
+
+		OpenVR_Camera1_Translation[0] = (float)ini.GetDoubleValue(section, "OpenVR_Camera1_TranslationX", OpenVR_Camera1_Translation[0]);
+		OpenVR_Camera1_Translation[1] = (float)ini.GetDoubleValue(section, "OpenVR_Camera1_TranslationY", OpenVR_Camera1_Translation[1]);
+		OpenVR_Camera1_Translation[2] = (float)ini.GetDoubleValue(section, "OpenVR_Camera1_TranslationZ", OpenVR_Camera1_Translation[2]);
+		OpenVR_Camera1_Rotation[0] = (float)ini.GetDoubleValue(section, "OpenVR_Camera1_RotationX", OpenVR_Camera1_Rotation[0]);
+		OpenVR_Camera1_Rotation[1] = (float)ini.GetDoubleValue(section, "OpenVR_Camera1_RotationY", OpenVR_Camera1_Rotation[1]);
+		OpenVR_Camera1_Rotation[2] = (float)ini.GetDoubleValue(section, "OpenVR_Camera1_RotationZ", OpenVR_Camera1_Rotation[2]);
+
+		OpenVR_Camera1_IntrinsicsFocal[0] = (float)ini.GetDoubleValue(section, "OpenVR_Camera1_IntrinsicsFocalX", OpenVR_Camera1_IntrinsicsFocal[0]);
+		OpenVR_Camera1_IntrinsicsFocal[1] = (float)ini.GetDoubleValue(section, "OpenVR_Camera1_IntrinsicsFocalY", OpenVR_Camera1_IntrinsicsFocal[1]);
+		OpenVR_Camera1_IntrinsicsCenter[0] = (float)ini.GetDoubleValue(section, "OpenVR_Camera1_IntrinsicsCenterX", OpenVR_Camera1_IntrinsicsCenter[0]);
+		OpenVR_Camera1_IntrinsicsCenter[1] = (float)ini.GetDoubleValue(section, "OpenVR_Camera1_IntrinsicsCenterY", OpenVR_Camera1_IntrinsicsCenter[1]);
+		OpenVR_Camera1_IntrinsicsDist[0] = (float)ini.GetDoubleValue(section, "OpenVR_Camera1_IntrinsicsDistR1", OpenVR_Camera1_IntrinsicsDist[0]);
+		OpenVR_Camera1_IntrinsicsDist[1] = (float)ini.GetDoubleValue(section, "OpenVR_Camera1_IntrinsicsDistR2", OpenVR_Camera1_IntrinsicsDist[1]);
+		OpenVR_Camera1_IntrinsicsDist[2] = (float)ini.GetDoubleValue(section, "OpenVR_Camera1_IntrinsicsDistT1", OpenVR_Camera1_IntrinsicsDist[2]);
+		OpenVR_Camera1_IntrinsicsDist[3] = (float)ini.GetDoubleValue(section, "OpenVR_Camera1_IntrinsicsDistT2", OpenVR_Camera1_IntrinsicsDist[3]);
+		OpenVR_Camera1_IntrinsicsSensorPixels[0] = (int)ini.GetLongValue(section, "OpenVR_Camera1_IntrinsicsSensorPixelsX", OpenVR_Camera1_IntrinsicsSensorPixels[0]);
+		OpenVR_Camera1_IntrinsicsSensorPixels[1] = (int)ini.GetLongValue(section, "OpenVR_Camera1_IntrinsicsSensorPixelsY", OpenVR_Camera1_IntrinsicsSensorPixels[1]);
 	}
 
 	void UpdateConfig(CSimpleIniA& ini, const char* section)
@@ -279,8 +311,8 @@ struct Config_Camera
 		ini.SetValue(section, "TrackedDeviceSerialNumber", TrackedDeviceSerialNumber.data());
 
 		ini.SetBoolValue(section, "RequestCustomFrameSize", RequestCustomFrameSize);
-		ini.SetLongValue(section, "CustomFrameWidth", (long)CustomFrameWidth);
-		ini.SetLongValue(section, "CustomFrameHeight", (long)CustomFrameHeight);
+		ini.SetLongValue(section, "CustomFrameWidth", (long)CustomFrameDimensions[0]);
+		ini.SetLongValue(section, "CustomFrameHeight", (long)CustomFrameDimensions[1]);
 		ini.SetLongValue(section, "CustomFrameRate", (long)CustomFrameRate);
 		ini.SetDoubleValue(section, "FrameDelayOffset", FrameDelayOffset);
 
@@ -291,41 +323,79 @@ struct Config_Camera
 
 		ini.SetLongValue(section, "Camera0DeviceIndex", (long)Camera0DeviceIndex);
 
-		ini.SetDoubleValue(section, "Camera0_TranslationX", Camera0_TranslationX);
-		ini.SetDoubleValue(section, "Camera0_TranslationY", Camera0_TranslationY);
-		ini.SetDoubleValue(section, "Camera0_TranslationZ", Camera0_TranslationZ);
-		ini.SetDoubleValue(section, "Camera0_RotationX", Camera0_RotationX);
-		ini.SetDoubleValue(section, "Camera0_RotationY", Camera0_RotationY);
-		ini.SetDoubleValue(section, "Camera0_RotationZ", Camera0_RotationZ);
+		ini.SetDoubleValue(section, "Camera0_TranslationX", Camera0_Translation[0]);
+		ini.SetDoubleValue(section, "Camera0_TranslationY", Camera0_Translation[1]);
+		ini.SetDoubleValue(section, "Camera0_TranslationZ", Camera0_Translation[2]);
+		ini.SetDoubleValue(section, "Camera0_RotationX", Camera0_Rotation[0]);
+		ini.SetDoubleValue(section, "Camera0_RotationY", Camera0_Rotation[1]);
+		ini.SetDoubleValue(section, "Camera0_RotationZ", Camera0_Rotation[2]);
 
-		ini.SetDoubleValue(section, "Camera0_IntrinsicsFocalX", Camera0_IntrinsicsFocalX);
-		ini.SetDoubleValue(section, "Camera0_IntrinsicsFocalY", Camera0_IntrinsicsFocalY);
-		ini.SetDoubleValue(section, "Camera0_IntrinsicsCenterX", Camera0_IntrinsicsCenterX);
-		ini.SetDoubleValue(section, "Camera0_IntrinsicsCenterY", Camera0_IntrinsicsCenterY);
-		ini.SetDoubleValue(section, "Camera0_IntrinsicsDistR1", Camera0_IntrinsicsDistR1);
-		ini.SetDoubleValue(section, "Camera0_IntrinsicsDistR2", Camera0_IntrinsicsDistR2);
-		ini.SetDoubleValue(section, "Camera0_IntrinsicsDistT1", Camera0_IntrinsicsDistT1);
-		ini.SetDoubleValue(section, "Camera0_IntrinsicsDistT2", Camera0_IntrinsicsDistT2);
-		ini.SetLongValue(section, "Camera0_IntrinsicsSensorPixelsX", Camera0_IntrinsicsSensorPixelsX);
-		ini.SetLongValue(section, "Camera0_IntrinsicsSensorPixelsY", Camera0_IntrinsicsSensorPixelsY);
+		ini.SetDoubleValue(section, "Camera0_IntrinsicsFocalX", Camera0_IntrinsicsFocal[0]);
+		ini.SetDoubleValue(section, "Camera0_IntrinsicsFocalY", Camera0_IntrinsicsFocal[1]);
+		ini.SetDoubleValue(section, "Camera0_IntrinsicsCenterX", Camera0_IntrinsicsCenter[0]);
+		ini.SetDoubleValue(section, "Camera0_IntrinsicsCenterY", Camera0_IntrinsicsCenter[1]);
+		ini.SetDoubleValue(section, "Camera0_IntrinsicsDistR1", Camera0_IntrinsicsDist[0]);
+		ini.SetDoubleValue(section, "Camera0_IntrinsicsDistR2", Camera0_IntrinsicsDist[1]);
+		ini.SetDoubleValue(section, "Camera0_IntrinsicsDistT1", Camera0_IntrinsicsDist[2]);
+		ini.SetDoubleValue(section, "Camera0_IntrinsicsDistT2", Camera0_IntrinsicsDist[3]);
+		ini.SetLongValue(section, "Camera0_IntrinsicsSensorPixelsX", Camera0_IntrinsicsSensorPixels[0]);
+		ini.SetLongValue(section, "Camera0_IntrinsicsSensorPixelsY", Camera0_IntrinsicsSensorPixels[1]);
 
-		ini.SetDoubleValue(section, "Camera1_TranslationX", Camera1_TranslationX);
-		ini.SetDoubleValue(section, "Camera1_TranslationY", Camera1_TranslationY);
-		ini.SetDoubleValue(section, "Camera1_TranslationZ", Camera1_TranslationZ);
-		ini.SetDoubleValue(section, "Camera1_RotationX", Camera1_RotationX);
-		ini.SetDoubleValue(section, "Camera1_RotationY", Camera1_RotationY);
-		ini.SetDoubleValue(section, "Camera1_RotationZ", Camera1_RotationZ);
+		ini.SetDoubleValue(section, "Camera1_TranslationX", Camera1_Translation[0]);
+		ini.SetDoubleValue(section, "Camera1_TranslationY", Camera1_Translation[1]);
+		ini.SetDoubleValue(section, "Camera1_TranslationZ", Camera1_Translation[2]);
+		ini.SetDoubleValue(section, "Camera1_RotationX", Camera1_Rotation[0]);
+		ini.SetDoubleValue(section, "Camera1_RotationY", Camera1_Rotation[1]);
+		ini.SetDoubleValue(section, "Camera1_RotationZ", Camera1_Rotation[2]);
 
-		ini.SetDoubleValue(section, "Camera1_IntrinsicsFocalX", Camera1_IntrinsicsFocalX);
-		ini.SetDoubleValue(section, "Camera1_IntrinsicsFocalY", Camera1_IntrinsicsFocalY);
-		ini.SetDoubleValue(section, "Camera1_IntrinsicsCenterX", Camera1_IntrinsicsCenterX);
-		ini.SetDoubleValue(section, "Camera1_IntrinsicsCenterY", Camera1_IntrinsicsCenterY);
-		ini.SetDoubleValue(section, "Camera1_IntrinsicsDistR1", Camera1_IntrinsicsDistR1);
-		ini.SetDoubleValue(section, "Camera1_IntrinsicsDistR2", Camera1_IntrinsicsDistR2);
-		ini.SetDoubleValue(section, "Camera1_IntrinsicsDistT1", Camera1_IntrinsicsDistT1);
-		ini.SetDoubleValue(section, "Camera1_IntrinsicsDistT2", Camera1_IntrinsicsDistT2);
-		ini.SetLongValue(section, "Camera1_IntrinsicsSensorPixelsX", Camera1_IntrinsicsSensorPixelsX);
-		ini.SetLongValue(section, "Camera1_IntrinsicsSensorPixelsY", Camera1_IntrinsicsSensorPixelsY);
+		ini.SetDoubleValue(section, "Camera1_IntrinsicsFocalX", Camera1_IntrinsicsFocal[0]);
+		ini.SetDoubleValue(section, "Camera1_IntrinsicsFocalY", Camera1_IntrinsicsFocal[1]);
+		ini.SetDoubleValue(section, "Camera1_IntrinsicsCenterX", Camera1_IntrinsicsCenter[0]);
+		ini.SetDoubleValue(section, "Camera1_IntrinsicsCenterY", Camera1_IntrinsicsCenter[1]);
+		ini.SetDoubleValue(section, "Camera1_IntrinsicsDistR1", Camera1_IntrinsicsDist[0]);
+		ini.SetDoubleValue(section, "Camera1_IntrinsicsDistR2", Camera1_IntrinsicsDist[1]);
+		ini.SetDoubleValue(section, "Camera1_IntrinsicsDistT1", Camera1_IntrinsicsDist[2]);
+		ini.SetDoubleValue(section, "Camera1_IntrinsicsDistT2", Camera1_IntrinsicsDist[3]);
+		ini.SetLongValue(section, "Camera1_IntrinsicsSensorPixelsX", Camera1_IntrinsicsSensorPixels[0]);
+		ini.SetLongValue(section, "Camera1_IntrinsicsSensorPixelsY", Camera1_IntrinsicsSensorPixels[1]);
+
+		ini.SetBoolValue(section, "OpenVRCustomCalibration", OpenVRCustomCalibration);
+
+		ini.SetDoubleValue(section, "OpenVR_Camera0_TranslationX", OpenVR_Camera0_Translation[0]);
+		ini.SetDoubleValue(section, "OpenVR_Camera0_TranslationY", OpenVR_Camera0_Translation[1]);
+		ini.SetDoubleValue(section, "OpenVR_Camera0_TranslationZ", OpenVR_Camera0_Translation[2]);
+		ini.SetDoubleValue(section, "OpenVR_Camera0_RotationX", OpenVR_Camera0_Rotation[0]);
+		ini.SetDoubleValue(section, "OpenVR_Camera0_RotationY", OpenVR_Camera0_Rotation[1]);
+		ini.SetDoubleValue(section, "OpenVR_Camera0_RotationZ", OpenVR_Camera0_Rotation[2]);
+
+		ini.SetDoubleValue(section, "OpenVR_Camera0_IntrinsicsFocalX", OpenVR_Camera0_IntrinsicsFocal[0]);
+		ini.SetDoubleValue(section, "OpenVR_Camera0_IntrinsicsFocalY", OpenVR_Camera0_IntrinsicsFocal[1]);
+		ini.SetDoubleValue(section, "OpenVR_Camera0_IntrinsicsCenterX", OpenVR_Camera0_IntrinsicsCenter[0]);
+		ini.SetDoubleValue(section, "OpenVR_Camera0_IntrinsicsCenterY", OpenVR_Camera0_IntrinsicsCenter[1]);
+		ini.SetDoubleValue(section, "OpenVR_Camera0_IntrinsicsDistR1", OpenVR_Camera0_IntrinsicsDist[0]);
+		ini.SetDoubleValue(section, "OpenVR_Camera0_IntrinsicsDistR2", OpenVR_Camera0_IntrinsicsDist[1]);
+		ini.SetDoubleValue(section, "OpenVR_Camera0_IntrinsicsDistT1", OpenVR_Camera0_IntrinsicsDist[2]);
+		ini.SetDoubleValue(section, "OpenVR_Camera0_IntrinsicsDistT2", OpenVR_Camera0_IntrinsicsDist[3]);
+		ini.SetLongValue(section, "OpenVR_Camera0_IntrinsicsSensorPixelsX", OpenVR_Camera0_IntrinsicsSensorPixels[0]);
+		ini.SetLongValue(section, "OpenVR_Camera0_IntrinsicsSensorPixelsY", OpenVR_Camera0_IntrinsicsSensorPixels[1]);
+
+		ini.SetDoubleValue(section, "OpenVR_Camera1_TranslationX", OpenVR_Camera1_Translation[0]);
+		ini.SetDoubleValue(section, "OpenVR_Camera1_TranslationY", OpenVR_Camera1_Translation[1]);
+		ini.SetDoubleValue(section, "OpenVR_Camera1_TranslationZ", OpenVR_Camera1_Translation[2]);
+		ini.SetDoubleValue(section, "OpenVR_Camera1_RotationX", OpenVR_Camera1_Rotation[0]);
+		ini.SetDoubleValue(section, "OpenVR_Camera1_RotationY", OpenVR_Camera1_Rotation[1]);
+		ini.SetDoubleValue(section, "OpenVR_Camera1_RotationZ", OpenVR_Camera1_Rotation[2]);
+
+		ini.SetDoubleValue(section, "OpenVR_Camera1_IntrinsicsFocalX", OpenVR_Camera1_IntrinsicsFocal[0]);
+		ini.SetDoubleValue(section, "OpenVR_Camera1_IntrinsicsFocalY", OpenVR_Camera1_IntrinsicsFocal[1]);
+		ini.SetDoubleValue(section, "OpenVR_Camera1_IntrinsicsCenterX", OpenVR_Camera1_IntrinsicsCenter[0]);
+		ini.SetDoubleValue(section, "OpenVR_Camera1_IntrinsicsCenterY", OpenVR_Camera1_IntrinsicsCenter[1]);
+		ini.SetDoubleValue(section, "OpenVR_Camera1_IntrinsicsDistR1", OpenVR_Camera1_IntrinsicsDist[0]);
+		ini.SetDoubleValue(section, "OpenVR_Camera1_IntrinsicsDistR2", OpenVR_Camera1_IntrinsicsDist[1]);
+		ini.SetDoubleValue(section, "OpenVR_Camera1_IntrinsicsDistT1", OpenVR_Camera1_IntrinsicsDist[2]);
+		ini.SetDoubleValue(section, "OpenVR_Camera1_IntrinsicsDistT2", OpenVR_Camera1_IntrinsicsDist[3]);
+		ini.SetLongValue(section, "OpenVR_Camera1_IntrinsicsSensorPixelsX", OpenVR_Camera1_IntrinsicsSensorPixels[0]);
+		ini.SetLongValue(section, "OpenVR_Camera1_IntrinsicsSensorPixelsY", OpenVR_Camera1_IntrinsicsSensorPixels[1]);
 	}
 };
 

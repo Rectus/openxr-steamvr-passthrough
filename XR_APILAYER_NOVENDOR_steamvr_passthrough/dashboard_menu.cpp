@@ -1164,8 +1164,7 @@ if (bIsActiveTab) { ImGui::PopStyleColor(1); bIsActiveTab = false; }
 			TextDescription("Set a resolution to use. The system may select the closest matching available one. If turned off, the system will attempt to select the best available resolution.");
 
 			BeginSoftDisabled(!cameraConfig.RequestCustomFrameSize);
-			ImGui::DragInt("Width###FrameWidth", &cameraConfig.CustomFrameWidth, 1.0f, 1, 8192);
-			ImGui::DragInt("Height###FrameHeight", &cameraConfig.CustomFrameHeight, 1.0f, 1, 8192);
+			ImGui::DragInt2("Width x Height###FrameWH", cameraConfig.CustomFrameDimensions, 1.0f, 1, 8192);
 			ImGui::DragInt("FPS###FrameFPS", &cameraConfig.CustomFrameRate, 1.0f, 1, 120);
 
 			EndSoftDisabled(!cameraConfig.RequestCustomFrameSize);
@@ -1189,64 +1188,90 @@ if (bIsActiveTab) { ImGui::PopStyleColor(1); bIsActiveTab = false; }
 			IMGUI_BIG_SPACING;
 
 			ImGui::SetNextItemOpen(true, ImGuiCond_Once);
-			if (ImGui::CollapsingHeader("Camera 0"))
+			if (ImGui::CollapsingHeader("Left Camera"))
 			{
 
-				ImGui::Text("Camera Offset (m)");
-				ImGui::DragFloat("X", &cameraConfig.Camera0_TranslationX, 0.001f, 0.0f, 0.0f, "%.3f");
-				ImGui::DragFloat("Y", &cameraConfig.Camera0_TranslationY, 0.001f, 0.0f, 0.0f, "%.3f");
-				ImGui::DragFloat("Z", &cameraConfig.Camera0_TranslationZ, 0.001f, 0.0f, 0.0f, "%.3f");
+				//ImGui::Text("Camera Offset (m)");
+				ImGui::DragFloat3("Camera Offset (m)", cameraConfig.Camera0_Translation, 0.001f, 0.0f, 0.0f, "%.3f");
 
-				ImGui::Text("Camera Rotation (degrees)");
-				ImGui::DragFloat("RX", &cameraConfig.Camera0_RotationX, 1.0f, -180.0f, 180.0f, "%.0f");
-				ImGui::DragFloat("RY", &cameraConfig.Camera0_RotationY, 1.0f, -180.0f, 180.0f, "%.0f");
-				ImGui::DragFloat("RZ", &cameraConfig.Camera0_RotationZ, 1.0f, -180.0f, 180.0f, "%.0f");
-
+				//ImGui::Text("Camera Rotation (degrees)");
+				ImGui::DragFloat3("Camera Rotation (degrees)", cameraConfig.Camera0_Rotation, 1.0f, -180.0f, 180.0f, "%.0f");
 				ImGui::Text("Camera Intrinsics");
-				ImGui::DragFloat("Fx", &cameraConfig.Camera0_IntrinsicsFocalX, 0.001f, 0.0f, 0.0f, "%.5f");
-				ImGui::DragFloat("Fy", &cameraConfig.Camera0_IntrinsicsFocalY, 0.001f, 0.0f, 0.0f, "%.5f");
-				ImGui::DragFloat("Cx", &cameraConfig.Camera0_IntrinsicsCenterX, 0.001f, 0.0f, 0.0f, "%.5f");
-				ImGui::DragFloat("Cy", &cameraConfig.Camera0_IntrinsicsCenterY, 0.001f, 0.0f, 0.0f, "%.5f");
+				ImGui::DragFloat2("Focal Length", cameraConfig.Camera0_IntrinsicsFocal, 0.001f, 0.0f, 0.0f, "%.5f");
+				ImGui::DragFloat2("Center", cameraConfig.Camera0_IntrinsicsCenter, 0.001f, 0.0f, 0.0f, "%.5f");
+				ImGui::DragInt2("Sensor Pixels", cameraConfig.Camera0_IntrinsicsSensorPixels, 1.0f, 1, 8192);
 
-				ImGui::DragInt("Sensor Pixels X", &cameraConfig.Camera0_IntrinsicsSensorPixelsX, 1.0f, 1, 8192);
-				ImGui::DragInt("Sensor Pixels Y", &cameraConfig.Camera0_IntrinsicsSensorPixelsY, 1.0f, 1, 8192);
+				//ImGui::Text("Camera Distortion");
+				ImGui::DragFloat4("Distortion", cameraConfig.Camera0_IntrinsicsDist, 0.001f, 0.0f, 0.0f, "%.5f");
 
-				ImGui::Text("Camera Distortion");
-				ImGui::DragFloat("R1", &cameraConfig.Camera0_IntrinsicsDistR1, 0.001f, 0.0f, 0.0f, "%.5f");
-				ImGui::DragFloat("R2", &cameraConfig.Camera0_IntrinsicsDistR2, 0.001f, 0.0f, 0.0f, "%.5f");
-				ImGui::DragFloat("T1", &cameraConfig.Camera0_IntrinsicsDistT1, 0.001f, 0.0f, 0.0f, "%.5f");
-				ImGui::DragFloat("T2", &cameraConfig.Camera0_IntrinsicsDistT2, 0.001f, 0.0f, 0.0f, "%.5f");
 			}
 
 			ImGui::SetNextItemOpen(true, ImGuiCond_Once);
-			if (ImGui::CollapsingHeader("Camera 1"))
+			if (ImGui::CollapsingHeader("Right Camera"))
 			{
 
-				ImGui::Text("Camera Offset (m)");
-				ImGui::DragFloat("X###Cam1X", &cameraConfig.Camera1_TranslationX, 0.001f, 0.0f, 0.0f, "%.3f");
-				ImGui::DragFloat("Y###Cam1Y", &cameraConfig.Camera1_TranslationY, 0.001f, 0.0f, 0.0f, "%.3f");
-				ImGui::DragFloat("Z###Cam1Z", &cameraConfig.Camera1_TranslationZ, 0.001f, 0.0f, 0.0f, "%.3f");
+				//ImGui::Text("Camera Offset (m)");
+				ImGui::DragFloat3("Camera Offset (m)###RightOffset", cameraConfig.Camera1_Translation, 0.001f, 0.0f, 0.0f, "%.3f");
 
-				ImGui::Text("Camera Rotation (degrees)");
-				ImGui::DragFloat("RX###Cam1RX", &cameraConfig.Camera1_RotationX, 1.0f, -180.0f, 180.0f, "%.0f");
-				ImGui::DragFloat("RY###Cam1RY", &cameraConfig.Camera1_RotationY, 1.0f, -180.0f, 180.0f, "%.0f");
-				ImGui::DragFloat("RZ###Cam1RZ", &cameraConfig.Camera1_RotationZ, 1.0f, -180.0f, 180.0f, "%.0f");
+				//ImGui::Text("Camera Rotation (degrees)");
+				ImGui::DragFloat3("Camera Rotation (degrees)###RightRotation", cameraConfig.Camera1_Rotation, 1.0f, -180.0f, 180.0f, "%.0f");
 
 				ImGui::Text("Camera Intrinsics");
-				ImGui::DragFloat("Fx###Cam1Fx", &cameraConfig.Camera1_IntrinsicsFocalX, 0.001f, 0.0f, 0.0f, "%.5f");
-				ImGui::DragFloat("Fy###Cam1Fy", &cameraConfig.Camera1_IntrinsicsFocalY, 0.001f, 0.0f, 0.0f, "%.5f");
-				ImGui::DragFloat("Cx###Cam1Cx", &cameraConfig.Camera1_IntrinsicsCenterX, 0.001f, 0.0f, 0.0f, "%.5f");
-				ImGui::DragFloat("Cy###Cam1Cy", &cameraConfig.Camera1_IntrinsicsCenterY, 0.001f, 0.0f, 0.0f, "%.5f");
+				ImGui::DragFloat2("Focal Length###RightF", cameraConfig.Camera1_IntrinsicsFocal, 0.001f, 0.0f, 0.0f, "%.5f");
+				ImGui::DragFloat2("Center###RightC", cameraConfig.Camera1_IntrinsicsCenter, 0.001f, 0.0f, 0.0f, "%.5f");
+				ImGui::DragInt2("Sensor Pixels###RightPx", cameraConfig.Camera1_IntrinsicsSensorPixels, 1.0f, 1, 8192);
 
-				ImGui::DragInt("Sensor Pixels X###Cam1SPx", &cameraConfig.Camera1_IntrinsicsSensorPixelsX, 1.0f, 1, 8192);
-				ImGui::DragInt("Sensor Pixels Y###Cam1SPy", &cameraConfig.Camera1_IntrinsicsSensorPixelsY, 1.0f, 1, 8192);
-
-				ImGui::Text("Camera Distortion");
-				ImGui::DragFloat("R1###Cam1R1", &cameraConfig.Camera1_IntrinsicsDistR1, 0.001f, 0.0f, 0.0f, "%.5f");
-				ImGui::DragFloat("R2###Cam1R2", &cameraConfig.Camera1_IntrinsicsDistR2, 0.001f, 0.0f, 0.0f, "%.5f");
-				ImGui::DragFloat("T1###Cam1T1", &cameraConfig.Camera1_IntrinsicsDistT1, 0.001f, 0.0f, 0.0f, "%.5f");
-				ImGui::DragFloat("T2###Cam1T2", &cameraConfig.Camera1_IntrinsicsDistT2, 0.001f, 0.0f, 0.0f, "%.5f");
+				//ImGui::Text("Camera Distortion");
+				ImGui::DragFloat4("Distortion##RightDist", cameraConfig.Camera1_IntrinsicsDist, 0.001f, 0.0f, 0.0f, "%.5f");
 			}
+
+			IMGUI_BIG_SPACING;
+
+			ImGui::Checkbox("Enable Custom Calibration for SteamVR Camera", &cameraConfig.OpenVRCustomCalibration);
+
+			IMGUI_BIG_SPACING;
+
+			BeginSoftDisabled(!cameraConfig.OpenVRCustomCalibration);
+
+			ImGui::SetNextItemOpen(true, ImGuiCond_Once);
+			if (ImGui::CollapsingHeader("SteamVR Camera 0"))
+			{
+
+				//ImGui::Text("Camera Offset (m)");
+				ImGui::DragFloat3("Camera Offset (m)###OpenVROffset", cameraConfig.OpenVR_Camera0_Translation, 0.001f, 0.0f, 0.0f, "%.3f");
+
+				//ImGui::Text("Camera Rotation (degrees)");
+				ImGui::DragFloat3("Camera Rotation (degrees)###OpenVRRot", cameraConfig.OpenVR_Camera0_Rotation, 1.0f, -180.0f, 180.0f, "%.0f");
+				ImGui::Text("Camera Intrinsics");
+				ImGui::DragFloat2("Focal Length###OpenVRF", cameraConfig.OpenVR_Camera0_IntrinsicsFocal, 0.001f, 0.0f, 0.0f, "%.5f");
+				ImGui::DragFloat2("Center###OpenVRC", cameraConfig.OpenVR_Camera0_IntrinsicsCenter, 0.001f, 0.0f, 0.0f, "%.5f");
+				ImGui::DragInt2("Sensor Pixels###OpenVRPx", cameraConfig.OpenVR_Camera0_IntrinsicsSensorPixels, 1.0f, 1, 8192);
+
+				//ImGui::Text("Camera Distortion");
+				ImGui::DragFloat4("Distortion###OpenVRDist", cameraConfig.OpenVR_Camera0_IntrinsicsDist, 0.001f, 0.0f, 0.0f, "%.5f");
+
+			}
+
+			ImGui::SetNextItemOpen(true, ImGuiCond_Once);
+			if (ImGui::CollapsingHeader("SteamVR Camera 1"))
+			{
+
+				//ImGui::Text("Camera Offset (m)");
+				ImGui::DragFloat3("Camera Offset (m)###OpenVRRightOffset", cameraConfig.OpenVR_Camera1_Translation, 0.001f, 0.0f, 0.0f, "%.3f");
+
+				//ImGui::Text("Camera Rotation (degrees)");
+				ImGui::DragFloat3("Camera Rotation (degrees)###OpenVRRightRotation", cameraConfig.OpenVR_Camera1_Rotation, 1.0f, -180.0f, 180.0f, "%.0f");
+
+				ImGui::Text("Camera Intrinsics");
+				ImGui::DragFloat2("Focal Length###OpenVRRightF", cameraConfig.OpenVR_Camera1_IntrinsicsFocal, 0.001f, 0.0f, 0.0f, "%.5f");
+				ImGui::DragFloat2("Center###OpenVRRightC", cameraConfig.OpenVR_Camera1_IntrinsicsCenter, 0.001f, 0.0f, 0.0f, "%.5f");
+				ImGui::DragInt2("Sensor Pixels###OpenVRRightPx", cameraConfig.OpenVR_Camera1_IntrinsicsSensorPixels, 1.0f, 1, 8192);
+
+				//ImGui::Text("Camera Distortion");
+				ImGui::DragFloat4("Distortion##OpenVRRightDist", cameraConfig.OpenVR_Camera1_IntrinsicsDist, 0.001f, 0.0f, 0.0f, "%.5f");
+			}
+
+			EndSoftDisabled(!cameraConfig.OpenVRCustomCalibration);
 		}
 
 		ImGui::EndChild();
