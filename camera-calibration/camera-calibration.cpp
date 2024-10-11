@@ -20,6 +20,9 @@
 #include <mfreadwrite.h>
 #include <strsafe.h>
 #include <opencv2/videoio.hpp>
+#include <opencv2/imgproc/types_c.h>
+#include <opencv2/calib3d.hpp>
+#include <opencv2/imgproc.hpp>
 
 #include "camera-calibration.h"
 #include "resource.h"
@@ -50,11 +53,19 @@ static uint32_t g_frameWidth = 0;
 static uint32_t g_frameHeight = 0;
 static uint32_t g_frameRate = 0;
 static EStereoFrameLayout g_frameLayout = Mono;
+static bool g_bFisheyeLens = false;
 static UINT g_resizeWidth = 0;
 static UINT g_resizeHeight = 0;
 static bool g_bSwapChainOccluded = false;
 static cv::VideoCapture g_videoCapture = cv::VideoCapture();
 static cv::Mat g_cameraFrameBuffer;
+static double g_lastCalibrationRMSError;
+static int g_lastCalibrationValidFrames;
+static int g_lastCalibrationTotalFrames;
+
+static cv::Mat g_leftCameraIntrinsics;
+static std::vector<double> g_leftCameraDistortion;
+
 
 static bool g_bRequestCustomFrameFormat = false;
 static int g_requestedFrameSize[2] = { 0 };
@@ -67,9 +78,11 @@ static bool g_bAutomaticCapture = true;
 static float g_automaticCaptureInterval = 5.0;
 
 
+bool CalibrateSingleCamera(std::vector<cv::Mat>& frames);
 void EnumerateCameras(std::vector<std::string>& deviceList);
 bool InitCamera(int deviceIndex);
 void CaptureFrame();
+void UploadFrame(cv::Mat& frameBuffer);
 bool CreateDeviceD3D(HWND hWnd);
 void CleanupDeviceD3D();
 void CreateRenderTarget();
@@ -87,7 +100,7 @@ int APIENTRY wWinMain(_In_ HINSTANCE hInstance, _In_opt_ HINSTANCE hPrevInstance
     wc.hIcon = LoadIcon(hInstance, MAKEINTRESOURCE(IDI_PASSTHROUGH_ICON));
 
     ::RegisterClassExW(&wc);
-    HWND hwnd = ::CreateWindowW(wc.lpszClassName, L"Webcam Test", WS_OVERLAPPEDWINDOW, CW_USEDEFAULT, CW_USEDEFAULT, WINDOW_WIDTH, WINDOW_HEIGHT, NULL, NULL, wc.hInstance, NULL);
+    HWND hwnd = ::CreateWindowW(wc.lpszClassName, L"Passthrough Camera Calibration", WS_OVERLAPPEDWINDOW, CW_USEDEFAULT, CW_USEDEFAULT, WINDOW_WIDTH, WINDOW_HEIGHT, NULL, NULL, wc.hInstance, NULL);
 
     if (!CreateDeviceD3D(hwnd))
     {
@@ -114,10 +127,14 @@ int APIENTRY wWinMain(_In_ HINSTANCE hInstance, _In_opt_ HINSTANCE hPrevInstance
     int32_t selectedDevice = -1;
     bool bIsCameraActive = false;
     bool bIsCapturing = false;
+    bool bCapturingComplete = false;
+    bool bCalibrationComplete = false;
     int framesRemaining = 0;
     float timeRemaining = 0.0f;
     LARGE_INTEGER lastTickTime;
     LARGE_INTEGER prefFreq;
+
+    std::vector<cv::Mat> calibrationFrames;
 
     QueryPerformanceFrequency(&prefFreq);
 
@@ -177,6 +194,9 @@ int APIENTRY wWinMain(_In_ HINSTANCE hInstance, _In_opt_ HINSTANCE hPrevInstance
         ImGui::BeginChild("Menu", ImVec2(std::min(ImGui::GetContentRegionAvail().x * 0.4f, 450.0f), 0));
 
         
+        ImGui::Separator();
+        ImGui::Text("Capture Setup");
+        ImGui::Spacing();
 
         std::string comboPreview = "No device";
         int32_t prevSelected = selectedDevice;
@@ -213,17 +233,28 @@ int APIENTRY wWinMain(_In_ HINSTANCE hInstance, _In_opt_ HINSTANCE hPrevInstance
 
         ImGui::Text("%u x %u @ %uHz", g_frameWidth, g_frameHeight, g_frameRate);
 
+        bool bPrevUseCustomFormat = g_bRequestCustomFrameFormat;
         ImGui::Checkbox("Use custom frame format", &g_bRequestCustomFrameFormat);
-
+        ImGui::BeginDisabled(!g_bRequestCustomFrameFormat);
         ImGui::InputInt2("Width x Height", g_requestedFrameSize);
         ImGui::InputInt("Frame Rate", &g_requestedFrameRate);
-        ImGui::BeginDisabled(!bIsCameraActive);
-        if (ImGui::Button("Apply"))
+        ImGui::EndDisabled();
+        ImGui::BeginDisabled(!bIsCameraActive || !g_bRequestCustomFrameFormat);
+        if (ImGui::Button("Apply") || (bIsCameraActive && g_bRequestCustomFrameFormat == false && bPrevUseCustomFormat == true))
         {
             bIsCameraActive = InitCamera(selectedDevice);
         }
         ImGui::EndDisabled();
 
+
+        if (bIsCameraActive)
+        {
+            CaptureFrame();
+        }
+
+
+        ImGui::Separator();
+        ImGui::Text("Camera Parameters");
         ImGui::Spacing();
 
         ImGui::Text("Camera frame layout");
@@ -231,17 +262,22 @@ int APIENTRY wWinMain(_In_ HINSTANCE hInstance, _In_opt_ HINSTANCE hPrevInstance
         {
             g_frameLayout = Mono;
         }
+        ImGui::SameLine();
 
         if (ImGui::RadioButton("Stereo Vertical", g_frameLayout == StereoVerticalLayout))
         {
             g_frameLayout = StereoVerticalLayout;
         }
+        ImGui::SameLine();
 
         if (ImGui::RadioButton("Stereo Horizontal", g_frameLayout == StereoHorizontalLayout))
         {
             g_frameLayout = StereoHorizontalLayout;
         }
+        ImGui::Checkbox("Camera has fisheye lens", &g_bFisheyeLens);
 
+        ImGui::Separator();
+        ImGui::Text("Calibration");
         ImGui::Spacing();
 
         ImGui::Text("Checkerboard calibration target");
@@ -253,7 +289,9 @@ int APIENTRY wWinMain(_In_ HINSTANCE hInstance, _In_opt_ HINSTANCE hPrevInstance
         ImGui::Text("Calibration");
         ImGui::InputInt("Frame count", &g_numCalibrationFrames);
         ImGui::Checkbox("Enable automatic capture", &g_bAutomaticCapture);
+        ImGui::BeginDisabled(!g_bAutomaticCapture);
         ImGui::InputFloat("Capture interval", &g_automaticCaptureInterval);
+        ImGui::EndDisabled();
 
         ImGui::Spacing();
 
@@ -261,8 +299,11 @@ int APIENTRY wWinMain(_In_ HINSTANCE hInstance, _In_opt_ HINSTANCE hPrevInstance
         if (ImGui::Button("Start capture"))
         {
             bIsCapturing = true;
+            bCapturingComplete = false;
+            bCalibrationComplete = false;
             framesRemaining = g_numCalibrationFrames;
             timeRemaining = g_automaticCaptureInterval;
+            calibrationFrames.clear();
             QueryPerformanceCounter(&lastTickTime);
         }
         ImGui::EndDisabled();
@@ -284,7 +325,6 @@ int APIENTRY wWinMain(_In_ HINSTANCE hInstance, _In_opt_ HINSTANCE hPrevInstance
                 QueryPerformanceCounter(&tickTime);
 
                 float deltaTime = (float)(tickTime.QuadPart - lastTickTime.QuadPart);
-                //deltaTime *= 1000.0f;
                 deltaTime /= prefFreq.QuadPart;
 
                 lastTickTime = tickTime;
@@ -293,10 +333,12 @@ int APIENTRY wWinMain(_In_ HINSTANCE hInstance, _In_opt_ HINSTANCE hPrevInstance
 
                 if (timeRemaining <= 0.0f)
                 {
+                    calibrationFrames.push_back(g_cameraFrameBuffer);
 
                     if (--framesRemaining <= 0)
                     {
                         bIsCapturing = false;
+                        bCapturingComplete = true;
                     }
 
                     timeRemaining = g_automaticCaptureInterval;
@@ -304,9 +346,50 @@ int APIENTRY wWinMain(_In_ HINSTANCE hInstance, _In_opt_ HINSTANCE hPrevInstance
 
                 ImGui::Text("%.1f", timeRemaining);
             }
+            else
+            {
+                if (ImGui::Button("Capture frame"))
+                {
+                    calibrationFrames.push_back(g_cameraFrameBuffer.clone());
+
+                    if (--framesRemaining <= 0)
+                    {
+                        bIsCapturing = false;
+                        bCapturingComplete = true;
+                    }
+                }
+            }
 
             ImGui::Text("Remaining: %d", framesRemaining);
         }
+
+        ImGui::BeginDisabled(!bCapturingComplete || bCalibrationComplete);
+        if (ImGui::Button("Calibrate"))
+        {
+            bCapturingComplete = false;
+
+            if (CalibrateSingleCamera(calibrationFrames))
+            {
+                bCalibrationComplete = true;
+            }
+        }
+        ImGui::EndDisabled();
+
+        ImGui::Separator();
+        ImGui::Text("Result");
+        ImGui::Spacing();
+
+        if (bCalibrationComplete)
+        {
+            ImGui::Text("Calibration complete. %d/%d frames used, RMS error: %f", g_lastCalibrationValidFrames, g_lastCalibrationTotalFrames, g_lastCalibrationRMSError);
+
+            ImGui::Spacing();
+
+            ImGui::Text("Focal length: %f %f", g_leftCameraIntrinsics.at<double>(0, 0), g_leftCameraIntrinsics.at<double>(1, 1));
+            ImGui::Text("Center: %f %f", g_leftCameraIntrinsics.at<double>(0, 2), g_leftCameraIntrinsics.at<double>(1, 2));
+            ImGui::Text("Distortion: %f %f %f %f", g_leftCameraDistortion[0], g_leftCameraDistortion[1], g_leftCameraDistortion[2], g_leftCameraDistortion[3]);
+        }
+
 
 
         ImGui::EndChild();
@@ -318,13 +401,33 @@ int APIENTRY wWinMain(_In_ HINSTANCE hInstance, _In_opt_ HINSTANCE hPrevInstance
 
         if (bIsCameraActive)
         {
-            CaptureFrame();
-
             float aspect = (float)g_frameHeight / (float)g_frameWidth;
             float width = std::min(ImGui::GetContentRegionAvail().x, (float)g_frameWidth);
             ImVec2 imageSize = ImVec2(width, width * aspect);
 
-            ImGui::Image((void*)g_cameraFrameSRV.Get(), imageSize);
+            if (bCalibrationComplete)
+            {
+                cv::Mat undistorted;
+                if (g_bFisheyeLens)
+                {
+                    //cv::fisheye::undistortImage(g_cameraFrameBuffer, undistorted, g_leftCameraIntrinsics, g_leftCameraDistortion);
+                    cv::Mat P, map1, map2;
+                    cv::fisheye::estimateNewCameraMatrixForUndistortRectify(g_leftCameraIntrinsics, g_leftCameraDistortion, g_cameraFrameBuffer.size(), cv::Matx33d::eye(), P, 1);
+                    cv::fisheye::initUndistortRectifyMap(g_leftCameraIntrinsics, g_leftCameraDistortion, cv::Matx33d::eye(), P, g_cameraFrameBuffer.size(), CV_16SC2, map1, map2);
+                    cv::remap(g_cameraFrameBuffer, undistorted, map1, map2, cv::INTER_LINEAR);
+                }
+                else
+                {         
+                    cv::undistort(g_cameraFrameBuffer, undistorted, g_leftCameraIntrinsics, g_leftCameraDistortion);
+                }
+                UploadFrame(undistorted);
+                ImGui::Image((void*)g_cameraFrameSRV.Get(), imageSize);
+            }
+            else
+            {
+                UploadFrame(g_cameraFrameBuffer);
+                ImGui::Image((void*)g_cameraFrameSRV.Get(), imageSize);
+            }
         }
 
 
@@ -357,6 +460,90 @@ int APIENTRY wWinMain(_In_ HINSTANCE hInstance, _In_opt_ HINSTANCE hPrevInstance
 
     return 0;
 }
+
+
+bool CalibrateSingleCamera(std::vector<cv::Mat>& frames)
+{
+    cv::Size checkerDims = cv::Size(g_checkerboardSquares[0], g_checkerboardSquares[1]);
+
+    cv::Size winSize = cv::Size(11, 11);
+    cv::Size zeroZone = cv::Size(-1, -1);
+    cv::TermCriteria cbTermCriteria = cv::TermCriteria(CV_TERMCRIT_EPS + CV_TERMCRIT_ITER, 30, 0.1);
+    cv::TermCriteria calibTermCriteria = cv::TermCriteria(cv::TermCriteria::COUNT + cv::TermCriteria::EPS, 100, DBL_EPSILON);
+
+    std::vector< std::vector<cv::Point3f>> refPoints;
+    std::vector< std::vector<cv::Point2f>> cbPoints;
+
+    std::vector<cv::Point3f> cbRef;
+    for (int i = 0; i < g_checkerboardSquares[1]; i++)
+    {
+        for (int j = 0; j < g_checkerboardSquares[0]; j++)
+        {
+            cbRef.push_back(cv::Point3f((float)j * g_checkerboardSquareSize, (float)i * g_checkerboardSquareSize, 0));
+        }
+    }
+
+    for (cv::Mat& image : frames)
+    {
+        cv::Mat grayScale;
+        cv::cvtColor(image, grayScale, cv::COLOR_BGR2GRAY);
+
+        std::vector<cv::Point2f> corners;
+        if (cv::findChessboardCorners(grayScale, checkerDims, corners, cv::CALIB_CB_ADAPTIVE_THRESH | cv::CALIB_CB_NORMALIZE_IMAGE || cv::CALIB_CB_FAST_CHECK))
+        {
+            cv::cornerSubPix(grayScale, corners, winSize, zeroZone, cbTermCriteria);
+
+            refPoints.push_back(cbRef);
+            cbPoints.push_back(corners);
+        }
+    }
+
+    if (cbPoints.empty())
+    {
+        return false;
+    }
+
+    cv::Mat K;
+    std::vector<double> D;
+    std::vector<cv::Mat> rvecs, tvecs;
+
+    if (g_bFisheyeLens)
+    {
+        //K = cv::Mat(3, 3, CV_64F);
+        //D = cv::Mat(1, 4, CV_64F);
+
+        try
+        {
+            g_lastCalibrationRMSError = cv::fisheye::calibrate(refPoints, cbPoints, cv::Size(g_frameWidth, g_frameHeight), K, D, rvecs, tvecs, cv::fisheye::CALIB_FIX_SKEW | cv::fisheye::CALIB_CHECK_COND, calibTermCriteria);
+        }
+        catch (const cv::Exception& e)
+        {
+            const char* err_msg = e.what();
+            std::cerr << "exception caught: " << err_msg << std::endl;
+            return false;
+        }
+
+        
+    }
+    else
+    {
+        g_lastCalibrationRMSError = cv::calibrateCamera(refPoints, cbPoints, cv::Size(g_frameWidth, g_frameHeight), K, D, rvecs, tvecs, cv::CALIB_FIX_K3, calibTermCriteria);
+
+    }
+
+    g_leftCameraIntrinsics = K.clone();
+    g_leftCameraDistortion.resize(4);
+    std::copy(D.begin(), D.end(), g_leftCameraDistortion.begin());
+
+    g_lastCalibrationTotalFrames = frames.size();
+    g_lastCalibrationValidFrames = cbPoints.size();
+
+    return true;
+}
+
+
+
+
 
 void EnumerateCameras(std::vector<std::string>& deviceList)
 {
@@ -467,15 +654,20 @@ void CaptureFrame()
         return;
     }
 
-    if (g_videoCapture.read(g_cameraFrameBuffer))
+    g_videoCapture.read(g_cameraFrameBuffer);
+}
+
+void UploadFrame(cv::Mat& frameBuffer)
+{
+    if (!frameBuffer.empty())
     {
         D3D11_MAPPED_SUBRESOURCE res = {};
         g_pd3dDeviceContext->Map(g_cameraFrameUploadTexture.Get(), 0, D3D11_MAP_WRITE, 0, &res);
 
-        cv::Mat uploadBuffer = cv::Mat(g_cameraFrameBuffer.rows, g_cameraFrameBuffer.cols, CV_8UC4, res.pData);
+        cv::Mat uploadBuffer = cv::Mat(frameBuffer.rows, frameBuffer.cols, CV_8UC4, res.pData);
 
         int from_to[] = { 0,0, 1,1, 2,2, -1,3 };
-        cv::mixChannels(&g_cameraFrameBuffer, 1, &uploadBuffer, 1, from_to, uploadBuffer.channels());
+        cv::mixChannels(&frameBuffer, 1, &uploadBuffer, 1, from_to, uploadBuffer.channels());
 
         g_pd3dDeviceContext->Unmap(g_cameraFrameUploadTexture.Get(), 0);
 
@@ -534,7 +726,7 @@ bool SetupCameraFrameResource(uint32_t width, uint32_t height)
 {
     D3D11_TEXTURE2D_DESC textureDesc = {};
     textureDesc.MipLevels = 1;
-    textureDesc.Format = DXGI_FORMAT_B8G8R8X8_UNORM_SRGB;
+    textureDesc.Format = DXGI_FORMAT_B8G8R8X8_UNORM;
     textureDesc.Width = width;
     textureDesc.Height = height;
     textureDesc.ArraySize = 1;
