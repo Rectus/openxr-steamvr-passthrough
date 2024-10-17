@@ -46,11 +46,18 @@ struct CalibrationData
     std::vector< std::vector<cv::Point3f>> RefPoints;
     std::vector< std::vector<cv::Point2f>> CBPoints;
     std::vector<bool> ValidFrames;
+    int SensorWidth = 0;
+    int SensorHeight = 0;
+    cv::Rect FrameROI;
     int NumValidFrames = 0;
     int NumTakenFrames = 0;
     double CalibrationRMSError = 0.0;
+    bool bFisheyeLens = false;
+    cv::Mat CameraIntrinsics = cv::Mat(3, 3, CV_64F);
+    std::vector<double> CameraDistortion = cv::Mat(1, 4, CV_64F);
+    bool bHasIntrinsics = false;
 
-    void clear()
+    void ClearFrames()
     {
         Frames.clear();
         RefPoints.clear();
@@ -85,12 +92,6 @@ static cv::Mat g_cameraFrameBuffer;
 static uint32_t g_frameWidthGPU = 0;
 static uint32_t g_frameHeightGPU = 0;
 
-static cv::Mat g_leftCameraIntrinsics = cv::Mat(3, 3, CV_64F);
-static std::vector<double> g_leftCameraDistortion = cv::Mat(1, 4, CV_64F);
-
-static cv::Mat g_rightCameraIntrinsics = cv::Mat(3, 3, CV_64F);
-static std::vector<double> g_rightCameraDistortion = cv::Mat(1, 4, CV_64F);
-
 
 static bool g_bRequestCustomFrameFormat = false;
 static int g_requestedFrameSize[2] = { 0 };
@@ -103,8 +104,10 @@ static bool g_bAutomaticCapture = false;
 static float g_automaticCaptureInterval = 5.0;
 
 
+void SetFrameGeometry(CalibrationData& calibData, bool bIsRightCamera);
+void DrawCameraFrame(CalibrationData& calibData, bool bDrawDistorted, bool bDrawChessboardCorners, int imageIndex);
 bool FindFrameCalibrationPatterns(CalibrationData& calibData, bool bRightCamera);
-bool CalibrateSingleCamera(CalibrationData& calibData, bool bRightCamera, int width, int height);
+bool CalibrateSingleCamera(CalibrationData& calibData, bool bRightCamera);
 void EnumerateCameras(std::vector<std::string>& deviceList);
 bool InitCamera(int deviceIndex);
 void CaptureFrame();
@@ -166,9 +169,9 @@ int APIENTRY wWinMain(_In_ HINSTANCE hInstance, _In_opt_ HINSTANCE hPrevInstance
     LARGE_INTEGER prefFreq;
     CalibrationData calibDataLeft;
     CalibrationData calibDataRight;
-    cv::Rect frameROI;
-    
-    cv::Mat overlaidImage;
+
+    bool bViewSingleframe = false;
+    bool bViewUndistorted = false;
 
     QueryPerformanceFrequency(&prefFreq);
 
@@ -263,7 +266,11 @@ int APIENTRY wWinMain(_In_ HINSTANCE hInstance, _In_opt_ HINSTANCE hPrevInstance
         if (deviceList.size() > 0 && (prevSelected != selectedDevice || !bIsCameraActive))
         {
             bIsCameraActive = InitCamera(selectedDevice);
-            frameROI = cv::Rect(0, 0, g_frameWidth, g_frameHeight);
+            calibDataLeft = CalibrationData();
+            calibDataRight = CalibrationData();
+            g_frameLayout = Mono;
+            bCalibrationCompleteLeft = false;
+            bCalibrationCompleteRight = false;
         }
 
         ImGui::Text("%u x %u @ %uHz", g_frameWidth, g_frameHeight, g_frameRate);
@@ -278,7 +285,11 @@ int APIENTRY wWinMain(_In_ HINSTANCE hInstance, _In_opt_ HINSTANCE hPrevInstance
         if (ImGui::Button("Apply") || (bIsCameraActive && g_bRequestCustomFrameFormat == false && bPrevUseCustomFormat == true))
         {
             bIsCameraActive = InitCamera(selectedDevice);
-            frameROI = cv::Rect(0, 0, g_frameWidth, g_frameHeight);
+            calibDataLeft = CalibrationData();
+            calibDataRight = CalibrationData();
+            g_frameLayout = Mono;
+            bCalibrationCompleteLeft = false;
+            bCalibrationCompleteRight = false;
         }
         ImGui::EndDisabled();
 
@@ -297,18 +308,23 @@ int APIENTRY wWinMain(_In_ HINSTANCE hInstance, _In_opt_ HINSTANCE hPrevInstance
         if (ImGui::RadioButton("Monocular", g_frameLayout == Mono))
         {
             g_frameLayout = Mono;
+            SetFrameGeometry(calibDataLeft, false);
         }
         ImGui::SameLine();
 
         if (ImGui::RadioButton("Stereo Vertical", g_frameLayout == StereoVerticalLayout))
         {
             g_frameLayout = StereoVerticalLayout;
+            SetFrameGeometry(calibDataLeft, false);
+            SetFrameGeometry(calibDataRight, true);
         }
         ImGui::SameLine();
 
         if (ImGui::RadioButton("Stereo Horizontal", g_frameLayout == StereoHorizontalLayout))
         {
             g_frameLayout = StereoHorizontalLayout;
+            SetFrameGeometry(calibDataLeft, false);
+            SetFrameGeometry(calibDataRight, true);
         }
         ImGui::Checkbox("Camera has fisheye lens", &g_bFisheyeLens);
 
@@ -345,33 +361,7 @@ int APIENTRY wWinMain(_In_ HINSTANCE hInstance, _In_opt_ HINSTANCE hPrevInstance
             bool& bCapturingComplete = bRightCamera ? bCapturingCompleteRight : bCapturingCompleteLeft;
             bool& bCalibrationComplete = bRightCamera ? bCalibrationCompleteRight : bCalibrationCompleteLeft;
 
-            if (g_frameLayout == Mono)
-            {
-                frameROI = cv::Rect(0, 0, g_frameWidth, g_frameHeight);
-            }
-            else if (g_frameLayout == StereoHorizontalLayout)
-            {
-                if (bRightCamera)
-                {
-                    frameROI = cv::Rect(g_frameWidth / 2, 0, g_frameWidth / 2, g_frameHeight);
-                }
-                else
-                {
-                    frameROI = cv::Rect(0, 0, g_frameWidth / 2, g_frameHeight);
-                }
-            }
-            else if (g_frameLayout == StereoVerticalLayout)
-            {
-                if (bRightCamera)
-                {
-                    frameROI = cv::Rect(0, 0, g_frameWidth, g_frameHeight / 2);
-                }
-                else
-                {
-                    frameROI = cv::Rect(0, g_frameHeight / 2, g_frameWidth, g_frameHeight / 2);
-                }
-            }
-            
+              
             ImGui::InputInt("Frame count", &g_numCalibrationFrames);
             ImGui::Checkbox("Automatic capture", &g_bAutomaticCapture);
             ImGui::SameLine();
@@ -390,10 +380,12 @@ int APIENTRY wWinMain(_In_ HINSTANCE hInstance, _In_opt_ HINSTANCE hPrevInstance
                 bCalibrationComplete = false;
                 framesRemaining = g_numCalibrationFrames;
                 timeRemaining = g_automaticCaptureInterval;
-                calibData.clear();
+                calibData.ClearFrames();
                 calibData.ChessboardCornersX = g_chessboardCorners[0];
                 calibData.ChessboardCornersY = g_chessboardCorners[1];
                 calibData.ChessboardSquareSize = g_chessboardSquareSize;
+                calibData.bFisheyeLens = g_bFisheyeLens;
+                SetFrameGeometry(calibData, bRightCamera);
 
                 QueryPerformanceCounter(&lastTickTime);
             }
@@ -424,7 +416,7 @@ int APIENTRY wWinMain(_In_ HINSTANCE hInstance, _In_opt_ HINSTANCE hPrevInstance
 
                     if (timeRemaining <= 0.0f)
                     {
-                        calibData.Frames.push_back(g_cameraFrameBuffer(frameROI).clone());
+                        calibData.Frames.push_back(g_cameraFrameBuffer(calibData.FrameROI).clone());
 
                         if (--framesRemaining <= 0)
                         {
@@ -444,7 +436,7 @@ int APIENTRY wWinMain(_In_ HINSTANCE hInstance, _In_opt_ HINSTANCE hPrevInstance
                 {
                     if (ImGui::Button("Capture frame"))
                     {
-                        calibData.Frames.push_back(g_cameraFrameBuffer(frameROI).clone());
+                        calibData.Frames.push_back(g_cameraFrameBuffer(calibData.FrameROI).clone());
 
                         if (--framesRemaining <= 0)
                         {
@@ -513,9 +505,10 @@ int APIENTRY wWinMain(_In_ HINSTANCE hInstance, _In_opt_ HINSTANCE hPrevInstance
             {
                 bCapturingComplete = false;
 
-                if (CalibrateSingleCamera(calibData, bRightCamera, frameROI.width, frameROI.height))
+                if (CalibrateSingleCamera(calibData, bRightCamera))
                 {
                     bCalibrationComplete = true;
+                    bViewUndistorted = true;
                 }
             }
             ImGui::EndDisabled();
@@ -537,29 +530,35 @@ int APIENTRY wWinMain(_In_ HINSTANCE hInstance, _In_opt_ HINSTANCE hPrevInstance
 
             if (bRightCamera)
             {
-                ImGui::InputDouble("Focal length X", &g_rightCameraIntrinsics.at<double>(0, 0));
-                ImGui::InputDouble("Focal length Y", &g_rightCameraIntrinsics.at<double>(1, 1));
+                ImGui::InputDouble("Focal length X", &calibDataRight.CameraIntrinsics.at<double>(0, 0));
+                ImGui::InputDouble("Focal length Y", &calibDataRight.CameraIntrinsics.at<double>(1, 1));
 
-                ImGui::InputDouble("Center X", &g_rightCameraIntrinsics.at<double>(0, 2));
-                ImGui::InputDouble("Center Y", &g_rightCameraIntrinsics.at<double>(1, 2));
+                ImGui::InputDouble("Center X", &calibDataRight.CameraIntrinsics.at<double>(0, 2));
+                ImGui::InputDouble("Center Y", &calibDataRight.CameraIntrinsics.at<double>(1, 2));
 
-                ImGui::InputDouble("Distortion 1", &g_rightCameraDistortion[0]);
-                ImGui::InputDouble("Distortion 2", &g_rightCameraDistortion[1]);
-                ImGui::InputDouble("Distortion 3", &g_rightCameraDistortion[2]);
-                ImGui::InputDouble("Distortion 4", &g_rightCameraDistortion[3]);
+                ImGui::InputDouble("Distortion 1", &calibDataRight.CameraDistortion[0]);
+                ImGui::InputDouble("Distortion 2", &calibDataRight.CameraDistortion[1]);
+                ImGui::InputDouble("Distortion 3", &calibDataRight.CameraDistortion[2]);
+                ImGui::InputDouble("Distortion 4", &calibDataRight.CameraDistortion[3]);
+
+                ImGui::InputInt("Sensor Width", &calibDataRight.SensorWidth);
+                ImGui::InputInt("Sensor Height", &calibDataRight.SensorHeight);
             }
             else
             {
-                ImGui::InputDouble("Focal length X", &g_leftCameraIntrinsics.at<double>(0, 0));
-                ImGui::InputDouble("Focal length Y", &g_leftCameraIntrinsics.at<double>(1, 1));
+                ImGui::InputDouble("Focal length X", &calibDataLeft.CameraIntrinsics.at<double>(0, 0));
+                ImGui::InputDouble("Focal length Y", &calibDataLeft.CameraIntrinsics.at<double>(1, 1));
 
-                ImGui::InputDouble("Center X", &g_leftCameraIntrinsics.at<double>(0, 2));
-                ImGui::InputDouble("Center Y", &g_leftCameraIntrinsics.at<double>(1, 2));
+                ImGui::InputDouble("Center X", &calibDataLeft.CameraIntrinsics.at<double>(0, 2));
+                ImGui::InputDouble("Center Y", &calibDataLeft.CameraIntrinsics.at<double>(1, 2));
 
-                ImGui::InputDouble("Distortion 1", &g_leftCameraDistortion[0]);
-                ImGui::InputDouble("Distortion 2", &g_leftCameraDistortion[1]);
-                ImGui::InputDouble("Distortion 3", &g_leftCameraDistortion[2]);
-                ImGui::InputDouble("Distortion 4", &g_leftCameraDistortion[3]);
+                ImGui::InputDouble("Distortion 1", &calibDataLeft.CameraDistortion[0]);
+                ImGui::InputDouble("Distortion 2", &calibDataLeft.CameraDistortion[1]);
+                ImGui::InputDouble("Distortion 3", &calibDataLeft.CameraDistortion[2]);
+                ImGui::InputDouble("Distortion 4", &calibDataLeft.CameraDistortion[3]);
+
+                ImGui::InputInt("Sensor Width", &calibDataLeft.SensorWidth);
+                ImGui::InputInt("Sensor Height", &calibDataLeft.SensorHeight);
             }
             
             ImGui::EndTabBar();
@@ -574,115 +573,89 @@ int APIENTRY wWinMain(_In_ HINSTANCE hInstance, _In_opt_ HINSTANCE hPrevInstance
 
         ImGui::BeginChild("CameraView");
 
+
+        ImGui::Text("Camera View");
+        if (ImGui::RadioButton("Distorted", !bViewUndistorted && !bViewSingleframe))
+        {
+            bViewUndistorted = false;
+            bViewSingleframe = false;
+        }
+        ImGui::SameLine();
+
+        ImGui::BeginDisabled(g_frameLayout == Mono);
+        if (ImGui::RadioButton("Distorted Single Frame", !bViewUndistorted && bViewSingleframe))
+        {
+            bViewUndistorted = false;
+            bViewSingleframe = true;
+        }
+        ImGui::EndDisabled();
+        ImGui::SameLine();
+
+        ImGui::BeginDisabled((!bCalibrationCompleteLeft && !bRightCamera) || (!bCalibrationCompleteRight && bRightCamera));
+        if (ImGui::RadioButton("Undistorted", bViewUndistorted))
+        {
+            bViewUndistorted = true;
+        }
+        ImGui::EndDisabled();
+
         if (bIsCameraActive)
         {
-            float aspect = (float)frameROI.height / (float)frameROI.width;
-            float width = std::min(ImGui::GetContentRegionAvail().x, (float)frameROI.width);
-            ImVec2 imageSize = ImVec2(width, width * aspect);
-
-            ImVec2 UV0 = ImVec2((float)frameROI.x / (float)g_frameWidth, (float)frameROI.y / (float)g_frameHeight);
-            ImVec2 UV1 = ImVec2((float)(frameROI.x + frameROI.width) / (float)g_frameWidth, (float)(frameROI.y + frameROI.height) / (float)g_frameHeight);
-
-            if (bCalibrationCompleteLeft && !bRightCamera)
+            if (bViewUndistorted && bCalibrationCompleteLeft && !bRightCamera)
             {
-                cv::Mat undistorted;
-                if (g_bFisheyeLens)
-                {
-                    cv::Mat P, map1, map2;
-                    cv::fisheye::estimateNewCameraMatrixForUndistortRectify(g_leftCameraIntrinsics, g_leftCameraDistortion, g_cameraFrameBuffer(frameROI).size(), cv::Matx33d::eye(), P, 1);
-                    cv::fisheye::initUndistortRectifyMap(g_leftCameraIntrinsics, g_leftCameraDistortion, cv::Matx33d::eye(), P, g_cameraFrameBuffer(frameROI).size(), CV_16SC2, map1, map2);
-                    cv::remap(g_cameraFrameBuffer(frameROI), undistorted, map1, map2, cv::INTER_LINEAR);
-                }
-                else
-                {         
-                    cv::undistort(g_cameraFrameBuffer(frameROI), undistorted, g_leftCameraIntrinsics, g_leftCameraDistortion);
-                }
-
-                if (g_frameWidthGPU != frameROI.width || g_frameHeightGPU != frameROI.height)
-                {
-                    SetupCameraFrameResource(frameROI.width, frameROI.height);
-                }
-
-                UploadFrame(undistorted);
-
-                ImGui::Image((void*)g_cameraFrameSRV.Get(), imageSize);
+                DrawCameraFrame(calibDataLeft, false, false, 0);
             }
-            else if (bCalibrationCompleteRight && bRightCamera)
+            else if (bViewUndistorted && bCalibrationCompleteRight && bRightCamera)
             {
-                cv::Mat undistorted;
-                if (g_bFisheyeLens)
-                {
-                    cv::Mat P, map1, map2;
-                    cv::fisheye::estimateNewCameraMatrixForUndistortRectify(g_rightCameraIntrinsics, g_rightCameraDistortion, g_cameraFrameBuffer(frameROI).size(), cv::Matx33d::eye(), P, 1);
-                    cv::fisheye::initUndistortRectifyMap(g_rightCameraIntrinsics, g_rightCameraDistortion, cv::Matx33d::eye(), P, g_cameraFrameBuffer(frameROI).size(), CV_16SC2, map1, map2);
-                    cv::remap(g_cameraFrameBuffer(frameROI), undistorted, map1, map2, cv::INTER_LINEAR);
-                }
-                else
-                {
-                    cv::undistort(g_cameraFrameBuffer(frameROI), undistorted, g_rightCameraIntrinsics, g_rightCameraDistortion);
-                }
-
-                if (g_frameWidthGPU != frameROI.width || g_frameHeightGPU != frameROI.height)
-                {
-                    SetupCameraFrameResource(frameROI.width, frameROI.height);
-                }
-
-                UploadFrame(undistorted);
-
-                ImGui::Image((void*)g_cameraFrameSRV.Get(), imageSize);
+                DrawCameraFrame(calibDataRight, false, false, 0);
             }
             else if (!bRightCamera && bCapturingCompleteLeft && !bCalibrationCompleteLeft && calibDataLeft.Frames.size() > 0)
             {
                 if (selectedImageChanged)
                 {
-                    overlaidImage = calibDataLeft.Frames[displayedImage].clone();
-                    cv::drawChessboardCorners(overlaidImage, cv::Size(calibDataLeft.ChessboardCornersX, calibDataLeft.ChessboardCornersY), calibDataLeft.CBPoints[displayedImage], calibDataLeft.ValidFrames[displayedImage]);
-
+                    DrawCameraFrame(calibDataLeft, true, true, displayedImage);
                     selectedImageChanged = false;
                 }
-
-                if (g_frameWidthGPU != frameROI.width || g_frameHeightGPU != frameROI.height)
+                else
                 {
-                    SetupCameraFrameResource(frameROI.width, frameROI.height);
-                }
+                    float aspect = (float)calibDataLeft.SensorHeight / (float)calibDataLeft.SensorWidth;
+                    float width = std::min(ImGui::GetContentRegionAvail().x, (float)calibDataLeft.SensorWidth);
+                    ImVec2 imageSize = ImVec2(width, width * aspect);
 
-                UploadFrame(overlaidImage);
-                ImGui::Image((void*)g_cameraFrameSRV.Get(), imageSize);
+                    ImGui::Image((void*)g_cameraFrameSRV.Get(), imageSize);
+                }              
             }
             else if (bRightCamera && bCapturingCompleteRight && !bCalibrationCompleteRight && calibDataRight.Frames.size() > 0)
             {
                 if (selectedImageChanged)
                 {
-                    overlaidImage = calibDataRight.Frames[displayedImage].clone();
-                    cv::drawChessboardCorners(overlaidImage, cv::Size(calibDataRight.ChessboardCornersX, calibDataRight.ChessboardCornersY), calibDataRight.CBPoints[displayedImage], calibDataRight.ValidFrames[displayedImage]);
-
+                    DrawCameraFrame(calibDataRight, true, true, displayedImage);
                     selectedImageChanged = false;
                 }
-
-                if (g_frameWidthGPU != frameROI.width || g_frameHeightGPU != frameROI.height)
+                else
                 {
-                    SetupCameraFrameResource(frameROI.width, frameROI.height);
-                }
+                    float aspect = (float)calibDataRight.SensorHeight / (float)calibDataRight.SensorWidth;
+                    float width = std::min(ImGui::GetContentRegionAvail().x, (float)calibDataRight.SensorWidth);
+                    ImVec2 imageSize = ImVec2(width, width * aspect);
 
-                UploadFrame(overlaidImage);
-                ImGui::Image((void*)g_cameraFrameSRV.Get(), imageSize);
+                    ImGui::Image((void*)g_cameraFrameSRV.Get(), imageSize);
+                }
             }
-            else if(bIsCapturing)
+            else if(bIsCapturing || bViewSingleframe)
             {
-                if (g_frameWidthGPU != frameROI.width || g_frameHeightGPU != frameROI.height)
+                if (bRightCamera)
                 {
-                    SetupCameraFrameResource(frameROI.width, frameROI.height);
+                    DrawCameraFrame(calibDataRight, true, false, 0);
                 }
-
-                cv::Mat frame = g_cameraFrameBuffer(frameROI);
-                UploadFrame(frame);
-                ImGui::Image((void*)g_cameraFrameSRV.Get(), imageSize);
+                else
+                {
+                    DrawCameraFrame(calibDataLeft, true, false, 0);
+                }
             }
             else
             {
-                float aspect2 = (float)g_frameHeight / (float)g_frameWidth;
-                float width2 = std::min(ImGui::GetContentRegionAvail().x, (float)g_frameWidth);
-                ImVec2 imageSize2 = ImVec2(width2, width2 * aspect2);
+                float aspect = (float)g_frameHeight / (float)g_frameWidth;
+                float width = std::min(ImGui::GetContentRegionAvail().x, (float)g_frameWidth);
+                ImVec2 imageSize = ImVec2(width, width * aspect);
 
                 if (g_frameWidthGPU != g_frameWidth || g_frameHeightGPU != g_frameHeight)
                 {
@@ -690,7 +663,7 @@ int APIENTRY wWinMain(_In_ HINSTANCE hInstance, _In_opt_ HINSTANCE hPrevInstance
                 }
 
                 UploadFrame(g_cameraFrameBuffer);
-                ImGui::Image((void*)g_cameraFrameSRV.Get(), imageSize2);
+                ImGui::Image((void*)g_cameraFrameSRV.Get(), imageSize);
             }
         }
 
@@ -724,6 +697,95 @@ int APIENTRY wWinMain(_In_ HINSTANCE hInstance, _In_opt_ HINSTANCE hPrevInstance
 
     return 0;
 }
+
+
+void SetFrameGeometry(CalibrationData& calibData, bool bIsRightCamera)
+{
+    if (g_frameLayout == Mono)
+    {
+        calibData.SensorHeight = g_frameHeight;
+        calibData.SensorWidth = g_frameWidth;
+        calibData.FrameROI = cv::Rect(0, 0, g_frameWidth, g_frameHeight);
+    }
+    else if (g_frameLayout == StereoHorizontalLayout)
+    {
+        if (bIsRightCamera)
+        {
+            calibData.FrameROI = cv::Rect(g_frameWidth / 2, 0, g_frameWidth / 2, g_frameHeight);
+        }
+        else
+        {
+            calibData.FrameROI = cv::Rect(0, 0, g_frameWidth / 2, g_frameHeight);
+        }
+
+        calibData.SensorHeight = g_frameHeight;
+        calibData.SensorWidth = g_frameWidth / 2;
+    }
+    else if (g_frameLayout == StereoVerticalLayout)
+    {
+        if (bIsRightCamera)
+        {
+            calibData.FrameROI = cv::Rect(0, 0, g_frameWidth, g_frameHeight / 2);
+        }
+        else
+        {
+            calibData.FrameROI = cv::Rect(0, g_frameHeight / 2, g_frameWidth, g_frameHeight / 2);
+        }
+
+        calibData.SensorHeight = g_frameHeight / 2;
+        calibData.SensorWidth = g_frameWidth;
+    }
+}
+
+
+
+void DrawCameraFrame(CalibrationData& calibData, bool bDrawDistorted, bool bDrawChessboardCorners, int imageIndex)
+{
+    float aspect = (float)calibData.SensorHeight / (float)calibData.SensorWidth;
+    float width = std::min(ImGui::GetContentRegionAvail().x, (float)calibData.SensorWidth);
+    ImVec2 imageSize = ImVec2(width, width * aspect);
+
+    if (g_frameWidthGPU != calibData.SensorWidth || g_frameHeightGPU != calibData.SensorHeight)
+    {
+        SetupCameraFrameResource(calibData.SensorWidth, calibData.SensorHeight);
+    }
+
+    if (!bDrawDistorted)
+    {
+        cv::Mat undistorted;
+        if (calibData.bFisheyeLens)
+        {
+            cv::Mat P, map1, map2;
+            cv::fisheye::estimateNewCameraMatrixForUndistortRectify(calibData.CameraIntrinsics, calibData.CameraDistortion, g_cameraFrameBuffer(calibData.FrameROI).size(), cv::Matx33d::eye(), P, 1);
+            cv::fisheye::initUndistortRectifyMap(calibData.CameraIntrinsics, calibData.CameraDistortion, cv::Matx33d::eye(), P, g_cameraFrameBuffer(calibData.FrameROI).size(), CV_16SC2, map1, map2);
+            cv::remap(g_cameraFrameBuffer(calibData.FrameROI), undistorted, map1, map2, cv::INTER_LINEAR);
+        }
+        else
+        {
+            cv::undistort(g_cameraFrameBuffer(calibData.FrameROI), undistorted, calibData.CameraIntrinsics, calibData.CameraDistortion);
+        }
+
+        UploadFrame(undistorted);
+
+        ImGui::Image((void*)g_cameraFrameSRV.Get(), imageSize);
+    }  
+    else if (bDrawChessboardCorners)
+    {
+        cv::Mat overlaidImage = calibData.Frames[imageIndex].clone();
+        cv::drawChessboardCorners(overlaidImage, cv::Size(calibData.ChessboardCornersX, calibData.ChessboardCornersY), calibData.CBPoints[imageIndex], calibData.ValidFrames[imageIndex]);
+
+
+        UploadFrame(overlaidImage);
+        ImGui::Image((void*)g_cameraFrameSRV.Get(), imageSize);
+    }   
+    else
+    {
+        cv::Mat frame = g_cameraFrameBuffer(calibData.FrameROI);
+        UploadFrame(frame);
+        ImGui::Image((void*)g_cameraFrameSRV.Get(), imageSize);
+    }
+}
+
 
 bool FindFrameCalibrationPatterns(CalibrationData& calibData, bool bRightCamera)
 {
@@ -791,7 +853,7 @@ bool FindFrameCalibrationPatterns(CalibrationData& calibData, bool bRightCamera)
 }
 
 
-bool CalibrateSingleCamera(CalibrationData& calibData, bool bRightCamera, int width, int height)
+bool CalibrateSingleCamera(CalibrationData& calibData, bool bRightCamera)
 { 
     cv::Mat K;
     std::vector<double> D;
@@ -802,39 +864,52 @@ bool CalibrateSingleCamera(CalibrationData& calibData, bool bRightCamera, int wi
         return false;
     }
 
-    if (g_bFisheyeLens)
+    if (calibData.bFisheyeLens)
     {
+        cv::TermCriteria calibTermCriteria = cv::TermCriteria(cv::TermCriteria::COUNT + cv::TermCriteria::EPS, 100, DBL_EPSILON);
+        int flags = cv::fisheye::CALIB_FIX_SKEW | cv::fisheye::CALIB_CHECK_COND;
+
+        // CALIB_USE_INTRINSIC_GUESS always fails on the fisheye model for some reason.
+        /*if (calibData.bHasIntrinsics)
+        {
+            K = calibData.CameraIntrinsics.clone();
+            flags |= cv::fisheye::CALIB_USE_INTRINSIC_GUESS;
+        }*/
+   
         try
         {
-            cv::TermCriteria calibTermCriteria = cv::TermCriteria(cv::TermCriteria::COUNT + cv::TermCriteria::EPS, 100, DBL_EPSILON);
-            calibData.CalibrationRMSError = cv::fisheye::calibrate(calibData.RefPoints, calibData.CBPoints, cv::Size(width, height), K, D, rvecs, tvecs, cv::fisheye::CALIB_FIX_SKEW | cv::fisheye::CALIB_CHECK_COND, calibTermCriteria);
+            calibData.CalibrationRMSError = cv::fisheye::calibrate(calibData.RefPoints, calibData.CBPoints, cv::Size(calibData.SensorWidth, calibData.SensorHeight), K, D, rvecs, tvecs, flags, calibTermCriteria);
         }
         catch (const cv::Exception& e)
         {
-            const char* err_msg = e.what();
-            std::cerr << "exception caught: " << err_msg << std::endl;
             return false;
         }
     }
     else
     {
         cv::TermCriteria calibTermCriteria = cv::TermCriteria(cv::TermCriteria::COUNT + cv::TermCriteria::EPS, 30, DBL_EPSILON);
-        calibData.CalibrationRMSError = cv::calibrateCamera(calibData.RefPoints, calibData.CBPoints, cv::Size(width, height), K, D, rvecs, tvecs, cv::CALIB_FIX_K3, calibTermCriteria);
+        int flags = cv::CALIB_FIX_K3;
 
+        if (calibData.bHasIntrinsics)
+        {
+            K = calibData.CameraIntrinsics.clone();
+            flags |= cv::CALIB_USE_INTRINSIC_GUESS;
+        }
+ 
+        try
+        {
+            calibData.CalibrationRMSError = cv::calibrateCamera(calibData.RefPoints, calibData.CBPoints, cv::Size(calibData.SensorWidth, calibData.SensorHeight), K, D, rvecs, tvecs, flags, calibTermCriteria);
+        }
+        catch (const cv::Exception& e)
+        {
+            return false;
+        }
     }
 
-    if (bRightCamera)
-    {
-        g_rightCameraIntrinsics = K.clone();
-        g_rightCameraDistortion.resize(4);
-        std::copy(D.begin(), D.end(), g_rightCameraDistortion.begin());
-    }
-    else
-    {
-        g_leftCameraIntrinsics = K.clone();
-        g_leftCameraDistortion.resize(4);
-        std::copy(D.begin(), D.end(), g_leftCameraDistortion.begin());
-    }   
+    calibData.CameraIntrinsics = K.clone();
+    calibData.CameraDistortion.resize(4);
+    std::copy(D.begin(), D.end(), calibData.CameraDistortion.begin());
+    calibData.bHasIntrinsics = true;
 
     return true;
 }
@@ -918,9 +993,6 @@ bool InitCamera(int deviceIndex)
         return false;
     }
 
-
-    //Log("OpenCV Video capture opened using API: %s\n", m_videoCapture.getBackendName());
-
     /*if (cameraConf.AutoExposureEnable)
     {
         g_videoCapture.set(cv::CAP_PROP_AUTO_EXPOSURE, 1);
@@ -957,7 +1029,7 @@ void CaptureFrame()
 
 void UploadFrame(cv::Mat& frameBuffer)
 {
-    if (!frameBuffer.empty())
+    if (!frameBuffer.empty() && g_cameraFrameUploadTexture != nullptr && g_cameraFrameTexture != nullptr)
     {
         D3D11_MAPPED_SUBRESOURCE res = {};
         g_pd3dDeviceContext->Map(g_cameraFrameUploadTexture.Get(), 0, D3D11_MAP_WRITE, 0, &res);
