@@ -274,10 +274,10 @@ PassthroughRendererVulkan::PassthroughRendererVulkan(const XrGraphicsBindingVulk
 	, m_pipelinePrepassIgnoreAppAlpha(nullptr)
 	, m_pipelineMaskedPrepass(nullptr)
 	, m_pipelineMaskedAlphaCopy(nullptr)
-	, m_testPattern(nullptr)
-	, m_testPatternMem(nullptr)
-	, m_testPatternBuffer(nullptr)
-	, m_testPatternBufferMem(nullptr)
+	, m_debugTexture(nullptr)
+	, m_debugTextureMem(nullptr)
+	, m_debugTextureBuffer(nullptr)
+	, m_debugTextureBufferMem(nullptr)
 	, m_uvDistortionMap(nullptr)
 	, m_uvDistortionMapView(nullptr)
 	, m_uvDistortionMapMem(nullptr)
@@ -579,10 +579,10 @@ bool PassthroughRendererVulkan::InitRenderer()
 		return false;
 	}
 
-	if (!SetupTestImage(m_commandBuffer[NUM_SWAPCHAINS - 1]))
+	/*if (!SetupTestImage(m_commandBuffer[NUM_SWAPCHAINS - 1]))
 	{
 		return false;
-	}
+	}*/
 
 	vkEndCommandBuffer(m_commandBuffer[NUM_SWAPCHAINS - 1]);
 
@@ -953,65 +953,82 @@ VkShaderModule PassthroughRendererVulkan::CreateShaderModule(const uint32_t* byt
 	return module;
 }
 
-
-bool PassthroughRendererVulkan::SetupTestImage(VkCommandBuffer commandBuffer)
+void PassthroughRendererVulkan::UploadDebugTexture(DebugTexture& texture)
 {
-	char path[MAX_PATH];
+	void* mappedData;
+	vkMapMemory(m_device, m_debugTextureBufferMem, 0, texture.Texture.size(), 0, &mappedData);
+	memcpy(mappedData, texture.Texture.data(), texture.Texture.size());
+	vkUnmapMemory(m_device, m_debugTextureBufferMem);
 
-	if (FAILED(GetModuleFileNameA(m_dllModule, path, sizeof(path))))
+	UploadImage(*m_commandBuffer, m_device, m_debugTextureBuffer, m_debugTexture, { texture.Width, texture.Height, 1 }, VK_IMAGE_LAYOUT_UNDEFINED, VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL);
+}
+
+bool PassthroughRendererVulkan::SetupDebugTexture(DebugTexture& texture)
+{
+	VkFormat format;
+
+	switch (texture.Format)
 	{
-		ErrorLog("Error opening test pattern.\n");
-		return false;
+	case DebugTextureFormat_RGBA8:
+		format = VK_FORMAT_R8G8B8A8_SRGB;
+		break;
+	case DebugTextureFormat_R8:
+		format = VK_FORMAT_R8_UNORM;
+		break;
+	case DebugTextureFormat_R16S:
+		format = VK_FORMAT_R16_SNORM;
+		break;
+	case DebugTextureFormat_R16U:
+		format = VK_FORMAT_R16_UNORM;
+		break;
+	case DebugTextureFormat_R32F:
+		format = VK_FORMAT_R32_SFLOAT;
+		break;
+	default:
+		format = VK_FORMAT_R8G8B8A8_SRGB;
 	}
 
-	std::string pathStr = path;
-	std::string imgPath = pathStr.substr(0, pathStr.find_last_of("/\\")) + "\\testpattern.png";
-
-	std::vector<unsigned char> image;
-	uint32_t width, height;
-
-	unsigned error = lodepng::decode(image, width, height, imgPath.c_str());
-	if (error)
+	if (m_debugTextureView != VK_NULL_HANDLE)
 	{
-		ErrorLog("Error decoding test pattern.\n");
-		return false;
+		vkDestroyImageView(m_device, m_debugTextureView, nullptr);
+		vkFreeMemory(m_device, m_debugTextureMem, nullptr);
+		vkDestroyImage(m_device, m_debugTexture, nullptr);
+		vkDestroyBuffer(m_device, m_debugTextureBuffer, nullptr);
+		vkFreeMemory(m_device, m_debugTextureBufferMem, nullptr);
 	}
 
-	if (!CreateBuffer(m_device, m_physDevice, m_testPatternBuffer, m_testPatternBufferMem, image.size(), VK_BUFFER_USAGE_TRANSFER_SRC_BIT, VK_MEMORY_PROPERTY_HOST_VISIBLE_BIT, &m_deletionQueue))
+
+
+	if (!CreateBuffer(m_device, m_physDevice, m_debugTextureBuffer, m_debugTextureBufferMem, texture.Texture.size(), VK_BUFFER_USAGE_TRANSFER_SRC_BIT, VK_MEMORY_PROPERTY_HOST_VISIBLE_BIT, &m_deletionQueue))
 	{
 		ErrorLog("Test image buffer creation failure!\n");
 		return false;
 	}
 
-	void* mappedData;
-	vkMapMemory(m_device, m_testPatternBufferMem, 0, image.size(), 0, &mappedData);
-	memcpy(mappedData, image.data(), image.size());
-	vkUnmapMemory(m_device, m_testPatternBufferMem);
-
 	VkImageCreateInfo imageInfo{ VK_STRUCTURE_TYPE_IMAGE_CREATE_INFO };
 	imageInfo.imageType = VK_IMAGE_TYPE_2D;
-	imageInfo.extent.width = width;
-	imageInfo.extent.height = height;
+	imageInfo.extent.width = texture.Width;
+	imageInfo.extent.height = texture.Height;
 	imageInfo.extent.depth = 1;
 	imageInfo.mipLevels = 1;
 	imageInfo.arrayLayers = 1;
-	imageInfo.format = VK_FORMAT_R8G8B8A8_SRGB;
+	imageInfo.format = format;
 	imageInfo.tiling = VK_IMAGE_TILING_OPTIMAL;
 	imageInfo.initialLayout = VK_IMAGE_LAYOUT_UNDEFINED;
 	imageInfo.usage = VK_IMAGE_USAGE_TRANSFER_DST_BIT | VK_IMAGE_USAGE_SAMPLED_BIT;
 	imageInfo.sharingMode = VK_SHARING_MODE_EXCLUSIVE;
 	imageInfo.samples = VK_SAMPLE_COUNT_1_BIT;
 
-	if (vkCreateImage(m_device, &imageInfo, nullptr, &m_testPattern) != VK_SUCCESS)
+	if (vkCreateImage(m_device, &imageInfo, nullptr, &m_debugTexture) != VK_SUCCESS)
 	{
 		ErrorLog("Test image vkCreateImage failure!\n");
 		return false;
 	}
-	m_deletionQueue.push_back([=]() { vkDestroyImage(m_device, m_testPattern, nullptr); });
+	m_deletionQueue.push_back([=]() { vkDestroyImage(m_device, m_debugTexture, nullptr); });
 	
 
 	VkMemoryRequirements memReq{};
-	vkGetImageMemoryRequirements(m_device, m_testPattern, &memReq);
+	vkGetImageMemoryRequirements(m_device, m_debugTexture, &memReq);
 
 	VkPhysicalDeviceMemoryProperties memProps{};
 	vkGetPhysicalDeviceMemoryProperties(m_physDevice, &memProps);
@@ -1024,7 +1041,7 @@ bool PassthroughRendererVulkan::SetupTestImage(VkCommandBuffer commandBuffer)
 			VkMemoryAllocateInfo allocInfo{ VK_STRUCTURE_TYPE_MEMORY_ALLOCATE_INFO };
 			allocInfo.allocationSize = memReq.size;
 			allocInfo.memoryTypeIndex = i;
-			if (vkAllocateMemory(m_device, &allocInfo, nullptr, &m_testPatternMem) != VK_SUCCESS)
+			if (vkAllocateMemory(m_device, &allocInfo, nullptr, &m_debugTextureMem) != VK_SUCCESS)
 			{
 				ErrorLog("Test image vkAllocateMemory failure!\n");
 				return false;
@@ -1033,34 +1050,33 @@ bool PassthroughRendererVulkan::SetupTestImage(VkCommandBuffer commandBuffer)
 		}
 	}
 
-	if (!m_testPatternMem)
+	if (!m_debugTextureMem)
 	{
 		ErrorLog("Test image memory allocation failure!\n");
 		return false;
 	}
-	m_deletionQueue.push_back([=]() { vkFreeMemory(m_device, m_testPatternMem, nullptr); });
+	m_deletionQueue.push_back([=]() { vkFreeMemory(m_device, m_debugTextureMem, nullptr); });
 
-	vkBindImageMemory(m_device, m_testPattern, m_testPatternMem, 0);
-
-	UploadImage(commandBuffer, m_device, m_testPatternBuffer, m_testPattern, { width, height, 1 }, VK_IMAGE_LAYOUT_UNDEFINED, VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL);
-
+	vkBindImageMemory(m_device, m_debugTexture, m_debugTextureMem, 0);
 
 	VkImageViewCreateInfo viewInfo{ VK_STRUCTURE_TYPE_IMAGE_VIEW_CREATE_INFO };
-	viewInfo.image = m_testPattern;
+	viewInfo.image = m_debugTexture;
 	viewInfo.viewType = VK_IMAGE_VIEW_TYPE_2D;
-	viewInfo.format = VK_FORMAT_R8G8B8A8_SRGB;
+	viewInfo.format = format;
 	viewInfo.subresourceRange.aspectMask = VK_IMAGE_ASPECT_COLOR_BIT;
 	viewInfo.subresourceRange.baseMipLevel = 0;
 	viewInfo.subresourceRange.levelCount = 1;
 	viewInfo.subresourceRange.baseArrayLayer = 0;
 	viewInfo.subresourceRange.layerCount = 1;
 
-	if (vkCreateImageView(m_device, &viewInfo, nullptr, &m_testPatternView) != VK_SUCCESS)
+	if (vkCreateImageView(m_device, &viewInfo, nullptr, &m_debugTextureView) != VK_SUCCESS)
 	{
 		ErrorLog("Test image vkCreateImageView failure!\n");
 		return false;
 	}
-	m_deletionQueue.push_back([=]() { vkDestroyImageView(m_device, m_testPatternView, nullptr); });
+	m_deletionQueue.push_back([=]() { vkDestroyImageView(m_device, m_debugTextureView, nullptr); });
+
+	UploadDebugTexture(texture);
 
 	return true;
 }
@@ -1545,7 +1561,7 @@ void PassthroughRendererVulkan::UpdateDescriptorSets(VkCommandBuffer commandBuff
 
 	if (m_configManager->GetConfig_Main().DebugTexture != DebugTexture_None)
 	{
-		cameraImageInfo.imageView = m_testPatternView;
+		cameraImageInfo.imageView = m_debugTextureView;
 		cameraImageInfo.sampler = m_cameraSampler;
 	}
 	else
@@ -1738,6 +1754,27 @@ void PassthroughRendererVulkan::RenderPassthroughFrame(const XrCompositionLayerP
 
 	vkBeginCommandBuffer(m_commandBuffer[m_frameIndex], &beginInfo);
 
+	if (mainConf.DebugTexture != DebugTexture_None)
+	{
+		DebugTexture& texture = m_configManager->GetDebugTexture();
+		std::lock_guard<std::mutex> readlock(texture.RWMutex);
+
+		if (texture.CurrentTexture == mainConf.DebugTexture)
+		{
+			if (m_debugTextureView == VK_NULL_HANDLE || texture.CurrentTexture != m_selectedDebugTexture || texture.bDimensionsUpdated)
+			{
+				SetupDebugTexture(texture);
+
+				m_selectedDebugTexture = texture.CurrentTexture;
+				texture.bDimensionsUpdated = false;
+			}
+
+			if (m_debugTextureBuffer != VK_NULL_HANDLE)
+			{
+				UploadDebugTexture(texture);
+			}
+		}
+	}
 
 	if (!mainConf.DebugTexture != DebugTexture_None && frame->frameTextureResource != nullptr)
 	{

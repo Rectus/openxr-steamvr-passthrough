@@ -257,8 +257,10 @@ namespace
 					const XrGraphicsBindingD3D11KHR* dx11bindings = reinterpret_cast<const XrGraphicsBindingD3D11KHR*>(entry);
 					m_Renderer = std::make_shared<PassthroughRendererDX11>(dx11bindings->device, g_dllModule, m_configManager);
 
-					SetupProcessingPipeline(DirectX11);
-					
+					if (!SetupProcessingPipeline(DirectX11))
+					{
+						return false;
+					}
 
 					m_dashboardMenu->GetDisplayValues().bSessionActive = true;
 					m_renderAPI = DirectX11;
@@ -288,7 +290,10 @@ namespace
 						m_Renderer = std::make_unique<PassthroughRendererDX11Interop>(dx12bindings->device, dx12bindings->queue, g_dllModule, m_configManager);
 					}
 
-					SetupProcessingPipeline(usedAPI);
+					if (!SetupProcessingPipeline(usedAPI))
+					{
+						return false;
+					}
 
 					m_dashboardMenu->GetDisplayValues().bSessionActive = true;
 					m_renderAPI = usedAPI;
@@ -306,7 +311,10 @@ namespace
 					const XrGraphicsBindingVulkanKHR* vulkanbindings = reinterpret_cast<const XrGraphicsBindingVulkanKHR*>(entry);
 					m_Renderer = std::make_unique<PassthroughRendererVulkan>(*vulkanbindings, g_dllModule, m_configManager);
 
-					SetupProcessingPipeline(Vulkan);
+					if (!SetupProcessingPipeline(Vulkan))
+					{
+						return false;
+					}
 
 					m_dashboardMenu->GetDisplayValues().bSessionActive = true;
 					m_renderAPI = Vulkan;

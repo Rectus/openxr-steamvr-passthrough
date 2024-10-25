@@ -446,7 +446,8 @@ private:
 	bool SetupPipeline(VkFormat format);
 	VkShaderModule CreateShaderModule(const uint32_t* bytecode, size_t codeSize);
 
-	bool SetupTestImage(VkCommandBuffer commandBuffer);
+	void UploadDebugTexture(DebugTexture& texture);
+	bool SetupDebugTexture(DebugTexture& texture);
 	bool GenerateMesh(VkCommandBuffer commandBuffer);
 	void SetupIntermediateRenderTarget(uint32_t index, uint32_t width, uint32_t height);
 	void SetupUVDistortionMap(std::shared_ptr<std::vector<float>> uvDistortionMap);
@@ -519,11 +520,12 @@ private:
 	VkSampler m_cameraSampler;
 	VkSampler m_intermediateSampler;
 
-	VkImage m_testPattern;
-	VkImageView m_testPatternView;
-	VkDeviceMemory m_testPatternMem;
-	VkBuffer m_testPatternBuffer;
-	VkDeviceMemory m_testPatternBufferMem;
+	VkImage m_debugTexture;
+	VkImageView m_debugTextureView;
+	VkDeviceMemory m_debugTextureMem;
+	VkBuffer m_debugTextureBuffer;
+	VkDeviceMemory m_debugTextureBufferMem;
+	ESelectedDebugTexture m_selectedDebugTexture;
 
 	VkImage m_cameraFrameRes[NUM_SWAPCHAINS];
 	VkImageView m_cameraFrameResView[NUM_SWAPCHAINS];
