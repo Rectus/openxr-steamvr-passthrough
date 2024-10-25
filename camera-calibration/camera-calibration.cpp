@@ -60,8 +60,8 @@ struct CalibrationData
     int NumTakenFrames = 0;
     double CalibrationRMSError = 0.0;
     bool bFisheyeLens = false;
-    cv::Mat CameraIntrinsics = cv::Mat(3, 3, CV_64F);
-    std::vector<double> CameraDistortion = cv::Mat(1, 4, CV_64F);
+    cv::Mat CameraIntrinsics = cv::Mat(3, 3, CV_64F, cv::Scalar(0));
+    std::vector<double> CameraDistortion = cv::Mat(1, 4, CV_64F, cv::Scalar(0));
     bool bHasIntrinsics = false;
     std::vector<double> ExtrinsicsRotation = std::vector<double>(3, 0.0);
     std::vector<double> ExtrinsicsTranslation = std::vector<double>(3, 0.0);
@@ -89,6 +89,9 @@ static ComPtr<ID3D11RenderTargetView> g_mainRenderTargetView = NULL;
 static ComPtr<ID3D11Texture2D> g_cameraFrameUploadTexture = NULL;
 static ComPtr<ID3D11Texture2D> g_cameraFrameTexture = NULL;
 static ComPtr<ID3D11ShaderResourceView> g_cameraFrameSRV = NULL;
+static ComPtr<ID3D11Texture2D> g_calibrationTargetUploadTexture = NULL;
+static ComPtr<ID3D11Texture2D> g_calibrationTargetTexture = NULL;
+static ComPtr<ID3D11ShaderResourceView> g_calibrationTargetSRV = NULL;
 
 static uint32_t g_frameWidth = 0;
 static uint32_t g_frameHeight = 0;
@@ -114,7 +117,7 @@ static int g_requestedFrameRate = 0;
 
 static int g_chessboardCorners[2] = { 8, 5 };
 static float g_chessboardSquareSize = 3.0f;
-static int g_numCalibrationFrames = 10;
+static int g_numCalibrationFrames = 20;
 static bool g_bAutomaticCapture = false;
 static float g_automaticCaptureInterval = 5.0;
 static bool g_selectedImageChanged = false;
@@ -130,6 +133,7 @@ void EnumerateCameras(std::vector<std::string>& deviceList);
 bool InitCamera(int deviceIndex);
 void CaptureFrame();
 void UploadFrame(cv::Mat& frameBuffer);
+bool CreateCalibrationTarget(int width, int height, int cornersW, int cornersH);
 bool CreateDeviceD3D(HWND hWnd);
 void CleanupDeviceD3D();
 void CreateRenderTarget();
@@ -189,6 +193,12 @@ int APIENTRY wWinMain(_In_ HINSTANCE hInstance, _In_opt_ HINSTANCE hPrevInstance
 
     bool bViewSingleframe = false;
     bool bViewUndistorted = false;
+    bool bShowCalibrationTarget = false;
+    int lastCalibrationTargetWidth = 0;
+    int lastCalibrationTargetHeight = 0;
+    int lastCalibrationTargetCornersW = 0;
+    int lastCalibrationTargetCornersH = 0;
+    bool bCalibrationTargetValid = false;
 
 
     QueryPerformanceFrequency(&prefFreq);
@@ -396,7 +406,12 @@ int APIENTRY wWinMain(_In_ HINSTANCE hInstance, _In_opt_ HINSTANCE hPrevInstance
 
         
         ImGui::InputInt2("Number of inner corners", g_chessboardCorners);
+        if (g_chessboardCorners[0] < 1) { g_chessboardCorners[0] = 1; }
+        if (g_chessboardCorners[1] < 1) { g_chessboardCorners[1] = 1; }
+        if (g_chessboardCorners[0] == g_chessboardCorners[1]) { g_chessboardCorners[0] += 1; }
+
         ImGui::InputFloat("Square side (cm)", &g_chessboardSquareSize);
+        ImGui::Checkbox("Show calibration target on screen", &bShowCalibrationTarget);
 
         
         ImGui::Separator();
@@ -491,9 +506,14 @@ int APIENTRY wWinMain(_In_ HINSTANCE hInstance, _In_opt_ HINSTANCE hPrevInstance
 
         ImGui::SameLine();
 
-
-        ImGui::BeginChild("CameraView");
-
+        if (bShowCalibrationTarget)
+        {
+            ImGui::BeginChild("CameraView", ImVec2(std::max(ImGui::GetContentRegionAvail().x * 0.25f, 128.0f), 0));
+        }
+        else
+        {
+            ImGui::BeginChild("CameraView");
+        }
 
         ImGui::Text("Camera View");
         if (ImGui::RadioButton("Distorted", !bViewUndistorted && !bViewSingleframe))
@@ -589,8 +609,44 @@ int APIENTRY wWinMain(_In_ HINSTANCE hInstance, _In_opt_ HINSTANCE hPrevInstance
         }
 
 
+
         ImGui::EndChild();
 
+        if (bShowCalibrationTarget)
+        {
+            ImGui::SameLine();
+
+            ImGui::BeginChild("CalibrationTarget");
+
+            ImVec2 size = ImGui::GetContentRegionAvail();
+            int width = (int)size.x;
+            int height = (int)size.y;
+
+            if (lastCalibrationTargetWidth != width || lastCalibrationTargetHeight != height
+                || lastCalibrationTargetCornersW != g_chessboardCorners[0] 
+                || lastCalibrationTargetCornersH != g_chessboardCorners[1])
+            {
+                if (CreateCalibrationTarget(width, height, g_chessboardCorners[0], g_chessboardCorners[1]))
+                {
+                    lastCalibrationTargetWidth = width;
+                    lastCalibrationTargetHeight = height;
+                    lastCalibrationTargetCornersW = g_chessboardCorners[0];
+                    lastCalibrationTargetCornersH = g_chessboardCorners[1];
+                    bCalibrationTargetValid = true;
+                }
+                else
+                {
+                    bCalibrationTargetValid = false;
+                }
+            }
+
+            if (g_calibrationTargetSRV.Get() && bCalibrationTargetValid)
+            {
+                ImGui::Image((void*)g_calibrationTargetSRV.Get(), ImVec2((float)width, (float)height));
+            }
+
+            ImGui::EndChild();
+        }
         ImGui::End();
 
         ImGui::Render();
@@ -675,9 +731,9 @@ bool ImageCaptureUI(CalibrationData& calibData, bool bCanCapture, bool& bIsCaptu
 
                 if (g_bUseOpenVRExtrinsic)
                 {
-                    cv::Mat pose = cv::Mat(4, 3, CV_32F, (void*)&g_lastTrackedDevicePoses[g_openVRDevice].mDeviceToAbsoluteTracking.m[0][0]);
+                    cv::Mat pose = cv::Mat(3, 4, CV_32F, (void*)&g_lastTrackedDevicePoses[g_openVRDevice].mDeviceToAbsoluteTracking.m[0][0]);
                     calibData.TrackedDeviceToWorldRotations.push_back(pose(cv::Rect(0, 0, 3, 3)).clone());
-                    calibData.TrackedDeviceToWorldTranslations.push_back(pose.col(3).clone());
+                    calibData.TrackedDeviceToWorldTranslations.push_back(pose(cv::Rect(3, 0, 1, 3)).clone());
                 }
 
                 if (--framesRemaining <= 0)
@@ -848,6 +904,17 @@ void DrawCameraFrame(CalibrationData& calibData, bool bDrawDistorted, bool bDraw
             cv::undistort(g_cameraFrameBuffer(calibData.FrameROI), undistorted, calibData.CameraIntrinsics, calibData.CameraDistortion);
         }
 
+
+        /*if (g_bUseOpenVRExtrinsic)
+        {
+            cv::Mat pose = cv::Mat(3, 4, CV_32F, (void*)&g_lastTrackedDevicePoses[g_openVRDevice].mDeviceToAbsoluteTracking.m[0][0]);
+            cv::Mat rot;
+            cv::Rodrigues(pose(cv::Rect(0, 0, 3, 3)).t(), rot);
+            
+            cv::drawFrameAxes(undistorted, calibData.CameraIntrinsics, calibData.CameraDistortion, rot, pose(cv::Rect(3, 0, 1, 3)) * -1.0, 0.5);
+        }*/
+
+
         UploadFrame(undistorted);
 
         ImGui::Image((void*)g_cameraFrameSRV.Get(), imageSize);
@@ -917,9 +984,9 @@ bool FindFrameCalibrationPatterns(CalibrationData& calibData, bool bRightCamera)
         calibData.CBPoints.push_back(corners);
     }
 
-    calibData.NumTakenFrames = calibData.Frames.size();
+    calibData.NumTakenFrames = (int)calibData.Frames.size();
 
-    for (int i = calibData.Frames.size() - 1; i >= 0; i--)
+    for (int i = (int)calibData.Frames.size() - 1; i >= 0; i--)
     {
         if (!calibData.ValidFrames[i])
         {
@@ -948,7 +1015,7 @@ inline double RadToDeg(double r)
 
 std::vector<double> RotationToEuler(cv::Mat& R)
 {
-    float sy = sqrt(R.at<double>(0, 0) * R.at<double>(0, 0) + R.at<double>(1, 0) * R.at<double>(1, 0));
+    double sy = sqrt(R.at<double>(0, 0) * R.at<double>(0, 0) + R.at<double>(1, 0) * R.at<double>(1, 0));
 
     double x, y, z;
     if (sy > 1e-6)
@@ -1040,6 +1107,7 @@ bool CalibrateSingleCamera(CalibrationData& calibData, bool bRightCamera)
 
         //outRotation = outRotation.t();
         calibData.ExtrinsicsRotation = RotationToEuler(outRotation);
+        calibData.ExtrinsicsRotation[0] *= -1.0;
 
         outTranslation.at<double>(0, 0) = outTranslation.at<double>(0, 0) * -1.0;
         outTranslation.at<double>(1, 0) = outTranslation.at<double>(1, 0) * -1.0;
@@ -1191,6 +1259,72 @@ void UploadFrame(cv::Mat& frameBuffer)
 
         g_pd3dDeviceContext->CopyResource(g_cameraFrameTexture.Get(), g_cameraFrameUploadTexture.Get());
     }
+}
+
+
+bool CreateCalibrationTarget(int width, int height, int cornersW, int cornersH)
+{
+    int border = 20;
+
+    if (width < border * 2 || height < border / 2)
+    {
+        return false;
+    }
+
+    int boardWidth = width - (border * 2);
+    int boardHeight = height - (border * 2);
+
+    int squareSize = std::min(boardWidth / (cornersW + 1), boardHeight / (cornersH + 1));
+
+    cv::Mat calibrationTarget(height, width, CV_8UC4, cv::Scalar(255, 255, 255, 255));
+    uint8_t color = 0;
+
+    for (int i = 0; i < (cornersH + 1); i++)
+    {
+        color = ~color;
+        for (int j = 0; j < (cornersW + 1); j++)
+        {
+            cv::Mat ROI = calibrationTarget(cv::Rect(border + j * squareSize, border + i * squareSize, squareSize, squareSize));
+            ROI.setTo(cv::Scalar(color, color, color, 1.0));
+            color = ~color;
+        }
+        if (cornersW % 2 == 0)
+        {
+            color = ~color;
+        }
+    }
+
+    D3D11_SUBRESOURCE_DATA subresData = {};
+    subresData.pSysMem = calibrationTarget.data;
+    subresData.SysMemPitch = width * 4;
+
+    D3D11_TEXTURE2D_DESC textureDesc = {};
+    textureDesc.MipLevels = 1;
+    textureDesc.Format = DXGI_FORMAT_B8G8R8X8_UNORM;
+    textureDesc.Width = width;
+    textureDesc.Height = height;
+    textureDesc.ArraySize = 1;
+    textureDesc.SampleDesc.Count = 1;
+    textureDesc.SampleDesc.Quality = 0;
+    textureDesc.BindFlags = D3D11_BIND_SHADER_RESOURCE;
+    textureDesc.Usage = D3D11_USAGE_IMMUTABLE;
+    textureDesc.CPUAccessFlags = 0;
+
+    D3D11_SHADER_RESOURCE_VIEW_DESC srvDesc = {};
+    srvDesc.ViewDimension = D3D11_SRV_DIMENSION_TEXTURE2D;
+    srvDesc.Format = textureDesc.Format;
+    srvDesc.Texture2D.MipLevels = 1;
+
+    if (FAILED(g_pd3dDevice->CreateTexture2D(&textureDesc, &subresData, &g_calibrationTargetTexture)))
+    {
+        return false;
+    }
+    if (FAILED(g_pd3dDevice->CreateShaderResourceView(g_calibrationTargetTexture.Get(), &srvDesc, &g_calibrationTargetSRV)))
+    {
+        return false;
+    }
+
+    return true;
 }
 
 
