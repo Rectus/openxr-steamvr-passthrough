@@ -23,6 +23,7 @@
 #include <math.h>
 #define OPENVR_BUILD_STATIC
 #include "openvr.h"
+#include <opencv2/core/matx.hpp>
 #include <opencv2/videoio.hpp>
 #include <opencv2/imgproc/types_c.h>
 #include <opencv2/calib3d.hpp>
@@ -78,6 +79,13 @@ struct CalibrationData
     }
 };
 
+struct StereoExtrinsicsData
+{
+    std::vector<double> LeftTorightRotation = std::vector<double>(3, 0.0);
+    std::vector<double> LeftTorightTranslation = std::vector<double>(3, 0.0);
+    double CalibrationRMSError = 0.0;
+};
+
 
 #define WINDOW_WIDTH 1600
 #define WINDOW_HEIGHT 1200
@@ -113,7 +121,7 @@ bool g_bIsSpaceDown = false;
 
 static bool g_bRequestCustomFrameFormat = false;
 static int g_requestedFrameSize[2] = { 0 };
-static int g_requestedFrameRate = 0;
+static int g_requestedFrameRate = 60;
 
 static int g_chessboardCorners[2] = { 8, 5 };
 static float g_chessboardSquareSize = 3.0f;
@@ -124,11 +132,14 @@ static bool g_selectedImageChanged = false;
 static int g_displayedImage = 0;
 
 
-bool ImageCaptureUI(CalibrationData& calibData, bool bCanCapture, bool& bIsCapturing, bool& bImageCaptureConsumed, bool& bCapturingComplete, int& framesRemaining, float& timeRemaining, bool bIsRightCamera, float deltaTime);
+bool ImageCaptureUI(CalibrationData* calibData, CalibrationData* calibDataStereo, bool bCanCapture, bool& bIsCapturing, bool& bImageCaptureConsumed, bool& bCapturingComplete, int& framesRemaining, float& timeRemaining, bool bIsRightCamera, float deltaTime, bool bCaptureStereo);
 void SetFrameGeometry(CalibrationData& calibData, bool bIsRightCamera);
 void DrawCameraFrame(CalibrationData& calibData, bool bDrawDistorted, bool bDrawChessboardCorners, int imageIndex);
+void DrawStereoFrame(CalibrationData& calibDataLeft, CalibrationData& calibDataRight, bool bDrawDistorted, bool bDrawChessboardCorners, int imageIndex);
 bool FindFrameCalibrationPatterns(CalibrationData& calibData, bool bRightCamera);
+bool FindFrameCalibrationPatternsStereo(CalibrationData& calibDataLeft, CalibrationData& calibDataRight);
 bool CalibrateSingleCamera(CalibrationData& calibData, bool bRightCamera);
+bool CalibrateStereo(CalibrationData& calibDataLeft, CalibrationData& calibDataRight, StereoExtrinsicsData& stereoData);
 void EnumerateCameras(std::vector<std::string>& deviceList);
 bool InitCamera(int deviceIndex);
 void CaptureFrame();
@@ -183,6 +194,9 @@ int APIENTRY wWinMain(_In_ HINSTANCE hInstance, _In_opt_ HINSTANCE hPrevInstance
     bool bCapturingCompleteRight = false;
     bool bCalibrationCompleteLeft = false;
     bool bCalibrationCompleteRight = false;
+    bool bIsCapturingStereo = false;
+    bool bCapturingCompleteStereo = false;
+    bool bCalibrationCompleteStereo = false;
     int framesRemaining = 0;
     float timeRemaining = 0.0f;
     LARGE_INTEGER lastTickTime, tickTime;
@@ -190,6 +204,7 @@ int APIENTRY wWinMain(_In_ HINSTANCE hInstance, _In_opt_ HINSTANCE hPrevInstance
     float deltaTime = 0.0f;
     CalibrationData calibDataLeft;
     CalibrationData calibDataRight;
+    StereoExtrinsicsData stereoData;
 
     bool bViewSingleframe = false;
     bool bViewUndistorted = false;
@@ -262,10 +277,9 @@ int APIENTRY wWinMain(_In_ HINSTANCE hInstance, _In_opt_ HINSTANCE hPrevInstance
 
         ImGui::Begin("Main", NULL, ImGuiWindowFlags_NoDecoration | ImGuiWindowFlags_NoResize);
 
-        ImGui::BeginChild("Menu", ImVec2(std::min(ImGui::GetContentRegionAvail().x * 0.4f, 470.0f), 0));
+        ImGui::BeginChild("Menu", ImVec2(std::min(ImGui::GetContentRegionAvail().x * 0.4f, 470.0f), 0), true);
 
         
-        ImGui::Separator();
         ImGui::Text("Capture Setup");
         ImGui::Spacing();
 
@@ -404,15 +418,16 @@ int APIENTRY wWinMain(_In_ HINSTANCE hInstance, _In_opt_ HINSTANCE hPrevInstance
         ImGui::Text("Chessboard calibration target");
         ImGui::Spacing();
 
-        
+        ImGui::PushItemWidth(ImGui::GetContentRegionAvail().x * 0.5);
         ImGui::InputInt2("Number of inner corners", g_chessboardCorners);
         if (g_chessboardCorners[0] < 1) { g_chessboardCorners[0] = 1; }
         if (g_chessboardCorners[1] < 1) { g_chessboardCorners[1] = 1; }
         if (g_chessboardCorners[0] == g_chessboardCorners[1]) { g_chessboardCorners[0] += 1; }
 
         ImGui::InputFloat("Square side (cm)", &g_chessboardSquareSize);
+        ImGui::PopItemWidth();
         ImGui::Checkbox("Show calibration target on screen", &bShowCalibrationTarget);
-
+        
         
         ImGui::Separator();
         ImGui::Text("Calibration");
@@ -438,11 +453,12 @@ int APIENTRY wWinMain(_In_ HINSTANCE hInstance, _In_opt_ HINSTANCE hPrevInstance
             bool& bCapturingComplete = bRightCamera ? bCapturingCompleteRight : bCapturingCompleteLeft;
             bool& bCalibrationComplete = bRightCamera ? bCalibrationCompleteRight : bCalibrationCompleteLeft;
 
-            if (ImageCaptureUI(calibData, bIsCameraActive, bIsCapturing, bCalibrationComplete, bCapturingComplete, framesRemaining, timeRemaining, bRightCamera, deltaTime))
+            if (ImageCaptureUI(&calibData, nullptr, bIsCameraActive, bIsCapturing, bCalibrationComplete, bCapturingComplete, framesRemaining, timeRemaining, bRightCamera, deltaTime, false))
             {
                 FindFrameCalibrationPatterns(calibData, bRightCamera);
                 g_displayedImage = 0;
                 g_selectedImageChanged = true;
+                bViewSingleframe = true;
             }
 
             if (ImGui::Button("Calibrate"))
@@ -453,6 +469,7 @@ int APIENTRY wWinMain(_In_ HINSTANCE hInstance, _In_opt_ HINSTANCE hPrevInstance
                 {
                     bCalibrationComplete = true;
                     bViewUndistorted = true;
+                    bViewSingleframe = true;
                 }
             }
             ImGui::EndDisabled();
@@ -502,17 +519,74 @@ int APIENTRY wWinMain(_In_ HINSTANCE hInstance, _In_opt_ HINSTANCE hPrevInstance
         }
         
 
+        if (g_frameLayout != Mono)
+        {
+            ImGui::Separator();
+            ImGui::Text("Stereo Calibration");
+            ImGui::Spacing();
+
+            bool bHasStarted = bIsCapturingStereo;
+
+            if (ImageCaptureUI(&calibDataLeft, &calibDataRight, bCalibrationCompleteLeft && bCalibrationCompleteRight, bIsCapturingStereo, bCalibrationCompleteStereo, bCapturingCompleteStereo, framesRemaining, timeRemaining, bRightCamera, deltaTime, true))
+            {
+                FindFrameCalibrationPatternsStereo(calibDataLeft, calibDataRight);
+                g_displayedImage = 0;
+                g_selectedImageChanged = true;
+                bViewSingleframe = false;
+            }
+
+            if (!bHasStarted && bIsCapturingStereo)
+            {
+                bViewUndistorted = false;
+                bViewSingleframe = false;
+            }
+
+            if (ImGui::Button("Calibrate"))
+            {
+                bCalibrationCompleteStereo = false;
+
+                if (CalibrateStereo(calibDataLeft, calibDataRight, stereoData))
+                {
+                    bCalibrationCompleteStereo = true;
+                    bViewUndistorted = true;
+                }
+            }
+            ImGui::EndDisabled();
+
+            if (bCalibrationCompleteStereo)
+            {
+                ImGui::Text("Calibration complete. RMS error: %f", stereoData.CalibrationRMSError);
+            }
+            else
+            {
+                ImGui::Text("Calibration pending.");
+            }
+
+            ImGui::Spacing();
+
+            ImGui::Text("Left to Right Transform");
+
+            ImGui::InputDouble("Rotation X", &stereoData.LeftTorightRotation[0]);
+            ImGui::InputDouble("Rotation Y", &stereoData.LeftTorightRotation[1]);
+            ImGui::InputDouble("Rotation Z", &stereoData.LeftTorightRotation[2]);
+
+            ImGui::InputDouble("Translation X", &stereoData.LeftTorightTranslation[0]);
+            ImGui::InputDouble("Translation Y", &stereoData.LeftTorightTranslation[1]);
+            ImGui::InputDouble("Translation Z", &stereoData.LeftTorightTranslation[2]);
+        }
+
+
         ImGui::EndChild();
 
         ImGui::SameLine();
 
         if (bShowCalibrationTarget)
         {
-            ImGui::BeginChild("CameraView", ImVec2(std::max(ImGui::GetContentRegionAvail().x * 0.25f, 128.0f), 0));
+            ImGui::BeginChild("CameraView", ImVec2(std::max(ImGui::GetContentRegionAvail().x * 0.25f, 128.0f), 0), true);
         }
         else
         {
-            ImGui::BeginChild("CameraView");
+            ImGui::BeginChild("CameraView", ImVec2(0, 0), true);
         }
 
         ImGui::Text("Camera View");
@@ -521,27 +595,43 @@ int APIENTRY wWinMain(_In_ HINSTANCE hInstance, _In_opt_ HINSTANCE hPrevInstance
             bViewUndistorted = false;
             bViewSingleframe = false;
         }
-        ImGui::SameLine();
 
-        ImGui::BeginDisabled(g_frameLayout == Mono);
-        if (ImGui::RadioButton("Distorted Single Frame", !bViewUndistorted && bViewSingleframe))
+        if (g_frameLayout != Mono)
         {
-            bViewUndistorted = false;
-            bViewSingleframe = true;
+            if (ImGui::RadioButton("Distorted Single", !bViewUndistorted && bViewSingleframe))
+            {
+                bViewUndistorted = false;
+                bViewSingleframe = true;
+            }
+            
         }
-        ImGui::EndDisabled();
-        ImGui::SameLine();
 
-        ImGui::BeginDisabled((!bCalibrationCompleteLeft && !bRightCamera) || (!bCalibrationCompleteRight && bRightCamera));
-        if (ImGui::RadioButton("Undistorted", bViewUndistorted))
+        ImGui::BeginDisabled(!bCalibrationCompleteLeft || !bCalibrationCompleteRight);
+        if (ImGui::RadioButton("Undistorted", bViewUndistorted && !bViewSingleframe))
         {
             bViewUndistorted = true;
+            bViewSingleframe = false;
+        }
+        ImGui::EndDisabled();
+
+        ImGui::BeginDisabled((!bCalibrationCompleteLeft && !bRightCamera) || (!bCalibrationCompleteRight && bRightCamera));
+        if (g_frameLayout != Mono)
+        {
+            if (ImGui::RadioButton("Undistorted Single", bViewUndistorted && bViewSingleframe))
+            {
+                bViewUndistorted = true;
+                bViewSingleframe = true;
+            }
         }
         ImGui::EndDisabled();
 
         if (bIsCameraActive)
         {
-            if (bViewUndistorted && bCalibrationCompleteLeft && !bRightCamera)
+            if (bViewUndistorted && !bViewSingleframe && bCalibrationCompleteLeft && bCalibrationCompleteRight)
+            {
+                DrawStereoFrame(calibDataLeft, calibDataRight, false, false, 0);
+            }
+            else if (bViewUndistorted && bCalibrationCompleteLeft && !bRightCamera)
             {
                 DrawCameraFrame(calibDataLeft, false, false, 0);
             }
@@ -576,6 +666,22 @@ int APIENTRY wWinMain(_In_ HINSTANCE hInstance, _In_opt_ HINSTANCE hPrevInstance
                 {
                     float aspect = (float)calibDataRight.SensorHeight / (float)calibDataRight.SensorWidth;
                     float width = std::min(ImGui::GetContentRegionAvail().x, (float)calibDataRight.SensorWidth);
+                    ImVec2 imageSize = ImVec2(width, width * aspect);
+
+                    ImGui::Image((void*)g_cameraFrameSRV.Get(), imageSize);
+                }
+            }
+            else if (bCapturingCompleteStereo && !bCalibrationCompleteStereo && calibDataLeft.Frames.size() > 0)
+            {
+                if (g_selectedImageChanged)
+                {
+                    DrawStereoFrame(calibDataLeft, calibDataRight, true, true, g_displayedImage);
+                    g_selectedImageChanged = false;
+                }
+                else
+                {
+                    float aspect = (float)g_frameHeight / (float)g_frameWidth;
+                    float width = std::min(ImGui::GetContentRegionAvail().x, (float)g_frameWidth);
                     ImVec2 imageSize = ImVec2(width, width * aspect);
 
                     ImGui::Image((void*)g_cameraFrameSRV.Get(), imageSize);
@@ -676,7 +782,7 @@ int APIENTRY wWinMain(_In_ HINSTANCE hInstance, _In_opt_ HINSTANCE hPrevInstance
 }
 
 
-bool ImageCaptureUI(CalibrationData& calibData, bool bCanCapture, bool& bIsCapturing, bool& bImageCaptureConsumed, bool& bCapturingComplete, int& framesRemaining, float& timeRemaining, bool bIsRightCamera, float deltaTime)
+bool ImageCaptureUI(CalibrationData* calibData, CalibrationData* calibDataStereo, bool bCanCapture, bool& bIsCapturing, bool& bImageCaptureConsumed, bool& bCapturingComplete, int& framesRemaining, float& timeRemaining, bool bIsRightCamera, float deltaTime, bool bCaptureStereo)
 {
     bool bCaptureJustCompleted = false;
     ImGui::InputInt("Frame count", &g_numCalibrationFrames);
@@ -697,13 +803,22 @@ bool ImageCaptureUI(CalibrationData& calibData, bool bCanCapture, bool& bIsCaptu
         bImageCaptureConsumed = false;
         framesRemaining = g_numCalibrationFrames;
         timeRemaining = g_automaticCaptureInterval;
-        calibData.ClearFrames();
-        calibData.ChessboardCornersX = g_chessboardCorners[0];
-        calibData.ChessboardCornersY = g_chessboardCorners[1];
-        calibData.ChessboardSquareSize = g_chessboardSquareSize;
-        calibData.bFisheyeLens = g_bFisheyeLens;
-        SetFrameGeometry(calibData, bIsRightCamera);
+        calibData->ClearFrames();
+        calibData->ChessboardCornersX = g_chessboardCorners[0];
+        calibData->ChessboardCornersY = g_chessboardCorners[1];
+        calibData->ChessboardSquareSize = g_chessboardSquareSize;
+        calibData->bFisheyeLens = g_bFisheyeLens;
+        SetFrameGeometry(*calibData, bIsRightCamera);
 
+        if (bCaptureStereo)
+        {
+            calibDataStereo->ClearFrames();
+            calibDataStereo->ChessboardCornersX = g_chessboardCorners[0];
+            calibDataStereo->ChessboardCornersY = g_chessboardCorners[1];
+            calibDataStereo->ChessboardSquareSize = g_chessboardSquareSize;
+            calibDataStereo->bFisheyeLens = g_bFisheyeLens;
+            SetFrameGeometry(*calibDataStereo, !bIsRightCamera);
+        }
         
     }
     ImGui::EndDisabled();
@@ -717,6 +832,8 @@ bool ImageCaptureUI(CalibrationData& calibData, bool bCanCapture, bool& bIsCaptu
     }
     ImGui::EndDisabled();
 
+    bool bDoCaptureFrame = false;
+
     if (bIsCapturing)
     {
         if (g_bAutomaticCapture)
@@ -727,21 +844,7 @@ bool ImageCaptureUI(CalibrationData& calibData, bool bCanCapture, bool& bIsCaptu
 
             if (timeRemaining <= 0.0f)
             {
-                calibData.Frames.push_back(g_cameraFrameBuffer(calibData.FrameROI).clone());
-
-                if (g_bUseOpenVRExtrinsic)
-                {
-                    cv::Mat pose = cv::Mat(3, 4, CV_32F, (void*)&g_lastTrackedDevicePoses[g_openVRDevice].mDeviceToAbsoluteTracking.m[0][0]);
-                    calibData.TrackedDeviceToWorldRotations.push_back(pose(cv::Rect(0, 0, 3, 3)).clone());
-                    calibData.TrackedDeviceToWorldTranslations.push_back(pose(cv::Rect(3, 0, 1, 3)).clone());
-                }
-
-                if (--framesRemaining <= 0)
-                {
-                    bCaptureJustCompleted = true;
-                    bIsCapturing = false;
-                    bCapturingComplete = true;
-                }
+                bDoCaptureFrame = true;
 
                 timeRemaining = g_automaticCaptureInterval;
             }
@@ -756,21 +859,7 @@ bool ImageCaptureUI(CalibrationData& calibData, bool bCanCapture, bool& bIsCaptu
 
             if (ImGui::Button("Capture frame") || bSpacePressed)
             {
-                calibData.Frames.push_back(g_cameraFrameBuffer(calibData.FrameROI).clone());
-
-                if (g_bUseOpenVRExtrinsic)
-                {
-                    cv::Mat pose = cv::Mat(3, 4, CV_32F, (void*)&g_lastTrackedDevicePoses[g_openVRDevice].mDeviceToAbsoluteTracking.m[0][0]);
-                    calibData.TrackedDeviceToWorldRotations.push_back(pose(cv::Rect(0, 0, 3, 3)).clone());
-                    calibData.TrackedDeviceToWorldTranslations.push_back(pose(cv::Rect(3, 0, 1, 3)).clone());
-                }
-
-                if (--framesRemaining <= 0)
-                {
-                    bCaptureJustCompleted = true;
-                    bIsCapturing = false;
-                    bCapturingComplete = true;
-                }
+                bDoCaptureFrame = true;
             }
             ImGui::SameLine();
             ImGui::Text("Or press spacebar");
@@ -779,15 +868,40 @@ bool ImageCaptureUI(CalibrationData& calibData, bool bCanCapture, bool& bIsCaptu
         ImGui::Text("Remaining: %d", framesRemaining);
     }
 
+    if (bDoCaptureFrame)
+    {
+        calibData->Frames.push_back(g_cameraFrameBuffer(calibData->FrameROI).clone());
+
+        if (bCaptureStereo)
+        {
+            calibDataStereo->Frames.push_back(g_cameraFrameBuffer(calibDataStereo->FrameROI).clone());
+        }
+
+        if (g_bUseOpenVRExtrinsic && !bCaptureStereo)
+        {
+            cv::Mat pose = cv::Mat(3, 4, CV_32F, (void*)&g_lastTrackedDevicePoses[g_openVRDevice].mDeviceToAbsoluteTracking.m[0][0]);
+            calibData->TrackedDeviceToWorldRotations.push_back(pose(cv::Rect(0, 0, 3, 3)).clone());
+            calibData->TrackedDeviceToWorldTranslations.push_back(pose(cv::Rect(3, 0, 1, 3)).clone());
+        }
+
+        if (--framesRemaining <= 0)
+        {
+            bCaptureJustCompleted = true;
+            bIsCapturing = false;
+            bCapturingComplete = true;
+        }
+    }
+
+
     ImGui::BeginDisabled(!bCapturingComplete || bImageCaptureConsumed);
 
     if (bCapturingComplete && !bImageCaptureConsumed)
     {
-        ImGui::Text("Capture successful, %d/%d frames valid", calibData.NumValidFrames, calibData.NumTakenFrames);
+        ImGui::Text("Capture successful, %d/%d frames valid", calibData->NumValidFrames, calibData->NumTakenFrames);
 
-        if (calibData.Frames.size() > 0)
+        if (calibData->Frames.size() > 0)
         {
-            ImGui::Text("Image: %d / %d", g_displayedImage + 1, calibData.Frames.size());
+            ImGui::Text("Image: %d / %d", g_displayedImage + 1, calibData->Frames.size());
         }
     }
 
@@ -802,19 +916,27 @@ bool ImageCaptureUI(CalibrationData& calibData, bool bCanCapture, bool& bIsCaptu
 
     ImGui::SameLine();
 
-    if (ImGui::Button("Reject Image") && g_displayedImage < calibData.Frames.size())
+    if (ImGui::Button("Reject Image") && g_displayedImage < calibData->Frames.size())
     {
-        calibData.Frames.erase(calibData.Frames.begin() + g_displayedImage);
-        calibData.RefPoints.erase(calibData.RefPoints.begin() + g_displayedImage);
-        calibData.CBPoints.erase(calibData.CBPoints.begin() + g_displayedImage);
-        calibData.ValidFrames.erase(calibData.ValidFrames.begin() + g_displayedImage);
-        if (g_bUseOpenVRExtrinsic)
+        calibData->Frames.erase(calibData->Frames.begin() + g_displayedImage);
+        calibData->RefPoints.erase(calibData->RefPoints.begin() + g_displayedImage);
+        calibData->CBPoints.erase(calibData->CBPoints.begin() + g_displayedImage);
+        calibData->ValidFrames.erase(calibData->ValidFrames.begin() + g_displayedImage);
+        if (g_bUseOpenVRExtrinsic && !bCaptureStereo)
         {
-            calibData.TrackedDeviceToWorldRotations.erase(calibData.TrackedDeviceToWorldRotations.begin() + g_displayedImage);
-            calibData.TrackedDeviceToWorldTranslations.erase(calibData.TrackedDeviceToWorldTranslations.begin() + g_displayedImage);
+            calibData->TrackedDeviceToWorldRotations.erase(calibData->TrackedDeviceToWorldRotations.begin() + g_displayedImage);
+            calibData->TrackedDeviceToWorldTranslations.erase(calibData->TrackedDeviceToWorldTranslations.begin() + g_displayedImage);
         }
+        if (bCaptureStereo)
+        {
+            calibDataStereo->Frames.erase(calibDataStereo->Frames.begin() + g_displayedImage);
+            calibDataStereo->RefPoints.erase(calibDataStereo->RefPoints.begin() + g_displayedImage);
+            calibDataStereo->CBPoints.erase(calibDataStereo->CBPoints.begin() + g_displayedImage);
+            calibDataStereo->ValidFrames.erase(calibDataStereo->ValidFrames.begin() + g_displayedImage);
+        }
+
         if (--g_displayedImage < 0) { g_displayedImage = 0; }
-        if (calibData.Frames.size() < 1)
+        if (calibData->Frames.size() < 1)
         {
             bCapturingComplete = false;
         }
@@ -826,7 +948,7 @@ bool ImageCaptureUI(CalibrationData& calibData, bool bCanCapture, bool& bIsCaptu
     if (ImGui::Button(" > ###NextImage"))
     {
         g_selectedImageChanged = true;
-        if (++g_displayedImage >= calibData.Frames.size())
+        if (++g_displayedImage >= calibData->Frames.size())
         {
             g_displayedImage--;
         }
@@ -936,6 +1058,64 @@ void DrawCameraFrame(CalibrationData& calibData, bool bDrawDistorted, bool bDraw
     }
 }
 
+void DrawStereoFrame(CalibrationData& calibDataLeft, CalibrationData& calibDataRight, bool bDrawDistorted, bool bDrawChessboardCorners, int imageIndex)
+{
+    float aspect = (float)g_frameHeight / (float)g_frameWidth;
+    float width = std::min(ImGui::GetContentRegionAvail().x, (float)g_frameWidth);
+    ImVec2 imageSize = ImVec2(width, width * aspect);
+
+    if (g_frameWidthGPU != g_frameWidth || g_frameHeightGPU != g_frameHeight)
+    {
+        SetupCameraFrameResource(g_frameWidth, g_frameHeight);
+    }
+
+    if (!bDrawDistorted)
+    {
+        cv::Mat undistorted = cv::Mat(g_frameHeight, g_frameWidth, CV_8UC3);
+        if (calibDataLeft.bFisheyeLens)
+        {
+            cv::Mat P, map1, map2;
+            cv::fisheye::estimateNewCameraMatrixForUndistortRectify(calibDataLeft.CameraIntrinsics, calibDataLeft.CameraDistortion, g_cameraFrameBuffer(calibDataLeft.FrameROI).size(), cv::Matx33d::eye(), P, 1);
+            cv::fisheye::initUndistortRectifyMap(calibDataLeft.CameraIntrinsics, calibDataLeft.CameraDistortion, cv::Matx33d::eye(), P, g_cameraFrameBuffer(calibDataLeft.FrameROI).size(), CV_16SC2, map1, map2);
+            cv::remap(g_cameraFrameBuffer(calibDataLeft.FrameROI), undistorted(calibDataLeft.FrameROI), map1, map2, cv::INTER_LINEAR);
+
+            cv::fisheye::estimateNewCameraMatrixForUndistortRectify(calibDataRight.CameraIntrinsics, calibDataRight.CameraDistortion, g_cameraFrameBuffer(calibDataRight.FrameROI).size(), cv::Matx33d::eye(), P, 1);
+            cv::fisheye::initUndistortRectifyMap(calibDataRight.CameraIntrinsics, calibDataRight.CameraDistortion, cv::Matx33d::eye(), P, g_cameraFrameBuffer(calibDataRight.FrameROI).size(), CV_16SC2, map1, map2);
+            cv::remap(g_cameraFrameBuffer(calibDataRight.FrameROI), undistorted(calibDataRight.FrameROI), map1, map2, cv::INTER_LINEAR);
+        }
+        else
+        {
+            cv::undistort(g_cameraFrameBuffer(calibDataLeft.FrameROI), undistorted(calibDataLeft.FrameROI), calibDataLeft.CameraIntrinsics, calibDataLeft.CameraDistortion);
+
+            cv::undistort(g_cameraFrameBuffer(calibDataRight.FrameROI), undistorted(calibDataRight.FrameROI), calibDataRight.CameraIntrinsics, calibDataRight.CameraDistortion);
+        }
+
+        UploadFrame(undistorted);
+
+        ImGui::Image((void*)g_cameraFrameSRV.Get(), imageSize);
+    }
+    else if (bDrawChessboardCorners)
+    {
+        cv::Mat composite = cv::Mat(g_frameHeight, g_frameWidth, CV_8UC3);
+
+        calibDataLeft.Frames[imageIndex].copyTo(composite(calibDataLeft.FrameROI));
+        cv::drawChessboardCorners(composite(calibDataLeft.FrameROI), cv::Size(calibDataLeft.ChessboardCornersX, calibDataLeft.ChessboardCornersY), calibDataLeft.CBPoints[imageIndex], calibDataLeft.ValidFrames[imageIndex]);
+
+        calibDataRight.Frames[imageIndex].copyTo(composite(calibDataRight.FrameROI));
+        cv::drawChessboardCorners(composite(calibDataRight.FrameROI), cv::Size(calibDataRight.ChessboardCornersX, calibDataRight.ChessboardCornersY), calibDataRight.CBPoints[imageIndex], calibDataRight.ValidFrames[imageIndex]);
+
+
+        UploadFrame(composite);
+        ImGui::Image((void*)g_cameraFrameSRV.Get(), imageSize);
+    }
+    else
+    {
+        cv::Mat frame = g_cameraFrameBuffer;
+        UploadFrame(frame);
+        ImGui::Image((void*)g_cameraFrameSRV.Get(), imageSize);
+    }
+}
+
 
 bool FindFrameCalibrationPatterns(CalibrationData& calibData, bool bRightCamera)
 {
@@ -1006,11 +1186,118 @@ bool FindFrameCalibrationPatterns(CalibrationData& calibData, bool bRightCamera)
     {
         return false;
     }
+
+    return true;
+}
+
+bool FindFrameCalibrationPatternsStereo(CalibrationData& calibDataLeft, CalibrationData& calibDataRight)
+{
+    cv::Size checkerDims = cv::Size(calibDataLeft.ChessboardCornersX, calibDataLeft.ChessboardCornersY);
+
+    cv::Size winSize = cv::Size(11, 11);
+    cv::Size zeroZone = cv::Size(-1, -1);
+    cv::TermCriteria cbTermCriteria = cv::TermCriteria(CV_TERMCRIT_EPS + CV_TERMCRIT_ITER, 30, 0.1);
+
+
+    calibDataLeft.RefPoints.clear();
+    calibDataLeft.CBPoints.clear();
+    calibDataLeft.ValidFrames.clear();
+    calibDataLeft.NumValidFrames = 0;
+    calibDataLeft.NumTakenFrames = 0;
+
+    calibDataRight.RefPoints.clear();
+    calibDataRight.CBPoints.clear();
+    calibDataRight.ValidFrames.clear();
+    calibDataRight.NumValidFrames = 0;
+    calibDataRight.NumTakenFrames = 0;
+
+    std::vector<cv::Point3f> cbRef;
+    for (int i = 0; i < calibDataLeft.ChessboardCornersY; i++)
+    {
+        for (int j = 0; j < calibDataLeft.ChessboardCornersX; j++)
+        {
+            float squareSide = calibDataLeft.ChessboardSquareSize / 100.0f; // Size in meters
+            cbRef.push_back(cv::Point3f((float)j * squareSide, (float)i * squareSide, 0));
+        }
+    }
+
+    for (cv::Mat& image : calibDataLeft.Frames)
+    {
+        cv::Mat grayScale;
+        cv::cvtColor(image, grayScale, cv::COLOR_BGR2GRAY);
+
+        std::vector<cv::Point2f> corners;
+        if (cv::findChessboardCorners(grayScale, checkerDims, corners, cv::CALIB_CB_ADAPTIVE_THRESH | cv::CALIB_CB_NORMALIZE_IMAGE || cv::CALIB_CB_FAST_CHECK))
+        {
+            cv::cornerSubPix(grayScale, corners, winSize, zeroZone, cbTermCriteria);
+            calibDataLeft.ValidFrames.push_back(true);
+            calibDataLeft.NumValidFrames++;
+        }
+        else
+        {
+            calibDataLeft.ValidFrames.push_back(false);
+        }
+
+        calibDataLeft.RefPoints.push_back(cbRef);
+        calibDataLeft.CBPoints.push_back(corners);
+    }
+
+    for (cv::Mat& image : calibDataRight.Frames)
+    {
+        cv::Mat grayScale;
+        cv::cvtColor(image, grayScale, cv::COLOR_BGR2GRAY);
+
+        std::vector<cv::Point2f> corners;
+        if (cv::findChessboardCorners(grayScale, checkerDims, corners, cv::CALIB_CB_ADAPTIVE_THRESH | cv::CALIB_CB_NORMALIZE_IMAGE || cv::CALIB_CB_FAST_CHECK))
+        {
+            cv::cornerSubPix(grayScale, corners, winSize, zeroZone, cbTermCriteria);
+            calibDataRight.ValidFrames.push_back(true);
+            calibDataRight.NumValidFrames++;
+        }
+        else
+        {
+            calibDataRight.ValidFrames.push_back(false);
+        }
+
+        calibDataRight.RefPoints.push_back(cbRef);
+        calibDataRight.CBPoints.push_back(corners);
+    }
+
+    calibDataLeft.NumTakenFrames = (int)calibDataLeft.Frames.size();
+    calibDataRight.NumTakenFrames = (int)calibDataRight.Frames.size();
+
+    for (int i = (int)calibDataLeft.Frames.size() - 1; i >= 0; i--)
+    {
+        if (!calibDataLeft.ValidFrames[i] || !calibDataRight.ValidFrames[i])
+        {
+            calibDataLeft.Frames.erase(calibDataLeft.Frames.begin() + i);
+            calibDataLeft.CBPoints.erase(calibDataLeft.CBPoints.begin() + i);
+            calibDataLeft.RefPoints.erase(calibDataLeft.RefPoints.begin() + i);
+            calibDataLeft.ValidFrames.erase(calibDataLeft.ValidFrames.begin() + i);
+            
+            calibDataRight.Frames.erase(calibDataRight.Frames.begin() + i);
+            calibDataRight.CBPoints.erase(calibDataRight.CBPoints.begin() + i);
+            calibDataRight.RefPoints.erase(calibDataRight.RefPoints.begin() + i);
+            calibDataRight.ValidFrames.erase(calibDataRight.ValidFrames.begin() + i);
+        }
+    }
+
+    if (calibDataLeft.RefPoints.empty())
+    {
+        return false;
+    }
+
+    return true;
 }
 
 inline double RadToDeg(double r)
 {
     return r * 180.0 / M_PI;
+}
+
+inline double DegToRad(double d)
+{
+    return d * M_PI / 180.0;
 }
 
 std::vector<double> RotationToEuler(cv::Mat& R)
@@ -1032,6 +1319,19 @@ std::vector<double> RotationToEuler(cv::Mat& R)
     }
 
     return { RadToDeg(x), RadToDeg(y), RadToDeg(z) };
+}
+
+cv::Mat EulerToRotationMatrix(std::vector<double>& angles)
+{
+    double rx = DegToRad(angles[0]);
+    double ry = DegToRad(angles[1]);
+    double rz = DegToRad(angles[2]);
+
+    cv::Mat X = (cv::Mat_<double>(3, 3) << 1, 0, 0, 0, cos(rx), -sin(rx), 0, sin(rx), cos(rx));
+    cv::Mat Y = (cv::Mat_<double>(3, 3) << cos(ry), 0, sin(ry), 0, 1, 0, -sin(ry), 0, cos(ry));
+    cv::Mat Z = (cv::Mat_<double>(3, 3) << cos(rz), -sin(rz), 0, sin(rz), cos(rz), 0, 0, 0, 1);
+
+    return Z * Y * X;
 }
 
 
@@ -1118,6 +1418,77 @@ bool CalibrateSingleCamera(CalibrationData& calibData, bool bRightCamera)
     return true;
 }
 
+
+bool CalibrateStereo(CalibrationData& calibDataLeft, CalibrationData& calibDataRight, StereoExtrinsicsData& stereoData)
+{
+    cv::Matx<double, 3, 3> rotationLeftToRight;
+    cv::Vec<double, 3> translationLeftToRight;
+
+    if (calibDataLeft.Frames.size() < 1)
+    {
+        return false;
+    }
+
+    if (calibDataLeft.bFisheyeLens)
+    {
+        cv::TermCriteria calibTermCriteria = cv::TermCriteria(cv::TermCriteria::COUNT + cv::TermCriteria::EPS, 100, DBL_EPSILON);
+        int flags = cv::CALIB_FIX_INTRINSIC;
+
+        try
+        {
+            stereoData.CalibrationRMSError = cv::fisheye::stereoCalibrate(calibDataLeft.RefPoints, calibDataLeft.CBPoints, calibDataRight.CBPoints, calibDataLeft.CameraIntrinsics, calibDataLeft.CameraDistortion, calibDataRight.CameraIntrinsics, calibDataRight.CameraDistortion, cv::Size(calibDataLeft.SensorWidth, calibDataLeft.SensorHeight), rotationLeftToRight, translationLeftToRight, cv::noArray(), cv::noArray(), flags, calibTermCriteria);
+        }
+        catch (const cv::Exception& e)
+        {
+            return false;
+        }
+    }
+    else
+    {
+        cv::TermCriteria calibTermCriteria = cv::TermCriteria(cv::TermCriteria::COUNT + cv::TermCriteria::EPS, 30, DBL_EPSILON);
+        int flags = cv::CALIB_FIX_INTRINSIC;
+
+        try
+        {
+            stereoData.CalibrationRMSError = cv::stereoCalibrate(calibDataLeft.RefPoints, calibDataLeft.CBPoints, calibDataRight.CBPoints, calibDataLeft.CameraIntrinsics, calibDataLeft.CameraDistortion, calibDataRight.CameraIntrinsics, calibDataRight.CameraDistortion, cv::Size(calibDataLeft.SensorWidth, calibDataLeft.SensorHeight), rotationLeftToRight, translationLeftToRight, cv::noArray(), cv::noArray(), flags, calibTermCriteria);
+        }
+        catch (const cv::Exception& e)
+        {
+            return false;
+        }
+    }
+
+    cv::Vec<double, 3> prevWorldTranslationLeft = cv::Vec<double, 3>(calibDataLeft.ExtrinsicsTranslation[0], calibDataLeft.ExtrinsicsTranslation[1], calibDataLeft.ExtrinsicsTranslation[2]);
+    cv::Vec<double, 3> prevWorldTranslationRight = cv::Vec<double, 3>(calibDataRight.ExtrinsicsTranslation[0], calibDataRight.ExtrinsicsTranslation[1], calibDataRight.ExtrinsicsTranslation[2]);
+
+    cv::Mat prevWorldRotationLeft = EulerToRotationMatrix(calibDataLeft.ExtrinsicsRotation);
+
+    cv::Mat worldToPrevL = cv::Mat::eye(4, 4, CV_64F);
+    cv::Mat prevLToWorld = cv::Mat::eye(4, 4, CV_64F);
+    cv::hconcat(prevWorldRotationLeft, prevWorldTranslationLeft, worldToPrevL(cv::Rect(0, 0, 4, 3)));
+    
+    cv::invert(worldToPrevL, prevLToWorld, cv::DECOMP_SVD);
+
+    cv::Vec<double, 4> homoCoord = cv::Vec<double, 4>(translationLeftToRight[0], translationLeftToRight[1], translationLeftToRight[2], 1);
+
+    cv::Mat rightTrans = prevLToWorld * homoCoord;
+
+    rightTrans.at<double>(0, 0) = rightTrans.at<double>(0, 0) * -1.0;
+    rightTrans.at<double>(1, 0) = rightTrans.at<double>(1, 0) * -1.0;
+    rightTrans.at<double>(2, 0) = rightTrans.at<double>(2, 0) * -1.0;
+    calibDataRight.ExtrinsicsTranslation = rightTrans(cv::Rect(0,0,1, 3));
+
+    cv::Mat combinedRot = prevWorldRotationLeft * rotationLeftToRight;
+    calibDataRight.ExtrinsicsRotation = RotationToEuler(combinedRot);
+    //calibDataRight.ExtrinsicsRotation[0] *= -1.0;
+
+    cv::Mat rot = cv::Mat(rotationLeftToRight);
+    stereoData.LeftTorightRotation = RotationToEuler(rot);
+    cv::Mat trans = cv::Mat(translationLeftToRight);
+    stereoData.LeftTorightTranslation = trans;
+
+    return true;
+}
 
 
 
@@ -1237,7 +1608,7 @@ void CaptureFrame()
 
     if (g_bOpenVRIntialized)
     {
-        vr::VRSystem()->GetDeviceToAbsoluteTrackingPose(vr::TrackingUniverseStanding, 0.0f, g_lastTrackedDevicePoses, g_openVRDevice + 1);
+        vr::VRSystem()->GetDeviceToAbsoluteTrackingPose(vr::TrackingUniverseStanding, -0.0075f, g_lastTrackedDevicePoses, g_openVRDevice + 1);
     }
 
     g_videoCapture.retrieve(g_cameraFrameBuffer); 
