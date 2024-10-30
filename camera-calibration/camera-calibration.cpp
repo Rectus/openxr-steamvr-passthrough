@@ -1395,7 +1395,7 @@ bool CalibrateSingleCamera(CalibrationData& calibData, bool bRightCamera)
 
     if (g_bUseOpenVRExtrinsic)
     {
-        // Rotate around 180 degrees to match OpenVR angles somehow
+        // Rotate around 180 degrees on the X axis to match OpenVR angles somehow
         cv::Mat rot = (cv::Mat_<float>(3, 3) << 1, 0, 0, 0, -1, 0, 0, 0, -1);
         for (int i = 0; i < calibData.TrackedDeviceToWorldRotations.size(); i++)
         {
@@ -1405,12 +1405,11 @@ bool CalibrateSingleCamera(CalibrationData& calibData, bool bRightCamera)
         cv::Mat outRotation, outTranslation;
         cv::calibrateHandEye(calibData.TrackedDeviceToWorldRotations, calibData.TrackedDeviceToWorldTranslations, rvecs, tvecs, outRotation, outTranslation, cv::CALIB_HAND_EYE_TSAI);
 
-        //outRotation = outRotation.t();
         calibData.ExtrinsicsRotation = RotationToEuler(outRotation);
-        calibData.ExtrinsicsRotation[0] *= -1.0;
+        calibData.ExtrinsicsRotation[1] *= -1.0;
+        calibData.ExtrinsicsRotation[2] *= -1.0;
 
         outTranslation.at<double>(0, 0) = outTranslation.at<double>(0, 0) * -1.0;
-        outTranslation.at<double>(1, 0) = outTranslation.at<double>(1, 0) * -1.0;
         calibData.ExtrinsicsTranslation = outTranslation;
     }
 
@@ -1461,31 +1460,25 @@ bool CalibrateStereo(CalibrationData& calibDataLeft, CalibrationData& calibDataR
     cv::Vec<double, 3> prevWorldTranslationLeft = cv::Vec<double, 3>(calibDataLeft.ExtrinsicsTranslation[0], calibDataLeft.ExtrinsicsTranslation[1], calibDataLeft.ExtrinsicsTranslation[2]);
     cv::Vec<double, 3> prevWorldTranslationRight = cv::Vec<double, 3>(calibDataRight.ExtrinsicsTranslation[0], calibDataRight.ExtrinsicsTranslation[1], calibDataRight.ExtrinsicsTranslation[2]);
 
-    cv::Mat prevWorldRotationLeft = EulerToRotationMatrix(calibDataLeft.ExtrinsicsRotation);
+    std::vector<double> prevRotL(calibDataLeft.ExtrinsicsRotation);
+    prevRotL[1] *= -1.0;
+    prevRotL[2] *= -1.0;
+    cv::Mat prevWorldRotationLeft = EulerToRotationMatrix(prevRotL);
 
-    cv::Mat worldToPrevL = cv::Mat::eye(4, 4, CV_64F);
-    cv::Mat prevLToWorld = cv::Mat::eye(4, 4, CV_64F);
-    cv::hconcat(prevWorldRotationLeft, prevWorldTranslationLeft, worldToPrevL(cv::Rect(0, 0, 4, 3)));
-    
-    cv::invert(worldToPrevL, prevLToWorld, cv::DECOMP_SVD);
+    cv::Mat rightTrans = prevWorldRotationLeft.t() * (translationLeftToRight - prevWorldTranslationLeft);
 
-    cv::Vec<double, 4> homoCoord = cv::Vec<double, 4>(translationLeftToRight[0], translationLeftToRight[1], translationLeftToRight[2], 1);
-
-    cv::Mat rightTrans = prevLToWorld * homoCoord;
-
-    rightTrans.at<double>(0, 0) = rightTrans.at<double>(0, 0) * -1.0;
-    rightTrans.at<double>(1, 0) = rightTrans.at<double>(1, 0) * -1.0;
-    rightTrans.at<double>(2, 0) = rightTrans.at<double>(2, 0) * -1.0;
-    calibDataRight.ExtrinsicsTranslation = rightTrans(cv::Rect(0,0,1, 3));
+    rightTrans *= -1.0;
+    calibDataRight.ExtrinsicsTranslation = rightTrans;
 
     cv::Mat combinedRot = prevWorldRotationLeft * rotationLeftToRight;
     calibDataRight.ExtrinsicsRotation = RotationToEuler(combinedRot);
-    //calibDataRight.ExtrinsicsRotation[0] *= -1.0;
+    calibDataRight.ExtrinsicsRotation[1] *= -1.0;
+    calibDataRight.ExtrinsicsRotation[2] *= -1.0;
 
-    cv::Mat rot = cv::Mat(rotationLeftToRight);
-    stereoData.LeftTorightRotation = RotationToEuler(rot);
-    cv::Mat trans = cv::Mat(translationLeftToRight);
-    stereoData.LeftTorightTranslation = trans;
+    cv::Mat rotLtoR = cv::Mat(rotationLeftToRight);
+    stereoData.LeftTorightRotation = RotationToEuler(rotLtoR);
+    cv::Mat transLtoR = cv::Mat(translationLeftToRight);
+    stereoData.LeftTorightTranslation = transLtoR;
 
     return true;
 }
