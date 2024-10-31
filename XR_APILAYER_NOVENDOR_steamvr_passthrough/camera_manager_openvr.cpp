@@ -365,12 +365,12 @@ void CameraManagerOpenVR::GetTrackedCameraEyePoses(XrMatrix4x4f& LeftPose, XrMat
         XrMatrix4x4f camera0Pose, camera1Pose, transMatrix, rotMatrix;
 
         XrMatrix4x4f_CreateTranslation(&transMatrix, cameraConf.OpenVR_Camera0_Translation[0], cameraConf.OpenVR_Camera0_Translation[1], cameraConf.OpenVR_Camera0_Translation[2]);
-        XrMatrix4x4f_CreateRotation(&rotMatrix, cameraConf.OpenVR_Camera0_Rotation[0], cameraConf.OpenVR_Camera0_Rotation[1], cameraConf.OpenVR_Camera0_Rotation[2]);
+        XrMatrix4x4f_CreateRotation(&rotMatrix, -cameraConf.OpenVR_Camera0_Rotation[0], -cameraConf.OpenVR_Camera0_Rotation[1], -cameraConf.OpenVR_Camera0_Rotation[2]);
 
         XrMatrix4x4f_Multiply(&camera0Pose, &rotMatrix, &transMatrix);
 
         XrMatrix4x4f_CreateTranslation(&transMatrix, cameraConf.OpenVR_Camera1_Translation[0], cameraConf.OpenVR_Camera1_Translation[1], cameraConf.OpenVR_Camera1_Translation[2]);
-        XrMatrix4x4f_CreateRotation(&rotMatrix, cameraConf.OpenVR_Camera1_Rotation[0], cameraConf.OpenVR_Camera1_Rotation[1], cameraConf.OpenVR_Camera1_Rotation[2]);
+        XrMatrix4x4f_CreateRotation(&rotMatrix, -cameraConf.OpenVR_Camera1_Rotation[0], -cameraConf.OpenVR_Camera1_Rotation[1], -cameraConf.OpenVR_Camera1_Rotation[2]);
 
         XrMatrix4x4f_Multiply(&camera1Pose, &rotMatrix, &transMatrix); 
 

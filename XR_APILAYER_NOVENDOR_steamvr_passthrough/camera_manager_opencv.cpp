@@ -259,12 +259,12 @@ XrMatrix4x4f CameraManagerOpenCV::GetLeftToRightCameraTransform() const
     XrMatrix4x4f result, camera0Pose, camera1Pose, transMatrix, rotMatrix, temp;
 
     XrMatrix4x4f_CreateTranslation(&transMatrix, cameraConf.Camera0_Translation[0], cameraConf.Camera0_Translation[1], cameraConf.Camera0_Translation[2]);
-    XrMatrix4x4f_CreateRotation(&rotMatrix, cameraConf.Camera0_Rotation[0], cameraConf.Camera0_Rotation[1], cameraConf.Camera0_Rotation[2]);
+    XrMatrix4x4f_CreateRotation(&rotMatrix, -cameraConf.Camera0_Rotation[0], -cameraConf.Camera0_Rotation[1], -cameraConf.Camera0_Rotation[2]);
 
     XrMatrix4x4f_Multiply(&camera0Pose, &rotMatrix, &transMatrix);
 
     XrMatrix4x4f_CreateTranslation(&transMatrix, cameraConf.Camera1_Translation[0], cameraConf.Camera1_Translation[1], cameraConf.Camera1_Translation[2]);
-    XrMatrix4x4f_CreateRotation(&rotMatrix, cameraConf.Camera1_Rotation[0], cameraConf.Camera1_Rotation[1], cameraConf.Camera1_Rotation[2]);
+    XrMatrix4x4f_CreateRotation(&rotMatrix, -cameraConf.Camera1_Rotation[0], -cameraConf.Camera1_Rotation[1], -cameraConf.Camera1_Rotation[2]);
 
     XrMatrix4x4f_Multiply(&camera1Pose, &rotMatrix, &transMatrix);
 
@@ -486,7 +486,7 @@ void CameraManagerOpenCV::ServeFrames()
         XrMatrix4x4f camera0ToWorld, camera1ToWorld, camera0Pose, camera1Pose, transMatrix, rotMatrix, temp;
 
         XrMatrix4x4f_CreateTranslation(&transMatrix, cameraConf.Camera0_Translation[0], cameraConf.Camera0_Translation[1], cameraConf.Camera0_Translation[2]);
-        XrMatrix4x4f_CreateRotation(&rotMatrix, cameraConf.Camera0_Rotation[0], cameraConf.Camera0_Rotation[1], cameraConf.Camera0_Rotation[2]);
+        XrMatrix4x4f_CreateRotation(&rotMatrix, -cameraConf.Camera0_Rotation[0], -cameraConf.Camera0_Rotation[1], -cameraConf.Camera0_Rotation[2]);
 
         XrMatrix4x4f_Multiply(&temp, &rotMatrix, &transMatrix);
         XrMatrix4x4f_Invert(&camera0Pose, &temp);
@@ -501,7 +501,7 @@ void CameraManagerOpenCV::ServeFrames()
         else
         {
             XrMatrix4x4f_CreateTranslation(&transMatrix, cameraConf.Camera1_Translation[0], cameraConf.Camera1_Translation[1], cameraConf.Camera1_Translation[2]);
-            XrMatrix4x4f_CreateRotation(&rotMatrix, cameraConf.Camera1_Rotation[0], cameraConf.Camera1_Rotation[1], cameraConf.Camera1_Rotation[2]);
+            XrMatrix4x4f_CreateRotation(&rotMatrix, -cameraConf.Camera1_Rotation[0], -cameraConf.Camera1_Rotation[1], -cameraConf.Camera1_Rotation[2]);
 
             XrMatrix4x4f_Multiply(&temp, &rotMatrix, &transMatrix);
             XrMatrix4x4f_Invert(&camera1Pose, &temp);

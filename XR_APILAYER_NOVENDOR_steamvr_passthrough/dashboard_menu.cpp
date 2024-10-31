@@ -1192,7 +1192,7 @@ if (bIsActiveTab) { ImGui::PopStyleColor(1); bIsActiveTab = false; }
 			{
 				ImGui::Text("Camera Extrinsics");
 				ImGui::DragFloat3("Camera Offset (m)", cameraConfig.Camera0_Translation, 0.001f, 0.0f, 0.0f, "%.3f");
-				ImGui::DragFloat3("Camera Rotation (degrees)", cameraConfig.Camera0_Rotation, 1.0f, -180.0f, 180.0f, "%.0f");
+				ImGui::DragFloat3("Camera Rotation (degrees)", cameraConfig.Camera0_Rotation, 0.001f, -180.0f, 180.0f, "%.3f");
 				ImGui::Text("Camera Intrinsics");
 				ImGui::DragFloat2("Focal Length", cameraConfig.Camera0_IntrinsicsFocal, 0.001f, 0.0f, 0.0f, "%.5f");
 				ImGui::DragFloat2("Center", cameraConfig.Camera0_IntrinsicsCenter, 0.001f, 0.0f, 0.0f, "%.5f");
@@ -1206,7 +1206,7 @@ if (bIsActiveTab) { ImGui::PopStyleColor(1); bIsActiveTab = false; }
 			{
 				ImGui::Text("Camera Extrinsics");
 				ImGui::DragFloat3("Camera Offset (m)###RightOffset", cameraConfig.Camera1_Translation, 0.001f, 0.0f, 0.0f, "%.3f");
-				ImGui::DragFloat3("Camera Rotation (degrees)###RightRotation", cameraConfig.Camera1_Rotation, 1.0f, -180.0f, 180.0f, "%.0f");
+				ImGui::DragFloat3("Camera Rotation (degrees)###RightRotation", cameraConfig.Camera1_Rotation, 0.001f, -180.0f, 180.0f, "%.3f");
 
 				ImGui::Text("Camera Intrinsics");
 				ImGui::DragFloat2("Focal Length###RightF", cameraConfig.Camera1_IntrinsicsFocal, 0.001f, 0.0f, 0.0f, "%.5f");
@@ -1233,7 +1233,7 @@ if (bIsActiveTab) { ImGui::PopStyleColor(1); bIsActiveTab = false; }
 			{
 				ImGui::Text("Camera Extrinsics");
 				ImGui::DragFloat3("Camera Offset (m)###OpenVROffset", cameraConfig.OpenVR_Camera0_Translation, 0.001f, 0.0f, 0.0f, "%.3f");
-				ImGui::DragFloat3("Camera Rotation (degrees)###OpenVRRot", cameraConfig.OpenVR_Camera0_Rotation, 1.0f, -180.0f, 180.0f, "%.0f");
+				ImGui::DragFloat3("Camera Rotation (degrees)###OpenVRRot", cameraConfig.OpenVR_Camera0_Rotation, 0.001f, -180.0f, 180.0f, "%.3f");
 				ImGui::Text("Camera Intrinsics");
 				ImGui::DragFloat2("Focal Length###OpenVRF", cameraConfig.OpenVR_Camera0_IntrinsicsFocal, 0.001f, 0.0f, 0.0f, "%.5f");
 				ImGui::DragFloat2("Center###OpenVRC", cameraConfig.OpenVR_Camera0_IntrinsicsCenter, 0.001f, 0.0f, 0.0f, "%.5f");
@@ -1246,7 +1246,7 @@ if (bIsActiveTab) { ImGui::PopStyleColor(1); bIsActiveTab = false; }
 			{
 				ImGui::Text("Camera Extrinsics");
 				ImGui::DragFloat3("Camera Offset (m)###OpenVRRightOffset", cameraConfig.OpenVR_Camera1_Translation, 0.001f, 0.0f, 0.0f, "%.3f");
-				ImGui::DragFloat3("Camera Rotation (degrees)###OpenVRRightRotation", cameraConfig.OpenVR_Camera1_Rotation, 1.0f, -180.0f, 180.0f, "%.0f");
+				ImGui::DragFloat3("Camera Rotation (degrees)###OpenVRRightRotation", cameraConfig.OpenVR_Camera1_Rotation, 0.001f, -180.0f, 180.0f, "%.3f");
 				ImGui::Text("Camera Intrinsics");
 				ImGui::DragFloat2("Focal Length###OpenVRRightF", cameraConfig.OpenVR_Camera1_IntrinsicsFocal, 0.001f, 0.0f, 0.0f, "%.5f");
 				ImGui::DragFloat2("Center###OpenVRRightC", cameraConfig.OpenVR_Camera1_IntrinsicsCenter, 0.001f, 0.0f, 0.0f, "%.5f");
