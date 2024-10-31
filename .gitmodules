@@ -12,7 +12,7 @@
 	
 [submodule "external/simpleini"]
 	path = external/simpleini
-	url = https://github.com/brofield/simpleini.git
+	url = https://github.com/Rectus/simpleini.git
 	
 [submodule "external/imgui"]
 	path = external/imgui
