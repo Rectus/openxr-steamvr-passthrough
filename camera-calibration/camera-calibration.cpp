@@ -24,6 +24,7 @@
 #define OPENVR_BUILD_STATIC
 #include "openvr.h"
 #include <opencv2/core/matx.hpp>
+#include <opencv2/core/quaternion.hpp>
 #include <opencv2/videoio.hpp>
 #include <opencv2/imgproc/types_c.h>
 #include <opencv2/calib3d.hpp>
@@ -81,9 +82,11 @@ struct CalibrationData
 
 struct StereoExtrinsicsData
 {
-    std::vector<double> LeftTorightRotation = std::vector<double>(3, 0.0);
-    std::vector<double> LeftTorightTranslation = std::vector<double>(3, 0.0);
+    cv::Mat LeftToRightRotationMatrix = cv::Mat(3, 3, CV_64F, cv::Scalar(0));
+    std::vector<double> LeftToRightRotation = std::vector<double>(3, 0.0);
+    std::vector<double> LeftToRightTranslation = std::vector<double>(3, 0.0);
     double CalibrationRMSError = 0.0;
+    double CalibrationDelta = 0.0;
 };
 
 
@@ -140,6 +143,7 @@ bool FindFrameCalibrationPatterns(CalibrationData& calibData, bool bRightCamera)
 bool FindFrameCalibrationPatternsStereo(CalibrationData& calibDataLeft, CalibrationData& calibDataRight);
 bool CalibrateSingleCamera(CalibrationData& calibData, bool bRightCamera);
 bool CalibrateStereo(CalibrationData& calibDataLeft, CalibrationData& calibDataRight, StereoExtrinsicsData& stereoData);
+void ApplyStereoCalibration(CalibrationData& calibDataLeft, CalibrationData& calibDataRight, StereoExtrinsicsData& stereoData);
 void EnumerateCameras(std::vector<std::string>& deviceList);
 bool InitCamera(int deviceIndex);
 void CaptureFrame();
@@ -197,6 +201,7 @@ int APIENTRY wWinMain(_In_ HINSTANCE hInstance, _In_opt_ HINSTANCE hPrevInstance
     bool bIsCapturingStereo = false;
     bool bCapturingCompleteStereo = false;
     bool bCalibrationCompleteStereo = false;
+    bool bCalibrationAppliedStereo = false;
     int framesRemaining = 0;
     float timeRemaining = 0.0f;
     LARGE_INTEGER lastTickTime, tickTime;
@@ -418,7 +423,7 @@ int APIENTRY wWinMain(_In_ HINSTANCE hInstance, _In_opt_ HINSTANCE hPrevInstance
         ImGui::Text("Chessboard calibration target");
         ImGui::Spacing();
 
-        ImGui::PushItemWidth(ImGui::GetContentRegionAvail().x * 0.5);
+        ImGui::PushItemWidth(ImGui::GetContentRegionAvail().x * 0.5f);
         ImGui::InputInt2("Number of inner corners", g_chessboardCorners);
         if (g_chessboardCorners[0] < 1) { g_chessboardCorners[0] = 1; }
         if (g_chessboardCorners[1] < 1) { g_chessboardCorners[1] = 1; }
@@ -549,6 +554,7 @@ int APIENTRY wWinMain(_In_ HINSTANCE hInstance, _In_opt_ HINSTANCE hPrevInstance
                 {
                     bCalibrationCompleteStereo = true;
                     bViewUndistorted = true;
+                    bCalibrationAppliedStereo = false;
                 }
             }
             ImGui::EndDisabled();
@@ -566,13 +572,26 @@ int APIENTRY wWinMain(_In_ HINSTANCE hInstance, _In_opt_ HINSTANCE hPrevInstance
 
             ImGui::Text("Left to Right Transform");
 
-            ImGui::InputDouble("Rotation X", &stereoData.LeftTorightRotation[0]);
-            ImGui::InputDouble("Rotation Y", &stereoData.LeftTorightRotation[1]);
-            ImGui::InputDouble("Rotation Z", &stereoData.LeftTorightRotation[2]);
+            ImGui::InputDouble("Rotation X", &stereoData.LeftToRightRotation[0]);
+            ImGui::InputDouble("Rotation Y", &stereoData.LeftToRightRotation[1]);
+            ImGui::InputDouble("Rotation Z", &stereoData.LeftToRightRotation[2]);
 
-            ImGui::InputDouble("Translation X", &stereoData.LeftTorightTranslation[0]);
-            ImGui::InputDouble("Translation Y", &stereoData.LeftTorightTranslation[1]);
-            ImGui::InputDouble("Translation Z", &stereoData.LeftTorightTranslation[2]);
+            ImGui::InputDouble("Translation X", &stereoData.LeftToRightTranslation[0]);
+            ImGui::InputDouble("Translation Y", &stereoData.LeftToRightTranslation[1]);
+            ImGui::InputDouble("Translation Z", &stereoData.LeftToRightTranslation[2]);
+
+            ImGui::BeginDisabled(!bCalibrationCompleteStereo || bCalibrationAppliedStereo);
+            if (ImGui::Button("Apply Calibration"))
+            {
+                ApplyStereoCalibration(calibDataLeft, calibDataRight, stereoData);
+                bCalibrationAppliedStereo = true;
+            }
+            ImGui::EndDisabled();
+
+            if (bCalibrationAppliedStereo)
+            {
+                ImGui::Text("Eye position change: %.3fmm", stereoData.CalibrationDelta * 1000.0);
+            }
         }
 
 
@@ -1279,6 +1298,9 @@ bool FindFrameCalibrationPatternsStereo(CalibrationData& calibDataLeft, Calibrat
             calibDataRight.CBPoints.erase(calibDataRight.CBPoints.begin() + i);
             calibDataRight.RefPoints.erase(calibDataRight.RefPoints.begin() + i);
             calibDataRight.ValidFrames.erase(calibDataRight.ValidFrames.begin() + i);
+
+            if (calibDataLeft.ValidFrames[i]) { calibDataLeft.NumValidFrames--; }
+            if (calibDataRight.ValidFrames[i]) { calibDataRight.NumValidFrames--; }          
         }
     }
 
@@ -1364,6 +1386,7 @@ bool CalibrateSingleCamera(CalibrationData& calibData, bool bRightCamera)
         }
         catch (const cv::Exception& e)
         {
+            e;
             return false;
         }
     }
@@ -1384,6 +1407,7 @@ bool CalibrateSingleCamera(CalibrationData& calibData, bool bRightCamera)
         }
         catch (const cv::Exception& e)
         {
+            e;
             return false;
         }
     }
@@ -1439,6 +1463,7 @@ bool CalibrateStereo(CalibrationData& calibDataLeft, CalibrationData& calibDataR
         }
         catch (const cv::Exception& e)
         {
+            e;
             return false;
         }
     }
@@ -1453,37 +1478,76 @@ bool CalibrateStereo(CalibrationData& calibDataLeft, CalibrationData& calibDataR
         }
         catch (const cv::Exception& e)
         {
+            e;
             return false;
         }
     }
 
+    stereoData.LeftToRightRotationMatrix = cv::Mat(rotationLeftToRight).clone();
+    stereoData.LeftToRightRotation = RotationToEuler(stereoData.LeftToRightRotationMatrix);
+    stereoData.LeftToRightTranslation = cv::Mat(translationLeftToRight).clone();
+
+    return true;
+}
+
+
+void ApplyStereoCalibration(CalibrationData& calibDataLeft, CalibrationData& calibDataRight, StereoExtrinsicsData& stereoData)
+{
+    // Apply the stereo calibration by getting the midpoint between the cameras of the old extrinsic calibration,
+    // and moving the midpoint of the new calibration to the old one, preserving the new distance between the cameras.
+
+    cv::Vec<double, 3> translationLeftToRight(stereoData.LeftToRightTranslation[0], stereoData.LeftToRightTranslation[1], stereoData.LeftToRightTranslation[2]);
+
     cv::Vec<double, 3> prevWorldTranslationLeft = cv::Vec<double, 3>(calibDataLeft.ExtrinsicsTranslation[0], calibDataLeft.ExtrinsicsTranslation[1], calibDataLeft.ExtrinsicsTranslation[2]);
     cv::Vec<double, 3> prevWorldTranslationRight = cv::Vec<double, 3>(calibDataRight.ExtrinsicsTranslation[0], calibDataRight.ExtrinsicsTranslation[1], calibDataRight.ExtrinsicsTranslation[2]);
+
+    cv::Vec<double, 3> prevWorldTranslationAverage = prevWorldTranslationLeft + (prevWorldTranslationRight - prevWorldTranslationLeft) * 0.5;
 
     std::vector<double> prevRotL(calibDataLeft.ExtrinsicsRotation);
     prevRotL[1] *= -1.0;
     prevRotL[2] *= -1.0;
     cv::Mat prevWorldRotationLeft = EulerToRotationMatrix(prevRotL);
 
-    cv::Mat rightTrans = prevWorldRotationLeft.t() * (translationLeftToRight - prevWorldTranslationLeft);
+    std::vector<double> prevRotR(calibDataRight.ExtrinsicsRotation);
+    prevRotR[1] *= -1.0;
+    prevRotR[2] *= -1.0;
+    cv::Mat prevWorldRotationRight = EulerToRotationMatrix(prevRotR);
 
-    rightTrans *= -1.0;
-    calibDataRight.ExtrinsicsTranslation = rightTrans;
+    cv::Quat<double> prevWorldRotationLeftQ = cv::Quat<double>::createFromRotMat(prevWorldRotationLeft);
+    cv::Quat<double> prevWorldRotationRightQ = cv::Quat<double>::createFromRotMat(prevWorldRotationRight);
+    cv::Quat<double> midpoint = cv::Quat<double>::slerp(prevWorldRotationLeftQ, prevWorldRotationRightQ, 0.5);
+    cv::Quat<double> LtoR = cv::Quat<double>::createFromRotMat(stereoData.LeftToRightRotationMatrix);
+    cv::Quat<double> halfLtoR = cv::Quat<double>::slerp(cv::Quat<double>(1, 0, 0, 0), LtoR, 0.5);
 
-    cv::Mat combinedRot = prevWorldRotationLeft * rotationLeftToRight;
-    calibDataRight.ExtrinsicsRotation = RotationToEuler(combinedRot);
+    cv::Mat rotLeft = cv::Mat((midpoint * halfLtoR.inv(cv::QUAT_ASSUME_UNIT)).toRotMat3x3(cv::QUAT_ASSUME_UNIT));
+    cv::Mat rotRight = cv::Mat((midpoint * halfLtoR).toRotMat3x3(cv::QUAT_ASSUME_UNIT));
+
+    cv::Mat rightWorldTrans = (rotLeft.t() * (translationLeftToRight - prevWorldTranslationLeft));
+
+    cv::Mat avgWorldTrans = (rotLeft.t() * ((translationLeftToRight * 0.5) - prevWorldTranslationLeft));
+
+    cv::Mat avgToRight = rightWorldTrans - avgWorldTrans;
+    avgToRight *= -1.0; // Needs to be inverted for some reason
+
+    cv::Mat rightCorrectedTrans = prevWorldTranslationAverage + avgToRight;
+    cv::Mat leftCorrectedTrans = prevWorldTranslationAverage - avgToRight;
+
+    calibDataRight.ExtrinsicsTranslation = rightCorrectedTrans;
+    calibDataLeft.ExtrinsicsTranslation = leftCorrectedTrans;
+
+    
+    calibDataRight.ExtrinsicsRotation = RotationToEuler(rotRight);
     calibDataRight.ExtrinsicsRotation[1] *= -1.0;
     calibDataRight.ExtrinsicsRotation[2] *= -1.0;
 
-    cv::Mat rotLtoR = cv::Mat(rotationLeftToRight);
-    stereoData.LeftTorightRotation = RotationToEuler(rotLtoR);
-    cv::Mat transLtoR = cv::Mat(translationLeftToRight);
-    stereoData.LeftTorightTranslation = transLtoR;
+    calibDataLeft.ExtrinsicsRotation = RotationToEuler(rotLeft);
+    calibDataLeft.ExtrinsicsRotation[1] *= -1.0;
+    calibDataLeft.ExtrinsicsRotation[2] *= -1.0;
 
-    return true;
+    cv::Vec<double, 3> diff = prevWorldTranslationLeft - cv::Vec3d(leftCorrectedTrans);
+    stereoData.CalibrationDelta = std::sqrt(std::pow(diff[0], 2) + std::pow(diff[0], 2) + std::pow(diff[0], 2));
+
 }
-
-
 
 
 void EnumerateCameras(std::vector<std::string>& deviceList)
