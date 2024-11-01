@@ -104,6 +104,13 @@ static ComPtr<ID3D11Texture2D> g_calibrationTargetUploadTexture = NULL;
 static ComPtr<ID3D11Texture2D> g_calibrationTargetTexture = NULL;
 static ComPtr<ID3D11ShaderResourceView> g_calibrationTargetSRV = NULL;
 
+static std::thread g_serveThread;
+static std::atomic_bool g_bRunThread = true;
+static std::atomic_bool g_bHasNewFrame = false;
+static std::mutex g_serveMutex;
+static cv::Mat g_waitingFrameBuffer;
+static vr::TrackedDevicePose_t g_waitingTrackedDevicePoses[vr::k_unMaxTrackedDeviceCount];
+
 static uint32_t g_frameWidth = 0;
 static uint32_t g_frameHeight = 0;
 static uint32_t g_frameRate = 0;
@@ -146,7 +153,8 @@ bool CalibrateStereo(CalibrationData& calibDataLeft, CalibrationData& calibDataR
 void ApplyStereoCalibration(CalibrationData& calibDataLeft, CalibrationData& calibDataRight, StereoExtrinsicsData& stereoData);
 void EnumerateCameras(std::vector<std::string>& deviceList);
 bool InitCamera(int deviceIndex);
-void CaptureFrame();
+void ServeFrames(int _);
+void FlipFrame();
 void UploadFrame(cv::Mat& frameBuffer);
 bool CreateCalibrationTarget(int width, int height, int cornersW, int cornersH);
 bool CreateDeviceD3D(HWND hWnd);
@@ -349,7 +357,7 @@ int APIENTRY wWinMain(_In_ HINSTANCE hInstance, _In_opt_ HINSTANCE hPrevInstance
 
         if (bIsCameraActive)
         {
-            CaptureFrame();
+            FlipFrame();
         }
 
 
@@ -782,6 +790,12 @@ int APIENTRY wWinMain(_In_ HINSTANCE hInstance, _In_opt_ HINSTANCE hPrevInstance
         ImGui_ImplDX11_RenderDrawData(ImGui::GetDrawData());
 
         g_pSwapChain->Present(1, 0);
+    }
+
+    if (g_serveThread.joinable())
+    {
+        g_bRunThread = false;
+        g_serveThread.join();
     }
 
     if (g_videoCapture.isOpened())
@@ -1603,6 +1617,15 @@ void EnumerateCameras(std::vector<std::string>& deviceList)
 
 bool InitCamera(int deviceIndex)
 {
+    if (g_serveThread.joinable())
+    {
+        g_bRunThread = false;
+        g_serveThread.join();
+    }
+
+    g_bHasNewFrame = false;
+    g_cameraFrameBuffer = cv::Mat();
+
     if (g_videoCapture.isOpened())
     {
         g_videoCapture.release();
@@ -1645,31 +1668,63 @@ bool InitCamera(int deviceIndex)
         return false;
     }
 
+    
+    g_bRunThread = true;
+    g_serveThread = std::thread(&ServeFrames, 0);
+
     return true;
 }
 
 
-void CaptureFrame()
+void ServeFrames(int _)
 {
-    if (!g_videoCapture.isOpened())
+    while (g_bRunThread)
+    {
+        if (!g_videoCapture.isOpened())
+        {
+            return;
+        }
+
+        if (!g_videoCapture.grab())
+        {
+            return;
+        }
+
+        std::lock_guard<std::mutex> lock(g_serveMutex);
+
+        if (g_bOpenVRIntialized)
+        {
+            vr::VRSystem()->GetDeviceToAbsoluteTrackingPose(vr::TrackingUniverseStanding, -0.0075f, g_waitingTrackedDevicePoses, g_openVRDevice + 1);
+        }
+
+        g_videoCapture.retrieve(g_waitingFrameBuffer);
+
+        g_bHasNewFrame = true;
+    }
+}
+
+void FlipFrame()
+{
+    if (!g_bHasNewFrame || !g_bRunThread)
     {
         return;
     }
 
-    g_videoCapture.read(g_cameraFrameBuffer);
+    std::lock_guard<std::mutex> lock(g_serveMutex);
 
-    if (!g_videoCapture.grab())
-    {
-        return;
-    }
+    g_cameraFrameBuffer = g_waitingFrameBuffer.clone();
 
     if (g_bOpenVRIntialized)
     {
-        vr::VRSystem()->GetDeviceToAbsoluteTrackingPose(vr::TrackingUniverseStanding, -0.0075f, g_lastTrackedDevicePoses, g_openVRDevice + 1);
+        for (int i = 0; i <= g_openVRDevice + 1; i++)
+        {
+            g_lastTrackedDevicePoses[i] = g_waitingTrackedDevicePoses[i];
+        }
     }
 
-    g_videoCapture.retrieve(g_cameraFrameBuffer); 
+    g_bHasNewFrame = false;
 }
+
 
 void UploadFrame(cv::Mat& frameBuffer)
 {
