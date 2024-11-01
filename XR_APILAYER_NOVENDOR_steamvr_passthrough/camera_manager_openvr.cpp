@@ -313,6 +313,16 @@ EStereoFrameLayout CameraManagerOpenVR::GetFrameLayout() const
     return m_frameLayout;
 }
 
+bool CameraManagerOpenVR::IsUsingFisheyeModel() const
+{
+    Config_Camera& cameraConf = m_configManager->GetConfig_Camera();
+    if (cameraConf.OpenVRCustomCalibration)
+    {
+        return cameraConf.OpenVR_CameraHasFisheyeLens;
+    }
+    return true;
+}
+
 XrMatrix4x4f CameraManagerOpenVR::GetLeftToRightCameraTransform() const
 {
     return m_cameraLeftToRightPose;

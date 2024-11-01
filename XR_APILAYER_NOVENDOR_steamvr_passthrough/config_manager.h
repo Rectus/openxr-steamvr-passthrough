@@ -175,6 +175,7 @@ struct Config_Camera
 	float ExposureValue = -7.0f;
 
 	EStereoFrameLayout CameraFrameLayout = Mono;
+	bool CameraHasFisheyeLens = false;
 
 	int Camera0DeviceIndex = 0;
 
@@ -193,6 +194,7 @@ struct Config_Camera
 	int Camera1_IntrinsicsSensorPixels[2] = { 1, 1 };
 
 	bool OpenVRCustomCalibration = false;
+	bool OpenVR_CameraHasFisheyeLens = true;
 
 	float OpenVR_Camera0_Translation[3] = { 0.0f };
 	float OpenVR_Camera0_Rotation[3] = { 0.0f };
@@ -225,6 +227,7 @@ struct Config_Camera
 		ExposureValue = (float)ini.GetDoubleValue(section, "ExposureValue", ExposureValue);
 
 		CameraFrameLayout = (EStereoFrameLayout)ini.GetLongValue(section, "CameraFrameLayout", CameraFrameLayout);
+		CameraHasFisheyeLens = ini.GetBoolValue(section, "CameraHasFisheyeLens", CameraHasFisheyeLens);
 
 		Camera0DeviceIndex = (int)ini.GetLongValue(section, "Camera0DeviceIndex", Camera0DeviceIndex);
 
@@ -265,6 +268,7 @@ struct Config_Camera
 		Camera1_IntrinsicsSensorPixels[1] = (int)ini.GetLongValue(section, "Camera1_IntrinsicsSensorPixelsY", Camera1_IntrinsicsSensorPixels[1]);
 
 		OpenVRCustomCalibration = ini.GetBoolValue(section, "OpenVRCustomCalibration", OpenVRCustomCalibration);
+		OpenVR_CameraHasFisheyeLens = ini.GetBoolValue(section, "OpenVR_CameraHasFisheyeLens", OpenVR_CameraHasFisheyeLens);
 
 		OpenVR_Camera0_Translation[0] = (float)ini.GetDoubleValue(section, "OpenVR_Camera0_TranslationX", OpenVR_Camera0_Translation[0]);
 		OpenVR_Camera0_Translation[1] = (float)ini.GetDoubleValue(section, "OpenVR_Camera0_TranslationY", OpenVR_Camera0_Translation[1]);
@@ -320,6 +324,7 @@ struct Config_Camera
 		ini.SetDoubleValue(section, "ExposureValue", ExposureValue);
 
 		ini.SetLongValue(section, "CameraFrameLayout", (long)CameraFrameLayout);
+		ini.SetBoolValue(section, "CameraHasFisheyeLens", CameraHasFisheyeLens);
 
 		ini.SetLongValue(section, "Camera0DeviceIndex", (long)Camera0DeviceIndex);
 
@@ -360,6 +365,7 @@ struct Config_Camera
 		ini.SetLongValue(section, "Camera1_IntrinsicsSensorPixelsY", Camera1_IntrinsicsSensorPixels[1]);
 
 		ini.SetBoolValue(section, "OpenVRCustomCalibration", OpenVRCustomCalibration);
+		ini.SetBoolValue(section, "OpenVR_CameraHasFisheyeLens", OpenVR_CameraHasFisheyeLens);
 
 		ini.SetDoubleValue(section, "OpenVR_Camera0_TranslationX", OpenVR_Camera0_Translation[0]);
 		ini.SetDoubleValue(section, "OpenVR_Camera0_TranslationY", OpenVR_Camera0_Translation[1]);

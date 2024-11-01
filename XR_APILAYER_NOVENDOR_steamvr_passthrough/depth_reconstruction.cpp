@@ -171,10 +171,41 @@ void DepthReconstruction::InitReconstruction()
 
     cv::Size textureSize(m_cameraFrameWidth, m_cameraFrameHeight);
 
-    cv::fisheye::stereoRectify(m_intrinsicsLeft, m_distortionParamsLeft, m_intrinsicsRight, m_distortionParamsRight, textureSize, R, T, R1, R2, P1, P2, Q, cv::CALIB_ZERO_DISPARITY, textureSize, 0.0, m_fovScale);
+    if (m_cameraManager->IsUsingFisheyeModel())
+    {
+        cv::fisheye::stereoRectify(m_intrinsicsLeft, m_distortionParamsLeft, m_intrinsicsRight, m_distortionParamsRight, textureSize, R, T, R1, R2, P1, P2, Q, cv::CALIB_ZERO_DISPARITY, textureSize, 0.0, m_fovScale);
 
-    cv::fisheye::initUndistortRectifyMap(m_intrinsicsLeft, m_distortionParamsLeft, R1, P1, textureSize, CV_32FC1, m_leftMap1, m_leftMap2);
-    cv::fisheye::initUndistortRectifyMap(m_intrinsicsRight, m_distortionParamsRight, R2, P2, textureSize, CV_32FC1, m_rightMap1, m_rightMap2);
+        cv::fisheye::initUndistortRectifyMap(m_intrinsicsLeft, m_distortionParamsLeft, R1, P1, textureSize, CV_32FC1, m_leftMap1, m_leftMap2);
+        cv::fisheye::initUndistortRectifyMap(m_intrinsicsRight, m_distortionParamsRight, R2, P2, textureSize, CV_32FC1, m_rightMap1, m_rightMap2);
+    }
+    else if(m_frameLayout != Mono)
+    {
+        cv::stereoRectify(m_intrinsicsLeft, m_distortionParamsLeft, m_intrinsicsRight, m_distortionParamsRight, textureSize, R, T, R1, R2, P1, P2, Q, cv::CALIB_ZERO_DISPARITY, 1.0, textureSize);
+
+        P1.at<double>(0, 0) /= m_fovScale;
+        P1.at<double>(1, 1) /= m_fovScale;
+
+        P2.at<double>(0, 0) /= m_fovScale;
+        P2.at<double>(1, 1) /= m_fovScale;
+
+        cv::initUndistortRectifyMap(m_intrinsicsLeft, m_distortionParamsLeft, R1, P1, textureSize, CV_32FC1, m_leftMap1, m_leftMap2);
+        cv::initUndistortRectifyMap(m_intrinsicsRight, m_distortionParamsRight, R2, P2, textureSize, CV_32FC1, m_rightMap1, m_rightMap2);
+    }
+    else
+    {
+        P1 = m_intrinsicsLeft.clone();
+        P2 = m_intrinsicsRight.clone();
+        Q = cv::Mat::eye(4, 4, CV_64F);
+
+        P1.at<double>(0, 0) /= m_fovScale;
+        P1.at<double>(1, 1) /= m_fovScale;
+
+        P2.at<double>(0, 0) /= m_fovScale;
+        P2.at<double>(1, 1) /= m_fovScale;
+
+        cv::initUndistortRectifyMap(m_intrinsicsLeft, m_distortionParamsLeft, R1, P1, textureSize, CV_32FC1, m_leftMap1, m_leftMap2);
+        cv::initUndistortRectifyMap(m_intrinsicsRight, m_distortionParamsRight, R2, P2, textureSize, CV_32FC1, m_rightMap1, m_rightMap2);
+    }
 
     m_fishEyeProjectionLeft = CVMatToXrMatrix(P1);
     m_fishEyeProjectionRight = CVMatToXrMatrix(P2);

@@ -41,6 +41,7 @@ public:
 	virtual void GetIntrinsics(const ERenderEye cameraEye, XrVector2f& focalLength, XrVector2f& center) const = 0;
 	virtual void GetDistortionCoefficients(ECameraDistortionCoefficients& coeffs) const = 0;
 	virtual EStereoFrameLayout GetFrameLayout() const = 0;
+	virtual bool IsUsingFisheyeModel() const = 0;
 	virtual XrMatrix4x4f GetLeftToRightCameraTransform() const = 0;
 	virtual void UpdateStaticCameraParameters() = 0;
 	virtual float GetFrameRetrievalPerfTime() = 0;
@@ -64,6 +65,7 @@ public:
 	void GetIntrinsics(const ERenderEye cameraEye, XrVector2f& focalLength, XrVector2f& center) const;
 	void GetDistortionCoefficients(ECameraDistortionCoefficients& coeffs) const;
 	EStereoFrameLayout GetFrameLayout() const;
+	bool IsUsingFisheyeModel() const;
 	XrMatrix4x4f GetLeftToRightCameraTransform() const;
 	void UpdateStaticCameraParameters();
 	float GetFrameRetrievalPerfTime() { return m_averageFrameRetrievalTime; }
@@ -168,6 +170,7 @@ public:
 	void GetIntrinsics(const ERenderEye cameraEye, XrVector2f& focalLength, XrVector2f& center) const;
 	void GetDistortionCoefficients(ECameraDistortionCoefficients& coeffs) const;
 	EStereoFrameLayout GetFrameLayout() const;
+	bool IsUsingFisheyeModel() const;
 	XrMatrix4x4f GetLeftToRightCameraTransform() const;
 	void UpdateStaticCameraParameters();
 	float GetFrameRetrievalPerfTime() { return m_averageFrameRetrievalTime; }

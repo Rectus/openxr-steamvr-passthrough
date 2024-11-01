@@ -245,6 +245,12 @@ EStereoFrameLayout CameraManagerOpenCV::GetFrameLayout() const
     return m_frameLayout;
 }
 
+bool CameraManagerOpenCV::IsUsingFisheyeModel() const
+{
+    Config_Camera& cameraConf = m_configManager->GetConfig_Camera();
+    return cameraConf.CameraHasFisheyeLens;
+}
+
 XrMatrix4x4f CameraManagerOpenCV::GetLeftToRightCameraTransform() const
 {
     if (m_frameLayout == EStereoFrameLayout::Mono)

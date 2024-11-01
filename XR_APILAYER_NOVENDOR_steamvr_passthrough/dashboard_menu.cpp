@@ -484,10 +484,6 @@ if (bIsActiveTab) { ImGui::PopStyleColor(1); bIsActiveTab = false; }
 			ImGui::SetNextItemWidth(ImGui::GetContentRegionAvail().x * 0.45f);
 			ScrollableSlider("Floor Height Offset (m)", &mainConfig.FloorHeightOffset, 0.0f, 2.0f, "%.2f", 0.01f);
 			TextDescriptionSpaced("Allows setting the floor height higher in the 2D modes,\nfor example to have correct projection on a table surface.");
-			
-			ImGui::SetNextItemWidth(ImGui::GetContentRegionAvail().x * 0.45f);
-			ScrollableSlider("Field of View Scale", &mainConfig.FieldOfViewScale, 0.0f, 1.0f, "%.1f", 0.1f);
-			TextDescription("Sets the size of the rendered area in the Custom 2D and Stereo 3D projection modes.");
 
 			IMGUI_BIG_SPACING;
 		}
@@ -1046,6 +1042,10 @@ if (bIsActiveTab) { ImGui::PopStyleColor(1); bIsActiveTab = false; }
 
 			ImGui::Checkbox("Clamp Camera Frame", &cameraConfig.ClampCameraFrame);
 			TextDescription("Only draws passthrough in the actual frame area. When turned off the edge pixels are extended past the frame into a 360 degree view.");
+
+			ImGui::SetNextItemWidth(ImGui::GetContentRegionAvail().x * 0.45f);
+			ScrollableSlider("Field of View Scale", &mainConfig.FieldOfViewScale, 0.1f, 2.0f, "%.2f", 0.01f);
+			TextDescription("Sets the size of the rendered area in the Custom 2D and Stereo 3D projection modes.");
 		}
 
 		ImGui::SetNextItemOpen(true, ImGuiCond_Once);
@@ -1184,6 +1184,7 @@ if (bIsActiveTab) { ImGui::PopStyleColor(1); bIsActiveTab = false; }
 			{
 				cameraConfig.CameraFrameLayout = StereoHorizontalLayout;
 			}
+			ImGui::Checkbox("Camera Has Fisheye Lens", &cameraConfig.CameraHasFisheyeLens);
 
 			IMGUI_BIG_SPACING;
 
@@ -1227,6 +1228,10 @@ if (bIsActiveTab) { ImGui::PopStyleColor(1); bIsActiveTab = false; }
 			IMGUI_BIG_SPACING;
 
 			BeginSoftDisabled(!cameraConfig.OpenVRCustomCalibration);
+
+			ImGui::Checkbox("SteamVR Camera Has Fisheye Lens", &cameraConfig.OpenVR_CameraHasFisheyeLens);
+
+			IMGUI_BIG_SPACING;
 
 			ImGui::SetNextItemOpen(true, ImGuiCond_Once);
 			if (ImGui::CollapsingHeader("SteamVR Camera 0"))
