@@ -151,6 +151,11 @@ static bool g_selectedImageChanged = false;
 static int g_displayedImage = 0;
 
 
+inline double RadToDeg(double r);
+inline double DegToRad(double d);
+std::vector<double> RotationToEuler(cv::Mat& R);
+cv::Mat EulerToRotationMatrix(std::vector<double>& angles);
+
 bool ImageCaptureUI(CalibrationData* calibData, CalibrationData* calibDataStereo, bool bCanCapture, bool& bIsCapturing, bool& bImageCaptureConsumed, bool& bCapturingComplete, int& framesRemaining, float& timeRemaining, bool bIsRightCamera, float deltaTime, bool bCaptureStereo);
 void SetFrameGeometry(CalibrationData& calibData, bool bIsRightCamera);
 void DrawCameraFrame(CalibrationData& calibData, bool bDrawDistorted, bool bDrawChessboardCorners, int imageIndex);
@@ -240,6 +245,8 @@ int APIENTRY wWinMain(_In_ HINSTANCE hInstance, _In_opt_ HINSTANCE hPrevInstance
     CalibrationData calibDataLeft = CalibrationData();
     CalibrationData calibDataRight = CalibrationData();
     StereoExtrinsicsData stereoData;
+    std::vector<double> displayRotation;
+    std::vector<double> displayTranslation;
 
     bool bViewSingleframe = false;
     bool bViewUndistorted = false;
@@ -249,6 +256,8 @@ int APIENTRY wWinMain(_In_ HINSTANCE hInstance, _In_opt_ HINSTANCE hPrevInstance
     int lastCalibrationTargetCornersW = 0;
     int lastCalibrationTargetCornersH = 0;
     bool bCalibrationTargetValid = false;
+    bool bHasIntrinsicsLeft = false;
+    bool bHasIntrinsicsRight = false;
 
 
     QueryPerformanceFrequency(&prefFreq);
@@ -295,6 +304,32 @@ int APIENTRY wWinMain(_In_ HINSTANCE hInstance, _In_opt_ HINSTANCE hPrevInstance
         deltaTime = (float)(tickTime.QuadPart - lastTickTime.QuadPart);
         deltaTime /= prefFreq.QuadPart;
         lastTickTime = tickTime;
+
+        
+
+        if (calibDataLeft.CameraIntrinsics.at<double>(0, 0) > 0 &&
+            calibDataLeft.CameraIntrinsics.at<double>(1, 1) > 0 &&
+            calibDataLeft.CameraIntrinsics.at<double>(0, 2) > 0 &&
+            calibDataLeft.CameraIntrinsics.at<double>(1, 2) > 0)
+        {
+            bHasIntrinsicsLeft = true;
+        }
+        else
+        {
+            bHasIntrinsicsLeft = false;
+        }
+
+        if (calibDataRight.CameraIntrinsics.at<double>(0, 0) > 0 &&
+            calibDataRight.CameraIntrinsics.at<double>(1, 1) > 0 &&
+            calibDataRight.CameraIntrinsics.at<double>(0, 2) > 0 &&
+            calibDataRight.CameraIntrinsics.at<double>(1, 2) > 0)
+        {
+            bHasIntrinsicsRight = true;
+        }
+        else
+        {
+            bHasIntrinsicsRight = false;
+        }
 
 
         ImGui_ImplDX11_NewFrame();
@@ -411,6 +446,15 @@ int APIENTRY wWinMain(_In_ HINSTANCE hInstance, _In_opt_ HINSTANCE hPrevInstance
                 calibData.SensorWidth = (int)g_iniData.GetLongValue(CONFIG_SECTION, "OpenVR_Camera1_IntrinsicsSensorPixelsX", calibData.SensorWidth);
                 calibData.SensorHeight = (int)g_iniData.GetLongValue(CONFIG_SECTION, "OpenVR_Camera1_IntrinsicsSensorPixelsY", calibData.SensorHeight);
             }
+        }
+
+        if (ImGui::Button("Reset Calibration Settings"))
+        {
+            calibDataLeft = CalibrationData();
+            calibDataRight = CalibrationData();
+            stereoData = StereoExtrinsicsData();
+            SetFrameGeometry(calibDataLeft, false);
+            SetFrameGeometry(calibDataRight, true);
         }
 
         ImGui::Separator();
@@ -590,7 +634,6 @@ int APIENTRY wWinMain(_In_ HINSTANCE hInstance, _In_opt_ HINSTANCE hPrevInstance
                 FindFrameCalibrationPatterns(calibData, bRightCamera);
                 g_displayedImage = 0;
                 g_selectedImageChanged = true;
-                bViewSingleframe = true;
             }
 
             if (ImGui::Button("Calibrate"))
@@ -664,13 +707,13 @@ int APIENTRY wWinMain(_In_ HINSTANCE hInstance, _In_opt_ HINSTANCE hPrevInstance
                 FindFrameCalibrationPatternsStereo(calibDataLeft, calibDataRight);
                 g_displayedImage = 0;
                 g_selectedImageChanged = true;
-                bViewSingleframe = false;
+                //bViewSingleframe = false;
             }
 
             if (!bHasStarted && bIsCapturingStereo)
             {
-                bViewUndistorted = false;
-                bViewSingleframe = false;
+                //bViewUndistorted = false;
+                //bViewSingleframe = false;
             }
 
             if (ImGui::Button("Calibrate"))
@@ -841,57 +884,38 @@ int APIENTRY wWinMain(_In_ HINSTANCE hInstance, _In_opt_ HINSTANCE hPrevInstance
             ImGui::BeginChild("CameraView", ImVec2(0, 0), true);
         }
 
+        bool bIsPerspectiveLocked = bIsCapturing || bIsCapturingStereo ||
+            (bCapturingCompleteLeft && !bCalibrationCompleteLeft && !bRightCamera) ||
+            (bCapturingCompleteRight && !bCalibrationCompleteRight && bRightCamera) ||
+            (bCapturingCompleteStereo && !bCalibrationCompleteStereo);
+
+        ImGui::BeginDisabled(bIsPerspectiveLocked);
         ImGui::Text("Camera View");
-        if (ImGui::RadioButton("Distorted", !bViewUndistorted && !bViewSingleframe))
+        if (ImGui::RadioButton("Distorted", !bViewUndistorted))
         {
             bViewUndistorted = false;
-            bViewSingleframe = false;
-        }
-
-        if (g_frameLayout != Mono)
-        {
-            if (ImGui::RadioButton("Distorted Single", !bViewUndistorted && bViewSingleframe))
-            {
-                bViewUndistorted = false;
-                bViewSingleframe = true;
-            }
-            
-        }
-
-        ImGui::BeginDisabled(!bCalibrationCompleteLeft || !bCalibrationCompleteRight);
-        if (ImGui::RadioButton("Undistorted", bViewUndistorted && !bViewSingleframe))
-        {
-            bViewUndistorted = true;
-            bViewSingleframe = false;
         }
         ImGui::EndDisabled();
 
-        ImGui::BeginDisabled((!bCalibrationCompleteLeft && !bRightCamera) || (!bCalibrationCompleteRight && bRightCamera));
+        ImGui::SameLine();
+
+        ImGui::BeginDisabled(bIsPerspectiveLocked || (!bHasIntrinsicsLeft && !bRightCamera) || (!bHasIntrinsicsRight && bRightCamera));
+        if (ImGui::RadioButton("Undistorted", bViewUndistorted))
+        {
+            bViewUndistorted = true;
+        }
+        ImGui::EndDisabled();
+
+        ImGui::BeginDisabled(bIsPerspectiveLocked);
         if (g_frameLayout != Mono)
         {
-            if (ImGui::RadioButton("Undistorted Single", bViewUndistorted && bViewSingleframe))
-            {
-                bViewUndistorted = true;
-                bViewSingleframe = true;
-            }
+            ImGui::Checkbox("Single Eye", &bViewSingleframe);           
         }
         ImGui::EndDisabled();
 
         if (bIsCameraActive)
         {
-            if (bViewUndistorted && !bViewSingleframe && bCalibrationCompleteLeft && bCalibrationCompleteRight)
-            {
-                DrawStereoFrame(calibDataLeft, calibDataRight, false, false, 0);
-            }
-            else if (bViewUndistorted && bCalibrationCompleteLeft && !bRightCamera)
-            {
-                DrawCameraFrame(calibDataLeft, false, false, 0);
-            }
-            else if (bViewUndistorted && bCalibrationCompleteRight && bRightCamera)
-            {
-                DrawCameraFrame(calibDataRight, false, false, 0);
-            }
-            else if (!bRightCamera && bCapturingCompleteLeft && !bCalibrationCompleteLeft && calibDataLeft.Frames.size() > 0)
+            if (!bRightCamera && bCapturingCompleteLeft && !bCalibrationCompleteLeft && calibDataLeft.Frames.size() > 0)
             {
                 if (g_selectedImageChanged)
                 {
@@ -939,7 +963,7 @@ int APIENTRY wWinMain(_In_ HINSTANCE hInstance, _In_opt_ HINSTANCE hPrevInstance
                     ImGui::Image((void*)g_cameraFrameSRV.Get(), imageSize);
                 }
             }
-            else if(bIsCapturing || bViewSingleframe)
+            else if(bIsCapturing || (bViewSingleframe && !bViewUndistorted && !bIsCapturingStereo))
             {
                 if (bRightCamera)
                 {
@@ -949,6 +973,18 @@ int APIENTRY wWinMain(_In_ HINSTANCE hInstance, _In_opt_ HINSTANCE hPrevInstance
                 {
                     DrawCameraFrame(calibDataLeft, true, false, 0);
                 }
+            }
+            else if (bViewUndistorted && !bViewSingleframe && bHasIntrinsicsLeft && bHasIntrinsicsRight && !bIsCapturingStereo)
+            {
+                DrawStereoFrame(calibDataLeft, calibDataRight, false, false, 0);
+            }
+            else if (bViewUndistorted && bHasIntrinsicsLeft && !bRightCamera && !bIsCapturingStereo)
+            {
+                DrawCameraFrame(calibDataLeft, false, false, 0);
+            }
+            else if (bViewUndistorted && bHasIntrinsicsRight && bRightCamera && !bIsCapturingStereo)
+            {
+                DrawCameraFrame(calibDataRight, false, false, 0);
             }
             else
             {
@@ -963,6 +999,34 @@ int APIENTRY wWinMain(_In_ HINSTANCE hInstance, _In_opt_ HINSTANCE hPrevInstance
 
                 UploadFrame(g_cameraFrameBuffer);
                 ImGui::Image((void*)g_cameraFrameSRV.Get(), imageSize);
+            }
+
+            if (bIsCapturing || bIsCapturingStereo)
+            {
+                ImGui::Text("Frames Remaining: %d", framesRemaining);
+                if (g_bUseOpenVRExtrinsic)
+                {
+                    if (g_lastTrackedDevicePoses[g_openVRDevice].bPoseIsValid)
+                    {
+                        cv::Mat pose = cv::Mat(3, 4, CV_32F, (void*)&g_lastTrackedDevicePoses[g_openVRDevice].mDeviceToAbsoluteTracking.m[0][0]);
+
+                        cv::Mat rotMatrix = pose(cv::Rect(0, 0, 3, 3)).clone();
+                        rotMatrix.convertTo(rotMatrix, CV_64F);
+
+                        displayRotation = RotationToEuler(rotMatrix);
+                        displayRotation[1] *= -1;
+                        displayRotation[2] *= -1;
+                        ImGui::Text("Rotation: %f, %f, %f", displayRotation[0], displayRotation[1], displayRotation[2]);
+
+                        displayTranslation = pose.col(3);
+                        displayTranslation[0] *= -1;
+                        ImGui::Text("Translation: %f, %f, %f", displayTranslation[0], displayTranslation[1], displayTranslation[2]);
+                    }
+                    else
+                    {
+                        ImGui::Text("Warning, tracked device not tracking!");
+                    }
+                }
             }
         }
 
@@ -1950,7 +2014,7 @@ void FlipFrame()
 
     if (g_bOpenVRIntialized)
     {
-        for (int i = 0; i <= g_openVRDevice + 1; i++)
+        for (int i = 0; i <= g_openVRDevice; i++)
         {
             g_lastTrackedDevicePoses[i] = g_waitingTrackedDevicePoses[i];
         }
