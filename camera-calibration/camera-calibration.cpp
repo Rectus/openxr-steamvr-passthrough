@@ -7,6 +7,7 @@
 #include <wrl.h>
 #include <shlwapi.h>
 #include <pathcch.h>
+#include <shlobj_core.h>
 #include <string>
 #include <format>
 #include <vector>
@@ -29,6 +30,7 @@
 #include <opencv2/imgproc/types_c.h>
 #include <opencv2/calib3d.hpp>
 #include <opencv2/imgproc.hpp>
+#include "SimpleIni.h"
 
 #include "camera-calibration.h"
 #include "resource.h"
@@ -55,8 +57,8 @@ struct CalibrationData
     std::vector<cv::Mat> TrackedDeviceToWorldRotations;
     std::vector<cv::Mat> TrackedDeviceToWorldTranslations;
     std::vector<bool> ValidFrames;
-    int SensorWidth = 0;
-    int SensorHeight = 0;
+    int SensorWidth = 1;
+    int SensorHeight = 1;
     cv::Rect FrameROI;
     int NumValidFrames = 0;
     int NumTakenFrames = 0;
@@ -64,7 +66,6 @@ struct CalibrationData
     bool bFisheyeLens = false;
     cv::Mat CameraIntrinsics = cv::Mat(3, 3, CV_64F, cv::Scalar(0));
     std::vector<double> CameraDistortion = cv::Mat(1, 4, CV_64F, cv::Scalar(0));
-    bool bHasIntrinsics = false;
     std::vector<double> ExtrinsicsRotation = std::vector<double>(3, 0.0);
     std::vector<double> ExtrinsicsTranslation = std::vector<double>(3, 0.0);
 
@@ -92,6 +93,14 @@ struct StereoExtrinsicsData
 
 #define WINDOW_WIDTH 1600
 #define WINDOW_HEIGHT 1200
+
+// Directory under AppData to write config.
+#define CONFIG_FILE_DIR L"\\OpenXR SteamVR Passthrough\\"
+#define CONFIG_FILE_NAME L"config.ini"
+#define CONFIG_SECTION "Camera"
+
+static std::wstring g_configFilePath;
+static CSimpleIniA g_iniData = CSimpleIniA();
 
 static ComPtr<ID3D11Device> g_pd3dDevice = NULL;
 static ComPtr<ID3D11DeviceContext> g_pd3dDeviceContext = NULL;
@@ -176,6 +185,19 @@ int APIENTRY wWinMain(_In_ HINSTANCE hInstance, _In_opt_ HINSTANCE hPrevInstance
     ::RegisterClassExW(&wc);
     HWND hwnd = ::CreateWindowW(wc.lpszClassName, L"Passthrough Camera Calibration", WS_OVERLAPPEDWINDOW, CW_USEDEFAULT, CW_USEDEFAULT, WINDOW_WIDTH, WINDOW_HEIGHT, NULL, NULL, wc.hInstance, NULL);
 
+    {
+        PWSTR path;
+        g_configFilePath = std::wstring(PATHCCH_MAX_CCH, L'\0');
+
+        SHGetKnownFolderPath(FOLDERID_RoamingAppData, 0, NULL, &path);
+        lstrcpyW((PWSTR)g_configFilePath.c_str(), path);
+        PathCchAppend((PWSTR)g_configFilePath.data(), PATHCCH_MAX_CCH, CONFIG_FILE_DIR);
+        CreateDirectoryW((PWSTR)g_configFilePath.data(), NULL);
+        PathCchAppend((PWSTR)g_configFilePath.data(), PATHCCH_MAX_CCH, CONFIG_FILE_NAME);
+        g_iniData.SetUnicode(true);
+    }
+
+
     if (!CreateDeviceD3D(hwnd))
     {
         CleanupDeviceD3D();
@@ -215,8 +237,8 @@ int APIENTRY wWinMain(_In_ HINSTANCE hInstance, _In_opt_ HINSTANCE hPrevInstance
     LARGE_INTEGER lastTickTime, tickTime;
     LARGE_INTEGER prefFreq;
     float deltaTime = 0.0f;
-    CalibrationData calibDataLeft;
-    CalibrationData calibDataRight;
+    CalibrationData calibDataLeft = CalibrationData();
+    CalibrationData calibDataRight = CalibrationData();
     StereoExtrinsicsData stereoData;
 
     bool bViewSingleframe = false;
@@ -292,7 +314,106 @@ int APIENTRY wWinMain(_In_ HINSTANCE hInstance, _In_opt_ HINSTANCE hPrevInstance
 
         ImGui::BeginChild("Menu", ImVec2(std::min(ImGui::GetContentRegionAvail().x * 0.4f, 470.0f), 0), true);
 
-        
+        ImGui::Text("Settings Import");
+        ImGui::Spacing();
+
+        if (ImGui::Button("Import Webcam Calibration Settings"))
+        {
+            g_iniData.LoadFile(g_configFilePath.c_str());
+
+            g_frameLayout = (EStereoFrameLayout)g_iniData.GetLongValue(CONFIG_SECTION, "CameraFrameLayout", g_frameLayout);
+            g_bFisheyeLens = g_iniData.GetBoolValue(CONFIG_SECTION, "CameraHasFisheyeLens", g_bFisheyeLens);
+
+            calibDataLeft.ExtrinsicsTranslation[0] = (float)g_iniData.GetDoubleValue(CONFIG_SECTION, "Camera0_TranslationX", calibDataLeft.ExtrinsicsTranslation[0]);
+            calibDataLeft.ExtrinsicsTranslation[1] = (float)g_iniData.GetDoubleValue(CONFIG_SECTION, "Camera0_TranslationY", calibDataLeft.ExtrinsicsTranslation[1]);
+            calibDataLeft.ExtrinsicsTranslation[2] = (float)g_iniData.GetDoubleValue(CONFIG_SECTION, "Camera0_TranslationZ", calibDataLeft.ExtrinsicsTranslation[2]);
+            calibDataLeft.ExtrinsicsRotation[0] = (float)g_iniData.GetDoubleValue(CONFIG_SECTION, "Camera0_RotationX", calibDataLeft.ExtrinsicsRotation[0]);
+            calibDataLeft.ExtrinsicsRotation[1] = (float)g_iniData.GetDoubleValue(CONFIG_SECTION, "Camera0_RotationY", calibDataLeft.ExtrinsicsRotation[1]);
+            calibDataLeft.ExtrinsicsRotation[2] = (float)g_iniData.GetDoubleValue(CONFIG_SECTION, "Camera0_RotationZ", calibDataLeft.ExtrinsicsRotation[2]);
+
+            calibDataLeft.CameraIntrinsics.at<double>(0, 0) = (float)g_iniData.GetDoubleValue(CONFIG_SECTION, "Camera0_IntrinsicsFocalX", calibDataLeft.CameraIntrinsics.at<double>(0, 0));
+            calibDataLeft.CameraIntrinsics.at<double>(1, 1) = (float)g_iniData.GetDoubleValue(CONFIG_SECTION, "Camera0_IntrinsicsFocalY", calibDataLeft.CameraIntrinsics.at<double>(1, 1));
+            calibDataLeft.CameraIntrinsics.at<double>(0, 2) = (float)g_iniData.GetDoubleValue(CONFIG_SECTION, "Camera0_IntrinsicsCenterX", calibDataLeft.CameraIntrinsics.at<double>(0, 2));
+            calibDataLeft.CameraIntrinsics.at<double>(1, 2) = (float)g_iniData.GetDoubleValue(CONFIG_SECTION, "Camera0_IntrinsicsCenterY", calibDataLeft.CameraIntrinsics.at<double>(1, 2));
+            calibDataLeft.CameraDistortion[0] = (float)g_iniData.GetDoubleValue(CONFIG_SECTION, "Camera0_IntrinsicsDistR1", calibDataLeft.CameraDistortion[0]);
+            calibDataLeft.CameraDistortion[1] = (float)g_iniData.GetDoubleValue(CONFIG_SECTION, "Camera0_IntrinsicsDistR2", calibDataLeft.CameraDistortion[1]);
+            calibDataLeft.CameraDistortion[2] = (float)g_iniData.GetDoubleValue(CONFIG_SECTION, "Camera0_IntrinsicsDistT1", calibDataLeft.CameraDistortion[2]);
+            calibDataLeft.CameraDistortion[3] = (float)g_iniData.GetDoubleValue(CONFIG_SECTION, "Camera0_IntrinsicsDistT2", calibDataLeft.CameraDistortion[3]);
+            calibDataLeft.SensorWidth = (int)g_iniData.GetLongValue(CONFIG_SECTION, "Camera0_IntrinsicsSensorPixelsX", calibDataLeft.SensorWidth);
+            calibDataLeft.SensorHeight = (int)g_iniData.GetLongValue(CONFIG_SECTION, "Camera0_IntrinsicsSensorPixelsY", calibDataLeft.SensorHeight);
+
+
+            calibDataRight.ExtrinsicsTranslation[0] = (float)g_iniData.GetDoubleValue(CONFIG_SECTION, "Camera1_TranslationX", calibDataRight.ExtrinsicsTranslation[0]);
+            calibDataRight.ExtrinsicsTranslation[1] = (float)g_iniData.GetDoubleValue(CONFIG_SECTION, "Camera1_TranslationY", calibDataRight.ExtrinsicsTranslation[1]);
+            calibDataRight.ExtrinsicsTranslation[2] = (float)g_iniData.GetDoubleValue(CONFIG_SECTION, "Camera1_TranslationZ", calibDataRight.ExtrinsicsTranslation[2]);
+            calibDataRight.ExtrinsicsRotation[0] = (float)g_iniData.GetDoubleValue(CONFIG_SECTION, "Camera1_RotationX", calibDataRight.ExtrinsicsRotation[0]);
+            calibDataRight.ExtrinsicsRotation[1] = (float)g_iniData.GetDoubleValue(CONFIG_SECTION, "Camera1_RotationY", calibDataRight.ExtrinsicsRotation[1]);
+            calibDataRight.ExtrinsicsRotation[2] = (float)g_iniData.GetDoubleValue(CONFIG_SECTION, "Camera1_RotationZ", calibDataRight.ExtrinsicsRotation[2]);
+
+            calibDataRight.CameraIntrinsics.at<double>(0, 0) = (float)g_iniData.GetDoubleValue(CONFIG_SECTION, "Camera1_IntrinsicsFocalX", calibDataRight.CameraIntrinsics.at<double>(0, 0));
+            calibDataRight.CameraIntrinsics.at<double>(1, 1) = (float)g_iniData.GetDoubleValue(CONFIG_SECTION, "Camera1_IntrinsicsFocalY", calibDataRight.CameraIntrinsics.at<double>(1, 1));
+            calibDataRight.CameraIntrinsics.at<double>(0, 2) = (float)g_iniData.GetDoubleValue(CONFIG_SECTION, "Camera1_IntrinsicsCenterX", calibDataRight.CameraIntrinsics.at<double>(0, 2));
+            calibDataRight.CameraIntrinsics.at<double>(1, 2) = (float)g_iniData.GetDoubleValue(CONFIG_SECTION, "Camera1_IntrinsicsCenterY", calibDataRight.CameraIntrinsics.at<double>(1, 2));
+            calibDataRight.CameraDistortion[0] = (float)g_iniData.GetDoubleValue(CONFIG_SECTION, "Camera1_IntrinsicsDistR1", calibDataRight.CameraDistortion[0]);
+            calibDataRight.CameraDistortion[1] = (float)g_iniData.GetDoubleValue(CONFIG_SECTION, "Camera1_IntrinsicsDistR2", calibDataRight.CameraDistortion[1]);
+            calibDataRight.CameraDistortion[2] = (float)g_iniData.GetDoubleValue(CONFIG_SECTION, "Camera1_IntrinsicsDistT1", calibDataRight.CameraDistortion[2]);
+            calibDataRight.CameraDistortion[3] = (float)g_iniData.GetDoubleValue(CONFIG_SECTION, "Camera1_IntrinsicsDistT2", calibDataRight.CameraDistortion[3]);
+            calibDataRight.SensorWidth = (int)g_iniData.GetLongValue(CONFIG_SECTION, "Camera1_IntrinsicsSensorPixelsX", calibDataRight.SensorWidth);
+            calibDataRight.SensorHeight = (int)g_iniData.GetLongValue(CONFIG_SECTION, "Camera1_IntrinsicsSensorPixelsY", calibDataRight.SensorHeight);
+        }
+
+        if (ImGui::Button("Import Custom SteamVR Calibration Settings"))
+        {
+            g_iniData.LoadFile(g_configFilePath.c_str());
+
+            g_bFisheyeLens = g_iniData.GetBoolValue(CONFIG_SECTION, "OpenVR_CameraHasFisheyeLens", g_bFisheyeLens);
+
+            {
+                CalibrationData& calibData = (g_frameLayout == StereoVerticalLayout) ? calibDataRight : calibDataLeft;
+
+                calibData.ExtrinsicsTranslation[0] = (float)g_iniData.GetDoubleValue(CONFIG_SECTION, "OpenVR_Camera0_TranslationX", calibData.ExtrinsicsTranslation[0]);
+                calibData.ExtrinsicsTranslation[1] = (float)g_iniData.GetDoubleValue(CONFIG_SECTION, "OpenVR_Camera0_TranslationY", calibData.ExtrinsicsTranslation[1]);
+                calibData.ExtrinsicsTranslation[2] = (float)g_iniData.GetDoubleValue(CONFIG_SECTION, "OpenVR_Camera0_TranslationZ", calibData.ExtrinsicsTranslation[2]);
+                calibData.ExtrinsicsRotation[0] = (float)g_iniData.GetDoubleValue(CONFIG_SECTION, "OpenVR_Camera0_RotationX", calibData.ExtrinsicsRotation[0]);
+                calibData.ExtrinsicsRotation[1] = (float)g_iniData.GetDoubleValue(CONFIG_SECTION, "OpenVR_Camera0_RotationY", calibData.ExtrinsicsRotation[1]);
+                calibData.ExtrinsicsRotation[2] = (float)g_iniData.GetDoubleValue(CONFIG_SECTION, "OpenVR_Camera0_RotationZ", calibData.ExtrinsicsRotation[2]);
+
+                calibData.CameraIntrinsics.at<double>(0, 0) = (float)g_iniData.GetDoubleValue(CONFIG_SECTION, "OpenVR_Camera0_IntrinsicsFocalX", calibData.CameraIntrinsics.at<double>(0, 0));
+                calibData.CameraIntrinsics.at<double>(1, 1) = (float)g_iniData.GetDoubleValue(CONFIG_SECTION, "OpenVR_Camera0_IntrinsicsFocalY", calibData.CameraIntrinsics.at<double>(1, 1));
+                calibData.CameraIntrinsics.at<double>(0, 2) = (float)g_iniData.GetDoubleValue(CONFIG_SECTION, "OpenVR_Camera0_IntrinsicsCenterX", calibData.CameraIntrinsics.at<double>(0, 2));
+                calibData.CameraIntrinsics.at<double>(1, 2) = (float)g_iniData.GetDoubleValue(CONFIG_SECTION, "OpenVR_Camera0_IntrinsicsCenterY", calibData.CameraIntrinsics.at<double>(1, 2));
+                calibData.CameraDistortion[0] = (float)g_iniData.GetDoubleValue(CONFIG_SECTION, "OpenVR_Camera0_IntrinsicsDistR1", calibData.CameraDistortion[0]);
+                calibData.CameraDistortion[1] = (float)g_iniData.GetDoubleValue(CONFIG_SECTION, "OpenVR_Camera0_IntrinsicsDistR2", calibData.CameraDistortion[1]);
+                calibData.CameraDistortion[2] = (float)g_iniData.GetDoubleValue(CONFIG_SECTION, "OpenVR_Camera0_IntrinsicsDistT1", calibData.CameraDistortion[2]);
+                calibData.CameraDistortion[3] = (float)g_iniData.GetDoubleValue(CONFIG_SECTION, "OpenVR_Camera0_IntrinsicsDistT2", calibData.CameraDistortion[3]);
+                calibData.SensorWidth = (int)g_iniData.GetLongValue(CONFIG_SECTION, "OpenVR_Camera0_IntrinsicsSensorPixelsX", calibData.SensorWidth);
+                calibData.SensorHeight = (int)g_iniData.GetLongValue(CONFIG_SECTION, "OpenVR_Camera0_IntrinsicsSensorPixelsY", calibData.SensorHeight);
+            }
+
+            {
+                CalibrationData& calibData = (g_frameLayout == StereoVerticalLayout) ? calibDataLeft : calibDataRight;
+
+                calibData.ExtrinsicsTranslation[0] = (float)g_iniData.GetDoubleValue(CONFIG_SECTION, "OpenVR_Camera1_TranslationX", calibData.ExtrinsicsTranslation[0]);
+                calibData.ExtrinsicsTranslation[1] = (float)g_iniData.GetDoubleValue(CONFIG_SECTION, "OpenVR_Camera1_TranslationY", calibData.ExtrinsicsTranslation[1]);
+                calibData.ExtrinsicsTranslation[2] = (float)g_iniData.GetDoubleValue(CONFIG_SECTION, "OpenVR_Camera1_TranslationZ", calibData.ExtrinsicsTranslation[2]);
+                calibData.ExtrinsicsRotation[0] = (float)g_iniData.GetDoubleValue(CONFIG_SECTION, "OpenVR_Camera1_RotationX", calibData.ExtrinsicsRotation[0]);
+                calibData.ExtrinsicsRotation[1] = (float)g_iniData.GetDoubleValue(CONFIG_SECTION, "OpenVR_Camera1_RotationY", calibData.ExtrinsicsRotation[1]);
+                calibData.ExtrinsicsRotation[2] = (float)g_iniData.GetDoubleValue(CONFIG_SECTION, "OpenVR_Camera1_RotationZ", calibData.ExtrinsicsRotation[2]);
+
+                calibData.CameraIntrinsics.at<double>(0, 0) = (float)g_iniData.GetDoubleValue(CONFIG_SECTION, "OpenVR_Camera1_IntrinsicsFocalX", calibData.CameraIntrinsics.at<double>(0, 0));
+                calibData.CameraIntrinsics.at<double>(1, 1) = (float)g_iniData.GetDoubleValue(CONFIG_SECTION, "OpenVR_Camera1_IntrinsicsFocalY", calibData.CameraIntrinsics.at<double>(1, 1));
+                calibData.CameraIntrinsics.at<double>(0, 2) = (float)g_iniData.GetDoubleValue(CONFIG_SECTION, "OpenVR_Camera1_IntrinsicsCenterX", calibData.CameraIntrinsics.at<double>(0, 2));
+                calibData.CameraIntrinsics.at<double>(1, 2) = (float)g_iniData.GetDoubleValue(CONFIG_SECTION, "OpenVR_Camera1_IntrinsicsCenterY", calibData.CameraIntrinsics.at<double>(1, 2));
+                calibData.CameraDistortion[0] = (float)g_iniData.GetDoubleValue(CONFIG_SECTION, "OpenVR_Camera1_IntrinsicsDistR1", calibData.CameraDistortion[0]);
+                calibData.CameraDistortion[1] = (float)g_iniData.GetDoubleValue(CONFIG_SECTION, "OpenVR_Camera1_IntrinsicsDistR2", calibData.CameraDistortion[1]);
+                calibData.CameraDistortion[2] = (float)g_iniData.GetDoubleValue(CONFIG_SECTION, "OpenVR_Camera1_IntrinsicsDistT1", calibData.CameraDistortion[2]);
+                calibData.CameraDistortion[3] = (float)g_iniData.GetDoubleValue(CONFIG_SECTION, "OpenVR_Camera1_IntrinsicsDistT2", calibData.CameraDistortion[3]);
+                calibData.SensorWidth = (int)g_iniData.GetLongValue(CONFIG_SECTION, "OpenVR_Camera1_IntrinsicsSensorPixelsX", calibData.SensorWidth);
+                calibData.SensorHeight = (int)g_iniData.GetLongValue(CONFIG_SECTION, "OpenVR_Camera1_IntrinsicsSensorPixelsY", calibData.SensorHeight);
+            }
+        }
+
+        ImGui::Separator();
         ImGui::Text("Capture Setup");
         ImGui::Spacing();
 
@@ -324,12 +445,11 @@ int APIENTRY wWinMain(_In_ HINSTANCE hInstance, _In_opt_ HINSTANCE hPrevInstance
             ImGui::EndCombo();
         }
 
-        if (deviceList.size() > 0 && (prevSelected != selectedDevice || !bIsCameraActive))
+        if (deviceList.size() > 0 && (prevSelected != selectedDevice))
         {
             bIsCameraActive = InitCamera(selectedDevice);
-            calibDataLeft = CalibrationData();
-            calibDataRight = CalibrationData();
-            g_frameLayout = Mono;
+            calibDataLeft.ClearFrames();
+            calibDataRight.ClearFrames();
             bCalibrationCompleteLeft = false;
             bCalibrationCompleteRight = false;
         }
@@ -346,9 +466,8 @@ int APIENTRY wWinMain(_In_ HINSTANCE hInstance, _In_opt_ HINSTANCE hPrevInstance
         if (ImGui::Button("Apply") || (bIsCameraActive && g_bRequestCustomFrameFormat == false && bPrevUseCustomFormat == true))
         {
             bIsCameraActive = InitCamera(selectedDevice);
-            calibDataLeft = CalibrationData();
-            calibDataRight = CalibrationData();
-            g_frameLayout = Mono;
+            calibDataLeft.ClearFrames();
+            calibDataRight.ClearFrames();
             bCalibrationCompleteLeft = false;
             bCalibrationCompleteRight = false;
         }
@@ -600,6 +719,112 @@ int APIENTRY wWinMain(_In_ HINSTANCE hInstance, _In_opt_ HINSTANCE hPrevInstance
             {
                 ImGui::Text("Eye position change: %.3fmm", stereoData.CalibrationDelta * 1000.0);
             }
+        }
+
+        ImGui::Separator();
+        ImGui::Text("Export");
+        ImGui::Spacing();
+
+        if (ImGui::Button("Write to API Layer as Webcam Calibration"))
+        {
+            g_iniData.LoadFile(g_configFilePath.c_str());
+
+            g_iniData.SetLongValue(CONFIG_SECTION, "CameraFrameLayout", (long)g_frameLayout);
+            g_iniData.SetBoolValue(CONFIG_SECTION, "CameraHasFisheyeLens", g_bFisheyeLens);
+
+            g_iniData.SetDoubleValue(CONFIG_SECTION, "Camera0_TranslationX", calibDataLeft.ExtrinsicsTranslation[0]);
+            g_iniData.SetDoubleValue(CONFIG_SECTION, "Camera0_TranslationY", calibDataLeft.ExtrinsicsTranslation[1]);
+            g_iniData.SetDoubleValue(CONFIG_SECTION, "Camera0_TranslationZ", calibDataLeft.ExtrinsicsTranslation[2]);
+            g_iniData.SetDoubleValue(CONFIG_SECTION, "Camera0_RotationX", calibDataLeft.ExtrinsicsRotation[0]);
+            g_iniData.SetDoubleValue(CONFIG_SECTION, "Camera0_RotationY", calibDataLeft.ExtrinsicsRotation[1]);
+            g_iniData.SetDoubleValue(CONFIG_SECTION, "Camera0_RotationZ", calibDataLeft.ExtrinsicsRotation[2]);
+
+            g_iniData.SetDoubleValue(CONFIG_SECTION, "Camera0_IntrinsicsFocalX", calibDataLeft.CameraIntrinsics.at<double>(0, 0));
+            g_iniData.SetDoubleValue(CONFIG_SECTION, "Camera0_IntrinsicsFocalY", calibDataLeft.CameraIntrinsics.at<double>(1, 1));
+            g_iniData.SetDoubleValue(CONFIG_SECTION, "Camera0_IntrinsicsCenterX", calibDataLeft.CameraIntrinsics.at<double>(0, 2));
+            g_iniData.SetDoubleValue(CONFIG_SECTION, "Camera0_IntrinsicsCenterY", calibDataLeft.CameraIntrinsics.at<double>(1, 2));
+            g_iniData.SetDoubleValue(CONFIG_SECTION, "Camera0_IntrinsicsDistR1", calibDataLeft.CameraDistortion[0]);
+            g_iniData.SetDoubleValue(CONFIG_SECTION, "Camera0_IntrinsicsDistR2", calibDataLeft.CameraDistortion[1]);
+            g_iniData.SetDoubleValue(CONFIG_SECTION, "Camera0_IntrinsicsDistT1", calibDataLeft.CameraDistortion[2]);
+            g_iniData.SetDoubleValue(CONFIG_SECTION, "Camera0_IntrinsicsDistT2", calibDataLeft.CameraDistortion[3]);
+            g_iniData.SetLongValue(CONFIG_SECTION, "Camera0_IntrinsicsSensorPixelsX", calibDataLeft.SensorWidth);
+            g_iniData.SetLongValue(CONFIG_SECTION, "Camera0_IntrinsicsSensorPixelsY", calibDataLeft.SensorHeight);
+
+            if (g_frameLayout != Mono)
+            {
+                g_iniData.SetDoubleValue(CONFIG_SECTION, "Camera1_TranslationX", calibDataRight.ExtrinsicsTranslation[0]);
+                g_iniData.SetDoubleValue(CONFIG_SECTION, "Camera1_TranslationY", calibDataRight.ExtrinsicsTranslation[1]);
+                g_iniData.SetDoubleValue(CONFIG_SECTION, "Camera1_TranslationZ", calibDataRight.ExtrinsicsTranslation[2]);
+                g_iniData.SetDoubleValue(CONFIG_SECTION, "Camera1_RotationX", calibDataRight.ExtrinsicsRotation[0]);
+                g_iniData.SetDoubleValue(CONFIG_SECTION, "Camera1_RotationY", calibDataRight.ExtrinsicsRotation[1]);
+                g_iniData.SetDoubleValue(CONFIG_SECTION, "Camera1_RotationZ", calibDataRight.ExtrinsicsRotation[2]);
+
+                g_iniData.SetDoubleValue(CONFIG_SECTION, "Camera1_IntrinsicsFocalX", calibDataRight.CameraIntrinsics.at<double>(0, 0));
+                g_iniData.SetDoubleValue(CONFIG_SECTION, "Camera1_IntrinsicsFocalY", calibDataRight.CameraIntrinsics.at<double>(1, 1));
+                g_iniData.SetDoubleValue(CONFIG_SECTION, "Camera1_IntrinsicsCenterX", calibDataRight.CameraIntrinsics.at<double>(0, 2));
+                g_iniData.SetDoubleValue(CONFIG_SECTION, "Camera1_IntrinsicsCenterY", calibDataRight.CameraIntrinsics.at<double>(1, 2));
+                g_iniData.SetDoubleValue(CONFIG_SECTION, "Camera1_IntrinsicsDistR1", calibDataRight.CameraDistortion[0]);
+                g_iniData.SetDoubleValue(CONFIG_SECTION, "Camera1_IntrinsicsDistR2", calibDataRight.CameraDistortion[1]);
+                g_iniData.SetDoubleValue(CONFIG_SECTION, "Camera1_IntrinsicsDistT1", calibDataRight.CameraDistortion[2]);
+                g_iniData.SetDoubleValue(CONFIG_SECTION, "Camera1_IntrinsicsDistT2", calibDataRight.CameraDistortion[3]);
+                g_iniData.SetLongValue(CONFIG_SECTION, "Camera1_IntrinsicsSensorPixelsX", calibDataRight.SensorWidth);
+                g_iniData.SetLongValue(CONFIG_SECTION, "Camera1_IntrinsicsSensorPixelsY", calibDataRight.SensorHeight);
+            }
+
+            g_iniData.SaveFile(g_configFilePath.c_str());
+        }
+
+        if (ImGui::Button("Write to API Layer as Custom SteamVR Calibration"))
+        {
+            g_iniData.LoadFile(g_configFilePath.c_str());
+
+            g_iniData.SetBoolValue(CONFIG_SECTION, "OpenVR_CameraHasFisheyeLens", g_bFisheyeLens);
+
+            {
+                CalibrationData& calibData = (g_frameLayout == StereoVerticalLayout) ? calibDataRight : calibDataLeft;
+
+                g_iniData.SetDoubleValue(CONFIG_SECTION, "OpenVR_Camera0_TranslationX", calibData.ExtrinsicsTranslation[0]);
+                g_iniData.SetDoubleValue(CONFIG_SECTION, "OpenVR_Camera0_TranslationY", calibData.ExtrinsicsTranslation[1]);
+                g_iniData.SetDoubleValue(CONFIG_SECTION, "OpenVR_Camera0_TranslationZ", calibData.ExtrinsicsTranslation[2]);
+                g_iniData.SetDoubleValue(CONFIG_SECTION, "OpenVR_Camera0_RotationX", calibData.ExtrinsicsRotation[0]);
+                g_iniData.SetDoubleValue(CONFIG_SECTION, "OpenVR_Camera0_RotationY", calibData.ExtrinsicsRotation[1]);
+                g_iniData.SetDoubleValue(CONFIG_SECTION, "OpenVR_Camera0_RotationZ", calibData.ExtrinsicsRotation[2]);
+
+                g_iniData.SetDoubleValue(CONFIG_SECTION, "OpenVR_Camera0_IntrinsicsFocalX", calibData.CameraIntrinsics.at<double>(0, 0));
+                g_iniData.SetDoubleValue(CONFIG_SECTION, "OpenVR_Camera0_IntrinsicsFocalY", calibData.CameraIntrinsics.at<double>(1, 1));
+                g_iniData.SetDoubleValue(CONFIG_SECTION, "OpenVR_Camera0_IntrinsicsCenterX", calibData.CameraIntrinsics.at<double>(0, 2));
+                g_iniData.SetDoubleValue(CONFIG_SECTION, "OpenVR_Camera0_IntrinsicsCenterY", calibData.CameraIntrinsics.at<double>(1, 2));
+                g_iniData.SetDoubleValue(CONFIG_SECTION, "OpenVR_Camera0_IntrinsicsDistR1", calibData.CameraDistortion[0]);
+                g_iniData.SetDoubleValue(CONFIG_SECTION, "OpenVR_Camera0_IntrinsicsDistR2", calibData.CameraDistortion[1]);
+                g_iniData.SetDoubleValue(CONFIG_SECTION, "OpenVR_Camera0_IntrinsicsDistT1", calibData.CameraDistortion[2]);
+                g_iniData.SetDoubleValue(CONFIG_SECTION, "OpenVR_Camera0_IntrinsicsDistT2", calibData.CameraDistortion[3]);
+                g_iniData.SetLongValue(CONFIG_SECTION, "OpenVR_Camera0_IntrinsicsSensorPixelsX", calibData.SensorWidth);
+                g_iniData.SetLongValue(CONFIG_SECTION, "OpenVR_Camera0_IntrinsicsSensorPixelsY", calibData.SensorHeight);
+            }
+            if (g_frameLayout != Mono)
+            {
+                CalibrationData& calibData = (g_frameLayout == StereoVerticalLayout) ? calibDataLeft : calibDataRight;
+
+                g_iniData.SetDoubleValue(CONFIG_SECTION, "OpenVR_Camera1_TranslationX", calibData.ExtrinsicsTranslation[0]);
+                g_iniData.SetDoubleValue(CONFIG_SECTION, "OpenVR_Camera1_TranslationY", calibData.ExtrinsicsTranslation[1]);
+                g_iniData.SetDoubleValue(CONFIG_SECTION, "OpenVR_Camera1_TranslationZ", calibData.ExtrinsicsTranslation[2]);
+                g_iniData.SetDoubleValue(CONFIG_SECTION, "OpenVR_Camera1_RotationX", calibData.ExtrinsicsRotation[0]);
+                g_iniData.SetDoubleValue(CONFIG_SECTION, "OpenVR_Camera1_RotationY", calibData.ExtrinsicsRotation[1]);
+                g_iniData.SetDoubleValue(CONFIG_SECTION, "OpenVR_Camera1_RotationZ", calibData.ExtrinsicsRotation[2]);
+
+                g_iniData.SetDoubleValue(CONFIG_SECTION, "OpenVR_Camera1_IntrinsicsFocalX", calibData.CameraIntrinsics.at<double>(0, 0));
+                g_iniData.SetDoubleValue(CONFIG_SECTION, "OpenVR_Camera1_IntrinsicsFocalY", calibData.CameraIntrinsics.at<double>(1, 1));
+                g_iniData.SetDoubleValue(CONFIG_SECTION, "OpenVR_Camera1_IntrinsicsCenterX", calibData.CameraIntrinsics.at<double>(0, 2));
+                g_iniData.SetDoubleValue(CONFIG_SECTION, "OpenVR_Camera1_IntrinsicsCenterY", calibData.CameraIntrinsics.at<double>(1, 2));
+                g_iniData.SetDoubleValue(CONFIG_SECTION, "OpenVR_Camera1_IntrinsicsDistR1", calibData.CameraDistortion[0]);
+                g_iniData.SetDoubleValue(CONFIG_SECTION, "OpenVR_Camera1_IntrinsicsDistR2", calibData.CameraDistortion[1]);
+                g_iniData.SetDoubleValue(CONFIG_SECTION, "OpenVR_Camera1_IntrinsicsDistT1", calibData.CameraDistortion[2]);
+                g_iniData.SetDoubleValue(CONFIG_SECTION, "OpenVR_Camera1_IntrinsicsDistT2", calibData.CameraDistortion[3]);
+                g_iniData.SetLongValue(CONFIG_SECTION, "OpenVR_Camera1_IntrinsicsSensorPixelsX", calibData.SensorWidth);
+                g_iniData.SetLongValue(CONFIG_SECTION, "OpenVR_Camera1_IntrinsicsSensorPixelsY", calibData.SensorHeight);
+            }
+
+            g_iniData.SaveFile(g_configFilePath.c_str());
         }
 
 
@@ -1382,13 +1607,23 @@ bool CalibrateSingleCamera(CalibrationData& calibData, bool bRightCamera)
         return false;
     }
 
+    bool bHasIntrinsics = false;
+
+    if (calibData.CameraIntrinsics.at<double>(0, 0) > 0 &&
+        calibData.CameraIntrinsics.at<double>(1, 1) > 0 &&
+        calibData.CameraIntrinsics.at<double>(0, 2) > 0 &&
+        calibData.CameraIntrinsics.at<double>(1, 2) > 0)
+    {
+        bHasIntrinsics = true;
+    }
+
     if (calibData.bFisheyeLens)
     {
         cv::TermCriteria calibTermCriteria = cv::TermCriteria(cv::TermCriteria::COUNT + cv::TermCriteria::EPS, 100, DBL_EPSILON);
         int flags = cv::fisheye::CALIB_FIX_SKEW | cv::fisheye::CALIB_CHECK_COND;
 
         // CALIB_USE_INTRINSIC_GUESS always fails on the fisheye model for some reason.
-        /*if (calibData.bHasIntrinsics)
+        /*if (bHasIntrinsics)
         {
             K = calibData.CameraIntrinsics.clone();
             flags |= cv::fisheye::CALIB_USE_INTRINSIC_GUESS;
@@ -1409,7 +1644,7 @@ bool CalibrateSingleCamera(CalibrationData& calibData, bool bRightCamera)
         cv::TermCriteria calibTermCriteria = cv::TermCriteria(cv::TermCriteria::COUNT + cv::TermCriteria::EPS, 30, DBL_EPSILON);
         int flags = cv::CALIB_FIX_K3;
 
-        if (calibData.bHasIntrinsics)
+        if (bHasIntrinsics)
         {
             K = calibData.CameraIntrinsics.clone();
             flags |= cv::CALIB_USE_INTRINSIC_GUESS;
@@ -1429,7 +1664,6 @@ bool CalibrateSingleCamera(CalibrationData& calibData, bool bRightCamera)
     calibData.CameraIntrinsics = K.clone();
     calibData.CameraDistortion.resize(4);
     std::copy(D.begin(), D.end(), calibData.CameraDistortion.begin());
-    calibData.bHasIntrinsics = true;
 
     if (g_bUseOpenVRExtrinsic)
     {
