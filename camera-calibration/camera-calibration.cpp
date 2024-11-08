@@ -133,10 +133,11 @@ static cv::Mat g_cameraFrameBuffer;
 static vr::TrackedDevicePose_t g_lastTrackedDevicePoses[vr::k_unMaxTrackedDeviceCount];
 static uint32_t g_frameWidthGPU = 0;
 static uint32_t g_frameHeightGPU = 0;
-bool g_bUseOpenVRExtrinsic = false;
-bool g_bOpenVRIntialized = false;
-int g_openVRDevice = 0;
-bool g_bIsSpaceDown = false;
+static bool g_bUseOpenVRExtrinsic = false;
+static bool g_bOpenVRIntialized = false;
+static int g_openVRDevice = 0;
+static float g_OpenVRPoseCaptureOffset = 0.055f;
+static bool g_bIsSpaceDown = false;
 
 static bool g_bRequestCustomFrameFormat = false;
 static int g_requestedFrameSize[2] = { 0 };
@@ -160,6 +161,7 @@ bool ImageCaptureUI(CalibrationData* calibData, CalibrationData* calibDataStereo
 void SetFrameGeometry(CalibrationData& calibData, bool bIsRightCamera);
 void DrawCameraFrame(CalibrationData& calibData, bool bDrawDistorted, bool bDrawChessboardCorners, int imageIndex);
 void DrawStereoFrame(CalibrationData& calibDataLeft, CalibrationData& calibDataRight, bool bDrawDistorted, bool bDrawChessboardCorners, int imageIndex);
+void DrawTrackingSpaceOriginAxis(CalibrationData& calibData, cv::Mat& image, cv::Rect& ROI);
 bool FindFrameCalibrationPatterns(CalibrationData& calibData, bool bRightCamera);
 bool FindFrameCalibrationPatternsStereo(CalibrationData& calibDataLeft, CalibrationData& calibDataRight);
 bool CalibrateSingleCamera(CalibrationData& calibData, bool bRightCamera);
@@ -370,6 +372,8 @@ int APIENTRY wWinMain(_In_ HINSTANCE hInstance, _In_opt_ HINSTANCE hPrevInstance
             calibDataLeft.CameraIntrinsics.at<double>(1, 1) = (float)g_iniData.GetDoubleValue(CONFIG_SECTION, "Camera0_IntrinsicsFocalY", calibDataLeft.CameraIntrinsics.at<double>(1, 1));
             calibDataLeft.CameraIntrinsics.at<double>(0, 2) = (float)g_iniData.GetDoubleValue(CONFIG_SECTION, "Camera0_IntrinsicsCenterX", calibDataLeft.CameraIntrinsics.at<double>(0, 2));
             calibDataLeft.CameraIntrinsics.at<double>(1, 2) = (float)g_iniData.GetDoubleValue(CONFIG_SECTION, "Camera0_IntrinsicsCenterY", calibDataLeft.CameraIntrinsics.at<double>(1, 2));
+            calibDataLeft.CameraIntrinsics.at<double>(2, 2) = 1.0;
+
             calibDataLeft.CameraDistortion[0] = (float)g_iniData.GetDoubleValue(CONFIG_SECTION, "Camera0_IntrinsicsDistR1", calibDataLeft.CameraDistortion[0]);
             calibDataLeft.CameraDistortion[1] = (float)g_iniData.GetDoubleValue(CONFIG_SECTION, "Camera0_IntrinsicsDistR2", calibDataLeft.CameraDistortion[1]);
             calibDataLeft.CameraDistortion[2] = (float)g_iniData.GetDoubleValue(CONFIG_SECTION, "Camera0_IntrinsicsDistT1", calibDataLeft.CameraDistortion[2]);
@@ -389,6 +393,8 @@ int APIENTRY wWinMain(_In_ HINSTANCE hInstance, _In_opt_ HINSTANCE hPrevInstance
             calibDataRight.CameraIntrinsics.at<double>(1, 1) = (float)g_iniData.GetDoubleValue(CONFIG_SECTION, "Camera1_IntrinsicsFocalY", calibDataRight.CameraIntrinsics.at<double>(1, 1));
             calibDataRight.CameraIntrinsics.at<double>(0, 2) = (float)g_iniData.GetDoubleValue(CONFIG_SECTION, "Camera1_IntrinsicsCenterX", calibDataRight.CameraIntrinsics.at<double>(0, 2));
             calibDataRight.CameraIntrinsics.at<double>(1, 2) = (float)g_iniData.GetDoubleValue(CONFIG_SECTION, "Camera1_IntrinsicsCenterY", calibDataRight.CameraIntrinsics.at<double>(1, 2));
+            calibDataRight.CameraIntrinsics.at<double>(2, 2) = 1.0;
+
             calibDataRight.CameraDistortion[0] = (float)g_iniData.GetDoubleValue(CONFIG_SECTION, "Camera1_IntrinsicsDistR1", calibDataRight.CameraDistortion[0]);
             calibDataRight.CameraDistortion[1] = (float)g_iniData.GetDoubleValue(CONFIG_SECTION, "Camera1_IntrinsicsDistR2", calibDataRight.CameraDistortion[1]);
             calibDataRight.CameraDistortion[2] = (float)g_iniData.GetDoubleValue(CONFIG_SECTION, "Camera1_IntrinsicsDistT1", calibDataRight.CameraDistortion[2]);
@@ -417,6 +423,8 @@ int APIENTRY wWinMain(_In_ HINSTANCE hInstance, _In_opt_ HINSTANCE hPrevInstance
                 calibData.CameraIntrinsics.at<double>(1, 1) = (float)g_iniData.GetDoubleValue(CONFIG_SECTION, "OpenVR_Camera0_IntrinsicsFocalY", calibData.CameraIntrinsics.at<double>(1, 1));
                 calibData.CameraIntrinsics.at<double>(0, 2) = (float)g_iniData.GetDoubleValue(CONFIG_SECTION, "OpenVR_Camera0_IntrinsicsCenterX", calibData.CameraIntrinsics.at<double>(0, 2));
                 calibData.CameraIntrinsics.at<double>(1, 2) = (float)g_iniData.GetDoubleValue(CONFIG_SECTION, "OpenVR_Camera0_IntrinsicsCenterY", calibData.CameraIntrinsics.at<double>(1, 2));
+                calibData.CameraIntrinsics.at<double>(2, 2) = 1.0;
+
                 calibData.CameraDistortion[0] = (float)g_iniData.GetDoubleValue(CONFIG_SECTION, "OpenVR_Camera0_IntrinsicsDistR1", calibData.CameraDistortion[0]);
                 calibData.CameraDistortion[1] = (float)g_iniData.GetDoubleValue(CONFIG_SECTION, "OpenVR_Camera0_IntrinsicsDistR2", calibData.CameraDistortion[1]);
                 calibData.CameraDistortion[2] = (float)g_iniData.GetDoubleValue(CONFIG_SECTION, "OpenVR_Camera0_IntrinsicsDistT1", calibData.CameraDistortion[2]);
@@ -439,6 +447,8 @@ int APIENTRY wWinMain(_In_ HINSTANCE hInstance, _In_opt_ HINSTANCE hPrevInstance
                 calibData.CameraIntrinsics.at<double>(1, 1) = (float)g_iniData.GetDoubleValue(CONFIG_SECTION, "OpenVR_Camera1_IntrinsicsFocalY", calibData.CameraIntrinsics.at<double>(1, 1));
                 calibData.CameraIntrinsics.at<double>(0, 2) = (float)g_iniData.GetDoubleValue(CONFIG_SECTION, "OpenVR_Camera1_IntrinsicsCenterX", calibData.CameraIntrinsics.at<double>(0, 2));
                 calibData.CameraIntrinsics.at<double>(1, 2) = (float)g_iniData.GetDoubleValue(CONFIG_SECTION, "OpenVR_Camera1_IntrinsicsCenterY", calibData.CameraIntrinsics.at<double>(1, 2));
+                calibData.CameraIntrinsics.at<double>(2, 2) = 1.0;
+
                 calibData.CameraDistortion[0] = (float)g_iniData.GetDoubleValue(CONFIG_SECTION, "OpenVR_Camera1_IntrinsicsDistR1", calibData.CameraDistortion[0]);
                 calibData.CameraDistortion[1] = (float)g_iniData.GetDoubleValue(CONFIG_SECTION, "OpenVR_Camera1_IntrinsicsDistR2", calibData.CameraDistortion[1]);
                 calibData.CameraDistortion[2] = (float)g_iniData.GetDoubleValue(CONFIG_SECTION, "OpenVR_Camera1_IntrinsicsDistT1", calibData.CameraDistortion[2]);
@@ -496,6 +506,8 @@ int APIENTRY wWinMain(_In_ HINSTANCE hInstance, _In_opt_ HINSTANCE hPrevInstance
             calibDataRight.ClearFrames();
             bCalibrationCompleteLeft = false;
             bCalibrationCompleteRight = false;
+            SetFrameGeometry(calibDataLeft, false);
+            SetFrameGeometry(calibDataRight, true);
         }
 
         ImGui::Text("%u x %u @ %uHz", g_frameWidth, g_frameHeight, g_frameRate);
@@ -514,6 +526,8 @@ int APIENTRY wWinMain(_In_ HINSTANCE hInstance, _In_opt_ HINSTANCE hPrevInstance
             calibDataRight.ClearFrames();
             bCalibrationCompleteLeft = false;
             bCalibrationCompleteRight = false;
+            SetFrameGeometry(calibDataLeft, false);
+            SetFrameGeometry(calibDataRight, true);
         }
         ImGui::EndDisabled();
 
@@ -579,8 +593,11 @@ int APIENTRY wWinMain(_In_ HINSTANCE hInstance, _In_opt_ HINSTANCE hPrevInstance
             }
         }
         ImGui::EndDisabled();
-        ImGui::InputInt("Tracked device index", &g_openVRDevice);
 
+        ImGui::PushItemWidth(ImGui::GetContentRegionAvail().x * 0.5f);
+        ImGui::InputInt("Tracked device index", &g_openVRDevice);
+        ImGui::InputFloat("Frame latency offset (s)", &g_OpenVRPoseCaptureOffset);
+        ImGui::PopItemWidth();
         if (g_bOpenVRIntialized && !g_lastTrackedDevicePoses[g_openVRDevice].bPoseIsValid)
         {
             ImGui::Text("SteamVR: Idle");
@@ -707,13 +724,6 @@ int APIENTRY wWinMain(_In_ HINSTANCE hInstance, _In_opt_ HINSTANCE hPrevInstance
                 FindFrameCalibrationPatternsStereo(calibDataLeft, calibDataRight);
                 g_displayedImage = 0;
                 g_selectedImageChanged = true;
-                //bViewSingleframe = false;
-            }
-
-            if (!bHasStarted && bIsCapturingStereo)
-            {
-                //bViewUndistorted = false;
-                //bViewSingleframe = false;
             }
 
             if (ImGui::Button("Calibrate"))
@@ -974,7 +984,7 @@ int APIENTRY wWinMain(_In_ HINSTANCE hInstance, _In_opt_ HINSTANCE hPrevInstance
                     DrawCameraFrame(calibDataLeft, true, false, 0);
                 }
             }
-            else if (bViewUndistorted && !bViewSingleframe && bHasIntrinsicsLeft && bHasIntrinsicsRight && !bIsCapturingStereo)
+            else if (bViewUndistorted && !bViewSingleframe && bHasIntrinsicsLeft && bHasIntrinsicsRight && !bIsCapturingStereo && g_frameLayout != Mono)
             {
                 DrawStereoFrame(calibDataLeft, calibDataRight, false, false, 0);
             }
@@ -1019,7 +1029,6 @@ int APIENTRY wWinMain(_In_ HINSTANCE hInstance, _In_opt_ HINSTANCE hPrevInstance
                         ImGui::Text("Rotation: %f, %f, %f", displayRotation[0], displayRotation[1], displayRotation[2]);
 
                         displayTranslation = pose.col(3);
-                        displayTranslation[0] *= -1;
                         ImGui::Text("Translation: %f, %f, %f", displayTranslation[0], displayTranslation[1], displayTranslation[2]);
                     }
                     else
@@ -1328,9 +1337,15 @@ void DrawCameraFrame(CalibrationData& calibData, bool bDrawDistorted, bool bDraw
     float width = std::min(ImGui::GetContentRegionAvail().x, (float)calibData.SensorWidth);
     ImVec2 imageSize = ImVec2(width, width * aspect);
 
-    if (g_frameWidthGPU != calibData.SensorWidth || g_frameHeightGPU != calibData.SensorHeight)
+    if (g_cameraFrameBuffer.empty() || calibData.FrameROI.width == 0 || calibData.FrameROI.height == 0 ||
+        calibData.FrameROI.width > (int)g_frameWidth || calibData.FrameROI.height > (int)g_frameHeight)
     {
-        SetupCameraFrameResource(calibData.SensorWidth, calibData.SensorHeight);
+        return;
+    }
+
+    if (g_frameWidthGPU != calibData.FrameROI.width || g_frameHeightGPU != calibData.FrameROI.height)
+    {
+        SetupCameraFrameResource(calibData.FrameROI.width, calibData.FrameROI.height);
     }
 
     if (!bDrawDistorted)
@@ -1348,16 +1363,8 @@ void DrawCameraFrame(CalibrationData& calibData, bool bDrawDistorted, bool bDraw
             cv::undistort(g_cameraFrameBuffer(calibData.FrameROI), undistorted, calibData.CameraIntrinsics, calibData.CameraDistortion);
         }
 
-
-        /*if (g_bUseOpenVRExtrinsic)
-        {
-            cv::Mat pose = cv::Mat(3, 4, CV_32F, (void*)&g_lastTrackedDevicePoses[g_openVRDevice].mDeviceToAbsoluteTracking.m[0][0]);
-            cv::Mat rot;
-            cv::Rodrigues(pose(cv::Rect(0, 0, 3, 3)).t(), rot);
-            
-            cv::drawFrameAxes(undistorted, calibData.CameraIntrinsics, calibData.CameraDistortion, rot, pose(cv::Rect(3, 0, 1, 3)) * -1.0, 0.5);
-        }*/
-
+        cv::Rect ROI(0, 0, calibData.FrameROI.width, calibData.FrameROI.height);
+        DrawTrackingSpaceOriginAxis(calibData, undistorted, ROI);
 
         UploadFrame(undistorted);
 
@@ -1386,6 +1393,13 @@ void DrawStereoFrame(CalibrationData& calibDataLeft, CalibrationData& calibDataR
     float width = std::min(ImGui::GetContentRegionAvail().x, (float)g_frameWidth);
     ImVec2 imageSize = ImVec2(width, width * aspect);
 
+    if (g_cameraFrameBuffer.empty() || 
+        calibDataLeft.FrameROI.width == 0 || calibDataLeft.FrameROI.height == 0 ||
+        calibDataRight.FrameROI.width == 0 || calibDataRight.FrameROI.height == 0)
+    {
+        return;
+    }
+
     if (g_frameWidthGPU != g_frameWidth || g_frameHeightGPU != g_frameHeight)
     {
         SetupCameraFrameResource(g_frameWidth, g_frameHeight);
@@ -1412,6 +1426,9 @@ void DrawStereoFrame(CalibrationData& calibDataLeft, CalibrationData& calibDataR
             cv::undistort(g_cameraFrameBuffer(calibDataRight.FrameROI), undistorted(calibDataRight.FrameROI), calibDataRight.CameraIntrinsics, calibDataRight.CameraDistortion);
         }
 
+        DrawTrackingSpaceOriginAxis(calibDataLeft, undistorted, calibDataLeft.FrameROI);
+        DrawTrackingSpaceOriginAxis(calibDataRight, undistorted, calibDataRight.FrameROI);
+
         UploadFrame(undistorted);
 
         ImGui::Image((void*)g_cameraFrameSRV.Get(), imageSize);
@@ -1436,6 +1453,41 @@ void DrawStereoFrame(CalibrationData& calibDataLeft, CalibrationData& calibDataR
         UploadFrame(frame);
         ImGui::Image((void*)g_cameraFrameSRV.Get(), imageSize);
     }
+}
+
+
+void DrawTrackingSpaceOriginAxis(CalibrationData& calibData, cv::Mat& image, cv::Rect& ROI)
+{
+    if (!g_bUseOpenVRExtrinsic || !g_lastTrackedDevicePoses[g_openVRDevice].bPoseIsValid)
+    {
+        return;
+    }
+
+    cv::Mat devicePose = cv::Mat(3, 4, CV_32F, (void*)&g_lastTrackedDevicePoses[g_openVRDevice].mDeviceToAbsoluteTracking.m[0][0]);
+    cv::Mat deviceMat = cv::Mat::eye(4, 4, CV_32F);
+    devicePose.copyTo(deviceMat(cv::Rect(0, 0, 4, 3)));
+
+    cv::Mat rot180 = (cv::Mat_<float>(3, 3) << 1, 0, 0, 0, -1, 0, 0, 0, -1);
+    deviceMat(cv::Rect(0, 0, 3, 3)) = deviceMat(cv::Rect(0, 0, 3, 3)) * rot180;
+
+    cv::Mat cameraMat = cv::Mat::eye(4, 4, CV_32F);
+    std::vector<double> rotVec(calibData.ExtrinsicsRotation);
+    rotVec[1] *= -1.0;
+    rotVec[2] *= -1.0;
+    cv::Mat camearRot = EulerToRotationMatrix(rotVec);
+    camearRot.convertTo(cameraMat(cv::Rect(0, 0, 3, 3)), CV_32F);
+
+    cameraMat.at<float>(0, 3) = (float)-calibData.ExtrinsicsTranslation[0];
+    cameraMat.at<float>(1, 3) = (float)calibData.ExtrinsicsTranslation[1];
+    cameraMat.at<float>(2, 3) = (float)calibData.ExtrinsicsTranslation[2];
+
+    cv::Mat combined = deviceMat * cameraMat;
+    combined = combined.inv(cv::DECOMP_SVD);
+
+    cv::Mat rot;
+    cv::Rodrigues(combined(cv::Rect(0, 0, 3, 3)), rot);
+
+    cv::drawFrameAxes(image(ROI), calibData.CameraIntrinsics, cv::noArray(), rot, combined(cv::Rect(3, 0, 1, 3)), 0.3, 2);
 }
 
 
@@ -1992,7 +2044,7 @@ void ServeFrames(int _)
 
         if (g_bOpenVRIntialized)
         {
-            vr::VRSystem()->GetDeviceToAbsoluteTrackingPose(vr::TrackingUniverseStanding, -0.0075f, g_waitingTrackedDevicePoses, g_openVRDevice + 1);
+            vr::VRSystem()->GetDeviceToAbsoluteTrackingPose(vr::TrackingUniverseStanding, -g_OpenVRPoseCaptureOffset, g_waitingTrackedDevicePoses, g_openVRDevice + 1);
         }
 
         g_videoCapture.retrieve(g_waitingFrameBuffer);
@@ -2029,16 +2081,17 @@ void UploadFrame(cv::Mat& frameBuffer)
     if (!frameBuffer.empty() && g_cameraFrameUploadTexture != nullptr && g_cameraFrameTexture != nullptr)
     {
         D3D11_MAPPED_SUBRESOURCE res = {};
-        g_pd3dDeviceContext->Map(g_cameraFrameUploadTexture.Get(), 0, D3D11_MAP_WRITE, 0, &res);
+        if (g_pd3dDeviceContext->Map(g_cameraFrameUploadTexture.Get(), 0, D3D11_MAP_WRITE, 0, &res) == S_OK)
+        {
+            cv::Mat uploadBuffer = cv::Mat(frameBuffer.rows, frameBuffer.cols, CV_8UC4, res.pData);
 
-        cv::Mat uploadBuffer = cv::Mat(frameBuffer.rows, frameBuffer.cols, CV_8UC4, res.pData);
+            int from_to[] = { 0,0, 1,1, 2,2, -1,3 };
+            cv::mixChannels(&frameBuffer, 1, &uploadBuffer, 1, from_to, uploadBuffer.channels());
 
-        int from_to[] = { 0,0, 1,1, 2,2, -1,3 };
-        cv::mixChannels(&frameBuffer, 1, &uploadBuffer, 1, from_to, uploadBuffer.channels());
+            g_pd3dDeviceContext->Unmap(g_cameraFrameUploadTexture.Get(), 0);
 
-        g_pd3dDeviceContext->Unmap(g_cameraFrameUploadTexture.Get(), 0);
-
-        g_pd3dDeviceContext->CopyResource(g_cameraFrameTexture.Get(), g_cameraFrameUploadTexture.Get());
+            g_pd3dDeviceContext->CopyResource(g_cameraFrameTexture.Get(), g_cameraFrameUploadTexture.Get());
+        }
     }
 }
 
