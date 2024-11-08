@@ -9,6 +9,7 @@
 #include <pathcch.h>
 #include <shlobj_core.h>
 #include <string>
+#include <deque>
 #include <format>
 #include <vector>
 #include <algorithm>
@@ -151,6 +152,11 @@ static float g_automaticCaptureInterval = 5.0;
 static bool g_selectedImageChanged = false;
 static int g_displayedImage = 0;
 
+static std::deque<std::string> g_logBuffer;
+static bool g_bLogUpdated = false;
+
+#define ADD_TO_LOG(x) g_logBuffer.emplace_back(x); g_bLogUpdated = true;
+
 
 inline double RadToDeg(double r);
 inline double DegToRad(double d);
@@ -161,7 +167,7 @@ bool ImageCaptureUI(CalibrationData* calibData, CalibrationData* calibDataStereo
 void SetFrameGeometry(CalibrationData& calibData, bool bIsRightCamera);
 void DrawCameraFrame(CalibrationData& calibData, bool bDrawDistorted, bool bDrawChessboardCorners, int imageIndex);
 void DrawStereoFrame(CalibrationData& calibDataLeft, CalibrationData& calibDataRight, bool bDrawDistorted, bool bDrawChessboardCorners, int imageIndex);
-void DrawTrackingSpaceOriginAxis(CalibrationData& calibData, cv::Mat& image, cv::Rect& ROI);
+void DrawTrackingSpaceOriginAxis(CalibrationData& calibData, cv::Mat& image, cv::Rect& ROI, cv::Mat& intrinsics);
 bool FindFrameCalibrationPatterns(CalibrationData& calibData, bool bRightCamera);
 bool FindFrameCalibrationPatternsStereo(CalibrationData& calibDataLeft, CalibrationData& calibDataRight);
 bool CalibrateSingleCamera(CalibrationData& calibData, bool bRightCamera);
@@ -349,14 +355,24 @@ int APIENTRY wWinMain(_In_ HINSTANCE hInstance, _In_opt_ HINSTANCE hPrevInstance
 
         ImGui::Begin("Main", NULL, ImGuiWindowFlags_NoDecoration | ImGuiWindowFlags_NoResize);
 
-        ImGui::BeginChild("Menu", ImVec2(std::min(ImGui::GetContentRegionAvail().x * 0.4f, 470.0f), 0), true);
+        ImGui::BeginChild("MenuPane", ImVec2(std::min(ImGui::GetContentRegionAvail().x * 0.4f, 470.0f), 0), true);
+
+        ImGui::BeginChild("Menu", ImVec2(0, ImGui::GetContentRegionAvail().y - 120.0f));
 
         ImGui::Text("Settings Import");
         ImGui::Spacing();
 
         if (ImGui::Button("Import Webcam Calibration Settings"))
         {
-            g_iniData.LoadFile(g_configFilePath.c_str());
+            SI_Error err = g_iniData.LoadFile(g_configFilePath.c_str());
+            if (err >= 0)
+            {
+                ADD_TO_LOG("Webcam calibration settings imported.");
+            }
+            else
+            {
+                ADD_TO_LOG(std::format("Failed to import settings: {}", err));
+            }
 
             g_frameLayout = (EStereoFrameLayout)g_iniData.GetLongValue(CONFIG_SECTION, "CameraFrameLayout", g_frameLayout);
             g_bFisheyeLens = g_iniData.GetBoolValue(CONFIG_SECTION, "CameraHasFisheyeLens", g_bFisheyeLens);
@@ -405,9 +421,19 @@ int APIENTRY wWinMain(_In_ HINSTANCE hInstance, _In_opt_ HINSTANCE hPrevInstance
 
         if (ImGui::Button("Import Custom SteamVR Calibration Settings"))
         {
-            g_iniData.LoadFile(g_configFilePath.c_str());
+            SI_Error err = g_iniData.LoadFile(g_configFilePath.c_str());
+            if (err >= 0)
+            {
+                ADD_TO_LOG("Custom SteamVR calibration settings imported.");
+            }
+            else
+            {
+                ADD_TO_LOG(std::format("Failed to import settings: {}", err));
+            }
 
             g_bFisheyeLens = g_iniData.GetBoolValue(CONFIG_SECTION, "OpenVR_CameraHasFisheyeLens", g_bFisheyeLens);
+            calibDataLeft.bFisheyeLens = g_bFisheyeLens;
+            calibDataRight.bFisheyeLens = g_bFisheyeLens;
 
             {
                 CalibrationData& calibData = (g_frameLayout == StereoVerticalLayout) ? calibDataRight : calibDataLeft;
@@ -508,6 +534,15 @@ int APIENTRY wWinMain(_In_ HINSTANCE hInstance, _In_opt_ HINSTANCE hPrevInstance
             bCalibrationCompleteRight = false;
             SetFrameGeometry(calibDataLeft, false);
             SetFrameGeometry(calibDataRight, true);
+
+            if (bIsCameraActive)
+            {
+                ADD_TO_LOG(std::format("Camera activated: {}", deviceList[selectedDevice]));
+            }
+            else
+            {
+                ADD_TO_LOG(std::format("Failed to activate camera: {}", deviceList[selectedDevice]));
+            }
         }
 
         ImGui::Text("%u x %u @ %uHz", g_frameWidth, g_frameHeight, g_frameRate);
@@ -528,6 +563,15 @@ int APIENTRY wWinMain(_In_ HINSTANCE hInstance, _In_opt_ HINSTANCE hPrevInstance
             bCalibrationCompleteRight = false;
             SetFrameGeometry(calibDataLeft, false);
             SetFrameGeometry(calibDataRight, true);
+
+            if (bIsCameraActive)
+            {
+                ADD_TO_LOG(std::format("Camera settings updated: {}", deviceList[selectedDevice]));
+            }
+            else
+            {
+                ADD_TO_LOG(std::format("Failed to activate camera: {}", deviceList[selectedDevice]));
+            }
         }
         ImGui::EndDisabled();
 
@@ -590,6 +634,11 @@ int APIENTRY wWinMain(_In_ HINSTANCE hInstance, _In_opt_ HINSTANCE hPrevInstance
             if (error == vr::VRInitError_None)
             {
                 g_bOpenVRIntialized = true;
+                ADD_TO_LOG("Connected to SteamVR");
+            }
+            else
+            {
+                ADD_TO_LOG(std::format("Failed to connect to SteamVR: {}", (int)error));
             }
         }
         ImGui::EndDisabled();
@@ -648,7 +697,14 @@ int APIENTRY wWinMain(_In_ HINSTANCE hInstance, _In_opt_ HINSTANCE hPrevInstance
 
             if (ImageCaptureUI(&calibData, nullptr, bIsCameraActive, bIsCapturing, bCalibrationComplete, bCapturingComplete, framesRemaining, timeRemaining, bRightCamera, deltaTime, false))
             {
-                FindFrameCalibrationPatterns(calibData, bRightCamera);
+                if (FindFrameCalibrationPatterns(calibData, bRightCamera))
+                {
+                    ADD_TO_LOG("Capture complete.");
+                }
+                else
+                {
+                    ADD_TO_LOG("Capture failed, no valid frames.");
+                }
                 g_displayedImage = 0;
                 g_selectedImageChanged = true;
             }
@@ -662,6 +718,11 @@ int APIENTRY wWinMain(_In_ HINSTANCE hInstance, _In_opt_ HINSTANCE hPrevInstance
                     bCalibrationComplete = true;
                     bViewUndistorted = true;
                     bViewSingleframe = true;
+                    ADD_TO_LOG(std::format("Calibration complete, RMS error: {:.5}", calibData.CalibrationRMSError));
+                }
+                else
+                {
+                    ADD_TO_LOG("Calibration failed.");
                 }
             }
             ImGui::EndDisabled();
@@ -721,7 +782,14 @@ int APIENTRY wWinMain(_In_ HINSTANCE hInstance, _In_opt_ HINSTANCE hPrevInstance
 
             if (ImageCaptureUI(&calibDataLeft, &calibDataRight, bCalibrationCompleteLeft && bCalibrationCompleteRight, bIsCapturingStereo, bCalibrationCompleteStereo, bCapturingCompleteStereo, framesRemaining, timeRemaining, bRightCamera, deltaTime, true))
             {
-                FindFrameCalibrationPatternsStereo(calibDataLeft, calibDataRight);
+                if (FindFrameCalibrationPatternsStereo(calibDataLeft, calibDataRight))
+                {
+                    ADD_TO_LOG("Capture complete.");
+                }
+                else
+                {
+                    ADD_TO_LOG("Capture failed, no valid frames.");
+                }
                 g_displayedImage = 0;
                 g_selectedImageChanged = true;
             }
@@ -735,6 +803,11 @@ int APIENTRY wWinMain(_In_ HINSTANCE hInstance, _In_opt_ HINSTANCE hPrevInstance
                     bCalibrationCompleteStereo = true;
                     bViewUndistorted = true;
                     bCalibrationAppliedStereo = false;
+                    ADD_TO_LOG(std::format("Stereo calibration complete, RMS error: {:.5}", stereoData.CalibrationRMSError));
+                }
+                else
+                {
+                    ADD_TO_LOG("Stereo calibration failed.");
                 }
             }
             ImGui::EndDisabled();
@@ -765,6 +838,7 @@ int APIENTRY wWinMain(_In_ HINSTANCE hInstance, _In_opt_ HINSTANCE hPrevInstance
             {
                 ApplyStereoCalibration(calibDataLeft, calibDataRight, stereoData);
                 bCalibrationAppliedStereo = true;
+                ADD_TO_LOG(std::format("Stereo calibration applied, eye position change: {:.5}mm", stereoData.CalibrationDelta * 1000.0));
             }
             ImGui::EndDisabled();
 
@@ -824,7 +898,17 @@ int APIENTRY wWinMain(_In_ HINSTANCE hInstance, _In_opt_ HINSTANCE hPrevInstance
                 g_iniData.SetLongValue(CONFIG_SECTION, "Camera1_IntrinsicsSensorPixelsY", calibDataRight.SensorHeight);
             }
 
-            g_iniData.SaveFile(g_configFilePath.c_str());
+            SI_Error err = g_iniData.SaveFile(g_configFilePath.c_str());
+            if (err >= 0)
+            {
+                ADD_TO_LOG("Webcam calibration written!");
+            }
+            else
+            {
+                ADD_TO_LOG(std::format("Failed to write calibration: {}", err));
+            }
+
+            
         }
 
         if (ImGui::Button("Write to API Layer as Custom SteamVR Calibration"))
@@ -877,11 +961,43 @@ int APIENTRY wWinMain(_In_ HINSTANCE hInstance, _In_opt_ HINSTANCE hPrevInstance
                 g_iniData.SetLongValue(CONFIG_SECTION, "OpenVR_Camera1_IntrinsicsSensorPixelsY", calibData.SensorHeight);
             }
 
-            g_iniData.SaveFile(g_configFilePath.c_str());
+            SI_Error err = g_iniData.SaveFile(g_configFilePath.c_str());
+            if (err >= 0)
+            {
+                ADD_TO_LOG("SteamVR camera calibration written!");
+            }
+            else
+            {
+                ADD_TO_LOG(std::format("Failed to write calibration: {}", err));
+            }
         }
 
+        ImGui::EndChild(); // Menu
 
-        ImGui::EndChild();
+        {
+            ImGui::Separator();
+            ImGui::Text("Log");
+            ImGui::Spacing();
+
+            ImGui::BeginChild("LogWindow", ImVec2(0, 0), true);
+            ImGui::PushTextWrapPos(ImGui::GetContentRegionAvail().x);
+
+            for (auto it = g_logBuffer.begin(); it != g_logBuffer.end(); it++)
+            {
+                ImGui::Text(it->c_str());
+            }
+
+            if (g_bLogUpdated)
+            {
+                ImGui::SetScrollHereY(1.0f);
+                g_bLogUpdated = false;
+            }
+
+            ImGui::PopTextWrapPos();
+            ImGui::EndChild();
+        }
+
+        ImGui::EndChild(); //MenuPane
 
         ImGui::SameLine();
 
@@ -1151,6 +1267,7 @@ bool ImageCaptureUI(CalibrationData* calibData, CalibrationData* calibDataStereo
             SetFrameGeometry(*calibDataStereo, !bIsRightCamera);
         }
         
+        ADD_TO_LOG("Capture started...");
     }
     ImGui::EndDisabled();
 
@@ -1160,6 +1277,7 @@ bool ImageCaptureUI(CalibrationData* calibData, CalibrationData* calibDataStereo
     if (ImGui::Button("Stop capture"))
     {
         bIsCapturing = false;
+        ADD_TO_LOG("Capture stopped.");
     }
     ImGui::EndDisabled();
 
@@ -1351,20 +1469,23 @@ void DrawCameraFrame(CalibrationData& calibData, bool bDrawDistorted, bool bDraw
     if (!bDrawDistorted)
     {
         cv::Mat undistorted;
+        cv::Rect ROI(0, 0, calibData.FrameROI.width, calibData.FrameROI.height);
         if (calibData.bFisheyeLens)
         {
             cv::Mat P, map1, map2;
             cv::fisheye::estimateNewCameraMatrixForUndistortRectify(calibData.CameraIntrinsics, calibData.CameraDistortion, g_cameraFrameBuffer(calibData.FrameROI).size(), cv::Matx33d::eye(), P, 1);
             cv::fisheye::initUndistortRectifyMap(calibData.CameraIntrinsics, calibData.CameraDistortion, cv::Matx33d::eye(), P, g_cameraFrameBuffer(calibData.FrameROI).size(), CV_16SC2, map1, map2);
             cv::remap(g_cameraFrameBuffer(calibData.FrameROI), undistorted, map1, map2, cv::INTER_LINEAR);
+            DrawTrackingSpaceOriginAxis(calibData, undistorted, ROI, P);
         }
         else
         {
             cv::undistort(g_cameraFrameBuffer(calibData.FrameROI), undistorted, calibData.CameraIntrinsics, calibData.CameraDistortion);
+            DrawTrackingSpaceOriginAxis(calibData, undistorted, ROI, calibData.CameraIntrinsics);
         }
 
-        cv::Rect ROI(0, 0, calibData.FrameROI.width, calibData.FrameROI.height);
-        DrawTrackingSpaceOriginAxis(calibData, undistorted, ROI);
+        
+        
 
         UploadFrame(undistorted);
 
@@ -1410,24 +1531,27 @@ void DrawStereoFrame(CalibrationData& calibDataLeft, CalibrationData& calibDataR
         cv::Mat undistorted = cv::Mat(g_frameHeight, g_frameWidth, CV_8UC3);
         if (calibDataLeft.bFisheyeLens)
         {
-            cv::Mat P, map1, map2;
-            cv::fisheye::estimateNewCameraMatrixForUndistortRectify(calibDataLeft.CameraIntrinsics, calibDataLeft.CameraDistortion, g_cameraFrameBuffer(calibDataLeft.FrameROI).size(), cv::Matx33d::eye(), P, 1);
-            cv::fisheye::initUndistortRectifyMap(calibDataLeft.CameraIntrinsics, calibDataLeft.CameraDistortion, cv::Matx33d::eye(), P, g_cameraFrameBuffer(calibDataLeft.FrameROI).size(), CV_16SC2, map1, map2);
+            cv::Mat PL, PR, map1, map2;
+            cv::fisheye::estimateNewCameraMatrixForUndistortRectify(calibDataLeft.CameraIntrinsics, calibDataLeft.CameraDistortion, g_cameraFrameBuffer(calibDataLeft.FrameROI).size(), cv::Matx33d::eye(), PL, 1);
+            cv::fisheye::initUndistortRectifyMap(calibDataLeft.CameraIntrinsics, calibDataLeft.CameraDistortion, cv::Matx33d::eye(), PL, g_cameraFrameBuffer(calibDataLeft.FrameROI).size(), CV_16SC2, map1, map2);
             cv::remap(g_cameraFrameBuffer(calibDataLeft.FrameROI), undistorted(calibDataLeft.FrameROI), map1, map2, cv::INTER_LINEAR);
+            DrawTrackingSpaceOriginAxis(calibDataLeft, undistorted, calibDataLeft.FrameROI, PL);
 
-            cv::fisheye::estimateNewCameraMatrixForUndistortRectify(calibDataRight.CameraIntrinsics, calibDataRight.CameraDistortion, g_cameraFrameBuffer(calibDataRight.FrameROI).size(), cv::Matx33d::eye(), P, 1);
-            cv::fisheye::initUndistortRectifyMap(calibDataRight.CameraIntrinsics, calibDataRight.CameraDistortion, cv::Matx33d::eye(), P, g_cameraFrameBuffer(calibDataRight.FrameROI).size(), CV_16SC2, map1, map2);
+            cv::fisheye::estimateNewCameraMatrixForUndistortRectify(calibDataRight.CameraIntrinsics, calibDataRight.CameraDistortion, g_cameraFrameBuffer(calibDataRight.FrameROI).size(), cv::Matx33d::eye(), PR, 1);
+            cv::fisheye::initUndistortRectifyMap(calibDataRight.CameraIntrinsics, calibDataRight.CameraDistortion, cv::Matx33d::eye(), PR, g_cameraFrameBuffer(calibDataRight.FrameROI).size(), CV_16SC2, map1, map2);
             cv::remap(g_cameraFrameBuffer(calibDataRight.FrameROI), undistorted(calibDataRight.FrameROI), map1, map2, cv::INTER_LINEAR);
+            DrawTrackingSpaceOriginAxis(calibDataRight, undistorted, calibDataRight.FrameROI, PR);
         }
         else
         {
             cv::undistort(g_cameraFrameBuffer(calibDataLeft.FrameROI), undistorted(calibDataLeft.FrameROI), calibDataLeft.CameraIntrinsics, calibDataLeft.CameraDistortion);
 
             cv::undistort(g_cameraFrameBuffer(calibDataRight.FrameROI), undistorted(calibDataRight.FrameROI), calibDataRight.CameraIntrinsics, calibDataRight.CameraDistortion);
+            DrawTrackingSpaceOriginAxis(calibDataLeft, undistorted, calibDataLeft.FrameROI, calibDataLeft.CameraIntrinsics);
+            DrawTrackingSpaceOriginAxis(calibDataRight, undistorted, calibDataRight.FrameROI, calibDataRight.CameraIntrinsics);
         }
 
-        DrawTrackingSpaceOriginAxis(calibDataLeft, undistorted, calibDataLeft.FrameROI);
-        DrawTrackingSpaceOriginAxis(calibDataRight, undistorted, calibDataRight.FrameROI);
+        
 
         UploadFrame(undistorted);
 
@@ -1456,7 +1580,7 @@ void DrawStereoFrame(CalibrationData& calibDataLeft, CalibrationData& calibDataR
 }
 
 
-void DrawTrackingSpaceOriginAxis(CalibrationData& calibData, cv::Mat& image, cv::Rect& ROI)
+void DrawTrackingSpaceOriginAxis(CalibrationData& calibData, cv::Mat& image, cv::Rect& ROI, cv::Mat& intrinsics)
 {
     if (!g_bUseOpenVRExtrinsic || !g_lastTrackedDevicePoses[g_openVRDevice].bPoseIsValid)
     {
@@ -1487,7 +1611,7 @@ void DrawTrackingSpaceOriginAxis(CalibrationData& calibData, cv::Mat& image, cv:
     cv::Mat rot;
     cv::Rodrigues(combined(cv::Rect(0, 0, 3, 3)), rot);
 
-    cv::drawFrameAxes(image(ROI), calibData.CameraIntrinsics, cv::noArray(), rot, combined(cv::Rect(3, 0, 1, 3)), 0.3, 2);
+    cv::drawFrameAxes(image(ROI), intrinsics, cv::noArray(), rot, combined(cv::Rect(3, 0, 1, 3)), 0.3f, 2);
 }
 
 
@@ -1736,23 +1860,41 @@ bool CalibrateSingleCamera(CalibrationData& calibData, bool bRightCamera)
     if (calibData.bFisheyeLens)
     {
         cv::TermCriteria calibTermCriteria = cv::TermCriteria(cv::TermCriteria::COUNT + cv::TermCriteria::EPS, 100, DBL_EPSILON);
-        int flags = cv::fisheye::CALIB_FIX_SKEW | cv::fisheye::CALIB_CHECK_COND;
+        
+        bool bRefinedCalibrationSucceded = false;
 
-        // CALIB_USE_INTRINSIC_GUESS always fails on the fisheye model for some reason.
-        /*if (bHasIntrinsics)
+        // Attempt to refine existing results if possible, although it always seems to fail on the fisheye model for some reason.
+        if (bHasIntrinsics)
         {
             K = calibData.CameraIntrinsics.clone();
-            flags |= cv::fisheye::CALIB_USE_INTRINSIC_GUESS;
-        }*/
-   
-        try
-        {
-            calibData.CalibrationRMSError = cv::fisheye::calibrate(calibData.RefPoints, calibData.CBPoints, cv::Size(calibData.SensorWidth, calibData.SensorHeight), K, D, rvecs, tvecs, flags, calibTermCriteria);
+            int flags = cv::fisheye::CALIB_FIX_SKEW | cv::fisheye::CALIB_CHECK_COND | cv::fisheye::CALIB_USE_INTRINSIC_GUESS;
+
+            try
+            {
+                calibData.CalibrationRMSError = cv::fisheye::calibrate(calibData.RefPoints, calibData.CBPoints, cv::Size(calibData.SensorWidth, calibData.SensorHeight), K, D, rvecs, tvecs, flags, calibTermCriteria);
+                bRefinedCalibrationSucceded = true;
+            }
+            catch (const cv::Exception& e)
+            {
+                e;
+                flags = cv::fisheye::CALIB_FIX_SKEW | cv::fisheye::CALIB_CHECK_COND;
+                bRefinedCalibrationSucceded = false;
+                ADD_TO_LOG("Failed to refine existing calibration, performing full calibration!");
+            }
         }
-        catch (const cv::Exception& e)
+   
+        if (!bRefinedCalibrationSucceded)
         {
-            e;
-            return false;
+            int flags = cv::fisheye::CALIB_FIX_SKEW | cv::fisheye::CALIB_CHECK_COND;
+            try
+            {
+                calibData.CalibrationRMSError = cv::fisheye::calibrate(calibData.RefPoints, calibData.CBPoints, cv::Size(calibData.SensorWidth, calibData.SensorHeight), K, D, rvecs, tvecs, flags, calibTermCriteria);
+            }
+            catch (const cv::Exception& e)
+            {
+                e;
+                return false;
+            }
         }
     }
     else
