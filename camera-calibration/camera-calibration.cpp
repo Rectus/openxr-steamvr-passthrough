@@ -374,6 +374,9 @@ int APIENTRY wWinMain(_In_ HINSTANCE hInstance, _In_opt_ HINSTANCE hPrevInstance
                 ADD_TO_LOG(std::format("Failed to import settings: {}", err));
             }
 
+            bCalibrationCompleteLeft = true;
+            bCalibrationCompleteRight = true;
+
             g_frameLayout = (EStereoFrameLayout)g_iniData.GetLongValue(CONFIG_SECTION, "CameraFrameLayout", g_frameLayout);
             g_bFisheyeLens = g_iniData.GetBoolValue(CONFIG_SECTION, "CameraHasFisheyeLens", g_bFisheyeLens);
 
@@ -434,6 +437,8 @@ int APIENTRY wWinMain(_In_ HINSTANCE hInstance, _In_opt_ HINSTANCE hPrevInstance
             g_bFisheyeLens = g_iniData.GetBoolValue(CONFIG_SECTION, "OpenVR_CameraHasFisheyeLens", g_bFisheyeLens);
             calibDataLeft.bFisheyeLens = g_bFisheyeLens;
             calibDataRight.bFisheyeLens = g_bFisheyeLens;
+            bCalibrationCompleteLeft = true;
+            bCalibrationCompleteRight = true;
 
             {
                 CalibrationData& calibData = (g_frameLayout == StereoVerticalLayout) ? calibDataRight : calibDataLeft;
@@ -530,8 +535,6 @@ int APIENTRY wWinMain(_In_ HINSTANCE hInstance, _In_opt_ HINSTANCE hPrevInstance
             bIsCameraActive = InitCamera(selectedDevice);
             calibDataLeft.ClearFrames();
             calibDataRight.ClearFrames();
-            bCalibrationCompleteLeft = false;
-            bCalibrationCompleteRight = false;
             SetFrameGeometry(calibDataLeft, false);
             SetFrameGeometry(calibDataRight, true);
 
@@ -559,8 +562,6 @@ int APIENTRY wWinMain(_In_ HINSTANCE hInstance, _In_opt_ HINSTANCE hPrevInstance
             bIsCameraActive = InitCamera(selectedDevice);
             calibDataLeft.ClearFrames();
             calibDataRight.ClearFrames();
-            bCalibrationCompleteLeft = false;
-            bCalibrationCompleteRight = false;
             SetFrameGeometry(calibDataLeft, false);
             SetFrameGeometry(calibDataRight, true);
 
@@ -626,7 +627,7 @@ int APIENTRY wWinMain(_In_ HINSTANCE hInstance, _In_opt_ HINSTANCE hPrevInstance
             g_bUseOpenVRExtrinsic = true;
         }
 
-        ImGui::BeginDisabled(!g_bUseOpenVRExtrinsic || g_bOpenVRIntialized);
+        ImGui::BeginDisabled(g_bOpenVRIntialized);
         if (ImGui::Button("Connect to SteamVR"))
         {
             vr::EVRInitError error;
@@ -2022,18 +2023,19 @@ void ApplyStereoCalibration(CalibrationData& calibDataLeft, CalibrationData& cal
     cv::Quat<double> prevWorldRotationLeftQ = cv::Quat<double>::createFromRotMat(prevWorldRotationLeft);
     cv::Quat<double> prevWorldRotationRightQ = cv::Quat<double>::createFromRotMat(prevWorldRotationRight);
     cv::Quat<double> midpoint = cv::Quat<double>::slerp(prevWorldRotationLeftQ, prevWorldRotationRightQ, 0.5);
-    cv::Quat<double> LtoR = cv::Quat<double>::createFromRotMat(stereoData.LeftToRightRotationMatrix);
+    // The left to right rotation matrix needs to be inverted for some reason.
+    cv::Quat<double> LtoR = cv::Quat<double>::createFromRotMat(stereoData.LeftToRightRotationMatrix.t());
     cv::Quat<double> halfLtoR = cv::Quat<double>::slerp(cv::Quat<double>(1, 0, 0, 0), LtoR, 0.5);
 
     cv::Mat rotLeft = cv::Mat((midpoint * halfLtoR.inv(cv::QUAT_ASSUME_UNIT)).toRotMat3x3(cv::QUAT_ASSUME_UNIT));
     cv::Mat rotRight = cv::Mat((midpoint * halfLtoR).toRotMat3x3(cv::QUAT_ASSUME_UNIT));
 
-    cv::Mat rightWorldTrans = (rotLeft.t() * (translationLeftToRight - prevWorldTranslationLeft));
+    cv::Mat rotLeftInvUncorrected = cv::Mat((halfLtoR).toRotMat3x3(cv::QUAT_ASSUME_UNIT));
 
-    cv::Mat avgWorldTrans = (rotLeft.t() * ((translationLeftToRight * 0.5) - prevWorldTranslationLeft));
+    cv::Mat rightWorldTrans = (rotLeftInvUncorrected * (translationLeftToRight - prevWorldTranslationLeft));
+    cv::Mat avgWorldTrans = (rotLeftInvUncorrected * ((translationLeftToRight * 0.5) - prevWorldTranslationLeft));
 
     cv::Mat avgToRight = rightWorldTrans - avgWorldTrans;
-    avgToRight *= -1.0; // Needs to be inverted for some reason
 
     cv::Mat rightCorrectedTrans = prevWorldTranslationAverage + avgToRight;
     cv::Mat leftCorrectedTrans = prevWorldTranslationAverage - avgToRight;
@@ -2052,7 +2054,6 @@ void ApplyStereoCalibration(CalibrationData& calibDataLeft, CalibrationData& cal
 
     cv::Vec<double, 3> diff = prevWorldTranslationLeft - cv::Vec3d(leftCorrectedTrans);
     stereoData.CalibrationDelta = std::sqrt(std::pow(diff[0], 2) + std::pow(diff[0], 2) + std::pow(diff[0], 2));
-
 }
 
 
