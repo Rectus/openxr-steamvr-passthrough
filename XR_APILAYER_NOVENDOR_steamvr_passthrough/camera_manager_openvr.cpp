@@ -328,11 +328,11 @@ XrMatrix4x4f CameraManagerOpenVR::GetLeftToRightCameraTransform() const
     return m_cameraLeftToRightPose;
 }
 
-void CameraManagerOpenVR::GetTrackedCameraEyePoses(XrMatrix4x4f& LeftPose, XrMatrix4x4f& RightPose)
+void CameraManagerOpenVR::GetTrackedCameraEyePoses(XrMatrix4x4f& LeftPose, XrMatrix4x4f& RightPose, bool bForceOpenVRValue)
 {
     Config_Camera& cameraConf = m_configManager->GetConfig_Camera();
 
-    if (!cameraConf.OpenVRCustomCalibration)
+    if (!cameraConf.OpenVRCustomCalibration || bForceOpenVRValue)
     {
         vr::IVRSystem* vrSystem = m_openVRManager->GetVRSystem();
 
@@ -478,10 +478,14 @@ void CameraManagerOpenVR::UpdateStaticCameraParameters()
     m_viewToHMDRight = ToXRMatrix4x4(vrHMDViewRight);
     m_HMDToViewRight = ToXRMatrix4x4Inverted(vrHMDViewRight);
 
-    GetTrackedCameraEyePoses(m_cameraToHMDLeft, m_cameraToHMDRight);
-
+    GetTrackedCameraEyePoses(m_cameraToHMDLeft, m_cameraToHMDRight, false);
     XrMatrix4x4f_Invert(&m_HMDToCameraLeft, &m_cameraToHMDLeft);
     XrMatrix4x4f_Invert(&m_HMDToCameraRight, &m_cameraToHMDRight);
+
+    XrMatrix4x4f camToHMDLeftOrig, camToHMDRightOrig;
+    GetTrackedCameraEyePoses(camToHMDLeftOrig, camToHMDRightOrig, true);
+    XrMatrix4x4f_Invert(&m_HMDToCameraLeftOriginal, &camToHMDLeftOrig);
+    XrMatrix4x4f_Invert(&m_HMDToCameraRightOriginal, &camToHMDRightOrig);
 
     XrMatrix4x4f_Multiply(&m_cameraLeftToRightPose, &m_cameraToHMDLeft, &m_HMDToCameraRight);
     XrMatrix4x4f_Multiply(&m_cameraRightToLeftPose, &m_cameraToHMDRight, &m_HMDToCameraLeft);
@@ -650,7 +654,15 @@ void CameraManagerOpenVR::ServeFrames()
         // For vertical layouts the device pose is for the right camera.
         if (m_frameLayout == EStereoFrameLayout::StereoVerticalLayout)
         {
-            XrMatrix4x4f_Multiply(&headToTrackingPose, &origCamera0ToTrackingPose, &m_HMDToCameraRight);
+            if (m_configManager->GetConfig_Camera().OpenVRCustomCalibration)
+            {
+                // Strip original OpenVR calibration from pose if custom calibration used.
+                XrMatrix4x4f_Multiply(&headToTrackingPose, &origCamera0ToTrackingPose, &m_HMDToCameraRightOriginal);
+            }
+            else
+            {
+                XrMatrix4x4f_Multiply(&headToTrackingPose, &origCamera0ToTrackingPose, &m_HMDToCameraRight);
+            }
             correctedCamera0ToHMDPose = m_cameraToHMDRight;
             correctedCamera0ToHMDPose.m[12] *= mainConf.DepthOffsetCalibration;
             correctedCamera0ToHMDPose.m[13] *= mainConf.DepthOffsetCalibration;
@@ -666,7 +678,15 @@ void CameraManagerOpenVR::ServeFrames()
         }
         else
         {
-            XrMatrix4x4f_Multiply(&headToTrackingPose, &origCamera0ToTrackingPose, &m_HMDToCameraLeft);
+            if (m_configManager->GetConfig_Camera().OpenVRCustomCalibration)
+            {
+                // Strip original OpenVR calibration from pose if custom calibration used.
+                XrMatrix4x4f_Multiply(&headToTrackingPose, &origCamera0ToTrackingPose, &m_HMDToCameraLeftOriginal);
+            }
+            else
+            {
+                XrMatrix4x4f_Multiply(&headToTrackingPose, &origCamera0ToTrackingPose, &m_HMDToCameraLeft);
+            }
             correctedCamera0ToHMDPose = m_cameraToHMDLeft;
             correctedCamera0ToHMDPose.m[12] *= mainConf.DepthOffsetCalibration;
             correctedCamera0ToHMDPose.m[13] *= mainConf.DepthOffsetCalibration;

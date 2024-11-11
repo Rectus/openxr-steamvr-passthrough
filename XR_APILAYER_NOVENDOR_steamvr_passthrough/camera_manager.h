@@ -75,7 +75,7 @@ public:
 private:
 	void ServeFrames();
 	void UpdateRenderModels();
-	void GetTrackedCameraEyePoses(XrMatrix4x4f& LeftPose, XrMatrix4x4f& RightPose);
+	void GetTrackedCameraEyePoses(XrMatrix4x4f& LeftPose, XrMatrix4x4f& RightPose, bool bForceOpenVRValue);
 	XrMatrix4x4f GetHMDWorldToViewMatrix(const ERenderEye eye, const XrCompositionLayerProjection& layer, const XrReferenceSpaceCreateInfo& refSpaceInfo);
 	void UpdateProjectionMatrix(std::shared_ptr<CameraFrame>& frame);
 	void CalculateFrameProjectionForEye(const ERenderEye eye, std::shared_ptr<CameraFrame>& frame, const XrCompositionLayerProjection& layer, const XrReferenceSpaceCreateInfo& refSpaceInfo, UVDistortionParameters& distortionParams);
@@ -130,6 +130,8 @@ private:
 	XrMatrix4x4f m_cameraToHMDRight{};
 	XrMatrix4x4f m_HMDToCameraLeft{};
 	XrMatrix4x4f m_HMDToCameraRight{};
+	XrMatrix4x4f m_HMDToCameraLeftOriginal{};
+	XrMatrix4x4f m_HMDToCameraRightOriginal{};
 
 	XrMatrix4x4f m_cameraLeftToRightPose{};
 	XrMatrix4x4f m_cameraRightToLeftPose{};
