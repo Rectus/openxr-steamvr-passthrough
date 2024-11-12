@@ -25,7 +25,7 @@ Using the 3D stereo mode may induce heavy flickering on the display. Exercise ca
 - EXPERIMENTAL: Supports 3D stereo reconstruction to estimate projection depth, using OpenCV. Includes support for Weighted Least Squares disparity filtering, and Fast Bilateral Solver filtering.
 - Supports custom fisheye lens rectification instead of using the OpenVR pre-rectified output.
 - Supports compositing the passthrough based on scene depth, for applications that supply depth buffers.
-- EXPERIMENTAL: Support for monocular webcam input. This can be used alone or in conjunction with the depth provided by a stereoscopic HMD camera. The camera can either be attached to a tracked SteamVR device, or be set up in a static position. Manual calibration is required.
+- EXPERIMENTAL: Support for USB camera input. This can be used alone or in conjunction with the depth provided by a stereoscopic HMD camera. The camera can either be attached to a tracked SteamVR device, or be set up in a static position. Manual calibration is required.
 
 
 ### Limitations ###
