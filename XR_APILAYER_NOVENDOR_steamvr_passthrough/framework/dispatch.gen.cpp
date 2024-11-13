@@ -547,10 +547,6 @@ namespace LAYER_NAMESPACE
 		{
 			throw new std::runtime_error("Failed to resolve xrAcquireSwapchainImage");
 		}
-		if (XR_FAILED(m_xrGetInstanceProcAddr(m_instance, "xrWaitSwapchainImage", reinterpret_cast<PFN_xrVoidFunction*>(&m_xrWaitSwapchainImage))))
-		{
-			throw new std::runtime_error("Failed to resolve xrWaitSwapchainImage");
-		}
 		if (XR_FAILED(m_xrGetInstanceProcAddr(m_instance, "xrReleaseSwapchainImage", reinterpret_cast<PFN_xrVoidFunction*>(&m_xrReleaseSwapchainImage))))
 		{
 			throw new std::runtime_error("Failed to resolve xrReleaseSwapchainImage");

@@ -218,14 +218,6 @@ namespace LAYER_NAMESPACE
 		PFN_xrAcquireSwapchainImage m_xrAcquireSwapchainImage{ nullptr };
 
 	public:
-		virtual XrResult xrWaitSwapchainImage(XrSwapchain swapchain, const XrSwapchainImageWaitInfo* waitInfo)
-		{
-			return m_xrWaitSwapchainImage(swapchain, waitInfo);
-		}
-	private:
-		PFN_xrWaitSwapchainImage m_xrWaitSwapchainImage{ nullptr };
-
-	public:
 		virtual XrResult xrReleaseSwapchainImage(XrSwapchain swapchain, const XrSwapchainImageReleaseInfo* releaseInfo)
 		{
 			return m_xrReleaseSwapchainImage(swapchain, releaseInfo);

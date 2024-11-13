@@ -30,7 +30,6 @@ requested_functions = [
     "xrDestroySwapchain",
     "xrEnumerateSwapchainImages",
     "xrAcquireSwapchainImage",
-    "xrWaitSwapchainImage",
     "xrReleaseSwapchainImage",
     "xrBeginFrame",
     "xrEndFrame",
