@@ -18,10 +18,18 @@
 #include "shaders\passthrough_temporal_ps.h"
 #include "shaders\alpha_copy_masked_ps.h"
 
+#include "shaders\fill_holes_cs.h"
+
 using namespace steamvr_passthrough;
 using namespace steamvr_passthrough::log;
 
-
+struct CSConstantBuffer
+{
+	uint32_t disparityFrameWidth;
+	uint32_t bHoleFillLastPass;
+	float minDisparity;
+	float maxDisparity;
+};
 
 struct VSPassConstantBuffer
 {
@@ -112,17 +120,21 @@ inline uint32_t Align(const uint32_t value, const uint32_t alignment)
 
 void UploadTexture(ComPtr<ID3D11DeviceContext> deviceContext, ComPtr<ID3D11Texture2D> uploadTexture, uint8_t* inputBuffer, int height, int width)
 {
+	if (inputBuffer == nullptr) { return; }
+
 	D3D11_MAPPED_SUBRESOURCE resource = {};
-	deviceContext->Map(uploadTexture.Get(), 0, D3D11_MAP_WRITE, 0, &resource);
-	uint8_t* writePtr = (uint8_t*)resource.pData;
-	uint8_t* readPtr = inputBuffer;
-	for (int i = 0; i < height; i++)
+	if (deviceContext->Map(uploadTexture.Get(), 0, D3D11_MAP_WRITE, 0, &resource) == S_OK)
 	{
-		memcpy(writePtr, readPtr, width);
-		writePtr += resource.RowPitch;
-		readPtr += width;
+		uint8_t* writePtr = (uint8_t*)resource.pData;
+		uint8_t* readPtr = inputBuffer;
+		for (int i = 0; i < height; i++)
+		{
+			memcpy(writePtr, readPtr, width);
+			writePtr += resource.RowPitch;
+			readPtr += width;
+		}
+		deviceContext->Unmap(uploadTexture.Get(), 0);
 	}
-	deviceContext->Unmap(uploadTexture.Get(), 0);
 }
 
 
@@ -154,6 +166,12 @@ bool PassthroughRendererDX11::InitRenderer()
 
 	m_d3dDevice->GetImmediateContext(&m_deviceContext);
 
+
+	if (FAILED(m_d3dDevice->CreateComputeShader(g_FillHolesShaderCS, sizeof(g_FillHolesShaderCS), nullptr, &m_fillHolesComputeShader)))
+	{
+		ErrorLog("g_FillHolesShaderCS creation failure!\n");
+		return false;
+	}
 
 	if (FAILED(m_d3dDevice->CreateVertexShader(g_FullscreenQuadShaderVS, sizeof(g_FullscreenQuadShaderVS), nullptr, &m_fullscreenQuadShader)))
 	{
@@ -593,6 +611,7 @@ void PassthroughRendererDX11::SetupCameraUndistortedFrameResource(const uint32_t
 
 void PassthroughRendererDX11::SetupDisparityMap(uint32_t width, uint32_t height)
 {
+	// TODO: merge textures to one, we shouldn't need a separtate one for temporal filtering
 	D3D11_TEXTURE2D_DESC textureDesc = {};
 	textureDesc.MipLevels = 1;
 	textureDesc.Format = DXGI_FORMAT_R16G16_SNORM;
@@ -601,7 +620,7 @@ void PassthroughRendererDX11::SetupDisparityMap(uint32_t width, uint32_t height)
 	textureDesc.ArraySize = 1;
 	textureDesc.SampleDesc.Count = 1;
 	textureDesc.SampleDesc.Quality = 0;
-	textureDesc.BindFlags = D3D11_BIND_SHADER_RESOURCE;
+	textureDesc.BindFlags = D3D11_BIND_UNORDERED_ACCESS | D3D11_BIND_SHADER_RESOURCE;
 	textureDesc.Usage = D3D11_USAGE_DEFAULT;
 	textureDesc.CPUAccessFlags = 0;
 	
@@ -647,6 +666,12 @@ void PassthroughRendererDX11::SetupDisparityMap(uint32_t width, uint32_t height)
 			ErrorLog("Disparity Map CreateTexture2D error!\n");
 			return;
 		}
+
+		if (FAILED(m_d3dDevice->CreateUnorderedAccessView(frameData.disparityMap.Get(), &uavDesc, frameData.disparityMapCSUAV.GetAddressOf())))
+		{
+			ErrorLog("Disparity Map CreateUnorderedAccessView error!\n");
+		}
+
 		if (FAILED(m_d3dDevice->CreateShaderResourceView(frameData.disparityMap.Get(), &srvDesc, &frameData.disparityMapSRV)))
 		{
 			ErrorLog("Disparity Map CreateShaderResourceView error!\n");
@@ -663,7 +688,7 @@ void PassthroughRendererDX11::SetupDisparityMap(uint32_t width, uint32_t height)
 
 			if (FAILED(m_d3dDevice->CreateUnorderedAccessView(frameData.disparityMapUAVTexture.Get(), &uavDesc, frameData.disparityMapUAV.GetAddressOf())))
 			{
-				ErrorLog("Frame Resource CreateUnorderedAccessView error!\n");
+				ErrorLog("Disparity Map CreateUnorderedAccessView error!\n");
 			}
 
 			if (FAILED(m_d3dDevice->CreateShaderResourceView(frameData.disparityMapUAVTexture.Get(), &srvDesc, &frameData.disparityMapUAVSRV)))
@@ -908,6 +933,13 @@ bool PassthroughRendererDX11::CheckInitFrameData(const uint32_t imageIndex)
 
 	D3D11_BUFFER_DESC bufferDesc = {};
 	bufferDesc.BindFlags = D3D11_BIND_CONSTANT_BUFFER;
+
+	bufferDesc.ByteWidth = Align(sizeof(CSConstantBuffer), 16);
+	if (FAILED(m_d3dDevice->CreateBuffer(&bufferDesc, nullptr, &frameData.csConstantBuffer)))
+	{
+		ErrorLog("m_csConstantBuffer creation failure!\n");
+		return false;
+	}
 
 	bufferDesc.ByteWidth = Align(sizeof(VSPassConstantBuffer), 16);
 	if (FAILED(m_d3dDevice->CreateBuffer(&bufferDesc, nullptr, &frameData.vsPassConstantBuffer)))
@@ -1224,7 +1256,7 @@ void PassthroughRendererDX11::RenderPassthroughFrame(const XrCompositionLayerPro
 
 	if (mainConf.ProjectionMode == Projection_StereoReconstruction)
 	{
-		std::shared_lock readLock(depthFrame->readWriteMutex);
+		bool bdisparityMapUpdated = depthFrame->bIsFirstRender;
 
 		if (depthFrame->disparityTextureSize[0] != m_disparityMapWidth || m_bUseHexagonGridMesh != stereoConf.StereoUseHexagonGridMesh || (stereoConf.StereoUseDisparityTemporalFiltering && frameData.disparityMapUAVTexture == nullptr))
 		{
@@ -1232,20 +1264,29 @@ void PassthroughRendererDX11::RenderPassthroughFrame(const XrCompositionLayerPro
 			m_bUseHexagonGridMesh = stereoConf.StereoUseHexagonGridMesh;
 			SetupDisparityMap(depthFrame->disparityTextureSize[0], depthFrame->disparityTextureSize[1]);
 			GenerateDepthMesh(depthFrame->disparityTextureSize[0] / 2, depthFrame->disparityTextureSize[1]);
+			bdisparityMapUpdated = true;
 		}
-
-		UploadTexture(m_deviceContext, m_disparityMapUploadTexture, (uint8_t*)depthFrame->disparityMap->data(), depthFrame->disparityTextureSize[1], depthFrame->disparityTextureSize[0] * sizeof(uint16_t) * 2);
-
-		m_deviceContext->CopyResource(frameData.disparityMap.Get(), m_disparityMapUploadTexture.Get());
+		if (bdisparityMapUpdated)
+		{
+			UploadTexture(m_deviceContext, m_disparityMapUploadTexture, (uint8_t*)depthFrame->disparityMap->data(), depthFrame->disparityTextureSize[1], depthFrame->disparityTextureSize[0] * sizeof(uint16_t) * 2);
+			m_deviceContext->CopyResource(frameData.disparityMap.Get(), m_disparityMapUploadTexture.Get());
+			m_prevDepthUpdatedFrameIndex = m_depthUpdatedFrameIndex;
+			m_depthUpdatedFrameIndex = m_frameIndex;
+		}
+		
+		if (stereoConf.StereoFillHoles && bdisparityMapUpdated)
+		{
+			RenderHoleFillCS(frameData, depthFrame);
+		}
 
 		if (stereoConf.StereoUseDisparityTemporalFiltering)
 		{
-			ID3D11ShaderResourceView* vsSRVs[2] = { frameData.disparityMapSRV.Get(), prevFrameData.disparityMapUAVSRV.Get() };
+			ID3D11ShaderResourceView* vsSRVs[2] = { m_frameData[m_depthUpdatedFrameIndex].disparityMapSRV.Get(), m_frameData[m_prevDepthUpdatedFrameIndex].disparityMapUAVSRV.Get() };
 			m_renderContext->VSSetShaderResources(0, 2, vsSRVs);
 		}
 		else
 		{
-			ID3D11ShaderResourceView* vsSRVs[1] = { frameData.disparityMapSRV.Get() };
+			ID3D11ShaderResourceView* vsSRVs[1] = { m_frameData[m_depthUpdatedFrameIndex].disparityMapSRV.Get() };
 			m_renderContext->VSSetShaderResources(0, 1, vsSRVs);
 		}
 
@@ -1306,7 +1347,7 @@ void PassthroughRendererDX11::RenderPassthroughFrame(const XrCompositionLayerPro
 		// Use shared texture
 		psSRVs[0] = (ID3D11ShaderResourceView*)frame->frameTextureResource;
 	}
-	else if(!bGotDebugTexture && frame->frameBuffer.get() != nullptr)
+	else if(!bGotDebugTexture && frame->frameBuffer.get() != nullptr && frame->frameBuffer->size() > 0)
 	{
 		// Upload camera frame from CPU
 
@@ -1421,6 +1462,42 @@ void PassthroughRendererDX11::RenderPassthroughFrame(const XrCompositionLayerPro
 }
 
 
+void PassthroughRendererDX11::RenderHoleFillCS(DX11FrameData& frameData, std::shared_ptr<DepthFrame> depthFrame)
+{
+	Config_Main& mainConf = m_configManager->GetConfig_Main();
+	Config_Stereo& stereoConf = m_configManager->GetConfig_Stereo();
+
+	m_renderContext->CSSetUnorderedAccessViews(0, 1, frameData.disparityMapCSUAV.GetAddressOf(), nullptr);
+	m_renderContext->CSSetShader(m_fillHolesComputeShader.Get(), nullptr, 0);
+	m_renderContext->CSSetConstantBuffers(0, 1, frameData.csConstantBuffer.GetAddressOf());
+
+	D3D11_TEXTURE2D_DESC dispDesc;
+	frameData.disparityMap->GetDesc(&dispDesc);
+
+	CSConstantBuffer csBuffer = {};
+	csBuffer.disparityFrameWidth = dispDesc.Width / 2;
+	csBuffer.bHoleFillLastPass = false;
+	csBuffer.minDisparity = depthFrame->disparityToDepth.m[11] /
+		(mainConf.ProjectionDistanceFar * 2048.0f * depthFrame->disparityDownscaleFactor * depthFrame->disparityToDepth.m[14]);
+	csBuffer.maxDisparity = stereoConf.StereoMaxDisparity / 2048.0f;
+
+	m_renderContext->UpdateSubresource(frameData.csConstantBuffer.Get(), 0, nullptr, &csBuffer, 0, 0);
+
+	for (int i = 0; i < 7; i++)
+	{
+		m_renderContext->Dispatch(dispDesc.Width / 16, dispDesc.Height / 16, 1);
+	}
+
+	csBuffer.bHoleFillLastPass = true;
+	m_renderContext->UpdateSubresource(frameData.csConstantBuffer.Get(), 0, nullptr, &csBuffer, 0, 0);
+	m_renderContext->Dispatch(dispDesc.Width / 16, dispDesc.Height / 16, 1);
+
+	ID3D11UnorderedAccessView* nullUAV = nullptr;
+	m_renderContext->CSSetUnorderedAccessViews(0, 1, &nullUAV, nullptr);
+
+}
+
+
 void PassthroughRendererDX11::RenderPassthroughView(const ERenderEye eye, const int32_t swapchainIndex, const int32_t depthSwapchainIndex, const XrCompositionLayerProjection* layer, CameraFrame* frame, std::shared_ptr<DepthFrame> depthFrame, EPassthroughBlendMode blendMode, UINT numIndices, FrameRenderParameters& renderParams)
 {
 	if (swapchainIndex < 0) { return; }
@@ -1487,7 +1564,7 @@ void PassthroughRendererDX11::RenderPassthroughView(const ERenderEye eye, const 
 	PSViewConstantBuffer psViewBuffer = {};
 	psViewBuffer.frameUVBounds = GetFrameUVBounds(eye, frame->frameLayout);
 	psViewBuffer.rtArrayIndex = layer->views[viewIndex].subImage.imageArrayIndex;
-	psViewBuffer.bDoCutout = !bCompositeDepth; // can only clip invalid areas when not using depth.
+	psViewBuffer.bDoCutout = stereoConf.StereoCutoutEnabled;// !bCompositeDepth; // can only clip invalid areas when not using depth.
 	psViewBuffer.bPremultiplyAlpha = (blendMode == AlphaBlendPremultiplied) && !bCompositeDepth;
 
 	m_renderContext->UpdateSubresource(viewData.psViewConstantBuffer.Get(), 0, nullptr, &psViewBuffer, 0, 0);
@@ -1640,7 +1717,7 @@ void PassthroughRendererDX11::RenderPassthroughView(const ERenderEye eye, const 
 
 		PSViewConstantBuffer psCrossBuffer = psViewBuffer;
 		psCrossBuffer.frameUVBounds = GetFrameUVBounds(eye == LEFT_EYE ? RIGHT_EYE : LEFT_EYE, frame->frameLayout);
-		psCrossBuffer.bDoCutout = true;
+		psCrossBuffer.bDoCutout = false;
 		psCrossBuffer.bPremultiplyAlpha = false;
 		m_renderContext->UpdateSubresource(viewData.psViewConstantBuffer.Get(), 0, nullptr, &psCrossBuffer, 0, 0);
 
@@ -1653,7 +1730,7 @@ void PassthroughRendererDX11::RenderPassthroughView(const ERenderEye eye, const 
 
 
 	// Draw cylinder mesh to fill out any holes
-	if(stereoConf.StereoFillHoles && mainConf.ProjectionMode == Projection_StereoReconstruction && !stereoConf.StereoReconstructionFreeze && !renderParams.bEnableDepthRange)
+	if(stereoConf.StereoFillHoles && mainConf.ProjectionMode == Projection_StereoReconstruction && !stereoConf.StereoReconstructionFreeze && !renderParams.bEnableDepthRange && !m_configManager->GetConfig_Camera().ClampCameraFrame)
 	{
 		m_renderContext->RSSetScissorRects(1, &scissor);
 
@@ -1685,7 +1762,7 @@ void PassthroughRendererDX11::RenderPassthroughView(const ERenderEye eye, const 
 			m_renderContext->VSSetShader(m_stereoVertexShader.Get(), nullptr, 0);
 		}
 		m_renderContext->RSSetState(frame->bIsRenderingMirrored ? m_rasterizerStateMirrored.Get() : m_rasterizerState.Get());
-	}
+	 }
 }
 
 
@@ -1845,7 +1922,7 @@ void PassthroughRendererDX11::RenderMaskedPrepassView(const ERenderEye eye, cons
 	ID3D11ShaderResourceView* views[3] = { cameraFrameSRV, nullptr, tempTarget.SRV.Get() };
 
 	
-	psViewBuffer.bDoCutout = !stereoConf.StereoCutoutEnabled;
+	psViewBuffer.bDoCutout = false;// !stereoConf.StereoCutoutEnabled;
 	m_renderContext->UpdateSubresource(viewData.psViewConstantBuffer.Get(), 0, nullptr, &psViewBuffer, 0, 0);
 
 	m_renderContext->OMSetRenderTargets(1, &rendertarget, depthStencil);

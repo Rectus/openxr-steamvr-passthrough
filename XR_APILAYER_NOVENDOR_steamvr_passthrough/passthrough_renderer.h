@@ -123,6 +123,7 @@ struct DX11FrameData
 {
 	bool bInitialized = false;
 	
+	ComPtr<ID3D11Buffer> csConstantBuffer;
 	ComPtr<ID3D11Buffer> vsPassConstantBuffer;
 	ComPtr<ID3D11Buffer> psPassConstantBuffer;
 	ComPtr<ID3D11Buffer> psMaskedConstantBuffer;
@@ -134,6 +135,7 @@ struct DX11FrameData
 	ComPtr<ID3D11ShaderResourceView> cameraUndistortedFrameSRV;
 
 	ComPtr<ID3D11Texture2D> disparityMap;
+	ComPtr<ID3D11UnorderedAccessView> disparityMapCSUAV;
 	ComPtr<ID3D11ShaderResourceView> disparityMapSRV;
 
 	ComPtr<ID3D11UnorderedAccessView> disparityMapUAV;
@@ -185,6 +187,7 @@ protected:
 	void SetupTemporalUAV(const uint32_t viewIndex, const uint32_t swapchainIndex);
 	void UpdateRenderModels(CameraFrame* frame);
 
+	void RenderHoleFillCS(DX11FrameData& frameData, std::shared_ptr<DepthFrame> depthFrame);
 	void RenderPassthroughView(const ERenderEye eye, const int32_t swapchainIndex, const int32_t depthSwapchainIndex, const XrCompositionLayerProjection* layer, CameraFrame* frame, std::shared_ptr<DepthFrame> depthFrame, EPassthroughBlendMode blendMode, UINT numIndices, FrameRenderParameters& renderParams);
 	void RenderMaskedPrepassView(const ERenderEye eye, const int32_t swapchainIndex, int32_t depthSwapchainIndex, const XrCompositionLayerProjection* layer, CameraFrame* frame, std::shared_ptr<DepthFrame> depthFrame, UINT numIndices, FrameRenderParameters& renderParams);
 	void RenderFrameFinish();
@@ -199,6 +202,8 @@ protected:
 	int m_prevFrameIndex = 0;
 	int m_prevSwapchainLeft = 0;
 	int m_prevSwapchainRight = 0;
+	int m_depthUpdatedFrameIndex = 0;
+	int m_prevDepthUpdatedFrameIndex = 0;
 
 
 	ComPtr<ID3D11Device> m_d3dDevice;
@@ -215,6 +220,7 @@ protected:
 	ComPtr<ID3D11DepthStencilState> m_depthStencilStateGreater;
 	ComPtr<ID3D11DepthStencilState> m_depthStencilStateGreaterWrite;
 
+	ComPtr<ID3D11ComputeShader> m_fillHolesComputeShader;
 	ComPtr<ID3D11VertexShader> m_fullscreenQuadShader;
 	ComPtr<ID3D11VertexShader> m_vertexShader;
 	ComPtr<ID3D11VertexShader> m_meshRigidVertexShader;

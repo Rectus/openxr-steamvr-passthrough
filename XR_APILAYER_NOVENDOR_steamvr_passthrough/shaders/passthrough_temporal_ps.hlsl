@@ -136,10 +136,11 @@ float4 bicubic_b_spline_4tap(in Texture2D<half4> tex, in SamplerState linearSamp
 //[earlydepthstencil]
 float4 main(VS_OUTPUT input) : SV_TARGET
 {
-    float alpha = saturate(input.projectionValidity);
+    float alpha = 1.0;
 	
     if (g_doCutout)
     {
+        alpha = saturate(input.projectionValidity);
         clip(input.projectionValidity);
     }
     

@@ -960,6 +960,10 @@ namespace
 			Config_Depth& depthConf = m_configManager->GetConfig_Depth();
 
 			std::shared_ptr<DepthFrame> depthFrame = m_depthReconstruction->GetDepthFrame();
+			if (depthFrame.get())
+			{
+				std::shared_lock depthReadLock(depthFrame->readWriteMutex);
+			}		
 
 			if (m_configManager->GetConfig_Main().CameraProvider == CameraProvider_Augmented)
 			{

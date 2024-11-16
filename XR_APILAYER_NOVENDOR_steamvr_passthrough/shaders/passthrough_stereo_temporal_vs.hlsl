@@ -180,7 +180,7 @@ VS_OUTPUT main(float3 inPosition : POSITION, uint vertexID : SV_VertexID)
     confidence = dispConf.y;
     
     
-    output.projectionValidity = 1;
+    output.projectionValidity = confidence;
     
 	// Disparity at the max projection distance
     float minDisparity = max(0, g_disparityToDepth[2][3] /

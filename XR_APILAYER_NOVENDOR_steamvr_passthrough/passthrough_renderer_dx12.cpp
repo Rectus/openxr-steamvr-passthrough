@@ -1194,8 +1194,6 @@ void PassthroughRendererDX12::RenderPassthroughFrame(const XrCompositionLayerPro
 
 	if (mainConf.ProjectionMode == Projection_StereoReconstruction)
 	{
-		std::shared_lock readLock(depthFrame->readWriteMutex);
-
 		if (depthFrame->disparityTextureSize[0] != m_disparityMapWidth || stereoConf.StereoUseHexagonGridMesh != m_bUseHexagonGridMesh)
 		{
 			m_disparityMapWidth = depthFrame->disparityTextureSize[0];

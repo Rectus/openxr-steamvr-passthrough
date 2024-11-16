@@ -31,10 +31,11 @@ Texture2D<float2> g_fisheyeCorrectionTexture : register(t1);
 [earlydepthstencil]
 float4 main(VS_OUTPUT input) : SV_TARGET
 {
-    float alpha = saturate(input.projectionValidity);
+    float alpha = 1.0;
 	
     if (g_doCutout)
     {
+        alpha = saturate(input.projectionValidity);
         clip(input.projectionValidity);
     }
     
@@ -113,14 +114,13 @@ float4 main(VS_OUTPUT input) : SV_TARGET
         {
             rgbColor.x += 0.5;
         }
-		else
+        else if (input.projectionValidity > 0.0)
         {
             rgbColor.y += input.projectionValidity * 0.25;
-			
-            if (input.projectionValidity > 1.0)
-            {
-                rgbColor.z += input.projectionValidity * 0.25;
-            }
+        }
+        else
+        {
+            rgbColor.z += 0.25;
         }
     }
     
