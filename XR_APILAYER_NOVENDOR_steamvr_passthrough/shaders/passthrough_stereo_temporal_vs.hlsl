@@ -160,9 +160,9 @@ VS_OUTPUT main(float3 inPosition : POSITION, uint vertexID : SV_VertexID)
     int3 prevUvPos = int3(floor(prevDisparityUVs * g_disparityTextureSize), 0);
     
     //float2 prevDispConf = g_prevDisparityFilter.Load(prevUvPos);
-    //float2 prevDispConf = g_prevDisparityFilter.SampleLevel(g_samplerState, prevDisparityUVs, 0);
+    float2 prevDispConf = g_prevDisparityFilter.SampleLevel(g_samplerState, prevDisparityUVs, 0);
     //float2 prevDispConf = lanczos2(g_prevDisparityFilter, prevDisparityUVs, g_disparityTextureSize);
-    float2 prevDispConf = catmull_rom_9tap(g_prevDisparityFilter, g_samplerState, prevDisparityUVs, g_disparityTextureSize);
+    //float2 prevDispConf = catmull_rom_9tap(g_prevDisparityFilter, g_samplerState, prevDisparityUVs, g_disparityTextureSize);
         
 
     float4 prevDisparityWorldCoords = PrevDisparityToWorldCoords(prevDispConf.x, prevDisparityCoords.xy);
@@ -171,7 +171,7 @@ VS_OUTPUT main(float3 inPosition : POSITION, uint vertexID : SV_VertexID)
     
     bool bUsePrev = true;
     
-    if (prevDispConf.y < 0.1 || prevDisparityCoords.x <= 0 || prevDisparityCoords.x >= 1 || prevDisparityCoords.y <= 0 || prevDisparityCoords.y >= 1)
+    if (prevDispConf.y < 0.0 || prevDisparityCoords.x <= 0 || prevDisparityCoords.x >= 1 || prevDisparityCoords.y <= 0 || prevDisparityCoords.y >= 1)
     {
         bUsePrev = false;
     }
@@ -266,10 +266,7 @@ VS_OUTPUT main(float3 inPosition : POSITION, uint vertexID : SV_VertexID)
         }
     }
     
-    if (g_bWriteDisparityFilter)
-    {
-        g_disparityFilter[uvPos.xy] = float2(disparity, confidence);
-    }
+    
     
     float4 worldSpacePoint = DisparityToWorldCoords(disparity, inPosition.xy);
     worldSpacePoint /= worldSpacePoint.w;
@@ -278,6 +275,15 @@ VS_OUTPUT main(float3 inPosition : POSITION, uint vertexID : SV_VertexID)
     {
         float factor = saturate(min(g_disparityTemporalFilterStrength, (prevDispConf.y - dispConf.y + 0.5)));
         worldSpacePoint.xyz = lerp(worldSpacePoint.xyz, prevDisparityWorldCoords.xyz, factor);
+        
+        if (g_bWriteDisparityFilter)
+        {
+            g_disparityFilter[uvPos.xy] = lerp(float2(disparity, confidence), prevDispConf, factor);
+        }
+    }
+    else if (g_bWriteDisparityFilter)
+    {
+        g_disparityFilter[uvPos.xy] = float2(disparity, confidence);
     }
     
     // Clamp positions to floor height

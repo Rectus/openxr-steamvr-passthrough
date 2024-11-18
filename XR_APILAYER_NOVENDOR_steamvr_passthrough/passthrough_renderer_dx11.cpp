@@ -1546,6 +1546,7 @@ void PassthroughRendererDX11::RenderPassthroughView(const ERenderEye eye, const 
 	vsViewBuffer.prevCameraProjectionToWorld = (eye == LEFT_EYE) ? frame->prevCameraProjectionToWorldLeft : frame->prevCameraProjectionToWorldRight;
 	vsViewBuffer.prevWorldToCameraProjection = (eye == LEFT_EYE) ? frame->prevWorldToCameraProjectionLeft : frame->prevWorldToCameraProjectionRight;
 	vsViewBuffer.prevWorldToHMDProjection = (eye == LEFT_EYE) ? frame->prevWorldToHMDProjectionLeft : frame->prevWorldToHMDProjectionRight;
+	vsViewBuffer.prevDispWorldToCameraProjection = (eye == LEFT_EYE) ? depthFrame->prevDispWorldToCameraProjectionLeft : depthFrame->prevDispWorldToCameraProjectionRight;
 
 	//TODO actual layout
 	vsViewBuffer.frameUVBounds = GetFrameUVBounds(eye, mainConf.CameraProvider == CameraProvider_Augmented ? StereoHorizontalLayout : frame->frameLayout);
@@ -1941,7 +1942,7 @@ void PassthroughRendererDX11::RenderMaskedPrepassView(const ERenderEye eye, cons
 	{
 		m_renderContext->IASetPrimitiveTopology(D3D11_PRIMITIVE_TOPOLOGY_TRIANGLELIST);
 
-		if (stereoConf.StereoUseDisparityTemporalFiltering && m_bIsTemporalSupported)
+		if (stereoConf.StereoUseDisparityTemporalFiltering && m_bIsTemporalSupported )
 		{
 			m_renderContext->VSSetShader(m_stereoTemporalVertexShader.Get(), nullptr, 0);
 		}
