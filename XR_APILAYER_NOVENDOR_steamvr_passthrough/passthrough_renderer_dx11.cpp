@@ -1565,7 +1565,7 @@ void PassthroughRendererDX11::RenderPassthroughView(const ERenderEye eye, const 
 	PSViewConstantBuffer psViewBuffer = {};
 	psViewBuffer.frameUVBounds = GetFrameUVBounds(eye, frame->frameLayout);
 	psViewBuffer.rtArrayIndex = layer->views[viewIndex].subImage.imageArrayIndex;
-	psViewBuffer.bDoCutout = stereoConf.StereoCutoutEnabled;// !bCompositeDepth; // can only clip invalid areas when not using depth.
+	psViewBuffer.bDoCutout = stereoConf.StereoCutoutEnabled;
 	psViewBuffer.bPremultiplyAlpha = (blendMode == AlphaBlendPremultiplied) && !bCompositeDepth;
 
 	m_renderContext->UpdateSubresource(viewData.psViewConstantBuffer.Get(), 0, nullptr, &psViewBuffer, 0, 0);
@@ -1697,7 +1697,8 @@ void PassthroughRendererDX11::RenderPassthroughView(const ERenderEye eye, const 
 
 
 
-	// Draw the other stereo camera on occluded areas
+	// Draw the other stereo camera on occluded areas. 
+	//TODO: Proper depth and alpha handling by calculating both cameras in the prepass.
 	if (stereoConf.StereoCutoutEnabled)
 	{
 		float secondaryWidthFactor = 0.6f;
@@ -1714,16 +1715,13 @@ void PassthroughRendererDX11::RenderPassthroughView(const ERenderEye eye, const 
 		vsCrossBuffer.bWriteDisparityFilter = false;
 		m_renderContext->UpdateSubresource(viewData.vsViewConstantBuffer.Get(), 0, nullptr, &vsCrossBuffer, 0, 0);
 
-		m_renderContext->OMSetBlendState(m_blendStateDestAlpha.Get(), nullptr, UINT_MAX);
-
 		PSViewConstantBuffer psCrossBuffer = psViewBuffer;
 		psCrossBuffer.frameUVBounds = GetFrameUVBounds(eye == LEFT_EYE ? RIGHT_EYE : LEFT_EYE, frame->frameLayout);
 		psCrossBuffer.bDoCutout = false;
 		psCrossBuffer.bPremultiplyAlpha = false;
 		m_renderContext->UpdateSubresource(viewData.psViewConstantBuffer.Get(), 0, nullptr, &psCrossBuffer, 0, 0);
 
-		// Reverse depth check to only affect ares below previously drawn
-		m_renderContext->OMSetDepthStencilState(GET_DEPTH_STENCIL_STATE(bCompositeDepth, !frame->bHasReversedDepth, false), 1);
+		m_renderContext->OMSetDepthStencilState(GET_DEPTH_STENCIL_STATE(bCompositeDepth, frame->bHasReversedDepth, false), 1);
 		m_renderContext->PSSetShader(m_pixelShader.Get(), nullptr, 0);
 
 		m_renderContext->DrawIndexed(numIndices, 0, 0);

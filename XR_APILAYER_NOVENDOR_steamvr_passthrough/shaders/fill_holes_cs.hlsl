@@ -17,8 +17,13 @@ void main(uint3 pos : SV_DispatchThreadID)
     float minDispMul = (pos.x >= g_disparityFrameWidth) ? -1.0 : 1.0;
     
     // Filter large invalid disparites from the right edge of the image.
-    int pixelsFromRightEdge = (pos.x >= g_disparityFrameWidth) ? g_disparityFrameWidth * 2 - pos.x : g_disparityFrameWidth - pos.x;
+    int pixelsFromRightEdge = (pos.x > g_disparityFrameWidth) ? g_disparityFrameWidth * 2 - pos.x : g_disparityFrameWidth - pos.x;
     float maxDisp = lerp(g_minDisparity, g_maxDisparity, min(1, pixelsFromRightEdge / ((g_maxDisparity - g_minDisparity) * 2048.0)));
+    
+    if (pixelsFromRightEdge < 2)
+    {
+        return;   
+    }
  
     // Sample neighbors and temporarily store furthest disparity in the confidence map as a negative value.
     if (dispConf.y <= 0.0 && (dispConf.x * minDispMul <= g_minDisparity || dispConf.x * minDispMul >= maxDisp))
