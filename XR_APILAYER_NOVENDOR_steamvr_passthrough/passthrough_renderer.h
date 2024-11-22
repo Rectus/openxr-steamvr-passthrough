@@ -293,11 +293,13 @@ class PassthroughRendererDX11Interop : public PassthroughRendererDX11
 {
 public:
 	PassthroughRendererDX11Interop(ID3D12Device* device, ID3D12CommandQueue* commandQueue, HMODULE dllModule, std::shared_ptr<ConfigManager> configManager);
-	~PassthroughRendererDX11Interop() {};
+	PassthroughRendererDX11Interop(const XrGraphicsBindingVulkanKHR& binding, HMODULE dllModule, std::shared_ptr<ConfigManager> configManager);
+	~PassthroughRendererDX11Interop();
 
 	bool InitRenderer();
 	void InitRenderTarget(const ERenderEye eye, void* rendertarget, const uint32_t imageIndex, const XrSwapchainCreateInfo& swapchainInfo);
 	void InitDepthBuffer(const ERenderEye eye, void* depthBuffer, const uint32_t imageIndex, const XrSwapchainCreateInfo& swapchainInfo);
+	bool CreateLocalTextureVulkan(VkImage& localVulkanTexture, VkDeviceMemory& localVulkanTextureMemory, ID3D11Texture2D** localD3DTexture, HANDLE& sharedTextureHandle, const XrSwapchainCreateInfo& swapchainInfo, bool bIsDepthMap);
 
 	void RenderPassthroughFrame(const XrCompositionLayerProjection* layer, CameraFrame* frame, EPassthroughBlendMode blendMode, int leftSwapchainIndex, int rightSwapchainIndex, int leftDepthSwapchainIndex, int rightDepthSwapchainIndex, std::shared_ptr<DepthFrame> depthFrame, UVDistortionParameters& distortionParams, FrameRenderParameters& renderParams);
 
@@ -307,6 +309,41 @@ private:
 	ComPtr<ID3D12Device> m_d3d12Device;
 	ComPtr<ID3D11On12Device2> m_d3d11On12Device;
 	ComPtr<ID3D12CommandQueue> m_d3d12CommandQueue;
+
+	ComPtr<ID3D11Device5> m_d3d11Device5;
+	ComPtr<ID3D11DeviceContext4> m_d3d11DeviceContext4;
+
+	VkInstance m_vulkanInstance;
+	VkPhysicalDevice m_vulkanPhysDevice;
+	VkDevice m_vulkanDevice;
+	uint32_t m_vulkanQueueFamilyIndex;
+	uint32_t m_vulkanQueueIndex;
+	VkQueue m_vulkanQueue;
+	VkCommandPool m_vulkanCommandPool;
+	VkCommandBuffer m_vulkanCommandBuffer[NUM_SWAPCHAINS * 2];
+
+	HANDLE m_sharedTextureLeft[NUM_SWAPCHAINS] = {};
+	HANDLE m_sharedTextureRight[NUM_SWAPCHAINS] = {};
+
+	VkImage m_swapchainsLeft[NUM_SWAPCHAINS] = {};
+	VkImage m_swapchainsRight[NUM_SWAPCHAINS] = {};
+	VkImage m_depthBuffersLeft[NUM_SWAPCHAINS] = {};
+	VkImage m_depthBuffersRight[NUM_SWAPCHAINS] = {};
+
+	VkImage m_localRendertargetsLeft[NUM_SWAPCHAINS] = {};
+	VkImage m_localRendertargetsRight[NUM_SWAPCHAINS] = {};
+	VkDeviceMemory m_localRTMemLeft[NUM_SWAPCHAINS] = {};
+	VkDeviceMemory m_localRTMemRight[NUM_SWAPCHAINS] = {};
+
+	VkImage m_localDepthBuffersLeft[NUM_SWAPCHAINS] = {};
+	VkImage m_localDepthBuffersRight[NUM_SWAPCHAINS] = {};
+	VkDeviceMemory m_localDBMemLeft[NUM_SWAPCHAINS] = {};
+	VkDeviceMemory m_localDBMemRight[NUM_SWAPCHAINS] = {};
+
+	VkSemaphore m_semaphore;
+	ComPtr<ID3D11Fence> m_semaphoreFence;
+	HANDLE m_semaphoreFenceHandle;
+	uint64_t m_semaphoreValue = 1;
 };
 
 

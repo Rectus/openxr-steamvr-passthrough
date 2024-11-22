@@ -250,12 +250,28 @@ namespace LAYER_NAMESPACE
 		PFN_xrLocateViews m_xrLocateViews{ nullptr };
 
 	public:
+		virtual XrResult xrGetVulkanDeviceExtensionsKHR(XrInstance instance, XrSystemId systemId, uint32_t bufferCapacityInput, uint32_t* bufferCountOutput, char* buffer)
+		{
+			return m_xrGetVulkanDeviceExtensionsKHR(instance, systemId, bufferCapacityInput, bufferCountOutput, buffer);
+		}
+	private:
+		PFN_xrGetVulkanDeviceExtensionsKHR m_xrGetVulkanDeviceExtensionsKHR{ nullptr };
+
+	public:
 		virtual XrResult xrConvertTimeToWin32PerformanceCounterKHR(XrInstance instance, XrTime time, LARGE_INTEGER* performanceCounter)
 		{
 			return m_xrConvertTimeToWin32PerformanceCounterKHR(instance, time, performanceCounter);
 		}
 	private:
 		PFN_xrConvertTimeToWin32PerformanceCounterKHR m_xrConvertTimeToWin32PerformanceCounterKHR{ nullptr };
+
+	public:
+		virtual XrResult xrCreateVulkanDeviceKHR(XrInstance instance, const XrVulkanDeviceCreateInfoKHR* createInfo, VkDevice* vulkanDevice, VkResult* vulkanResult)
+		{
+			return m_xrCreateVulkanDeviceKHR(instance, createInfo, vulkanDevice, vulkanResult);
+		}
+	private:
+		PFN_xrCreateVulkanDeviceKHR m_xrCreateVulkanDeviceKHR{ nullptr };
 
 	public:
 		virtual XrResult xrSetEnvironmentDepthEstimationVARJO(XrSession session, XrBool32 enabled)

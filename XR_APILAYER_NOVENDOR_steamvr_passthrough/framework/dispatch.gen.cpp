@@ -387,6 +387,64 @@ namespace LAYER_NAMESPACE
 		return result;
 	}
 
+	XrResult xrGetVulkanDeviceExtensionsKHR(XrInstance instance, XrSystemId systemId, uint32_t bufferCapacityInput, uint32_t* bufferCountOutput, char* buffer)
+	{
+#if USE_TRACELOGGING
+		TraceLoggingWrite(g_traceProvider, "xrGetVulkanDeviceExtensionsKHR");
+#endif
+
+		XrResult result;
+		try
+		{
+			result = LAYER_NAMESPACE::GetInstance()->xrGetVulkanDeviceExtensionsKHR(instance, systemId, bufferCapacityInput, bufferCountOutput, buffer);
+		}
+		catch (std::exception exc)
+		{
+#if USE_TRACELOGGING
+			TraceLoggingWrite(g_traceProvider, "xrGetVulkanDeviceExtensionsKHR_Error", TLArg(exc.what(), "Error"));
+#endif
+			ErrorLog("xrGetVulkanDeviceExtensionsKHR: %s\n", exc.what());
+			result = XR_ERROR_RUNTIME_FAILURE;
+		}
+#if USE_TRACELOGGING
+		TraceLoggingWrite(g_traceProvider, "xrGetVulkanDeviceExtensionsKHR_Result", TLArg(xr::ToCString(result), "Result"));
+#endif
+		if (XR_FAILED(result)) {
+			ErrorLog("xrGetVulkanDeviceExtensionsKHR failed with %d\n", result);
+		}
+
+		return result;
+	}
+
+	XrResult xrCreateVulkanDeviceKHR(XrInstance instance, const XrVulkanDeviceCreateInfoKHR* createInfo, VkDevice* vulkanDevice, VkResult* vulkanResult)
+	{
+#if USE_TRACELOGGING
+		TraceLoggingWrite(g_traceProvider, "xrCreateVulkanDeviceKHR");
+#endif
+
+		XrResult result;
+		try
+		{
+			result = LAYER_NAMESPACE::GetInstance()->xrCreateVulkanDeviceKHR(instance, createInfo, vulkanDevice, vulkanResult);
+		}
+		catch (std::exception exc)
+		{
+#if USE_TRACELOGGING
+			TraceLoggingWrite(g_traceProvider, "xrCreateVulkanDeviceKHR_Error", TLArg(exc.what(), "Error"));
+#endif
+			ErrorLog("xrCreateVulkanDeviceKHR: %s\n", exc.what());
+			result = XR_ERROR_RUNTIME_FAILURE;
+		}
+#if USE_TRACELOGGING
+		TraceLoggingWrite(g_traceProvider, "xrCreateVulkanDeviceKHR_Result", TLArg(xr::ToCString(result), "Result"));
+#endif
+		if (XR_FAILED(result)) {
+			ErrorLog("xrCreateVulkanDeviceKHR failed with %d\n", result);
+		}
+
+		return result;
+	}
+
 	XrResult xrSetEnvironmentDepthEstimationVARJO(XrSession session, XrBool32 enabled)
 	{
 #if USE_TRACELOGGING
@@ -488,6 +546,18 @@ namespace LAYER_NAMESPACE
 		{
 			m_xrEndFrame = reinterpret_cast<PFN_xrEndFrame>(*function);
 			*function = reinterpret_cast<PFN_xrVoidFunction>(LAYER_NAMESPACE::xrEndFrame);
+		}
+		else if (apiName == "xrGetVulkanDeviceExtensionsKHR")
+		{
+			m_xrGetVulkanDeviceExtensionsKHR = reinterpret_cast<PFN_xrGetVulkanDeviceExtensionsKHR>(*function);
+			*function = reinterpret_cast<PFN_xrVoidFunction>(LAYER_NAMESPACE::xrGetVulkanDeviceExtensionsKHR);
+			result = XR_SUCCESS;
+		}
+		else if (apiName == "xrCreateVulkanDeviceKHR")
+		{
+			m_xrCreateVulkanDeviceKHR = reinterpret_cast<PFN_xrCreateVulkanDeviceKHR>(*function);
+			*function = reinterpret_cast<PFN_xrVoidFunction>(LAYER_NAMESPACE::xrCreateVulkanDeviceKHR);
+			result = XR_SUCCESS;
 		}
 		else if (apiName == "xrSetEnvironmentDepthEstimationVARJO")
 		{

@@ -197,6 +197,66 @@ namespace
 			return result;
 		}
 
+		XrResult xrGetVulkanDeviceExtensionsKHR(XrInstance instance,XrSystemId systemId, uint32_t bufferCapacityInput, uint32_t* bufferCountOutput,char* buffer)
+		{
+			std::string exts = " VK_KHR_external_semaphore VK_KHR_external_semaphore_win32 VK_KHR_timeline_semaphore";
+
+			if (bufferCapacityInput == 0)
+			{
+				XrResult res = OpenXrApi::xrGetVulkanDeviceExtensionsKHR(instance, systemId, bufferCapacityInput, bufferCountOutput, buffer);
+
+				(*bufferCountOutput) += exts.size();
+
+				return res;
+			}
+			else
+			{
+				XrResult res = OpenXrApi::xrGetVulkanDeviceExtensionsKHR(instance, systemId, bufferCapacityInput, bufferCountOutput, buffer);
+
+				if (bufferCapacityInput > exts.size() + 2)
+				{
+					strncpy(&buffer[bufferCapacityInput - exts.size() - 2], exts.c_str(), exts.size());
+				}
+
+				(*bufferCountOutput) += exts.size();
+
+				return res;
+			}
+			
+		}
+
+
+		XrResult xrCreateVulkanDeviceKHR(XrInstance instance, const XrVulkanDeviceCreateInfoKHR* createInfo, VkDevice* vulkanDevice, VkResult* vulkanResult)
+		{
+			std::vector<const char*> deviceExtensions;
+			deviceExtensions.push_back(VK_KHR_EXTERNAL_SEMAPHORE_EXTENSION_NAME);
+			deviceExtensions.push_back(VK_KHR_EXTERNAL_SEMAPHORE_WIN32_EXTENSION_NAME);
+			deviceExtensions.push_back(VK_KHR_TIMELINE_SEMAPHORE_EXTENSION_NAME);
+
+			if (createInfo->vulkanCreateInfo->ppEnabledExtensionNames)
+			{
+				for (unsigned int i = 0; i < createInfo->vulkanCreateInfo->enabledExtensionCount; i++)
+				{
+					deviceExtensions.push_back(createInfo->vulkanCreateInfo->ppEnabledExtensionNames[i]);
+				}
+			}
+			XrVulkanDeviceCreateInfoKHR newCreateInfo = *createInfo;
+			VkDeviceCreateInfo newDeviceInfo = *createInfo->vulkanCreateInfo;
+			newCreateInfo.vulkanCreateInfo = &newDeviceInfo;
+				
+			VkPhysicalDeviceVulkan12Features features = { VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_VULKAN_1_2_FEATURES };
+			features.timelineSemaphore = true;
+			features.pNext = (void*)newDeviceInfo.pNext;
+			newDeviceInfo.pNext = &features;
+			
+
+			newDeviceInfo.enabledExtensionCount = deviceExtensions.size();
+			newDeviceInfo.ppEnabledExtensionNames = deviceExtensions.data();
+
+			return OpenXrApi::xrCreateVulkanDeviceKHR(instance, &newCreateInfo, vulkanDevice, vulkanResult);
+		}
+
+
 		XrResult xrGetSystem(XrInstance instance, const XrSystemGetInfo* getInfo, XrSystemId* systemId) override
 		{
 			if (getInfo->type != XR_TYPE_SYSTEM_GET_INFO)
@@ -308,16 +368,26 @@ namespace
 				{
 					Log("Vulkan renderer initializing...\n");
 
-					const XrGraphicsBindingVulkanKHR* vulkanbindings = reinterpret_cast<const XrGraphicsBindingVulkanKHR*>(entry);
-					m_Renderer = std::make_unique<PassthroughRendererVulkan>(*vulkanbindings, g_dllModule, m_configManager);
+					ERenderAPI usedAPI = DirectX11;
 
-					if (!SetupProcessingPipeline(Vulkan))
+					const XrGraphicsBindingVulkanKHR* vulkanbindings = reinterpret_cast<const XrGraphicsBindingVulkanKHR*>(entry);
+					if (false)
+					{
+						m_Renderer = std::make_unique<PassthroughRendererVulkan>(*vulkanbindings, g_dllModule, m_configManager);
+						usedAPI = Vulkan;
+					}
+					else
+					{
+						m_Renderer = std::make_unique<PassthroughRendererDX11Interop>(*vulkanbindings, g_dllModule, m_configManager);
+					}
+
+					if (!SetupProcessingPipeline(usedAPI))
 					{
 						return false;
 					}
 
 					m_dashboardMenu->GetDisplayValues().bSessionActive = true;
-					m_renderAPI = Vulkan;
+					m_renderAPI = usedAPI;
 					m_dashboardMenu->GetDisplayValues().renderAPI = Vulkan;
 					m_bDepthSupportedByRenderer = false;
 					Log("Vulkan renderer initialized\n");
@@ -644,7 +714,13 @@ namespace
 
 		XrResult xrCreateSwapchain(XrSession session, const XrSwapchainCreateInfo* createInfo, XrSwapchain* swapchain)
 		{
-			XrResult result = OpenXrApi::xrCreateSwapchain(session, createInfo, swapchain);
+			XrSwapchainCreateInfo newCreateInfo = *createInfo;
+			if (m_Renderer.get())
+			{
+				newCreateInfo.usageFlags |= (XR_SWAPCHAIN_USAGE_TRANSFER_SRC_BIT | XR_SWAPCHAIN_USAGE_TRANSFER_DST_BIT | XR_SWAPCHAIN_USAGE_MUTABLE_FORMAT_BIT);
+			}
+
+			XrResult result = OpenXrApi::xrCreateSwapchain(session, &newCreateInfo, swapchain);
 			if (XR_SUCCEEDED(result))
 			{
 				m_swapchainProperties[*swapchain] = *createInfo;
