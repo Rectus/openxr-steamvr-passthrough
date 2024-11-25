@@ -1973,3 +1973,73 @@ void* PassthroughRendererDX11::GetRenderDevice()
 {
 	return m_d3dDevice.Get();
 }
+
+
+//bool PassthroughRendererDX11::DownloadTextureToCPU(const void* textureSRV, const uint32_t width, const uint32_t height, const uint32_t bufferSize, uint8_t* buffer)
+//{
+//	if (textureSRV == nullptr)
+//	{
+//		ErrorLog("Null pointer passed to DownloadTextureToCPU!\n");
+//		return false;
+//	}
+//
+//	if(!m_downloadStagingTexture.Get() || m_downloadStagingTextureWidth != width || m_downloadStagingTextureHeight != height)
+//	{
+//		m_downloadStagingTextureWidth = width;
+//		m_downloadStagingTextureHeight = height;
+//		D3D11_TEXTURE2D_DESC textureDesc = {};
+//		textureDesc.MipLevels = 1;
+//		textureDesc.Format = DXGI_FORMAT_R8G8B8A8_UNORM_SRGB;
+//		textureDesc.Width = width;
+//		textureDesc.Height = height;
+//		textureDesc.ArraySize = 1;
+//		textureDesc.SampleDesc.Count = 1;
+//		textureDesc.SampleDesc.Quality = 0;
+//		textureDesc.BindFlags = 0;
+//		textureDesc.Usage = D3D11_USAGE_STAGING;
+//		textureDesc.CPUAccessFlags = D3D11_CPU_ACCESS_READ;
+//
+//		if (FAILED(m_d3dDevice->CreateTexture2D(&textureDesc, nullptr, &m_downloadStagingTexture)))
+//		{
+//			ErrorLog("Download staging texture CreateTexture2D error!\n");
+//			return false;
+//		}
+//	}
+//	ID3D11Resource* textureRes;
+//
+//	((ID3D11ShaderResourceView*)textureSRV)->GetResource(&textureRes);
+//
+//	m_deviceContext->CopyResource(m_downloadStagingTexture.Get(), textureRes);
+//
+//	D3D11_MAPPED_SUBRESOURCE resDesc = {};
+//	
+//	if (SUCCEEDED(m_deviceContext->Map(m_downloadStagingTexture.Get(), 0, D3D11_MAP_READ, 0, &resDesc)))
+//	{
+//		uint8_t* writePtr = buffer;
+//		uint8_t* readPtr = (uint8_t*)resDesc.pData;
+//		uint32_t amountWritten = 0;
+//		for (unsigned int i = 0; i < height; i++)
+//		{
+//			if (bufferSize >= (amountWritten += resDesc.RowPitch))
+//			{
+//				memcpy(writePtr, readPtr, width);
+//				writePtr += resDesc.RowPitch;
+//				readPtr += width;
+//			}
+//			else
+//			{
+//				ErrorLog("Texture download buffer overrun!\n");
+//				break;
+//			}
+//		}
+//
+//		m_deviceContext->Unmap(m_downloadStagingTexture.Get(), 0);
+//	}
+//	else
+//	{
+//		ErrorLog("Failed to read download texture!\n");
+//		return false;
+//	}
+//	
+//	return true; 
+//}

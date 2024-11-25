@@ -155,6 +155,7 @@ public:
 	virtual void SetFrameSize(const uint32_t width, const uint32_t height, const uint32_t bufferSize, const uint32_t undistortedWidth, const uint32_t undistortedHeight, const uint32_t undistortedBufferSize) = 0;
 	virtual void RenderPassthroughFrame(const XrCompositionLayerProjection* layer, CameraFrame* frame, EPassthroughBlendMode blendMode, int leftSwapchainIndex, int rightSwapchainIndex, int leftDepthSwapchainIndex, int rightDepthSwapchainIndex, std::shared_ptr<DepthFrame> depthFrame, UVDistortionParameters& distortionParams, FrameRenderParameters& renderParams) = 0;
 	virtual void* GetRenderDevice() = 0;
+	virtual bool DownloadTextureToCPU(const void* textureSRV, const uint32_t width, const uint32_t height, const uint32_t bufferSize, uint8_t* buffer) { return false; }
 };
 
 
@@ -258,6 +259,10 @@ protected:
 	ComPtr<ID3D11Texture2D> m_disparityMapUploadTexture;
 	uint32_t m_disparityMapWidth;
 
+	/*ComPtr<ID3D11Texture2D> m_downloadStagingTexture;
+	uint32_t m_downloadStagingTextureWidth = 0;
+	uint32_t m_downloadStagingTextureHeight = 0;*/
+
 	ComPtr<ID3D11Texture2D> m_uvDistortionMap;
 	ComPtr<ID3D11ShaderResourceView> m_uvDistortionMapSRV;
 	float m_fovScale;
@@ -302,25 +307,26 @@ public:
 	bool CreateLocalTextureVulkan(VkImage& localVulkanTexture, VkDeviceMemory& localVulkanTextureMemory, ID3D11Texture2D** localD3DTexture, HANDLE& sharedTextureHandle, const XrSwapchainCreateInfo& swapchainInfo, bool bIsDepthMap);
 
 	void RenderPassthroughFrame(const XrCompositionLayerProjection* layer, CameraFrame* frame, EPassthroughBlendMode blendMode, int leftSwapchainIndex, int rightSwapchainIndex, int leftDepthSwapchainIndex, int rightDepthSwapchainIndex, std::shared_ptr<DepthFrame> depthFrame, UVDistortionParameters& distortionParams, FrameRenderParameters& renderParams);
+	bool DownloadTextureToCPU(const void* textureSRV, const uint32_t width, const uint32_t height, const uint32_t bufferSize, uint8_t* buffer);
 
 private:
 	ERenderAPI m_applicationRenderAPI;
 
-	ComPtr<ID3D12Device> m_d3d12Device;
-	ComPtr<ID3D11On12Device2> m_d3d11On12Device;
-	ComPtr<ID3D12CommandQueue> m_d3d12CommandQueue;
+	ComPtr<ID3D12Device> m_d3d12Device = NULL;
+	ComPtr<ID3D11On12Device2> m_d3d11On12Device = NULL;
+	ComPtr<ID3D12CommandQueue> m_d3d12CommandQueue = NULL;
 
-	ComPtr<ID3D11Device5> m_d3d11Device5;
-	ComPtr<ID3D11DeviceContext4> m_d3d11DeviceContext4;
+	ComPtr<ID3D11Device5> m_d3d11Device5 = NULL;
+	ComPtr<ID3D11DeviceContext4> m_d3d11DeviceContext4 = NULL;
 
-	VkInstance m_vulkanInstance;
-	VkPhysicalDevice m_vulkanPhysDevice;
-	VkDevice m_vulkanDevice;
-	uint32_t m_vulkanQueueFamilyIndex;
-	uint32_t m_vulkanQueueIndex;
-	VkQueue m_vulkanQueue;
-	VkCommandPool m_vulkanCommandPool;
-	VkCommandBuffer m_vulkanCommandBuffer[NUM_SWAPCHAINS * 2];
+	VkInstance m_vulkanInstance = VK_NULL_HANDLE;
+	VkPhysicalDevice m_vulkanPhysDevice = VK_NULL_HANDLE;
+	VkDevice m_vulkanDevice = VK_NULL_HANDLE;
+	uint32_t m_vulkanQueueFamilyIndex = 0;
+	uint32_t m_vulkanQueueIndex = 0;
+	VkQueue m_vulkanQueue = VK_NULL_HANDLE;
+	VkCommandPool m_vulkanCommandPool = VK_NULL_HANDLE;
+	VkCommandBuffer m_vulkanCommandBuffer[NUM_SWAPCHAINS * 2 + 1] = {};
 
 	HANDLE m_sharedTextureLeft[NUM_SWAPCHAINS] = {};
 	HANDLE m_sharedTextureRight[NUM_SWAPCHAINS] = {};
@@ -340,10 +346,21 @@ private:
 	VkDeviceMemory m_localDBMemLeft[NUM_SWAPCHAINS] = {};
 	VkDeviceMemory m_localDBMemRight[NUM_SWAPCHAINS] = {};
 
-	VkSemaphore m_semaphore;
-	ComPtr<ID3D11Fence> m_semaphoreFence;
-	HANDLE m_semaphoreFenceHandle;
+	VkSemaphore m_semaphore = VK_NULL_HANDLE;
+	ComPtr<ID3D11Fence> m_semaphoreFence = NULL;
+	HANDLE m_semaphoreFenceHandle = NULL;
 	uint64_t m_semaphoreValue = 1;
+	bool m_bFirstRender = true;
+
+	VkDevice m_vulkanDownloadDevice = VK_NULL_HANDLE;
+	VkQueue m_vulkanDownloadQueue = VK_NULL_HANDLE;
+	VkCommandPool m_vulkanDownloadCommandPool = VK_NULL_HANDLE;
+	VkCommandBuffer m_vulkanDownloadCommandBuffer = VK_NULL_HANDLE;
+	VkFence m_vulkanDownloadFence = VK_NULL_HANDLE;
+	VkBuffer m_vulkanDownloadBuffer = VK_NULL_HANDLE;
+	VkDeviceMemory m_vulkanDownloadBufferMemory = VK_NULL_HANDLE;
+	uint32_t m_downloadBufferWidth = 0;
+	uint32_t m_downloadBufferHeight = 0;
 };
 
 

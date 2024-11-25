@@ -197,63 +197,93 @@ namespace
 			return result;
 		}
 
-		XrResult xrGetVulkanDeviceExtensionsKHR(XrInstance instance,XrSystemId systemId, uint32_t bufferCapacityInput, uint32_t* bufferCountOutput,char* buffer)
+		XrResult xrGetVulkanDeviceExtensionsKHR(XrInstance instance, XrSystemId systemId, uint32_t bufferCapacityInput, uint32_t* bufferCountOutput, char* buffer)
 		{
-			std::string exts = " VK_KHR_external_semaphore VK_KHR_external_semaphore_win32 VK_KHR_timeline_semaphore";
-
-			if (bufferCapacityInput == 0)
+			if (m_configManager->GetConfig_Main().UseLegacyVulkanRenderer)
 			{
-				XrResult res = OpenXrApi::xrGetVulkanDeviceExtensionsKHR(instance, systemId, bufferCapacityInput, bufferCountOutput, buffer);
-
-				(*bufferCountOutput) += exts.size();
-
-				return res;
+				return OpenXrApi::xrGetVulkanDeviceExtensionsKHR(instance, systemId, bufferCapacityInput, bufferCountOutput, buffer);
 			}
 			else
 			{
-				XrResult res = OpenXrApi::xrGetVulkanDeviceExtensionsKHR(instance, systemId, bufferCapacityInput, bufferCountOutput, buffer);
+				std::string exts = " VK_KHR_external_semaphore VK_KHR_external_semaphore_win32 VK_KHR_timeline_semaphore";
 
-				if (bufferCapacityInput > exts.size() + 2)
+				if (bufferCapacityInput == 0)
 				{
-					strncpy(&buffer[bufferCapacityInput - exts.size() - 2], exts.c_str(), exts.size());
+					XrResult res = OpenXrApi::xrGetVulkanDeviceExtensionsKHR(instance, systemId, bufferCapacityInput, bufferCountOutput, buffer);
+
+					(*bufferCountOutput) += (uint32_t)exts.size();
+
+					return res;
 				}
+				else
+				{
+					XrResult res = OpenXrApi::xrGetVulkanDeviceExtensionsKHR(instance, systemId, bufferCapacityInput, bufferCountOutput, buffer);
 
-				(*bufferCountOutput) += exts.size();
+					if (bufferCapacityInput > exts.size() + 2)
+					{
+						strncpy(&buffer[bufferCapacityInput - exts.size() - 2], exts.c_str(), exts.size());
+					}
 
-				return res;
+					(*bufferCountOutput) += (uint32_t)exts.size();
+
+					return res;
+				}
 			}
-			
 		}
 
 
 		XrResult xrCreateVulkanDeviceKHR(XrInstance instance, const XrVulkanDeviceCreateInfoKHR* createInfo, VkDevice* vulkanDevice, VkResult* vulkanResult)
 		{
-			std::vector<const char*> deviceExtensions;
-			deviceExtensions.push_back(VK_KHR_EXTERNAL_SEMAPHORE_EXTENSION_NAME);
-			deviceExtensions.push_back(VK_KHR_EXTERNAL_SEMAPHORE_WIN32_EXTENSION_NAME);
-			deviceExtensions.push_back(VK_KHR_TIMELINE_SEMAPHORE_EXTENSION_NAME);
-
-			if (createInfo->vulkanCreateInfo->ppEnabledExtensionNames)
+			if (m_configManager->GetConfig_Main().UseLegacyVulkanRenderer)
 			{
-				for (unsigned int i = 0; i < createInfo->vulkanCreateInfo->enabledExtensionCount; i++)
-				{
-					deviceExtensions.push_back(createInfo->vulkanCreateInfo->ppEnabledExtensionNames[i]);
-				}
+				return OpenXrApi::xrCreateVulkanDeviceKHR(instance, createInfo, vulkanDevice, vulkanResult);
 			}
-			XrVulkanDeviceCreateInfoKHR newCreateInfo = *createInfo;
-			VkDeviceCreateInfo newDeviceInfo = *createInfo->vulkanCreateInfo;
-			newCreateInfo.vulkanCreateInfo = &newDeviceInfo;
-				
-			VkPhysicalDeviceVulkan12Features features = { VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_VULKAN_1_2_FEATURES };
-			features.timelineSemaphore = true;
-			features.pNext = (void*)newDeviceInfo.pNext;
-			newDeviceInfo.pNext = &features;
-			
+			else
+			{
+				std::vector<const char*> deviceExtensions;
+				deviceExtensions.push_back(VK_KHR_EXTERNAL_SEMAPHORE_EXTENSION_NAME);
+				deviceExtensions.push_back(VK_KHR_EXTERNAL_SEMAPHORE_WIN32_EXTENSION_NAME);
+				deviceExtensions.push_back(VK_KHR_TIMELINE_SEMAPHORE_EXTENSION_NAME);
 
-			newDeviceInfo.enabledExtensionCount = deviceExtensions.size();
-			newDeviceInfo.ppEnabledExtensionNames = deviceExtensions.data();
+				if (createInfo->vulkanCreateInfo->ppEnabledExtensionNames)
+				{
+					for (unsigned int i = 0; i < createInfo->vulkanCreateInfo->enabledExtensionCount; i++)
+					{
+						deviceExtensions.push_back(createInfo->vulkanCreateInfo->ppEnabledExtensionNames[i]);
+					}
+				}
+				XrVulkanDeviceCreateInfoKHR newCreateInfo = *createInfo;
 
-			return OpenXrApi::xrCreateVulkanDeviceKHR(instance, &newCreateInfo, vulkanDevice, vulkanResult);
+				VkBaseInStructure* base = (VkBaseInStructure*)createInfo->vulkanCreateInfo->pNext;
+				bool bFoundFeatStruct = false;
+				while (base != nullptr)
+				{
+					if (base->sType == VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_VULKAN_1_2_FEATURES)
+					{
+						bFoundFeatStruct = true;
+						((VkPhysicalDeviceVulkan12Features*)base)->timelineSemaphore = true;
+						break;
+					}
+					base = (VkBaseInStructure*)base->pNext;
+				}
+
+				VkDeviceCreateInfo newDeviceInfo = *createInfo->vulkanCreateInfo;
+				newCreateInfo.vulkanCreateInfo = &newDeviceInfo;
+
+				VkPhysicalDeviceVulkan12Features features = { VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_VULKAN_1_2_FEATURES };
+
+				if (!bFoundFeatStruct)
+				{
+					features.timelineSemaphore = true;
+					features.pNext = (void*)newDeviceInfo.pNext;
+					newDeviceInfo.pNext = &features;
+				}
+
+				newDeviceInfo.enabledExtensionCount = (uint32_t)deviceExtensions.size();
+				newDeviceInfo.ppEnabledExtensionNames = deviceExtensions.data();
+
+				return OpenXrApi::xrCreateVulkanDeviceKHR(instance, &newCreateInfo, vulkanDevice, vulkanResult);
+			}
 		}
 
 
@@ -316,15 +346,17 @@ namespace
 
 					const XrGraphicsBindingD3D11KHR* dx11bindings = reinterpret_cast<const XrGraphicsBindingD3D11KHR*>(entry);
 					m_Renderer = std::make_shared<PassthroughRendererDX11>(dx11bindings->device, g_dllModule, m_configManager);
+					m_renderAPI = DirectX11;
+					m_appRenderAPI = DirectX11;
 
-					if (!SetupProcessingPipeline(DirectX11))
+					if (!SetupProcessingPipeline())
 					{
 						return false;
 					}
 
 					m_dashboardMenu->GetDisplayValues().bSessionActive = true;
-					m_renderAPI = DirectX11;
 					m_dashboardMenu->GetDisplayValues().renderAPI = DirectX11;
+					m_dashboardMenu->GetDisplayValues().appRenderAPI = DirectX11;
 					m_bDepthSupportedByRenderer = true;
 					Log("Direct3D 11 renderer initialized\n");
 
@@ -350,14 +382,17 @@ namespace
 						m_Renderer = std::make_unique<PassthroughRendererDX11Interop>(dx12bindings->device, dx12bindings->queue, g_dllModule, m_configManager);
 					}
 
-					if (!SetupProcessingPipeline(usedAPI))
+					m_renderAPI = usedAPI;
+					m_appRenderAPI = DirectX12;
+
+					if (!SetupProcessingPipeline())
 					{
 						return false;
 					}
 
 					m_dashboardMenu->GetDisplayValues().bSessionActive = true;
-					m_renderAPI = usedAPI;
-					m_dashboardMenu->GetDisplayValues().renderAPI = DirectX12;
+					m_dashboardMenu->GetDisplayValues().renderAPI = usedAPI;
+					m_dashboardMenu->GetDisplayValues().appRenderAPI = DirectX12;
 					m_bDepthSupportedByRenderer = true;
 					Log("Direct3D 12 renderer initialized\n");
 
@@ -371,7 +406,7 @@ namespace
 					ERenderAPI usedAPI = DirectX11;
 
 					const XrGraphicsBindingVulkanKHR* vulkanbindings = reinterpret_cast<const XrGraphicsBindingVulkanKHR*>(entry);
-					if (false)
+					if (m_configManager->GetConfig_Main().UseLegacyVulkanRenderer)
 					{
 						m_Renderer = std::make_unique<PassthroughRendererVulkan>(*vulkanbindings, g_dllModule, m_configManager);
 						usedAPI = Vulkan;
@@ -381,14 +416,17 @@ namespace
 						m_Renderer = std::make_unique<PassthroughRendererDX11Interop>(*vulkanbindings, g_dllModule, m_configManager);
 					}
 
-					if (!SetupProcessingPipeline(usedAPI))
+					m_renderAPI = usedAPI;
+					m_appRenderAPI = Vulkan;
+
+					if (!SetupProcessingPipeline())
 					{
 						return false;
 					}
 
 					m_dashboardMenu->GetDisplayValues().bSessionActive = true;
-					m_renderAPI = usedAPI;
-					m_dashboardMenu->GetDisplayValues().renderAPI = Vulkan;
+					m_dashboardMenu->GetDisplayValues().renderAPI = usedAPI;
+					m_dashboardMenu->GetDisplayValues().appRenderAPI = Vulkan;
 					m_bDepthSupportedByRenderer = false;
 					Log("Vulkan renderer initialized\n");
 
@@ -404,7 +442,7 @@ namespace
 			return false;
 		}
 
-		bool SetupProcessingPipeline(ERenderAPI usedAPI)
+		bool SetupProcessingPipeline()
 		{
 			uint32_t cameraTextureWidth;
 			uint32_t cameraTextureHeight;
@@ -427,7 +465,7 @@ namespace
 
 			if (m_configManager->GetConfig_Main().CameraProvider == CameraProvider_OpenVR)
 			{
-				m_cameraManager = std::make_shared<CameraManagerOpenVR>(m_Renderer, usedAPI, m_configManager, m_openVRManager);
+				m_cameraManager = std::make_shared<CameraManagerOpenVR>(m_Renderer, m_renderAPI, m_appRenderAPI, m_configManager, m_openVRManager);
 
 				if (!m_cameraManager->InitCamera())
 				{
@@ -441,8 +479,8 @@ namespace
 			}
 			else if (m_configManager->GetConfig_Main().CameraProvider == CameraProvider_Augmented)
 			{
-				m_cameraManager = std::make_shared<CameraManagerOpenVR>(m_Renderer, usedAPI, m_configManager, m_openVRManager);
-				m_augmentedCameraManager = std::make_shared<CameraManagerOpenCV>(m_Renderer, usedAPI, m_configManager, m_openVRManager, true);
+				m_cameraManager = std::make_shared<CameraManagerOpenVR>(m_Renderer, m_renderAPI, m_appRenderAPI, m_configManager, m_openVRManager);
+				m_augmentedCameraManager = std::make_shared<CameraManagerOpenCV>(m_Renderer, m_renderAPI, m_appRenderAPI, m_configManager, m_openVRManager, true);
 
 				if (!m_cameraManager->InitCamera() || !m_augmentedCameraManager->InitCamera())
 				{
@@ -456,7 +494,7 @@ namespace
 			}
 			else
 			{
-				m_cameraManager = std::make_shared<CameraManagerOpenCV>(m_Renderer, usedAPI, m_configManager, m_openVRManager);
+				m_cameraManager = std::make_shared<CameraManagerOpenCV>(m_Renderer, m_renderAPI, m_appRenderAPI, m_configManager, m_openVRManager);
 
 				if (!m_cameraManager->InitCamera())
 				{
@@ -494,7 +532,7 @@ namespace
 			m_depthSwapChainLeft = XR_NULL_HANDLE;
 			m_depthSwapChainRight = XR_NULL_HANDLE;
 
-			SetupProcessingPipeline(m_renderAPI);
+			SetupProcessingPipeline();
 		}
 
 
@@ -1270,6 +1308,7 @@ namespace
 		std::deque<float> m_passthroughRenderTimes;
 
 		ERenderAPI m_renderAPI = DirectX11;
+		ERenderAPI m_appRenderAPI = DirectX11;
 
     };
 

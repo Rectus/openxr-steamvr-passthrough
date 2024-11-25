@@ -67,9 +67,10 @@ inline XrMatrix4x4f ToXRMatrix4x4Inverted(vr::HmdMatrix34_t& input)
 
 
 
-CameraManagerOpenVR::CameraManagerOpenVR(std::shared_ptr<IPassthroughRenderer> renderer, ERenderAPI renderAPI, std::shared_ptr<ConfigManager> configManager, std::shared_ptr<OpenVRManager> openVRManager)
+CameraManagerOpenVR::CameraManagerOpenVR(std::shared_ptr<IPassthroughRenderer> renderer, ERenderAPI renderAPI, ERenderAPI appRenderAPI, std::shared_ptr<ConfigManager> configManager, std::shared_ptr<OpenVRManager> openVRManager)
     : m_renderer(renderer)
     , m_renderAPI(renderAPI)
+    , m_appRenderAPI(appRenderAPI)
     , m_configManager(configManager)
     , m_openVRManager(openVRManager)
     , m_frameLayout(EStereoFrameLayout::Mono)
@@ -616,9 +617,8 @@ void CameraManagerOpenVR::ServeFrames()
 
         m_underConstructionFrame->bHasFrameBuffer = false;
 
-        // TODO: Getting the framebuffer crashes under Vulkan
         if(m_renderAPI == DirectX12 || 
-            (mainConf.ProjectionMode == Projection_StereoReconstruction && m_renderAPI != Vulkan))
+            (mainConf.ProjectionMode == Projection_StereoReconstruction && m_appRenderAPI != Vulkan))
         {
             if (m_underConstructionFrame->frameBuffer.get() == nullptr)
             {
@@ -633,6 +633,21 @@ void CameraManagerOpenVR::ServeFrames()
             }
 
             m_underConstructionFrame->bHasFrameBuffer = true;
+        }
+        else if (mainConf.ProjectionMode == Projection_StereoReconstruction && m_renderAPI == DirectX11 && m_appRenderAPI == Vulkan && m_underConstructionFrame->frameTextureResource != nullptr)
+        {
+            if (m_underConstructionFrame->frameBuffer.get() == nullptr)
+            {
+                m_underConstructionFrame->frameBuffer = std::make_shared<std::vector<uint8_t>>(m_cameraFrameBufferSize);
+            }
+
+            m_underConstructionFrame->bHasFrameBuffer = false;
+
+            // Since SteamVR still crashes when using GetVideoStreamFrameBuffer under Vulkan, we manually download the image. This is very slow.
+            if (m_renderer.lock()->DownloadTextureToCPU(m_underConstructionFrame->frameTextureResource, m_underConstructionFrame->header.nWidth, m_underConstructionFrame->header.nHeight, (uint32_t)m_underConstructionFrame->frameBuffer->size(), m_underConstructionFrame->frameBuffer->data()))
+            {
+                m_underConstructionFrame->bHasFrameBuffer = true;
+            }
         }
 
         bHasFrame = true;

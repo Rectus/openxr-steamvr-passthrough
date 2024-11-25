@@ -53,7 +53,7 @@ class CameraManagerOpenVR : public ICameraManager
 {
 public:
 
-	CameraManagerOpenVR(std::shared_ptr<IPassthroughRenderer> renderer, ERenderAPI renderAPI, std::shared_ptr<ConfigManager> configManager, std::shared_ptr<OpenVRManager> openVRManager);
+	CameraManagerOpenVR(std::shared_ptr<IPassthroughRenderer> renderer, ERenderAPI renderAPI, ERenderAPI appRenderAPI, std::shared_ptr<ConfigManager> configManager, std::shared_ptr<OpenVRManager> openVRManager);
 	~CameraManagerOpenVR();
 
 	bool InitCamera();
@@ -104,6 +104,7 @@ private:
 
 	std::weak_ptr<IPassthroughRenderer> m_renderer;
 	ERenderAPI m_renderAPI;
+	ERenderAPI m_appRenderAPI;
 	std::thread m_serveThread;
 	std::atomic_bool m_bRunThread = true;
 	std::mutex m_serveMutex;
@@ -160,7 +161,7 @@ class CameraManagerOpenCV : public ICameraManager
 {
 public:
 
-	CameraManagerOpenCV(std::shared_ptr<IPassthroughRenderer> renderer, ERenderAPI renderAPI, std::shared_ptr<ConfigManager> configManager, std::shared_ptr<OpenVRManager> openVRManager, bool bIsAugmented = false);
+	CameraManagerOpenCV(std::shared_ptr<IPassthroughRenderer> renderer, ERenderAPI renderAPI, ERenderAPI appRenderAPI, std::shared_ptr<ConfigManager> configManager, std::shared_ptr<OpenVRManager> openVRManager, bool bIsAugmented = false);
 	~CameraManagerOpenCV();
 
 	bool InitCamera();
@@ -214,6 +215,7 @@ private:
 
 	std::weak_ptr<IPassthroughRenderer> m_renderer;
 	ERenderAPI m_renderAPI;
+	ERenderAPI m_appRenderAPI;
 	std::thread m_serveThread;
 	std::atomic_bool m_bRunThread = true;
 	std::mutex m_serveMutex;

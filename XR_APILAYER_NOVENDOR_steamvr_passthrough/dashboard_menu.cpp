@@ -493,7 +493,9 @@ if (bIsActiveTab) { ImGui::PopStyleColor(1); bIsActiveTab = false; }
 		{
 			ImGui::Checkbox("Show Descriptions", &mainConfig.ShowSettingDescriptions);
 			ImGui::Checkbox("Use legacy DirectX 12 renderer", &mainConfig.UseLegacyD3D12Renderer);
-			TextDescription("Uses the old native DirectX12 renderer for DirectX 12 applications. Not recommended since it is missing rendering features. Requires restart.");
+			TextDescription("Uses the old native DirectX 12 renderer for DirectX 12 applications. Not recommended since it is missing rendering features. Requires restart.");
+			ImGui::Checkbox("Use legacy Vulkan renderer", &mainConfig.UseLegacyVulkanRenderer);
+			TextDescription("Uses the old native Vulkan renderer for Vulkan applications. Not recommended since it is missing rendering features. Requires restart.");
 		}
 		IMGUI_BIG_SPACING;
 
@@ -1326,19 +1328,34 @@ if (bIsActiveTab) { ImGui::PopStyleColor(1); bIsActiveTab = false; }
 			ImGui::PushFont(m_fixedFont);
 			ImGui::Text("Layer Version: %s", steamvr_passthrough::VersionString.c_str());
 
+			switch (m_displayValues.appRenderAPI)
+			{
+			case DirectX11:
+				ImGui::Text("Application Render API: DirectX 11");
+				break;
+			case DirectX12:
+				ImGui::Text("Application Render API: DirectX 12");
+				break;
+			case Vulkan:
+				ImGui::Text("Application Render API: Vulkan");
+				break;
+			default:
+				ImGui::Text("Application Render API: None");
+			}
+
 			switch (m_displayValues.renderAPI)
 			{
 			case DirectX11:
-				ImGui::Text("Render API: DirectX 11");
+				ImGui::Text("Layer Render API: DirectX 11");
 				break;
 			case DirectX12:
-				ImGui::Text("Render API: DirectX 12");
+				ImGui::Text("Layer Render API: DirectX 12");
 				break;
 			case Vulkan:
-				ImGui::Text("Render API: Vulkan");
+				ImGui::Text("Layer Render API: Vulkan");
 				break;
 			default:
-				ImGui::Text("Render API: None");
+				ImGui::Text("Layer Render API: None");
 			}
 
 			ImGui::Text("Application: %s", m_displayValues.currentApplication.c_str());
@@ -1359,8 +1376,8 @@ if (bIsActiveTab) { ImGui::PopStyleColor(1); bIsActiveTab = false; }
 				ImGui::Text("Flags: No alpha");
 			}
 
-			ImGui::Text("Framebuffer format: %s (%li)", GetImageFormatName(m_displayValues.renderAPI, m_displayValues.frameBufferFormat).c_str(), m_displayValues.frameBufferFormat);
-			ImGui::Text("Depthbuffer format: %s (%li)", GetImageFormatName(m_displayValues.renderAPI, m_displayValues.depthBufferFormat).c_str(), m_displayValues.depthBufferFormat);
+			ImGui::Text("Framebuffer format: %s (%li)", GetImageFormatName(m_displayValues.appRenderAPI, m_displayValues.frameBufferFormat).c_str(), m_displayValues.frameBufferFormat);
+			ImGui::Text("Depthbuffer format: %s (%li)", GetImageFormatName(m_displayValues.appRenderAPI, m_displayValues.depthBufferFormat).c_str(), m_displayValues.depthBufferFormat);
 
 			ImGui::Text("Exposure to render latency: %.1fms", m_displayValues.frameToRenderLatencyMS);
 			ImGui::Text("Exposure to photons latency: %.1fms", m_displayValues.frameToPhotonsLatencyMS);

@@ -92,6 +92,7 @@ struct Config_Main
 	bool RequireSteamVRRuntime = true;
 	bool ShowSettingDescriptions = true;
 	bool UseLegacyD3D12Renderer = false;
+	bool UseLegacyVulkanRenderer = false;
 
 	EStereoPreset StereoPreset = StereoPreset_Medium;
 
@@ -124,6 +125,7 @@ struct Config_Main
 		RequireSteamVRRuntime = ini.GetBoolValue(section, "RequireSteamVRRuntime", RequireSteamVRRuntime);
 		ShowSettingDescriptions = ini.GetBoolValue(section, "ShowSettingDescriptions", ShowSettingDescriptions);
 		UseLegacyD3D12Renderer = ini.GetBoolValue(section, "UseLegacyD3D12Renderer", UseLegacyD3D12Renderer);
+		UseLegacyVulkanRenderer = ini.GetBoolValue(section, "UseLegacyVulkanRenderer", UseLegacyVulkanRenderer);
 
 		StereoPreset = (EStereoPreset)ini.GetLongValue(section, "StereoPreset", StereoPreset);
 	}
@@ -153,6 +155,7 @@ struct Config_Main
 		ini.SetBoolValue(section, "RequireSteamVRRuntime", RequireSteamVRRuntime);
 		ini.SetBoolValue(section, "ShowSettingDescriptions", ShowSettingDescriptions);
 		ini.SetBoolValue(section, "UseLegacyD3D12Renderer", UseLegacyD3D12Renderer);
+		ini.SetBoolValue(section, "UseLegacyVulkanRenderer", UseLegacyVulkanRenderer);
 
 		ini.SetLongValue(section, "StereoPreset", StereoPreset);
 	}
