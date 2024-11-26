@@ -90,6 +90,7 @@ namespace
 #endif
 			bool bEnableVarjoDepthExtension = false;
 			bool bEnableVarjoCompositionExtension = false;
+			bool bEnableVulkan2Extension = false;
 
 			std::vector<std::string> extensions = GetRequestedExtensions();
 			for (uint32_t i = 0; i < extensions.size(); i++)
@@ -101,6 +102,10 @@ namespace
 				else if (strncmp(extensions[i].c_str(), XR_VARJO_COMPOSITION_LAYER_DEPTH_TEST_EXTENSION_NAME, strlen(XR_VARJO_COMPOSITION_LAYER_DEPTH_TEST_EXTENSION_NAME)) == 0)
 				{
 					bEnableVarjoCompositionExtension = true;
+				}
+				else if (strncmp(extensions[i].c_str(), XR_KHR_VULKAN_ENABLE2_EXTENSION_NAME, strlen(XR_KHR_VULKAN_ENABLE2_EXTENSION_NAME)) == 0)
+				{
+					bEnableVulkan2Extension = true;
 				}
 			}
 			
@@ -167,7 +172,7 @@ namespace
 
 				if (strncmp(instanceProperties.runtimeName, "SteamVR/OpenXR", 14))
 				{
-					ErrorLog("The active OpenXR runtime is not SteamVR, passthrough layer not enabled");
+					ErrorLog("The active OpenXR runtime is %s, not SteamVR, passthrough layer not enabled\n", instanceProperties.runtimeName);
 					return result;
 				}
 			}
@@ -189,7 +194,8 @@ namespace
 				m_dashboardMenu->GetDisplayValues().bVarjoDepthCompositionExtensionActive = true;
 				Log("Extension XR_VARJO_composition_layer_depth_test enabled\n");
 			}
-			
+
+			m_bEnableVulkan2Extension = bEnableVulkan2Extension;
 
 			m_bSuccessfullyLoaded = true;
 			Log("OpenXR instance successfully created\n");
@@ -289,6 +295,11 @@ namespace
 
 		XrResult xrGetSystem(XrInstance instance, const XrSystemGetInfo* getInfo, XrSystemId* systemId) override
 		{
+			if (m_configManager->GetConfig_Main().RequireSteamVRRuntime && !m_bSuccessfullyLoaded)
+			{
+				return OpenXrApi::xrGetSystem(instance, getInfo, systemId);
+			}
+
 			if (getInfo->type != XR_TYPE_SYSTEM_GET_INFO)
 			{
 				return XR_ERROR_VALIDATION_FAILURE;
@@ -328,12 +339,8 @@ namespace
 		}
 
 
-		bool SetupRenderer(const XrInstance instance,
-			const XrSessionCreateInfo* createInfo,
-			const XrSession* session)
+		bool SetupRenderer(const XrInstance instance, const XrSessionCreateInfo* createInfo, const XrSession* session)
 		{
-			
-
 			const XrBaseInStructure* entry = reinterpret_cast<const XrBaseInStructure*>(createInfo->next);
 
 			while (entry)
@@ -403,16 +410,23 @@ namespace
 				{
 					Log("Vulkan renderer initializing...\n");
 
-					ERenderAPI usedAPI = DirectX11;
+					ERenderAPI usedAPI = Vulkan;
 
 					const XrGraphicsBindingVulkanKHR* vulkanbindings = reinterpret_cast<const XrGraphicsBindingVulkanKHR*>(entry);
 					if (m_configManager->GetConfig_Main().UseLegacyVulkanRenderer)
 					{
+
 						m_Renderer = std::make_unique<PassthroughRendererVulkan>(*vulkanbindings, g_dllModule, m_configManager);
-						usedAPI = Vulkan;
 					}
 					else
 					{
+						if (!m_bEnableVulkan2Extension)
+						{
+							ErrorLog("The XR_KHR_vulkan_enable extension is only supported with the legacy renderer, passthough rendering not enabled\n");
+							return false;
+						}
+
+						usedAPI = DirectX11;
 						m_Renderer = std::make_unique<PassthroughRendererDX11Interop>(*vulkanbindings, g_dllModule, m_configManager);
 					}
 
@@ -536,10 +550,13 @@ namespace
 		}
 
 
-		XrResult xrCreateSession(XrInstance instance,
-					 const XrSessionCreateInfo* createInfo,
-					 XrSession* session) override
+		XrResult xrCreateSession(XrInstance instance, const XrSessionCreateInfo* createInfo, XrSession* session) override
 		{
+			if (m_configManager->GetConfig_Main().RequireSteamVRRuntime && !m_bSuccessfullyLoaded)
+			{
+				return OpenXrApi::xrCreateSession(instance, createInfo, session);
+			}
+
 			if (createInfo->type != XR_TYPE_SESSION_CREATE_INFO)
 			{
 				return XR_ERROR_VALIDATION_FAILURE;
@@ -573,6 +590,8 @@ namespace
 					}
 					else
 					{
+						m_bPassthroughAvailable = false;
+						m_bUsePassthrough = false;
 						ErrorLog("Failed to initialize renderer\n");
 					}
 				}
@@ -1290,6 +1309,7 @@ namespace
 		bool m_bVarjoDepthExtensionEnabled = false;
 		bool m_bVarjoDepthEnabled = false;
 		bool m_bVarjoCompositionExtensionEnabled = false;
+		bool m_bEnableVulkan2Extension = false;
 		bool m_bDepthSupportedByRenderer = false;
 
 		XrSwapchain m_swapChainLeft{XR_NULL_HANDLE};

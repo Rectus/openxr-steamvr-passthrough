@@ -27,7 +27,7 @@ namespace {
     uint32_t g_globalErrorCount = 0;
     constexpr uint32_t k_maxBufferedLines = 200;
     std::deque<std::string> g_logBuffer;
-    std::shared_timed_mutex g_logBufferMutex;
+    std::shared_mutex g_logBufferMutex;
 } // namespace
 
 namespace LAYER_NAMESPACE::log {
@@ -46,7 +46,7 @@ namespace LAYER_NAMESPACE::log {
 
         void BufferLog(const char* buf)
         {
-            std::unique_lock writeLock(g_logBufferMutex, std::chrono::milliseconds(1));
+            std::unique_lock writeLock(g_logBufferMutex);
 
             if (!writeLock.owns_lock())
             {
@@ -108,7 +108,7 @@ namespace LAYER_NAMESPACE::log {
 
     void ReadLogBuffer(void (*printFunc)(std::deque<std::string>& logBuffer))
     {
-        std::shared_lock readLock(g_logBufferMutex, std::chrono::milliseconds(1));
+        std::shared_lock readLock(g_logBufferMutex);
 
         if (!readLock.owns_lock())
         {
