@@ -300,6 +300,35 @@ namespace LAYER_NAMESPACE
 		return result;
 	}
 
+	XrResult xrWaitSwapchainImage(XrSwapchain swapchain, const XrSwapchainImageWaitInfo* waitInfo)
+	{
+#if USE_TRACELOGGING
+		TraceLoggingWrite(g_traceProvider, "xrWaitSwapchainImage");
+#endif
+
+		XrResult result;
+		try
+		{
+			result = LAYER_NAMESPACE::GetInstance()->xrWaitSwapchainImage(swapchain, waitInfo);
+		}
+		catch (std::exception exc)
+		{
+#if USE_TRACELOGGING
+			TraceLoggingWrite(g_traceProvider, "xrWaitSwapchainImage_Error", TLArg(exc.what(), "Error"));
+#endif
+			ErrorLog("xrWaitSwapchainImage: %s\n", exc.what());
+			result = XR_ERROR_RUNTIME_FAILURE;
+		}
+#if USE_TRACELOGGING
+		TraceLoggingWrite(g_traceProvider, "xrWaitSwapchainImage_Result", TLArg(xr::ToCString(result), "Result"));
+#endif
+		if (XR_FAILED(result)) {
+			ErrorLog("xrWaitSwapchainImage failed with %d\n", result);
+		}
+
+		return result;
+	}
+
 	XrResult xrReleaseSwapchainImage(XrSwapchain swapchain, const XrSwapchainImageReleaseInfo* releaseInfo)
 	{
 #if USE_TRACELOGGING
@@ -532,6 +561,11 @@ namespace LAYER_NAMESPACE
 			m_xrAcquireSwapchainImage = reinterpret_cast<PFN_xrAcquireSwapchainImage>(*function);
 			*function = reinterpret_cast<PFN_xrVoidFunction>(LAYER_NAMESPACE::xrAcquireSwapchainImage);
 		}
+		else if (apiName == "xrWaitSwapchainImage")
+		{
+			m_xrWaitSwapchainImage = reinterpret_cast<PFN_xrWaitSwapchainImage>(*function);
+			*function = reinterpret_cast<PFN_xrVoidFunction>(LAYER_NAMESPACE::xrWaitSwapchainImage);
+		}
 		else if (apiName == "xrReleaseSwapchainImage")
 		{
 			m_xrReleaseSwapchainImage = reinterpret_cast<PFN_xrReleaseSwapchainImage>(*function);
@@ -616,6 +650,10 @@ namespace LAYER_NAMESPACE
 		if (XR_FAILED(m_xrGetInstanceProcAddr(m_instance, "xrAcquireSwapchainImage", reinterpret_cast<PFN_xrVoidFunction*>(&m_xrAcquireSwapchainImage))))
 		{
 			throw new std::runtime_error("Failed to resolve xrAcquireSwapchainImage");
+		}
+		if (XR_FAILED(m_xrGetInstanceProcAddr(m_instance, "xrWaitSwapchainImage", reinterpret_cast<PFN_xrVoidFunction*>(&m_xrWaitSwapchainImage))))
+		{
+			throw new std::runtime_error("Failed to resolve xrWaitSwapchainImage");
 		}
 		if (XR_FAILED(m_xrGetInstanceProcAddr(m_instance, "xrReleaseSwapchainImage", reinterpret_cast<PFN_xrVoidFunction*>(&m_xrReleaseSwapchainImage))))
 		{

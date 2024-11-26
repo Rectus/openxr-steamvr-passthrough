@@ -326,7 +326,7 @@ private:
 	uint32_t m_vulkanQueueIndex = 0;
 	VkQueue m_vulkanQueue = VK_NULL_HANDLE;
 	VkCommandPool m_vulkanCommandPool = VK_NULL_HANDLE;
-	VkCommandBuffer m_vulkanCommandBuffer[NUM_SWAPCHAINS * 2 + 1] = {};
+	VkCommandBuffer m_vulkanCommandBuffer[NUM_SWAPCHAINS * 2] = {};
 
 	HANDLE m_sharedTextureLeft[NUM_SWAPCHAINS] = {};
 	HANDLE m_sharedTextureRight[NUM_SWAPCHAINS] = {};

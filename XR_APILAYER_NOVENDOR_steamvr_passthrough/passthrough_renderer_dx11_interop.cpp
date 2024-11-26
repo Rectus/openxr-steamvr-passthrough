@@ -18,6 +18,8 @@ DXGI_FORMAT VulkanImageFormatToDXGI(VkFormat in)
 		return DXGI_FORMAT_B8G8R8A8_UNORM_SRGB;
 	case VK_FORMAT_R32G32B32A32_SFLOAT:
 		return DXGI_FORMAT_R32G32B32A32_FLOAT;
+	case VK_FORMAT_R32G32B32_SFLOAT:
+		return DXGI_FORMAT_R32G32B32_FLOAT;
 	case VK_FORMAT_R16G16B16A16_SFLOAT:
 		return DXGI_FORMAT_R16G16B16A16_FLOAT;
 	case VK_FORMAT_A2B10G10R10_UNORM_PACK32:
@@ -219,7 +221,7 @@ bool PassthroughRendererDX11Interop::InitRenderer()
 		VkCommandBufferAllocateInfo allocInfo{ VK_STRUCTURE_TYPE_COMMAND_BUFFER_ALLOCATE_INFO };
 		allocInfo.commandPool = m_vulkanCommandPool;
 		allocInfo.level = VK_COMMAND_BUFFER_LEVEL_PRIMARY;
-		allocInfo.commandBufferCount = NUM_SWAPCHAINS * 2 + 1;
+		allocInfo.commandBufferCount = NUM_SWAPCHAINS * 2;
 
 		if (vkAllocateCommandBuffers(m_vulkanDevice, &allocInfo, m_vulkanCommandBuffer) != VK_SUCCESS)
 		{

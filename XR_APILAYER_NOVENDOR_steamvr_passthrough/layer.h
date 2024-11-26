@@ -163,9 +163,17 @@ struct DepthFrame
 		, disparityViewToWorldLeft()
 		, disparityViewToWorldRight()
 		, disparityToDepth()
+		, prevDisparityViewToWorldLeft()
+		, prevDisparityViewToWorldRight()
+		, prevDispWorldToCameraProjectionLeft()
+		, prevDispWorldToCameraProjectionRight()
+		, disparityDownscaleFactor(0.0f)
 		, bIsValid(false)
+		, bIsFirstRender(true)
 	{
 		disparityMap = std::make_shared<std::vector<uint16_t>>();
+		disparityTextureSize[0] = 0;
+		disparityTextureSize[1] = 0;
 	}
 
 	std::shared_mutex readWriteMutex;
