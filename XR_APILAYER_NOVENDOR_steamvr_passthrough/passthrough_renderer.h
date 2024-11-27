@@ -156,6 +156,7 @@ public:
 	virtual void RenderPassthroughFrame(const XrCompositionLayerProjection* layer, CameraFrame* frame, EPassthroughBlendMode blendMode, int leftSwapchainIndex, int rightSwapchainIndex, int leftDepthSwapchainIndex, int rightDepthSwapchainIndex, std::shared_ptr<DepthFrame> depthFrame, UVDistortionParameters& distortionParams, FrameRenderParameters& renderParams) = 0;
 	virtual void* GetRenderDevice() = 0;
 	virtual bool DownloadTextureToCPU(const void* textureSRV, const uint32_t width, const uint32_t height, const uint32_t bufferSize, uint8_t* buffer) { return false; }
+	virtual std::shared_timed_mutex& GetAccessMutex() = 0;
 };
 
 
@@ -172,6 +173,7 @@ public:
 
 	void RenderPassthroughFrame(const XrCompositionLayerProjection* layer, CameraFrame* frame, EPassthroughBlendMode blendMode, int leftSwapchainIndex, int rightSwapchainIndex, int leftDepthSwapchainIndex, int rightDepthSwapchainIndex, std::shared_ptr<DepthFrame> depthFrame, UVDistortionParameters& distortionParams, FrameRenderParameters& renderParams);
 	void* GetRenderDevice();
+	std::shared_timed_mutex& GetAccessMutex() { return m_accessRendererMutex; }
 
 protected:
 
@@ -195,6 +197,7 @@ protected:
 
 	std::shared_ptr<ConfigManager> m_configManager;
 	HMODULE m_dllModule;
+	std::shared_timed_mutex m_accessRendererMutex;
 
 	bool m_bIsTemporalSupported = true;
 	bool m_bUsingDeferredContext = false;
@@ -302,15 +305,19 @@ public:
 	~PassthroughRendererDX11Interop();
 
 	bool InitRenderer();
-	void InitRenderTarget(const ERenderEye eye, void* rendertarget, const uint32_t imageIndex, const XrSwapchainCreateInfo& swapchainInfo);
-	void InitDepthBuffer(const ERenderEye eye, void* depthBuffer, const uint32_t imageIndex, const XrSwapchainCreateInfo& swapchainInfo);
-	bool CreateLocalTextureVulkan(VkImage& localVulkanTexture, VkDeviceMemory& localVulkanTextureMemory, ID3D11Texture2D** localD3DTexture, HANDLE& sharedTextureHandle, const XrSwapchainCreateInfo& swapchainInfo, bool bIsDepthMap);
-
+	
 	void RenderPassthroughFrame(const XrCompositionLayerProjection* layer, CameraFrame* frame, EPassthroughBlendMode blendMode, int leftSwapchainIndex, int rightSwapchainIndex, int leftDepthSwapchainIndex, int rightDepthSwapchainIndex, std::shared_ptr<DepthFrame> depthFrame, UVDistortionParameters& distortionParams, FrameRenderParameters& renderParams);
 	bool DownloadTextureToCPU(const void* textureSRV, const uint32_t width, const uint32_t height, const uint32_t bufferSize, uint8_t* buffer);
 
 private:
+
+	void ResetRenderer();
+	void InitRenderTarget(const ERenderEye eye, void* rendertarget, const uint32_t imageIndex, const XrSwapchainCreateInfo& swapchainInfo);
+	void InitDepthBuffer(const ERenderEye eye, void* depthBuffer, const uint32_t imageIndex, const XrSwapchainCreateInfo& swapchainInfo);
+	bool CreateLocalTextureVulkan(VkImage& localVulkanTexture, VkDeviceMemory& localVulkanTextureMemory, ID3D11Texture2D** localD3DTexture, HANDLE& sharedTextureHandle, const XrSwapchainCreateInfo& swapchainInfo, bool bIsDepthMap);
+
 	ERenderAPI m_applicationRenderAPI;
+	bool m_rendererInitialized = false;
 
 	ComPtr<ID3D12Device> m_d3d12Device = NULL;
 	ComPtr<ID3D11On12Device2> m_d3d11On12Device = NULL;
@@ -327,6 +334,7 @@ private:
 	VkQueue m_vulkanQueue = VK_NULL_HANDLE;
 	VkCommandPool m_vulkanCommandPool = VK_NULL_HANDLE;
 	VkCommandBuffer m_vulkanCommandBuffer[NUM_SWAPCHAINS * 2] = {};
+	VkFence m_vulkanRenderCompleteFence = VK_NULL_HANDLE;
 
 	HANDLE m_sharedTextureLeft[NUM_SWAPCHAINS] = {};
 	HANDLE m_sharedTextureRight[NUM_SWAPCHAINS] = {};
@@ -354,6 +362,7 @@ private:
 
 	VkDevice m_vulkanDownloadDevice = VK_NULL_HANDLE;
 	VkQueue m_vulkanDownloadQueue = VK_NULL_HANDLE;
+	uint32_t m_vulkanDownloadQueueFamilyIndex = 0;
 	VkCommandPool m_vulkanDownloadCommandPool = VK_NULL_HANDLE;
 	VkCommandBuffer m_vulkanDownloadCommandBuffer = VK_NULL_HANDLE;
 	VkFence m_vulkanDownloadFence = VK_NULL_HANDLE;
@@ -376,6 +385,7 @@ public:
 	void SetFrameSize(const uint32_t width, const uint32_t height, const uint32_t bufferSize, const uint32_t undistortedWidth, const uint32_t undistortedHeight, const uint32_t undistortedBufferSize);
 	void RenderPassthroughFrame(const XrCompositionLayerProjection* layer, CameraFrame* frame, EPassthroughBlendMode blendMode, int leftSwapchainIndex, int rightSwapchainIndex, int leftDepthSwapchainIndex, int rightDepthSwapchainIndex, std::shared_ptr<DepthFrame> depthFrame, UVDistortionParameters& distortionParams, FrameRenderParameters& renderParams);
 	void* GetRenderDevice();
+	std::shared_timed_mutex& GetAccessMutex() { return m_accessRendererMutex; }
 	
 private:
 	ComPtr<ID3D12Resource> InitBuffer(UINT8** bufferCPUData, int numBuffers, int bufferSizePerAlign, int heapIndex);
@@ -396,6 +406,7 @@ private:
 
 	std::shared_ptr<ConfigManager> m_configManager;
 	HMODULE m_dllModule;
+	std::shared_timed_mutex m_accessRendererMutex;
 
 	int m_frameIndex = 0;
 
@@ -500,6 +511,7 @@ public:
 	void SetFrameSize(const uint32_t width, const uint32_t height, const uint32_t bufferSize, const uint32_t undistortedWidth, const uint32_t undistortedHeight, const uint32_t undistortedBufferSize);
 	void RenderPassthroughFrame(const XrCompositionLayerProjection* layer, CameraFrame* frame, EPassthroughBlendMode blendMode, int leftSwapchainIndex, int rightSwapchainIndex, int leftDepthSwapchainIndex, int rightDepthSwapchainIndex, std::shared_ptr<DepthFrame> depthFrame, UVDistortionParameters& distortionParams, FrameRenderParameters& renderParams);
 	void* GetRenderDevice();
+	std::shared_timed_mutex& GetAccessMutex() { return m_accessRendererMutex; }
 
 private:
 
@@ -519,6 +531,7 @@ private:
 
 	std::shared_ptr<ConfigManager> m_configManager;
 	HMODULE m_dllModule;
+	std::shared_timed_mutex m_accessRendererMutex;
 
 	std::deque<std::function<void()>> m_deletionQueue;
 

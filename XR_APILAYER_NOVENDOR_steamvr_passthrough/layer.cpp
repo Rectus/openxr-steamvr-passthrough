@@ -1261,9 +1261,11 @@ namespace
 				return OpenXrApi::xrEndFrame(session, frameEndInfo);
 			}
 
+			bool bResetPending = false;
+
 			if (m_Renderer.get() &&m_configManager->CheckResetRendererResetPending())
 			{
-				ResetRenderer();
+				bResetPending = true;
 			}
 
 
@@ -1277,14 +1279,17 @@ namespace
 
 			if (m_bUsePassthrough)
 			{
-				for (uint32_t i = 0; i < frameEndInfo->layerCount; i++)
+				if (!bResetPending)
 				{
-					if (frameEndInfo->layers[i] != nullptr && frameEndInfo->layers[i]->type == XR_TYPE_COMPOSITION_LAYER_PROJECTION && IsBlendModeEnabled(frameEndInfo->environmentBlendMode, (const XrCompositionLayerProjection*)frameEndInfo->layers[i]))
+					for (uint32_t i = 0; i < frameEndInfo->layerCount; i++)
 					{
-						m_dashboardMenu->GetDisplayValues().bCorePassthroughActive = true;
-						RenderPassthroughOnAppLayer(frameEndInfo, i);
-						
-						break;
+						if (frameEndInfo->layers[i] != nullptr && frameEndInfo->layers[i]->type == XR_TYPE_COMPOSITION_LAYER_PROJECTION && IsBlendModeEnabled(frameEndInfo->environmentBlendMode, (const XrCompositionLayerProjection*)frameEndInfo->layers[i]))
+						{
+							m_dashboardMenu->GetDisplayValues().bCorePassthroughActive = true;
+							RenderPassthroughOnAppLayer(frameEndInfo, i);
+
+							break;
+						}
 					}
 				}
 
@@ -1310,6 +1315,11 @@ namespace
 			modifiedFrameEndInfo.environmentBlendMode = XR_ENVIRONMENT_BLEND_MODE_OPAQUE;
 
 			result = OpenXrApi::xrEndFrame(session, &modifiedFrameEndInfo);
+
+			if (bResetPending)
+			{
+				ResetRenderer();
+			}
 
 			return result;
 		}

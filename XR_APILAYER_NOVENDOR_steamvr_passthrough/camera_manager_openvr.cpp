@@ -590,6 +590,12 @@ void CameraManagerOpenVR::ServeFrames()
                 continue;
             }
 
+            std::shared_lock accessLock(renderer->GetAccessMutex(), std::try_to_lock);
+            if (!accessLock.owns_lock())
+            {
+                continue;
+            }
+
             vr::EVRTrackedCameraError error = trackedCamera->GetVideoStreamTextureD3D11(m_cameraHandle, frameType, renderer->GetRenderDevice(), &m_underConstructionFrame->frameTextureResource, nullptr, 0);
             if (error != vr::VRTrackedCameraError_None)
             {
@@ -643,8 +649,21 @@ void CameraManagerOpenVR::ServeFrames()
 
             m_underConstructionFrame->bHasFrameBuffer = false;
 
+            std::shared_ptr<IPassthroughRenderer> renderer = m_renderer.lock();
+
+            if (!renderer.get())
+            {
+                continue;
+            }
+
+            std::shared_lock accessLock(renderer->GetAccessMutex(), std::try_to_lock);
+            if (!accessLock.owns_lock())
+            {
+                continue;
+            }
+
             // Since SteamVR still crashes when using GetVideoStreamFrameBuffer under Vulkan, we manually download the image. This is very slow.
-            if (m_renderer.lock()->DownloadTextureToCPU(m_underConstructionFrame->frameTextureResource, m_underConstructionFrame->header.nWidth, m_underConstructionFrame->header.nHeight, (uint32_t)m_underConstructionFrame->frameBuffer->size(), m_underConstructionFrame->frameBuffer->data()))
+            if (renderer->DownloadTextureToCPU(m_underConstructionFrame->frameTextureResource, m_underConstructionFrame->header.nWidth, m_underConstructionFrame->header.nHeight, (uint32_t)m_underConstructionFrame->frameBuffer->size(), m_underConstructionFrame->frameBuffer->data()))
             {
                 m_underConstructionFrame->bHasFrameBuffer = true;
             }

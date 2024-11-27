@@ -714,9 +714,9 @@ private:
 
 	std::wstring m_configFile;
 	CSimpleIniA m_iniData;
-	bool m_bConfigUpdated;
-	bool m_bRendererResetPending;
-	bool m_bCameraParamChangesPending;
+	bool m_bConfigUpdated = false;
+	bool m_bRendererResetPending = false;
+	bool m_bCameraParamChangesPending = false;
 
 	Config_Main m_configMain;
 	Config_Camera m_configCamera;

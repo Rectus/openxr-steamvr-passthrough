@@ -1021,24 +1021,33 @@ if (bIsActiveTab) { ImGui::PopStyleColor(1); bIsActiveTab = false; }
 			TextDescription("Source for passthough camera images.");
 			if (ImGui::RadioButton("SteamVR", mainConfig.CameraProvider == CameraProvider_OpenVR))
 			{
-				mainConfig.CameraProvider = CameraProvider_OpenVR;
-				m_configManager->SetRendererResetPending();
+				if (mainConfig.CameraProvider != CameraProvider_OpenVR)
+				{
+					mainConfig.CameraProvider = CameraProvider_OpenVR;
+					m_configManager->SetRendererResetPending();
+				}
 			}
 			TextDescription("Use the passthrough cameras on a compatible HMD. Uses the OpenVR Tracked Camera interface.");
 
 			if (ImGui::RadioButton("Webcam (Experimental)", mainConfig.CameraProvider == CameraProvider_OpenCV))
 			{
-				mainConfig.CameraProvider = CameraProvider_OpenCV;
-				mainConfig.ProjectionMode = Projection_Custom2D;
-				m_configManager->SetRendererResetPending();
+				if (mainConfig.CameraProvider != CameraProvider_OpenCV)
+				{
+					mainConfig.CameraProvider = CameraProvider_OpenCV;
+					mainConfig.ProjectionMode = Projection_Custom2D;
+					m_configManager->SetRendererResetPending();
+				}
 			}
 			TextDescription("Use a regular webcam from the OpenCV camera interface. Requires manual configuration.");
 
 			if (ImGui::RadioButton("Augmented (Experimental)", mainConfig.CameraProvider == CameraProvider_Augmented))
 			{
-				mainConfig.CameraProvider = CameraProvider_Augmented;
-				mainConfig.ProjectionMode = Projection_StereoReconstruction;
-				m_configManager->SetRendererResetPending();
+				if (mainConfig.CameraProvider != CameraProvider_Augmented)
+				{
+					mainConfig.CameraProvider = CameraProvider_Augmented;
+					mainConfig.ProjectionMode = Projection_StereoReconstruction;
+					m_configManager->SetRendererResetPending();
+				}
 			}
 			TextDescription("Use SteamVR for calculating depth, and a webcam for color data. Requires a HMD with a stereo camera and manual configuration.");
 

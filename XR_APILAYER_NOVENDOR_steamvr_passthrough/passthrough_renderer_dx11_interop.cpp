@@ -73,8 +73,38 @@ PassthroughRendererDX11Interop::PassthroughRendererDX11Interop(const XrGraphicsB
 
 PassthroughRendererDX11Interop::~PassthroughRendererDX11Interop()
 {
-	if (m_applicationRenderAPI == Vulkan && m_vulkanDevice)
+	if (m_rendererInitialized)
 	{
+		ResetRenderer();
+	}
+}
+
+void PassthroughRendererDX11Interop::ResetRenderer()
+{
+	std::unique_lock deleteLock(m_accessRendererMutex, std::chrono::milliseconds(50));
+
+	m_viewData[0].clear();
+	m_viewData[1].clear();
+	m_viewDepthData[0].clear();
+	m_viewDepthData[1].clear();
+	m_frameData.clear();
+
+	switch (m_applicationRenderAPI)
+	{
+	case DirectX12:
+	{
+
+		break;
+	}
+	case Vulkan:
+	{
+		// Wait for queue to complete before freeing objects.
+		if (m_vulkanRenderCompleteFence && vkGetFenceStatus(m_vulkanDevice, m_vulkanRenderCompleteFence) == VK_NOT_READY)
+		{
+			vkWaitForFences(m_vulkanDevice, 1, &m_vulkanRenderCompleteFence, true, 10000000);
+			std::this_thread::yield();
+		}
+
 		for (int i = 0; i < NUM_SWAPCHAINS; i++)
 		{
 			if (m_localRTMemLeft[i]) { vkFreeMemory(m_vulkanDevice, m_localRTMemLeft[i], nullptr); }
@@ -82,41 +112,89 @@ PassthroughRendererDX11Interop::~PassthroughRendererDX11Interop()
 			if (m_localDBMemLeft[i]) { vkFreeMemory(m_vulkanDevice, m_localDBMemLeft[i], nullptr); }
 			if (m_localDBMemRight[i]) { vkFreeMemory(m_vulkanDevice, m_localDBMemRight[i], nullptr); }
 
-			if (m_swapchainsLeft[i]) { vkDestroyImage(m_vulkanDevice, m_swapchainsLeft[i], nullptr); }
-			if (m_swapchainsRight[i]) { vkDestroyImage(m_vulkanDevice, m_swapchainsRight[i], nullptr); }
-			if (m_depthBuffersLeft[i]) { vkDestroyImage(m_vulkanDevice, m_depthBuffersLeft[i], nullptr); }
-			if (m_depthBuffersRight[i]) { vkDestroyImage(m_vulkanDevice, m_depthBuffersRight[i], nullptr); }
+			//if (m_swapchainsLeft[i]) { vkDestroyImage(m_vulkanDevice, m_swapchainsLeft[i], nullptr); }
+			//if (m_swapchainsRight[i]) { vkDestroyImage(m_vulkanDevice, m_swapchainsRight[i], nullptr); }
+			//if (m_depthBuffersLeft[i]) { vkDestroyImage(m_vulkanDevice, m_depthBuffersLeft[i], nullptr); }
+			//if (m_depthBuffersRight[i]) { vkDestroyImage(m_vulkanDevice, m_depthBuffersRight[i], nullptr); }
 
 			if (m_localRendertargetsLeft[i]) { vkDestroyImage(m_vulkanDevice, m_localRendertargetsLeft[i], nullptr); }
 			if (m_localRendertargetsRight[i]) { vkDestroyImage(m_vulkanDevice, m_localRendertargetsRight[i], nullptr); }
 			if (m_localDepthBuffersLeft[i]) { vkDestroyImage(m_vulkanDevice, m_localDepthBuffersLeft[i], nullptr); }
 			if (m_localDepthBuffersRight[i]) { vkDestroyImage(m_vulkanDevice, m_localDepthBuffersRight[i], nullptr); }
+
+			m_localRTMemLeft[i] = VK_NULL_HANDLE;
+			m_localRTMemRight[i] = VK_NULL_HANDLE;
+			m_localDBMemLeft[i] = VK_NULL_HANDLE;
+			m_localDBMemRight[i] = VK_NULL_HANDLE;
+			//m_swapchainsLeft[i] = VK_NULL_HANDLE;
+			//m_swapchainsRight[i] = VK_NULL_HANDLE;
+			//m_depthBuffersLeft[i] = VK_NULL_HANDLE;
+			//m_depthBuffersRight[i] = VK_NULL_HANDLE;
+			m_localRendertargetsLeft[i] = VK_NULL_HANDLE;
+			m_localRendertargetsRight[i] = VK_NULL_HANDLE;
+			m_localDepthBuffersLeft[i] = VK_NULL_HANDLE;
+			m_localDepthBuffersRight[i] = VK_NULL_HANDLE;
 		}
 
 		if (m_semaphoreFenceHandle) { CloseHandle(m_semaphoreFenceHandle); }
 		if (m_semaphore) { vkDestroySemaphore(m_vulkanDevice, m_semaphore, nullptr); }
+		if (m_vulkanRenderCompleteFence) { vkDestroyFence(m_vulkanDevice, m_vulkanRenderCompleteFence, nullptr); }
 
-		if (m_vulkanCommandPool) 
-		{ 
-			vkFreeCommandBuffers(m_vulkanDevice, m_vulkanCommandPool, NUM_SWAPCHAINS * 2, m_vulkanCommandBuffer); 
+		m_semaphoreFenceHandle = VK_NULL_HANDLE;
+		m_semaphore = VK_NULL_HANDLE;
+		m_vulkanRenderCompleteFence = VK_NULL_HANDLE;
+
+		if (m_vulkanCommandPool)
+		{
+			vkFreeCommandBuffers(m_vulkanDevice, m_vulkanCommandPool, NUM_SWAPCHAINS * 2, m_vulkanCommandBuffer);
 			vkDestroyCommandPool(m_vulkanDevice, m_vulkanCommandPool, nullptr);
+			m_vulkanCommandPool = VK_NULL_HANDLE;
 		}
 
-		if (m_vulkanDownloadDevice)
+		if (m_vulkanDownloadDevice) 
 		{
+			if (m_vulkanDownloadFence && vkGetFenceStatus(m_vulkanDownloadDevice, m_vulkanDownloadFence) == VK_NOT_READY)
+			{
+				vkWaitForFences(m_vulkanDownloadDevice, 1, &m_vulkanDownloadFence, true, 10000000);
+				std::this_thread::yield();
+			}
+
 			if (m_vulkanDownloadBufferMemory) { vkFreeMemory(m_vulkanDownloadDevice, m_vulkanDownloadBufferMemory, nullptr); }
 			if (m_vulkanDownloadBuffer) { vkDestroyBuffer(m_vulkanDownloadDevice, m_vulkanDownloadBuffer, nullptr); }
-			vkDestroyFence(m_vulkanDownloadDevice, m_vulkanDownloadFence, nullptr);
-			vkFreeCommandBuffers(m_vulkanDownloadDevice, m_vulkanDownloadCommandPool, 1, &m_vulkanDownloadCommandBuffer);
-			vkDestroyCommandPool(m_vulkanDownloadDevice, m_vulkanDownloadCommandPool, nullptr);
+			if (m_vulkanDownloadFence) { vkDestroyFence(m_vulkanDownloadDevice, m_vulkanDownloadFence, nullptr); }
+			if (m_vulkanDownloadCommandBuffer) { vkFreeCommandBuffers(m_vulkanDownloadDevice, m_vulkanDownloadCommandPool, 1, &m_vulkanDownloadCommandBuffer); }
+			if (m_vulkanDownloadCommandPool) { vkDestroyCommandPool(m_vulkanDownloadDevice, m_vulkanDownloadCommandPool, nullptr); }
 			vkDestroyDevice(m_vulkanDownloadDevice, nullptr);
+
+			m_vulkanDownloadBufferMemory = VK_NULL_HANDLE;
+			m_vulkanDownloadBuffer = VK_NULL_HANDLE;
+			m_vulkanDownloadFence = VK_NULL_HANDLE;
+			m_vulkanDownloadCommandBuffer = VK_NULL_HANDLE;
+			m_vulkanDownloadCommandPool = VK_NULL_HANDLE;
+			m_vulkanDownloadDevice = VK_NULL_HANDLE;
 		}
+
+		break;
+	}
+	case OpenGL:
+	{
+		break;
 	}
 
+	default:
+	{
+		break;
+	}
+	}
 }
 
 bool PassthroughRendererDX11Interop::InitRenderer()
 {
+	if (m_rendererInitialized)
+	{
+		ResetRenderer();
+	}
+	m_rendererInitialized = true;
 
 	switch (m_applicationRenderAPI)
 	{
@@ -265,17 +343,57 @@ bool PassthroughRendererDX11Interop::InitRenderer()
 			return false;
 		}
 
+		VkFenceCreateInfo fenceInfo = { VK_STRUCTURE_TYPE_FENCE_CREATE_INFO };
+
+		if (vkCreateFence(m_vulkanDevice, &fenceInfo, nullptr, &m_vulkanRenderCompleteFence) != VK_SUCCESS)
+		{
+			ErrorLog("vkCreateFence failure!\n");
+			return false;
+		}
+
 
 
 		{
+			uint32_t familyPropsCount = 0;
+
+			vkGetPhysicalDeviceQueueFamilyProperties(m_vulkanPhysDevice, &familyPropsCount, nullptr);
+
+			std::vector<VkQueueFamilyProperties> familyProps;
+			familyProps.resize(familyPropsCount);
+
+			vkGetPhysicalDeviceQueueFamilyProperties(m_vulkanPhysDevice, &familyPropsCount, familyProps.data());
+
+			bool bFoundQueue = false;
+
+			for (uint32_t i = 0; i < familyPropsCount; i++)
+			{
+				// Prioritize queues without graphics or compute
+				if (familyProps[i].queueFlags & VK_QUEUE_TRANSFER_BIT && (familyProps[i].queueFlags & (VK_QUEUE_GRAPHICS_BIT | VK_QUEUE_COMPUTE_BIT)) == 0)
+				{
+					bFoundQueue = true;
+					m_vulkanDownloadQueueFamilyIndex = i;
+					break;
+				}
+				else if (familyProps[i].queueFlags & VK_QUEUE_TRANSFER_BIT && (familyProps[i].queueFlags & VK_QUEUE_GRAPHICS_BIT) == 0)
+				{
+					bFoundQueue = true;
+					m_vulkanDownloadQueueFamilyIndex = i;
+				}
+				else if (!bFoundQueue && familyProps[i].queueFlags & VK_QUEUE_TRANSFER_BIT)
+				{
+					bFoundQueue = true;
+					m_vulkanDownloadQueueFamilyIndex = i;
+				}			 
+			}
+
 			float queuePriority = 0.0;
 
 			VkDeviceQueueCreateInfo queueInfo = { VK_STRUCTURE_TYPE_DEVICE_QUEUE_CREATE_INFO };
 			queueInfo.queueCount = 1;
-			queueInfo.queueFamilyIndex = 0;
+			queueInfo.queueFamilyIndex = m_vulkanDownloadQueueFamilyIndex;
 			queueInfo.pQueuePriorities = &queuePriority;
 
-			VkDeviceCreateInfo deviceInfo = {};
+			VkDeviceCreateInfo deviceInfo = { VK_STRUCTURE_TYPE_DEVICE_CREATE_INFO };
 			deviceInfo.queueCreateInfoCount = 1;
 			deviceInfo.pQueueCreateInfos = &queueInfo;
 
@@ -285,11 +403,11 @@ bool PassthroughRendererDX11Interop::InitRenderer()
 				return false;
 			}
 
-			vkGetDeviceQueue(m_vulkanDownloadDevice, 0, 0, &m_vulkanDownloadQueue);
+			vkGetDeviceQueue(m_vulkanDownloadDevice, m_vulkanDownloadQueueFamilyIndex, 0, &m_vulkanDownloadQueue);
 
 			VkCommandPoolCreateInfo poolInfo{ VK_STRUCTURE_TYPE_COMMAND_POOL_CREATE_INFO };
 			poolInfo.flags = VK_COMMAND_POOL_CREATE_RESET_COMMAND_BUFFER_BIT;
-			poolInfo.queueFamilyIndex = 0;
+			poolInfo.queueFamilyIndex = m_vulkanDownloadQueueFamilyIndex;
 
 			if (vkCreateCommandPool(m_vulkanDownloadDevice, &poolInfo, nullptr, &m_vulkanDownloadCommandPool) != VK_SUCCESS)
 			{
@@ -309,9 +427,9 @@ bool PassthroughRendererDX11Interop::InitRenderer()
 				return false;
 			}
 
-			VkFenceCreateInfo fenceInfo = { VK_STRUCTURE_TYPE_FENCE_CREATE_INFO };
+			VkFenceCreateInfo fenceInfo2 = { VK_STRUCTURE_TYPE_FENCE_CREATE_INFO };
 
-			if (vkCreateFence(m_vulkanDownloadDevice, &fenceInfo, nullptr, &m_vulkanDownloadFence) != VK_SUCCESS)
+			if (vkCreateFence(m_vulkanDownloadDevice, &fenceInfo2, nullptr, &m_vulkanDownloadFence) != VK_SUCCESS)
 			{
 				ErrorLog("vkCreateFence failure!\n");
 				return false;
@@ -584,7 +702,7 @@ struct ImageCopyData {
 };
 
 
-void VulkanCopyImages(VkCommandBuffer commandBuffer, std::vector<ImageCopyData>& dataVec, bool bCopyIn)
+void VulkanCopyImages(VkCommandBuffer commandBuffer, std::vector<ImageCopyData>& dataVec, bool bCopyIn, uint32_t queueFamilyIndex)
 {
 	std::vector<VkImageMemoryBarrier> preBarriers;
 
@@ -595,8 +713,8 @@ void VulkanCopyImages(VkCommandBuffer commandBuffer, std::vector<ImageCopyData>&
 			barrier.sType = VK_STRUCTURE_TYPE_IMAGE_MEMORY_BARRIER;
 			barrier.oldLayout = data.sourcePreLayout;
 			barrier.newLayout = VK_IMAGE_LAYOUT_TRANSFER_SRC_OPTIMAL;
-			barrier.srcQueueFamilyIndex = VK_QUEUE_FAMILY_IGNORED;
-			barrier.dstQueueFamilyIndex = VK_QUEUE_FAMILY_IGNORED;
+			barrier.srcQueueFamilyIndex = bCopyIn ? VK_QUEUE_FAMILY_IGNORED : VK_QUEUE_FAMILY_EXTERNAL;
+			barrier.dstQueueFamilyIndex = bCopyIn ? VK_QUEUE_FAMILY_IGNORED : queueFamilyIndex;
 			barrier.image = data.sourceImage;
 			barrier.subresourceRange.aspectMask = data.bIsDepth ? VK_IMAGE_ASPECT_DEPTH_BIT : VK_IMAGE_ASPECT_COLOR_BIT;
 			barrier.subresourceRange.baseMipLevel = 0;
@@ -675,8 +793,8 @@ void VulkanCopyImages(VkCommandBuffer commandBuffer, std::vector<ImageCopyData>&
 			barrier.sType = VK_STRUCTURE_TYPE_IMAGE_MEMORY_BARRIER;
 			barrier.oldLayout = VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL;
 			barrier.newLayout = data.destPostLayout;
-			barrier.srcQueueFamilyIndex = VK_QUEUE_FAMILY_IGNORED;
-			barrier.dstQueueFamilyIndex = VK_QUEUE_FAMILY_IGNORED;
+			barrier.srcQueueFamilyIndex = bCopyIn ? queueFamilyIndex : VK_QUEUE_FAMILY_IGNORED;
+			barrier.dstQueueFamilyIndex = bCopyIn ? VK_QUEUE_FAMILY_EXTERNAL : VK_QUEUE_FAMILY_IGNORED;
 			barrier.image = data.destImage;
 			barrier.subresourceRange.aspectMask = data.bIsDepth ? VK_IMAGE_ASPECT_DEPTH_BIT : VK_IMAGE_ASPECT_COLOR_BIT;
 			barrier.subresourceRange.baseMipLevel = 0;
@@ -738,6 +856,8 @@ void PassthroughRendererDX11Interop::RenderPassthroughFrame(const XrCompositionL
 		int frameIndex = leftSwapchainIndex;
 
 		{
+			vkResetFences(m_vulkanDevice, 1, &m_vulkanRenderCompleteFence);
+
 			VkCommandBuffer& commandBuffer = m_vulkanCommandBuffer[frameIndex];
 
 			VkCommandBufferBeginInfo beginInfo{ VK_STRUCTURE_TYPE_COMMAND_BUFFER_BEGIN_INFO };
@@ -788,7 +908,7 @@ void PassthroughRendererDX11Interop::RenderPassthroughFrame(const XrCompositionL
 				depthDataR.imageData = layer->views[1].subImage;
 			}
 
-			VulkanCopyImages(commandBuffer, copyData, true);
+			VulkanCopyImages(commandBuffer, copyData, true, m_vulkanQueueFamilyIndex);
 
 			vkEndCommandBuffer(commandBuffer);
 			
@@ -874,7 +994,7 @@ void PassthroughRendererDX11Interop::RenderPassthroughFrame(const XrCompositionL
 				depthDataR.imageData = layer->views[1].subImage;
 			}
 
-			VulkanCopyImages(commandBuffer2, copyData, false);
+			VulkanCopyImages(commandBuffer2, copyData, false, m_vulkanQueueFamilyIndex);
 
 			vkEndCommandBuffer(commandBuffer2);
 
@@ -891,7 +1011,7 @@ void PassthroughRendererDX11Interop::RenderPassthroughFrame(const XrCompositionL
 			VkPipelineStageFlags bits = VK_PIPELINE_STAGE_ALL_COMMANDS_BIT;
 			submitInfo2.pWaitDstStageMask = &bits;
 
-			vkQueueSubmit(m_vulkanQueue, 1, &submitInfo2, VK_NULL_HANDLE);
+			vkQueueSubmit(m_vulkanQueue, 1, &submitInfo2, m_vulkanRenderCompleteFence);
 		}
 
 		break;
@@ -912,12 +1032,16 @@ void PassthroughRendererDX11Interop::RenderPassthroughFrame(const XrCompositionL
 	
 }
 
+
+// Download external texture to buffer. VERY SLOW!
 bool PassthroughRendererDX11Interop::DownloadTextureToCPU(const void* textureSRV, const uint32_t width, const uint32_t height, const uint32_t bufferSize, uint8_t* buffer)
 {
 	if (m_applicationRenderAPI != Vulkan)
 	{
 		return false;
 	}
+
+	vkResetFences(m_vulkanDownloadDevice, 1, &m_vulkanDownloadFence);
 
 	ComPtr<IDXGIResource> dxgiRes;
 	ID3D11Resource* res;
@@ -947,7 +1071,6 @@ bool PassthroughRendererDX11Interop::DownloadTextureToCPU(const void* textureSRV
 		imageInfo.usage = VK_IMAGE_USAGE_TRANSFER_SRC_BIT;
 		imageInfo.sharingMode = VK_SHARING_MODE_EXCLUSIVE;
 		imageInfo.samples = VK_SAMPLE_COUNT_1_BIT;
-
 
 		if (vkCreateImage(m_vulkanDownloadDevice, &imageInfo, nullptr, &gpuTexture) != VK_SUCCESS)
 		{
@@ -1032,6 +1155,7 @@ bool PassthroughRendererDX11Interop::DownloadTextureToCPU(const void* textureSRV
 				{
 					ErrorLog("Download buffer vkAllocateMemory failure!\n");
 					vkDestroyBuffer(m_vulkanDownloadDevice, m_vulkanDownloadBuffer, nullptr);
+					m_vulkanDownloadBuffer = VK_NULL_HANDLE;
 					vkDestroyImage(m_vulkanDownloadDevice, gpuTexture, nullptr);
 					vkFreeMemory(m_vulkanDownloadDevice, gpuTextureMemory, nullptr);
 					return false;
@@ -1041,10 +1165,11 @@ bool PassthroughRendererDX11Interop::DownloadTextureToCPU(const void* textureSRV
 			}
 		}
 
-		if (!m_vulkanDownloadBuffer && !m_vulkanDownloadBufferMemory)
+		if (!m_vulkanDownloadBufferMemory)
 		{
 			ErrorLog("Download buffer failure!\n");
 			vkDestroyBuffer(m_vulkanDownloadDevice, m_vulkanDownloadBuffer, nullptr);
+			m_vulkanDownloadBuffer = VK_NULL_HANDLE;
 			vkDestroyImage(m_vulkanDownloadDevice, gpuTexture, nullptr);
 			vkFreeMemory(m_vulkanDownloadDevice, gpuTextureMemory, nullptr);
 			return false;
@@ -1061,8 +1186,8 @@ bool PassthroughRendererDX11Interop::DownloadTextureToCPU(const void* textureSRV
 	VkImageMemoryBarrier barrier = { VK_STRUCTURE_TYPE_IMAGE_MEMORY_BARRIER };
 	barrier.oldLayout = VK_IMAGE_LAYOUT_UNDEFINED;
 	barrier.newLayout = VK_IMAGE_LAYOUT_TRANSFER_SRC_OPTIMAL;
-	barrier.srcQueueFamilyIndex = VK_QUEUE_FAMILY_IGNORED;
-	barrier.dstQueueFamilyIndex = VK_QUEUE_FAMILY_IGNORED;
+	barrier.srcQueueFamilyIndex = VK_QUEUE_FAMILY_EXTERNAL;
+	barrier.dstQueueFamilyIndex = m_vulkanDownloadQueueFamilyIndex;
 	barrier.image = gpuTexture;
 	barrier.subresourceRange.aspectMask = VK_IMAGE_ASPECT_COLOR_BIT;
 	barrier.subresourceRange.baseMipLevel = 0;
@@ -1072,7 +1197,7 @@ bool PassthroughRendererDX11Interop::DownloadTextureToCPU(const void* textureSRV
 	barrier.srcAccessMask = 0;
 	barrier.dstAccessMask = VK_ACCESS_TRANSFER_READ_BIT;
 
-	vkCmdPipelineBarrier(m_vulkanDownloadCommandBuffer, VK_PIPELINE_STAGE_ALL_GRAPHICS_BIT, VK_PIPELINE_STAGE_TRANSFER_BIT, 0, 0, nullptr, 0, nullptr, 1, &barrier);
+	vkCmdPipelineBarrier(m_vulkanDownloadCommandBuffer, VK_PIPELINE_STAGE_ALL_COMMANDS_BIT, VK_PIPELINE_STAGE_TRANSFER_BIT, 0, 0, nullptr, 0, nullptr, 1, &barrier);
 
 	VkBufferImageCopy region{};
 	region.bufferOffset = 0;
@@ -1091,8 +1216,6 @@ bool PassthroughRendererDX11Interop::DownloadTextureToCPU(const void* textureSRV
 	VkSubmitInfo submitInfo2{ VK_STRUCTURE_TYPE_SUBMIT_INFO };
 	submitInfo2.commandBufferCount = 1;
 	submitInfo2.pCommandBuffers = &m_vulkanDownloadCommandBuffer;
-
-	vkResetFences(m_vulkanDownloadDevice, 1, &m_vulkanDownloadFence);
 
 	vkQueueSubmit(m_vulkanDownloadQueue, 1, &submitInfo2, m_vulkanDownloadFence);
 
