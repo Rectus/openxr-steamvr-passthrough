@@ -662,7 +662,7 @@ void CameraManagerOpenVR::ServeFrames()
                 continue;
             }
 
-            // Since SteamVR still crashes when using GetVideoStreamFrameBuffer under Vulkan, we manually download the image. This is very slow.
+            // Since SteamVR still crashes when using GetVideoStreamFrameBuffer under Vulkan, we manually download the image.
             if (renderer->DownloadTextureToCPU(m_underConstructionFrame->frameTextureResource, m_underConstructionFrame->header.nWidth, m_underConstructionFrame->header.nHeight, (uint32_t)m_underConstructionFrame->frameBuffer->size(), m_underConstructionFrame->frameBuffer->data()))
             {
                 m_underConstructionFrame->bHasFrameBuffer = true;

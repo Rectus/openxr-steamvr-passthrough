@@ -112,11 +112,6 @@ void PassthroughRendererDX11Interop::ResetRenderer()
 			if (m_localDBMemLeft[i]) { vkFreeMemory(m_vulkanDevice, m_localDBMemLeft[i], nullptr); }
 			if (m_localDBMemRight[i]) { vkFreeMemory(m_vulkanDevice, m_localDBMemRight[i], nullptr); }
 
-			//if (m_swapchainsLeft[i]) { vkDestroyImage(m_vulkanDevice, m_swapchainsLeft[i], nullptr); }
-			//if (m_swapchainsRight[i]) { vkDestroyImage(m_vulkanDevice, m_swapchainsRight[i], nullptr); }
-			//if (m_depthBuffersLeft[i]) { vkDestroyImage(m_vulkanDevice, m_depthBuffersLeft[i], nullptr); }
-			//if (m_depthBuffersRight[i]) { vkDestroyImage(m_vulkanDevice, m_depthBuffersRight[i], nullptr); }
-
 			if (m_localRendertargetsLeft[i]) { vkDestroyImage(m_vulkanDevice, m_localRendertargetsLeft[i], nullptr); }
 			if (m_localRendertargetsRight[i]) { vkDestroyImage(m_vulkanDevice, m_localRendertargetsRight[i], nullptr); }
 			if (m_localDepthBuffersLeft[i]) { vkDestroyImage(m_vulkanDevice, m_localDepthBuffersLeft[i], nullptr); }
@@ -126,10 +121,6 @@ void PassthroughRendererDX11Interop::ResetRenderer()
 			m_localRTMemRight[i] = VK_NULL_HANDLE;
 			m_localDBMemLeft[i] = VK_NULL_HANDLE;
 			m_localDBMemRight[i] = VK_NULL_HANDLE;
-			//m_swapchainsLeft[i] = VK_NULL_HANDLE;
-			//m_swapchainsRight[i] = VK_NULL_HANDLE;
-			//m_depthBuffersLeft[i] = VK_NULL_HANDLE;
-			//m_depthBuffersRight[i] = VK_NULL_HANDLE;
 			m_localRendertargetsLeft[i] = VK_NULL_HANDLE;
 			m_localRendertargetsRight[i] = VK_NULL_HANDLE;
 			m_localDepthBuffersLeft[i] = VK_NULL_HANDLE;
@@ -1033,7 +1024,6 @@ void PassthroughRendererDX11Interop::RenderPassthroughFrame(const XrCompositionL
 }
 
 
-// Download external texture to buffer. VERY SLOW!
 bool PassthroughRendererDX11Interop::DownloadTextureToCPU(const void* textureSRV, const uint32_t width, const uint32_t height, const uint32_t bufferSize, uint8_t* buffer)
 {
 	if (m_applicationRenderAPI != Vulkan)
@@ -1146,7 +1136,7 @@ bool PassthroughRendererDX11Interop::DownloadTextureToCPU(const void* textureSRV
 		for (uint32_t i = 0; i < memProps2.memoryTypeCount; i++)
 		{
 			if ((memReq2.memoryTypeBits & (1 << i))
-				&& (memProps2.memoryTypes[i].propertyFlags & (VK_MEMORY_PROPERTY_HOST_VISIBLE_BIT | VK_MEMORY_PROPERTY_HOST_COHERENT_BIT | VK_MEMORY_PROPERTY_HOST_CACHED_BIT)))
+				&& (memProps2.memoryTypes[i].propertyFlags & (VK_MEMORY_PROPERTY_HOST_CACHED_BIT)))
 			{
 				VkMemoryAllocateInfo allocInfo{ VK_STRUCTURE_TYPE_MEMORY_ALLOCATE_INFO };
 				allocInfo.allocationSize = memReq2.size;
