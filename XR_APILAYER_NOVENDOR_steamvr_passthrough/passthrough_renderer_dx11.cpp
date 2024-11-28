@@ -199,8 +199,8 @@ bool PassthroughRendererDX11::InitRenderer()
 
 	if (FAILED(m_d3dDevice->CreateVertexShader(g_PassthroughStereoTemporalShaderVS, sizeof(g_PassthroughStereoTemporalShaderVS), nullptr, &m_stereoTemporalVertexShader)))
 	{
-		ErrorLog("g_PassthroughStereoTemporalShaderVS creation failure, temporal effects disabled.\n");
-		m_bIsTemporalSupported = false;
+		ErrorLog("g_PassthroughStereoTemporalShaderVS creation failure, temporal disparity filter disabled.\n");
+		m_bIsVSUAVSupported = false;
 	}
 
 	if (FAILED(m_d3dDevice->CreatePixelShader(g_PassthroughShaderPS, sizeof(g_PassthroughShaderPS), nullptr, &m_pixelShader)))
@@ -211,8 +211,8 @@ bool PassthroughRendererDX11::InitRenderer()
 
 	if (FAILED(m_d3dDevice->CreatePixelShader(g_PassthroughTemporalShaderPS, sizeof(g_PassthroughTemporalShaderPS), nullptr, &m_pixelShaderTemporal)))
 	{
-		ErrorLog("g_PassthroughTemporalShaderPS creation failure, temporal effects disabled.\n");
-		m_bIsTemporalSupported = false;
+		ErrorLog("g_PassthroughTemporalShaderPS creation failure.\n");
+		return false;
 	}
 
 	if (FAILED(m_d3dDevice->CreatePixelShader(g_AlphaPrepassShaderPS, sizeof(g_AlphaPrepassShaderPS), nullptr, &m_prepassShader)))
@@ -1393,7 +1393,7 @@ void PassthroughRendererDX11::RenderPassthroughFrame(const XrCompositionLayerPro
 		m_renderContext->IASetIndexBuffer(m_gridMeshIndexBuffer.Get(), DXGI_FORMAT_R32_UINT, 0);
 		m_renderContext->IASetPrimitiveTopology(D3D11_PRIMITIVE_TOPOLOGY_TRIANGLELIST);
 		
-		if (stereoConf.StereoUseDisparityTemporalFiltering && m_bIsTemporalSupported)
+		if (stereoConf.StereoUseDisparityTemporalFiltering && m_bIsVSUAVSupported)
 		{
 			m_renderContext->VSSetShader(m_stereoTemporalVertexShader.Get(), nullptr, 0);
 		}
@@ -1603,7 +1603,7 @@ void PassthroughRendererDX11::RenderPassthroughView(const ERenderEye eye, const 
 			m_renderContext->UpdateSubresource(viewData.vsViewConstantBuffer.Get(), 0, nullptr, &vsViewBuffer, 0, 0);
 		}
 	}
-	else if(stereoConf.StereoUseDisparityTemporalFiltering && m_bIsTemporalSupported && depthFrame->bIsFirstRender)
+	else if(stereoConf.StereoUseDisparityTemporalFiltering && m_bIsVSUAVSupported && depthFrame->bIsFirstRender)
 	{
 		vsViewBuffer.bWriteDisparityFilter = true;
 		m_renderContext->UpdateSubresource(viewData.vsViewConstantBuffer.Get(), 0, nullptr, &vsViewBuffer, 0, 0);
@@ -1620,7 +1620,7 @@ void PassthroughRendererDX11::RenderPassthroughView(const ERenderEye eye, const 
 		m_renderContext->OMSetBlendState(m_blendStateDestAlpha.Get(), nullptr, UINT_MAX);
 	}
 
-	if (mainConf.EnableTemporalFiltering && m_bIsTemporalSupported)
+	if (mainConf.EnableTemporalFiltering)
 	{
 		ID3D11ShaderResourceView* psSRVs[3];
 		m_renderContext->PSGetShaderResources(0, 2, psSRVs);
@@ -1675,7 +1675,7 @@ void PassthroughRendererDX11::RenderPassthroughView(const ERenderEye eye, const 
 		m_renderContext->IASetVertexBuffers(0, 1, m_gridMeshVertexBuffer.GetAddressOf(), strides, offsets);
 		m_renderContext->IASetIndexBuffer(m_gridMeshIndexBuffer.Get(), DXGI_FORMAT_R32_UINT, 0);
 
-		if (stereoConf.StereoUseDisparityTemporalFiltering && m_bIsTemporalSupported)
+		if (stereoConf.StereoUseDisparityTemporalFiltering && m_bIsVSUAVSupported)
 		{
 			m_renderContext->VSSetShader(m_stereoTemporalVertexShader.Get(), nullptr, 0);
 		}
@@ -1747,12 +1747,14 @@ void PassthroughRendererDX11::RenderPassthroughView(const ERenderEye eye, const 
 
 		m_renderContext->OMSetDepthStencilState(GET_DEPTH_STENCIL_STATE(bCompositeDepth, frame->bHasReversedDepth, depthConfig.DepthWriteOutput && depthConfig.DepthReadFromApplication), 1);
 
+		m_renderContext->PSSetShader(m_pixelShader.Get(), nullptr, 0);
+
 		m_renderContext->DrawIndexed((UINT)m_cylinderMesh.triangles.size() * 3, 0, 0);
 
 
 		m_renderContext->IASetVertexBuffers(0, 1, m_gridMeshVertexBuffer.GetAddressOf(), strides, offsets);
 		m_renderContext->IASetIndexBuffer(m_gridMeshIndexBuffer.Get(), DXGI_FORMAT_R32_UINT, 0);
-		if (stereoConf.StereoUseDisparityTemporalFiltering && m_bIsTemporalSupported)
+		if (stereoConf.StereoUseDisparityTemporalFiltering && m_bIsVSUAVSupported)
 		{
 			m_renderContext->VSSetShader(m_stereoTemporalVertexShader.Get(), nullptr, 0);
 		}
@@ -1921,7 +1923,7 @@ void PassthroughRendererDX11::RenderMaskedPrepassView(const ERenderEye eye, cons
 	ID3D11ShaderResourceView* views[3] = { cameraFrameSRV, nullptr, tempTarget.SRV.Get() };
 
 	
-	psViewBuffer.bDoCutout = false;// !stereoConf.StereoCutoutEnabled;
+	psViewBuffer.bDoCutout = false;
 	m_renderContext->UpdateSubresource(viewData.psViewConstantBuffer.Get(), 0, nullptr, &psViewBuffer, 0, 0);
 
 	m_renderContext->OMSetRenderTargets(1, &rendertarget, depthStencil);
@@ -1940,7 +1942,7 @@ void PassthroughRendererDX11::RenderMaskedPrepassView(const ERenderEye eye, cons
 	{
 		m_renderContext->IASetPrimitiveTopology(D3D11_PRIMITIVE_TOPOLOGY_TRIANGLELIST);
 
-		if (stereoConf.StereoUseDisparityTemporalFiltering && m_bIsTemporalSupported )
+		if (stereoConf.StereoUseDisparityTemporalFiltering && m_bIsVSUAVSupported)
 		{
 			m_renderContext->VSSetShader(m_stereoTemporalVertexShader.Get(), nullptr, 0);
 		}
@@ -1973,73 +1975,3 @@ void* PassthroughRendererDX11::GetRenderDevice()
 {
 	return m_d3dDevice.Get();
 }
-
-
-//bool PassthroughRendererDX11::DownloadTextureToCPU(const void* textureSRV, const uint32_t width, const uint32_t height, const uint32_t bufferSize, uint8_t* buffer)
-//{
-//	if (textureSRV == nullptr)
-//	{
-//		ErrorLog("Null pointer passed to DownloadTextureToCPU!\n");
-//		return false;
-//	}
-//
-//	if(!m_downloadStagingTexture.Get() || m_downloadStagingTextureWidth != width || m_downloadStagingTextureHeight != height)
-//	{
-//		m_downloadStagingTextureWidth = width;
-//		m_downloadStagingTextureHeight = height;
-//		D3D11_TEXTURE2D_DESC textureDesc = {};
-//		textureDesc.MipLevels = 1;
-//		textureDesc.Format = DXGI_FORMAT_R8G8B8A8_UNORM_SRGB;
-//		textureDesc.Width = width;
-//		textureDesc.Height = height;
-//		textureDesc.ArraySize = 1;
-//		textureDesc.SampleDesc.Count = 1;
-//		textureDesc.SampleDesc.Quality = 0;
-//		textureDesc.BindFlags = 0;
-//		textureDesc.Usage = D3D11_USAGE_STAGING;
-//		textureDesc.CPUAccessFlags = D3D11_CPU_ACCESS_READ;
-//
-//		if (FAILED(m_d3dDevice->CreateTexture2D(&textureDesc, nullptr, &m_downloadStagingTexture)))
-//		{
-//			ErrorLog("Download staging texture CreateTexture2D error!\n");
-//			return false;
-//		}
-//	}
-//	ID3D11Resource* textureRes;
-//
-//	((ID3D11ShaderResourceView*)textureSRV)->GetResource(&textureRes);
-//
-//	m_deviceContext->CopyResource(m_downloadStagingTexture.Get(), textureRes);
-//
-//	D3D11_MAPPED_SUBRESOURCE resDesc = {};
-//	
-//	if (SUCCEEDED(m_deviceContext->Map(m_downloadStagingTexture.Get(), 0, D3D11_MAP_READ, 0, &resDesc)))
-//	{
-//		uint8_t* writePtr = buffer;
-//		uint8_t* readPtr = (uint8_t*)resDesc.pData;
-//		uint32_t amountWritten = 0;
-//		for (unsigned int i = 0; i < height; i++)
-//		{
-//			if (bufferSize >= (amountWritten += resDesc.RowPitch))
-//			{
-//				memcpy(writePtr, readPtr, width);
-//				writePtr += resDesc.RowPitch;
-//				readPtr += width;
-//			}
-//			else
-//			{
-//				ErrorLog("Texture download buffer overrun!\n");
-//				break;
-//			}
-//		}
-//
-//		m_deviceContext->Unmap(m_downloadStagingTexture.Get(), 0);
-//	}
-//	else
-//	{
-//		ErrorLog("Failed to read download texture!\n");
-//		return false;
-//	}
-//	
-//	return true; 
-//}

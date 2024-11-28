@@ -199,7 +199,7 @@ protected:
 	HMODULE m_dllModule;
 	std::shared_timed_mutex m_accessRendererMutex;
 
-	bool m_bIsTemporalSupported = true;
+	bool m_bIsVSUAVSupported = true;
 	bool m_bUsingDeferredContext = false;
 
 	int m_frameIndex = 0;

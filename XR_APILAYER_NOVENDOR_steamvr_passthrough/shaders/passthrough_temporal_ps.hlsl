@@ -280,7 +280,7 @@ float4 main(VS_OUTPUT input) : SV_TARGET
     rgbColor = lerp(rgbColor, filtered.xyz, clamp(factor * confidence, 0, invAlphaFactor));
     
     
-    g_cameraFilter[floor(newScreenUvs * outputFrameRes)] = float4(g_bIsFirstRenderOfCameraFrame ? rgbColor : filtered.xyz, input.projectionValidity > 0 ? depth : 1);
+    g_cameraFilter[floor(newScreenUvs * outputFrameRes)] = float4(g_bIsFirstRenderOfCameraFrame ? rgbColor : filtered.xyz, input.projectionValidity >= 0 ? depth : 1);
     
     
 	if (g_bDoColorAdjustment)

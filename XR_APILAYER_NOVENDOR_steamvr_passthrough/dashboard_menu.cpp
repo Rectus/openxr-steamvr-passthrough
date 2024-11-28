@@ -1962,7 +1962,9 @@ void DashboardMenu::HandleEvents()
 
 void DashboardMenu::SetupDX11()
 {
-	D3D11CreateDevice(NULL, D3D_DRIVER_TYPE_HARDWARE, NULL, 0, NULL, 0, D3D11_SDK_VERSION, &m_d3d11Device, NULL, &m_d3d11DeviceContext);
+	std::vector<D3D_FEATURE_LEVEL> featureLevels = { D3D_FEATURE_LEVEL_12_1, D3D_FEATURE_LEVEL_12_0, D3D_FEATURE_LEVEL_11_1 };
+
+	D3D11CreateDevice(NULL, D3D_DRIVER_TYPE_HARDWARE, NULL, 0, featureLevels.data(), (UINT)featureLevels.size(), D3D11_SDK_VERSION, &m_d3d11Device, NULL, &m_d3d11DeviceContext);
 
 	D3D11_TEXTURE2D_DESC textureDesc = {};
 	textureDesc.MipLevels = 1;

@@ -166,7 +166,6 @@ VS_OUTPUT main(float3 inPosition : POSITION, uint vertexID : SV_VertexID)
 	output.clipSpaceCoords = outCoords;
     
     float4 prevOutCoords = mul(g_prevWorldToCameraProjection, worldSpacePoint);
-    //output.prevClipSpaceCoords = prevOutCoords;
     
     float4 prevClipCoords = mul(g_prevWorldToHMDProjection, worldSpacePoint);
     output.prevClipSpaceCoords = prevClipCoords;
