@@ -492,6 +492,17 @@ if (bIsActiveTab) { ImGui::PopStyleColor(1); bIsActiveTab = false; }
 		if (ImGui::CollapsingHeader("Misc."))
 		{
 			ImGui::Checkbox("Show Descriptions", &mainConfig.ShowSettingDescriptions);
+
+			ImGui::Checkbox("Pause Passthrough When Idle", &mainConfig.PauseImageHandlingOnIdle);
+			TextDescription("Stops the camera passthrough stream from being processed when no passthough is being rendered.");
+
+			BeginSoftDisabled(!mainConfig.PauseImageHandlingOnIdle);
+			ImGui::Checkbox("Close Camera Stream On Pause", &mainConfig.CloseCameraStreamOnPause);
+			TextDescription("Closes the camera provider when idle. It may take several seconds to start again.");
+			ScrollableSlider("Idle Time (s)", &mainConfig.IdleTimeSeconds, 1.0f, 30.0f, "%.0f", 1.0f);
+			TextDescription("How long to wait before stopping the processing when idle.");
+			EndSoftDisabled(!mainConfig.PauseImageHandlingOnIdle);
+
 			ImGui::Checkbox("Use legacy DirectX 12 renderer", &mainConfig.UseLegacyD3D12Renderer);
 			TextDescription("Uses the old native DirectX 12 renderer for DirectX 12 applications. Not recommended since it is missing rendering features. Requires restart.");
 			ImGui::Checkbox("Use legacy Vulkan renderer", &mainConfig.UseLegacyVulkanRenderer);

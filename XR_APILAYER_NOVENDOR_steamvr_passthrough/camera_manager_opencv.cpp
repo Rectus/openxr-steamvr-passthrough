@@ -141,6 +141,7 @@ bool CameraManagerOpenCV::InitCamera()
     m_bCameraInitialized = true;
     m_bRunThread = true;
     m_lastFrameTimestamp = 0;
+    m_bIsPaused = false;
 
     if (!m_serveThread.joinable())
     {
@@ -382,6 +383,11 @@ void CameraManagerOpenCV::ServeFrames()
 
     while (m_bRunThread && m_videoCapture.isOpened())
     {
+        if (m_bIsPaused)
+        { 
+            std::this_thread::sleep_for(POSTFRAME_SLEEP_INTERVAL);
+            continue; 
+        }
 
         // Wait for the old frame struct to be available in case someone is still reading from it.
         std::unique_lock writeLock(m_underConstructionFrame->readWriteMutex);

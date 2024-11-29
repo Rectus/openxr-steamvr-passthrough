@@ -132,6 +132,7 @@ bool CameraManagerOpenVR::InitCamera()
 
     m_bCameraInitialized = true;
     m_bRunThread = true;
+    m_bIsPaused = false;
 
     if (!m_serveThread.joinable())
     {
@@ -147,6 +148,11 @@ void CameraManagerOpenVR::DeinitCamera()
     m_bCameraInitialized = false;
     m_bRunThread = false;
 
+    if (m_serveThread.joinable())
+    {
+        m_serveThread.join();
+    }
+
     vr::IVRTrackedCamera* trackedCamera = m_openVRManager->GetVRTrackedCamera();
 
     if (trackedCamera)
@@ -157,11 +163,6 @@ void CameraManagerOpenVR::DeinitCamera()
         {
             Log("ReleaseVideoStreamingService error %i\n", (int)error);
         }
-    }
-
-    if (m_serveThread.joinable())
-    {
-        m_serveThread.join();
     }
 }
 
@@ -540,6 +541,8 @@ void CameraManagerOpenVR::ServeFrames()
         std::this_thread::sleep_for(POSTFRAME_SLEEP_INTERVAL);
 
         if (!m_bRunThread) { return; }
+
+        if (m_bIsPaused) { continue; }
 
         // Wait for the old frame struct to be available in case someone is still reading from it.
         std::unique_lock writeLock(m_underConstructionFrame->readWriteMutex);

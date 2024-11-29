@@ -34,6 +34,7 @@ public:
 
 	virtual bool InitCamera() = 0;
 	virtual void DeinitCamera() = 0;
+	virtual void SetPaused(bool bIsPaused) = 0;
 
 	virtual void GetCameraDisplayStats(uint32_t& width, uint32_t& height, float& fps, std::string& API) const = 0;
 	virtual void GetDistortedFrameSize(uint32_t& width, uint32_t& height, uint32_t& bufferSize) const = 0;
@@ -58,6 +59,10 @@ public:
 
 	bool InitCamera();
 	void DeinitCamera();
+	void SetPaused(bool bIsPaused)
+	{
+		m_bIsPaused = bIsPaused;
+	}
 
 	void GetCameraDisplayStats(uint32_t& width, uint32_t& height, float& fps, std::string& API) const;
 	void GetDistortedFrameSize(uint32_t& width, uint32_t& height, uint32_t& bufferSize) const;
@@ -108,6 +113,7 @@ private:
 	std::thread m_serveThread;
 	std::atomic_bool m_bRunThread = true;
 	std::mutex m_serveMutex;
+	bool m_bIsPaused = false;
 
 	std::shared_ptr<CameraFrame> m_renderFrame;
 	std::shared_ptr<CameraFrame> m_servedFrame;
@@ -166,6 +172,10 @@ public:
 
 	bool InitCamera();
 	void DeinitCamera();
+	void SetPaused(bool bIsPaused)
+	{
+		m_bIsPaused = bIsPaused;
+	}
 
 	void GetCameraDisplayStats(uint32_t& width, uint32_t& height, float& fps, std::string& API) const;
 	void GetDistortedFrameSize(uint32_t& width, uint32_t& height, uint32_t& bufferSize) const;
@@ -192,6 +202,7 @@ private:
 
 	bool m_bIsAugmented = false;
 	bool m_bCameraInitialized = false;
+	bool m_bIsPaused = false;
 
 	cv::VideoCapture m_videoCapture;
 	uint32_t m_lastFrameTimestamp;

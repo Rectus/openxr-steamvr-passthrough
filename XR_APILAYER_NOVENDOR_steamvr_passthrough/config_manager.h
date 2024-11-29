@@ -94,6 +94,10 @@ struct Config_Main
 	bool UseLegacyD3D12Renderer = false;
 	bool UseLegacyVulkanRenderer = false;
 
+	bool PauseImageHandlingOnIdle = true;
+	float IdleTimeSeconds = 10.0f;
+	bool CloseCameraStreamOnPause = false;
+
 	EStereoPreset StereoPreset = StereoPreset_Medium;
 
 	// Transient settings not written to file
@@ -127,6 +131,10 @@ struct Config_Main
 		UseLegacyD3D12Renderer = ini.GetBoolValue(section, "UseLegacyD3D12Renderer", UseLegacyD3D12Renderer);
 		UseLegacyVulkanRenderer = ini.GetBoolValue(section, "UseLegacyVulkanRenderer", UseLegacyVulkanRenderer);
 
+		PauseImageHandlingOnIdle = ini.GetBoolValue(section, "PauseImageHandlingOnIdle", PauseImageHandlingOnIdle);
+		IdleTimeSeconds = (float)ini.GetDoubleValue(section, "IdleTimeSeconds", IdleTimeSeconds);
+		CloseCameraStreamOnPause = ini.GetBoolValue(section, "CloseCameraStreamOnPause", CloseCameraStreamOnPause);
+
 		StereoPreset = (EStereoPreset)ini.GetLongValue(section, "StereoPreset", StereoPreset);
 	}
 
@@ -156,6 +164,10 @@ struct Config_Main
 		ini.SetBoolValue(section, "ShowSettingDescriptions", ShowSettingDescriptions);
 		ini.SetBoolValue(section, "UseLegacyD3D12Renderer", UseLegacyD3D12Renderer);
 		ini.SetBoolValue(section, "UseLegacyVulkanRenderer", UseLegacyVulkanRenderer);
+
+		ini.SetBoolValue(section, "PauseImageHandlingOnIdle", PauseImageHandlingOnIdle);
+		ini.SetDoubleValue(section, "IdleTimeSeconds", IdleTimeSeconds);
+		ini.SetBoolValue(section, "CloseCameraStreamOnPause", CloseCameraStreamOnPause);
 
 		ini.SetLongValue(section, "StereoPreset", StereoPreset);
 	}

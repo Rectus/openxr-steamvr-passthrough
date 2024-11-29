@@ -483,15 +483,22 @@ namespace
 
 			if (!m_Renderer.get())
 			{
+				ErrorLog("Trying to initialize processing pipeline without renderer!\n");
 				return false;
 			}
 
-			if (m_configManager->GetConfig_Main().CameraProvider == CameraProvider_OpenVR)
+			Config_Main& mainConfig = m_configManager->GetConfig_Main();
+
+			m_bIsPaused = false;
+			m_lastRenderTime = StartPerfTimer();
+
+			if (mainConfig.CameraProvider == CameraProvider_OpenVR)
 			{
 				m_cameraManager = std::make_shared<CameraManagerOpenVR>(m_Renderer, m_renderAPI, m_appRenderAPI, m_configManager, m_openVRManager);
 
 				if (!m_cameraManager->InitCamera())
 				{
+					ErrorLog("Failed to initialize camera!\n");
 					return false;
 				}
 				MenuDisplayValues& vals = m_dashboardMenu->GetDisplayValues();
@@ -500,13 +507,14 @@ namespace
 				m_cameraManager->GetDistortedFrameSize(cameraTextureWidth, cameraTextureHeight, cameraFrameBufferSize);
 				m_cameraManager->GetUndistortedFrameSize(cameraUndistortedTextureWidth, cameraUndistortedTextureHeight, cameraUndistortedFrameBufferSize);
 			}
-			else if (m_configManager->GetConfig_Main().CameraProvider == CameraProvider_Augmented)
+			else if (mainConfig.CameraProvider == CameraProvider_Augmented)
 			{
 				m_cameraManager = std::make_shared<CameraManagerOpenVR>(m_Renderer, m_renderAPI, m_appRenderAPI, m_configManager, m_openVRManager);
 				m_augmentedCameraManager = std::make_shared<CameraManagerOpenCV>(m_Renderer, m_renderAPI, m_appRenderAPI, m_configManager, m_openVRManager, true);
 
 				if (!m_cameraManager->InitCamera() || !m_augmentedCameraManager->InitCamera())
 				{
+					ErrorLog("Failed to initialize camera!\n");
 					return false;
 				}
 				MenuDisplayValues& vals = m_dashboardMenu->GetDisplayValues();
@@ -521,6 +529,7 @@ namespace
 
 				if (!m_cameraManager->InitCamera())
 				{
+					ErrorLog("Failed to initialize camera!\n");
 					return false;
 				}
 				MenuDisplayValues& vals = m_dashboardMenu->GetDisplayValues();
@@ -530,10 +539,12 @@ namespace
 				m_cameraManager->GetUndistortedFrameSize(cameraUndistortedTextureWidth, cameraUndistortedTextureHeight, cameraUndistortedFrameBufferSize);
 			}
 
+			m_bCamerasInitialized = true;
 
 			m_Renderer->SetFrameSize(cameraTextureWidth, cameraTextureHeight, cameraFrameBufferSize, cameraUndistortedTextureWidth, cameraUndistortedTextureHeight, cameraUndistortedFrameBufferSize);
 			if (!m_Renderer->InitRenderer())
 			{
+				ErrorLog("Failed to initialize renderer!\n");
 				return false;
 			}
 
@@ -600,7 +611,7 @@ namespace
 					{
 						m_bUsePassthrough = false;
 						m_currentSession = XR_NULL_HANDLE;
-						ErrorLog("Failed to initialize renderer\n");
+						ErrorLog("Failed to initialize rendering system!\n");
 					}
 				}
 
@@ -1285,6 +1296,8 @@ namespace
 				return OpenXrApi::xrEndFrame(session, &modifiedFrameEndInfo);
 			}
 
+			Config_Main& mainConfig = m_configManager->GetConfig_Main();
+
 			bool bResetPending = false;
 
 			if (m_Renderer.get() &&m_configManager->CheckResetRendererResetPending())
@@ -1310,14 +1323,44 @@ namespace
 
 			m_bBeginframeCalled = false;
 
+			bool bDidRender = false;
 			if (m_bUsePassthrough && !bResetPending && !bInvalidEndFrame)
 			{
 				for (uint32_t i = 0; i < frameEndInfo->layerCount; i++)
 				{
 					if (frameEndInfo->layers[i] != nullptr && frameEndInfo->layers[i]->type == XR_TYPE_COMPOSITION_LAYER_PROJECTION && IsBlendModeEnabled(frameEndInfo->environmentBlendMode, (const XrCompositionLayerProjection*)frameEndInfo->layers[i]))
 					{
+						if (m_bIsPaused)
+						{
+							if (mainConfig.CameraProvider == CameraProvider_Augmented)
+							{
+								m_augmentedCameraManager->SetPaused(false);
+							}
+							m_cameraManager->SetPaused(false);
+
+							if (!m_bCamerasInitialized)
+							{
+								if (mainConfig.CameraProvider == CameraProvider_Augmented)
+								{
+									if ((!m_cameraManager->InitCamera() || !m_augmentedCameraManager->InitCamera()))
+									{
+										ErrorLog("Failed to reinitialize camera!\n");
+										break;
+									}
+								}
+								else if(!m_cameraManager->InitCamera())
+								{
+									ErrorLog("Failed to reinitialize camera!\n");
+									break;
+								}
+								m_bCamerasInitialized = true;
+							}
+							m_bIsPaused = false;
+						}
+
 						m_dashboardMenu->GetDisplayValues().bCorePassthroughActive = true;
 						RenderPassthroughOnAppLayer(frameEndInfo, i);
+						bDidRender = true;
 
 						break;
 					}
@@ -1349,6 +1392,35 @@ namespace
 			if (bResetPending)
 			{
 				ResetRenderer();
+			}
+			else if (bDidRender)
+			{
+				m_lastRenderTime = StartPerfTimer();
+			}
+			else
+			{
+				float time = EndPerfTimer(m_lastRenderTime);
+				if (!m_bIsPaused && mainConfig.PauseImageHandlingOnIdle && time > mainConfig.IdleTimeSeconds * 1000.0f)
+				{
+					m_bIsPaused = true;
+
+					if (mainConfig.CameraProvider == CameraProvider_Augmented)
+					{
+						m_augmentedCameraManager->SetPaused(true);
+					}
+					m_cameraManager->SetPaused(true);
+
+					if (mainConfig.CloseCameraStreamOnPause)
+					{
+						if (mainConfig.CameraProvider == CameraProvider_Augmented)
+						{
+							m_augmentedCameraManager->DeinitCamera();
+						}
+						m_cameraManager->DeinitCamera();
+
+						m_bCamerasInitialized = false;
+					}
+				}
 			}
 
 			return result;
@@ -1425,6 +1497,10 @@ namespace
 		std::deque<float> m_frameToRenderTimes;
 		std::deque<float> m_frameToPhotonTimes;
 		std::deque<float> m_passthroughRenderTimes;
+
+		LARGE_INTEGER m_lastRenderTime;
+		bool m_bIsPaused = false;
+		bool m_bCamerasInitialized = false;
 
 		ERenderAPI m_renderAPI = DirectX11;
 		ERenderAPI m_appRenderAPI = DirectX11;
