@@ -1,9 +1,9 @@
 OpenXR SteamVR Passthrough API Layer
 ---
 
-This OpenXR API layer adds camera passthrough support to the SteamVR OpenXR runtime. It allows OpenXR applications that use the OpenXR passthrough feature to enable it when using the SteamVR runtime. 
+This OpenXR API layer adds camera passthrough (Mixed Reality) support to the SteamVR OpenXR runtime. It allows OpenXR applications that use the OpenXR passthrough feature to enable it when using the SteamVR runtime. 
 
-The SteamVR runtime itself does not currently support any OpenXR passthrough features, but provides access to the camera video feeds and projection data through the proprietary OpenVR interface. This layer acts as a compositor in-between the application and runtime, retrieves the passthrough data from OpenVR, and renders it on the frames submitted by the application before passing them on to the runtime.
+The SteamVR runtime itself does not currently support any OpenXR passthrough features, but provides access to the camera video feeds and projection data through the proprietary OpenVR interface. This layer acts as a compositor in-between the application and runtime, retrieves the passthrough data from OpenVR (or a USB webcam), and renders it on the frames submitted by the application before passing them on to the runtime.
 
 Please report any issues! Any comments and suggestions are also appreciated.
 
@@ -39,8 +39,9 @@ Using the 3D stereo mode may induce heavy flickering on the display. Exercise ca
 - The depth reconstruction from the 3D Room View is not supported. It is not currently accessible to developers. A custom depth reconstruction is used instead.
 - The passthrough view has higher latency than the SteamVR compositor.
 - OpenGL applications are not currently supported.
-- The 3D stereo reconstruction mode is not supported with Vulkan.
+- The Vulkan renderer interop does not support the the old XR_KHR_vulkan_enable extension.
 - Depth blending requires the application to submit depth buffers using the `XR_KHR_composition_layer_depth` extension, which only a few do.
+- USB webcam frames can not be accurately timed. This will cause hitching in the image, especially if the frame rate jitters.
 
 ### Supported Headsets ###
 
