@@ -57,13 +57,11 @@ private:
 
 	inline bool CheckRuntimeIntialized()
 	{
+		if (!m_bRuntimeInitialized)
 		{
-			std::lock_guard<std::mutex> lock(m_runtimeMutex);
-			if (!m_bRuntimeInitialized)
-			{
-				return InitRuntime();
-			}
+			return InitRuntime();
 		}
+
 		return true;
 	}
 

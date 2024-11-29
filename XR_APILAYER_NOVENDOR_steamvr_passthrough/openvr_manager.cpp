@@ -20,12 +20,19 @@ OpenVRManager::~OpenVRManager()
     std::lock_guard<std::mutex> lock(m_runtimeMutex);
     if (m_bRuntimeInitialized)
     {
+        m_vrSystem = nullptr;
+        m_vrCompositor = nullptr;
+        m_vrTrackedCamera = nullptr;
+        m_vrOverlay = nullptr;
+        m_vrRenderModels = nullptr;
         vr::VR_Shutdown();
     }
 }
 
 bool OpenVRManager::InitRuntime()
 {
+    std::lock_guard<std::mutex> lock(m_runtimeMutex);
+
     if (m_bRuntimeInitialized) { return true; }
 
     if (!vr::VR_IsRuntimeInstalled())

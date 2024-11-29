@@ -58,7 +58,18 @@ namespace
 
 		OpenXrLayer() = default;
 
-		~OpenXrLayer() = default;
+		~OpenXrLayer()
+		{
+			// Destroy renderer first so it can block on any outstanding rendering commands.
+
+			m_Renderer.reset();
+			m_depthReconstruction.reset();
+			m_augmentedDepthReconstruction.reset();
+			m_cameraManager.reset();
+			m_augmentedCameraManager.reset();
+			m_dashboardMenu.reset();
+			m_openVRManager.reset();
+		}
 
 		XrResult xrCreateInstance(const XrInstanceCreateInfo* createInfo) override
 		{
@@ -464,18 +475,11 @@ namespace
 			uint32_t cameraUndistortedTextureWidth;
 			uint32_t cameraUndistortedTextureHeight;
 			uint32_t cameraUndistortedFrameBufferSize;
-
-			if (m_cameraManager.get())
-			{
-				m_cameraManager->DeinitCamera();
-				m_cameraManager.reset();
-			}
-
-			if (m_augmentedCameraManager.get())
-			{
-				m_augmentedCameraManager->DeinitCamera();
-				m_augmentedCameraManager.reset();
-			}
+			
+			m_depthReconstruction.reset();
+			m_augmentedDepthReconstruction.reset();
+			m_cameraManager.reset();
+			m_augmentedCameraManager.reset();
 
 			if (!m_Renderer.get())
 			{
@@ -589,14 +593,13 @@ namespace
 					if (SetupRenderer(instance, createInfo, session))
 					{
 						Log("Passthrough API layer enabled for session\n");
-						m_bPassthroughAvailable = true;
 						m_bUsePassthrough = m_configManager->GetConfig_Main().EnablePassthrough;
 						m_dashboardMenu->GetDisplayValues().currentApplication = GetApplicationName();
 					}
 					else
 					{
-						m_bPassthroughAvailable = false;
 						m_bUsePassthrough = false;
+						m_currentSession = XR_NULL_HANDLE;
 						ErrorLog("Failed to initialize renderer\n");
 					}
 				}
@@ -615,18 +618,14 @@ namespace
 			if (isCurrentSession(session))
 			{
 				Log("Passthrough session ending...\n");
-				m_Renderer.reset();
-
-				if (m_cameraManager.get())
-				{
-					m_cameraManager->DeinitCamera();
-				}
-				if (m_augmentedCameraManager.get())
-				{
-					m_augmentedCameraManager->DeinitCamera();
-				}
+				
+				m_depthReconstruction.reset();
+				m_augmentedDepthReconstruction.reset();
 				m_cameraManager.reset();
 				m_augmentedCameraManager.reset();
+
+				m_Renderer.reset();
+
 				m_currentSession = XR_NULL_HANDLE;
 				m_currentInstance = XR_NULL_HANDLE;
 
@@ -749,6 +748,11 @@ namespace
 
 		XrResult xrCreateReferenceSpace(XrSession session, const XrReferenceSpaceCreateInfo* createInfo, XrSpace* space) 
 		{
+			if (!isCurrentSession(session))
+			{
+				return OpenXrApi::xrCreateReferenceSpace(session, createInfo, space);
+			}
+
 			XrResult result = OpenXrApi::xrCreateReferenceSpace(session, createInfo, space);
 			if (XR_SUCCEEDED(result))
 			{
@@ -769,14 +773,20 @@ namespace
 
 		XrResult xrCreateSwapchain(XrSession session, const XrSwapchainCreateInfo* createInfo, XrSwapchain* swapchain)
 		{
-			XrSwapchainCreateInfo newCreateInfo = *createInfo;
-			if (m_bPassthroughAvailable && m_Renderer.get())
+			if (!isCurrentSession(session))
 			{
-				newCreateInfo.usageFlags |= (XR_SWAPCHAIN_USAGE_TRANSFER_SRC_BIT | XR_SWAPCHAIN_USAGE_TRANSFER_DST_BIT | XR_SWAPCHAIN_USAGE_MUTABLE_FORMAT_BIT);
+				return OpenXrApi::xrCreateSwapchain(session, createInfo, swapchain);
+			}
+
+			XrSwapchainCreateInfo newCreateInfo = *createInfo;
+			
+			if (m_appRenderAPI == Vulkan && m_renderAPI == DirectX11)
+			{
+				newCreateInfo.usageFlags |= (XR_SWAPCHAIN_USAGE_TRANSFER_SRC_BIT | XR_SWAPCHAIN_USAGE_TRANSFER_DST_BIT);
 			}
 
 			XrResult result = OpenXrApi::xrCreateSwapchain(session, &newCreateInfo, swapchain);
-			if (XR_SUCCEEDED(result) && m_bPassthroughAvailable)
+			if (XR_SUCCEEDED(result))
 			{
 				m_swapchainProperties[*swapchain] = *createInfo;
 			}
@@ -786,13 +796,18 @@ namespace
 
 		XrResult xrDestroySwapchain(XrSwapchain swapchain)
 		{
+			m_acquiredSwapchains.erase(swapchain);
+			m_waitedSwapchains.erase(swapchain);
+			m_heldSwapchains.erase(swapchain);
+			m_swapchainProperties.erase(swapchain);
+
 			return OpenXrApi::xrDestroySwapchain(swapchain);
 		}
 
 
 		XrResult xrAcquireSwapchainImage(XrSwapchain swapchain, const XrSwapchainImageAcquireInfo* acquireInfo, uint32_t* index)
 		{
-			if (!m_bPassthroughAvailable || !m_bUsePassthrough)
+			if (!m_swapchainProperties.contains(swapchain))
 			{
 				return OpenXrApi::xrAcquireSwapchainImage(swapchain, acquireInfo, index);
 			}
@@ -824,7 +839,6 @@ namespace
 				}
 
 				m_acquiredSwapchains[swapchain].push(*index);
-				//Log("Acquired: %i, %i\n", swapchain, *index);
 			}
 			else
 			{
@@ -837,7 +851,7 @@ namespace
 
 		XrResult xrWaitSwapchainImage(XrSwapchain swapchain, const XrSwapchainImageWaitInfo* waitInfo)
 		{
-			if (!m_bPassthroughAvailable || !m_bUsePassthrough)
+			if (!m_swapchainProperties.contains(swapchain))
 			{
 				return OpenXrApi::xrWaitSwapchainImage(swapchain, waitInfo);
 			}
@@ -870,7 +884,7 @@ namespace
 
 		XrResult xrReleaseSwapchainImage(XrSwapchain swapchain, const XrSwapchainImageReleaseInfo* releaseInfo)
 		{
-			if (!m_bPassthroughAvailable || !m_bUsePassthrough)
+			if (!m_swapchainProperties.contains(swapchain))
 			{
 				return OpenXrApi::xrReleaseSwapchainImage(swapchain, releaseInfo);
 			}
@@ -879,8 +893,8 @@ namespace
 			auto acq = m_acquiredSwapchains.find(swapchain);
 			if (acq != m_acquiredSwapchains.end() && !acq->second.empty())
 			{
-				// If the swapchain is being released without being waited on, we invalidate and let the runtime deal with it.
-				if (m_waitedSwapchains.find(swapchain) != m_waitedSwapchains.end() && !m_waitedSwapchains[swapchain])
+				// If passthrough is disabled, or the swapchain is being released without being waited on, we invalidate and let the runtime deal with it.
+				if (!m_bUsePassthrough || m_waitedSwapchains.find(swapchain) != m_waitedSwapchains.end() && !m_waitedSwapchains[swapchain])
 				{
 					acq->second.pop();
 
@@ -888,7 +902,6 @@ namespace
 				}
 				else
 				{
-					//Log("Held: %i, %i\n", swapchain, It->second);
 					m_waitedSwapchains[swapchain] = false;
 					m_heldSwapchains[swapchain].push(acq->second.front());
 					acq->second.pop();
@@ -906,9 +919,16 @@ namespace
 
 		XrResult xrBeginFrame(XrSession session, const XrFrameBeginInfo* frameBeginInfo)
 		{
-			m_bUsePassthrough = isCurrentSession(session) && m_bPassthroughAvailable && m_configManager->GetConfig_Main().EnablePassthrough;
+			m_bUsePassthrough = isCurrentSession(session) && m_configManager->GetConfig_Main().EnablePassthrough;
 
-			return OpenXrApi::xrBeginFrame(session, frameBeginInfo);
+			XrResult result = OpenXrApi::xrBeginFrame(session, frameBeginInfo);
+
+			if (isCurrentSession(session) && result == XR_SUCCESS)
+			{
+				m_bBeginframeCalled = true;
+			}
+
+			return result;
 		}
 
 
@@ -1258,7 +1278,11 @@ namespace
 		{
 			if (!isCurrentSession(session))
 			{
-				return OpenXrApi::xrEndFrame(session, frameEndInfo);
+				// Strip out blend mode even when we aren't handling the session.
+				XrFrameEndInfo modifiedFrameEndInfo = *frameEndInfo;
+				modifiedFrameEndInfo.environmentBlendMode = XR_ENVIRONMENT_BLEND_MODE_OPAQUE;
+
+				return OpenXrApi::xrEndFrame(session, &modifiedFrameEndInfo);
 			}
 
 			bool bResetPending = false;
@@ -1277,39 +1301,45 @@ namespace
 				m_dashboardMenu->GetDisplayValues().bCorePassthroughActive = false;
 			}
 
-			if (m_bUsePassthrough)
+			bool bInvalidEndFrame = false;
+
+			if (frameEndInfo->displayTime == 0 || !m_bBeginframeCalled)
 			{
-				if (!bResetPending)
-				{
-					for (uint32_t i = 0; i < frameEndInfo->layerCount; i++)
-					{
-						if (frameEndInfo->layers[i] != nullptr && frameEndInfo->layers[i]->type == XR_TYPE_COMPOSITION_LAYER_PROJECTION && IsBlendModeEnabled(frameEndInfo->environmentBlendMode, (const XrCompositionLayerProjection*)frameEndInfo->layers[i]))
-						{
-							m_dashboardMenu->GetDisplayValues().bCorePassthroughActive = true;
-							RenderPassthroughOnAppLayer(frameEndInfo, i);
-
-							break;
-						}
-					}
-				}
-
-				for (auto& held : m_heldSwapchains)
-				{
-					while (!held.second.empty())
-					{
-						held.second.pop();
-						m_waitedSwapchains[held.first] = false;
-						result = OpenXrApi::xrReleaseSwapchainImage(held.first, nullptr);
-						if (XR_FAILED(result))
-						{
-							ErrorLog("Error in xrReleaseSwapchainImage: %i\n", result);
-						}
-						//Log("Released: %i, %i\n", held.first, held.second);
-					}
-				}
-
-				m_heldSwapchains.clear();
+				bInvalidEndFrame = true;
 			}
+
+			m_bBeginframeCalled = false;
+
+			if (m_bUsePassthrough && !bResetPending && !bInvalidEndFrame)
+			{
+				for (uint32_t i = 0; i < frameEndInfo->layerCount; i++)
+				{
+					if (frameEndInfo->layers[i] != nullptr && frameEndInfo->layers[i]->type == XR_TYPE_COMPOSITION_LAYER_PROJECTION && IsBlendModeEnabled(frameEndInfo->environmentBlendMode, (const XrCompositionLayerProjection*)frameEndInfo->layers[i]))
+					{
+						m_dashboardMenu->GetDisplayValues().bCorePassthroughActive = true;
+						RenderPassthroughOnAppLayer(frameEndInfo, i);
+
+						break;
+					}
+				}
+			}
+
+			for (auto& held : m_heldSwapchains)
+			{
+				while (!held.second.empty())
+				{
+					held.second.pop();
+					m_waitedSwapchains[held.first] = false;
+					result = OpenXrApi::xrReleaseSwapchainImage(held.first, nullptr);
+					if (XR_FAILED(result))
+					{
+						ErrorLog("Error in xrReleaseSwapchainImage: %i\n", result);
+					}
+				}
+			}
+
+			m_heldSwapchains.clear();
+
 
 			XrFrameEndInfo modifiedFrameEndInfo = *frameEndInfo;
 			modifiedFrameEndInfo.environmentBlendMode = XR_ENVIRONMENT_BLEND_MODE_OPAQUE;
@@ -1372,13 +1402,13 @@ namespace
 		std::shared_ptr<DepthReconstruction> m_augmentedDepthReconstruction;
 
 		bool m_bSuccessfullyLoaded = false;
-		bool m_bPassthroughAvailable = false;
 		bool m_bUsePassthrough = false;
 		bool m_bVarjoDepthExtensionEnabled = false;
 		bool m_bVarjoDepthEnabled = false;
 		bool m_bVarjoCompositionExtensionEnabled = false;
 		bool m_bEnableVulkan2Extension = false;
 		bool m_bDepthSupportedByRenderer = false;
+		bool m_bBeginframeCalled = false;
 
 		XrSwapchain m_swapChainLeft{XR_NULL_HANDLE};
 		XrSwapchain m_swapChainRight{XR_NULL_HANDLE};
