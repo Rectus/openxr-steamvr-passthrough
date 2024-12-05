@@ -14,8 +14,6 @@ void main(uint3 pos : SV_DispatchThreadID)
 {
     float2 dispConf = g_disparityTexture.Load(pos.xy);
     
-    float minDispMul = (pos.x >= g_disparityFrameWidth) ? -1.0 : 1.0;
-    
     // Filter large invalid disparites from the right edge of the image.
     int pixelsFromRightEdge = (pos.x > g_disparityFrameWidth) ? g_disparityFrameWidth * 2 - pos.x : g_disparityFrameWidth - pos.x;
     float maxDisp = lerp(g_minDisparity, g_maxDisparity, min(1, pixelsFromRightEdge / ((g_maxDisparity - g_minDisparity) * 2048.0)));
@@ -26,32 +24,30 @@ void main(uint3 pos : SV_DispatchThreadID)
     }
  
     // Sample neighbors and temporarily store furthest disparity in the confidence map as a negative value.
-    if (dispConf.y <= 0.0 && (dispConf.x * minDispMul <= g_minDisparity || dispConf.x * minDispMul >= maxDisp))
+    if (dispConf.y <= 0.0 && (dispConf.x <= g_minDisparity || dispConf.x >= maxDisp))
     {
         float2 dispConfU = g_disparityTexture.Load(pos.xy + uint2(0, -1));
         float2 dispConfD = g_disparityTexture.Load(pos.xy + uint2(0, 1));
         float2 dispConfL = g_disparityTexture.Load(pos.xy + uint2(-1, 0));
         float2 dispConfR = g_disparityTexture.Load(pos.xy + uint2(1, 0));
         
-        float fillMul = (pos.x >= g_disparityFrameWidth) ? 1.0 : -1.0;
-        
         if (dispConf.y == 0.0)
         {      
-            if (dispConfU.x * minDispMul > g_minDisparity && dispConfU.x * minDispMul < maxDisp)
+            if (dispConfU.x > g_minDisparity && dispConfU.x < maxDisp)
             {
-                dispConf.y = dispConfU.x * fillMul;
+                dispConf.y = dispConfU.x * -1.0;
             }
-            else if (dispConfD.x * minDispMul > g_minDisparity && dispConfD.x * minDispMul < maxDisp)
+            else if (dispConfD.x > g_minDisparity && dispConfD.x < maxDisp)
             {
-                dispConf.y = dispConfD.x * fillMul;
+                dispConf.y = dispConfD.x * -1.0;
             }
-            else if (dispConfL.x * minDispMul > g_minDisparity && dispConfL.x * minDispMul < maxDisp)
+            else if (dispConfL.x > g_minDisparity && dispConfL.x < maxDisp)
             {
-                dispConf.y = dispConfL.x * fillMul;
+                dispConf.y = dispConfL.x * -1.0;
             }
-            else if (dispConfR.x * minDispMul > g_minDisparity && dispConfR.x * minDispMul < maxDisp)
+            else if (dispConfR.x > g_minDisparity && dispConfR.x < maxDisp)
             {
-                dispConf.y = dispConfR.x * fillMul;
+                dispConf.y = dispConfR.x * -1.0;
             }
             else if (dispConfU.y < 0.0)
             {
@@ -93,13 +89,13 @@ void main(uint3 pos : SV_DispatchThreadID)
         {
             if (dispConf.y < 0.5 && dispConf.y >= 0.0)
             {
-                dispConf.x = g_minDisparity * minDispMul;
+                dispConf.x = g_minDisparity;
                 dispConf.y = -1.0;
 
             }
             else
             {
-                dispConf.x = (pos.x >= g_disparityFrameWidth) ? dispConf.y : -dispConf.y;
+                dispConf.x = -dispConf.y;
                 dispConf.y = 0.0;
             }
         }

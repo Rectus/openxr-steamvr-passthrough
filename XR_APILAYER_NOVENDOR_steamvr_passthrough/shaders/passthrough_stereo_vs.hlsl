@@ -27,10 +27,8 @@ float4 DisparityToWorldCoords(float disparity, float2 clipCoords)
 {
     float2 texturePos = clipCoords * g_disparityTextureSize * float2(0.5, 1) * g_disparityDownscaleFactor;
     
-    float scaledDisp = disparity * (g_viewIndex == 1 ? -1 : 1);
-    
 	// Convert to int16 range with 4 bit fixed decimal: 65536 / 2 / 16
-    scaledDisp = scaledDisp * 2048.0 * g_disparityDownscaleFactor;
+    float scaledDisp = disparity * 2048.0 * g_disparityDownscaleFactor;
     float4 viewSpaceCoords = mul(g_disparityToDepth, float4(texturePos, scaledDisp, 1.0));
     viewSpaceCoords.y = 1 - viewSpaceCoords.y;
     viewSpaceCoords.z *= -1;
@@ -60,18 +58,10 @@ VS_OUTPUT main(float3 inPosition : POSITION, uint vertexID : SV_VertexID)
     float minDisparity = max(0, g_disparityToDepth[2][3] /
     (g_projectionDistance * 2048.0 * g_disparityDownscaleFactor * g_disparityToDepth[3][2]));
     
-    float maxDisparity = 0.0465;
+    float maxDisparity = 0.0465; // TODO: This shouldn't be hardcoded.
     
     float defaultDisparity = g_disparityToDepth[2][3] /
-    (min(2.0, g_projectionDistance) * 2048.0 * g_disparityDownscaleFactor * g_disparityToDepth[3][2]);
-
-    if(g_viewIndex == 1)
-    {
-        maxDisparity = -minDisparity;
-        minDisparity = -0.0465;
-        defaultDisparity *= -1;
-    }
-    
+    (min(2.0, g_projectionDistance) * 2048.0 * g_disparityDownscaleFactor * g_disparityToDepth[3][2]); 
     
     uint maxFilterWidth = max(g_disparityFilterWidth, (int)ceil(g_cutoutFilterWidth));
     
@@ -105,9 +95,8 @@ VS_OUTPUT main(float3 inPosition : POSITION, uint vertexID : SV_VertexID)
             float dispDL = g_disparityTexture.SampleLevel(g_samplerState, disparityUVs + float2(-1, 1) * fac, 0).x;
             float dispUR = g_disparityTexture.SampleLevel(g_samplerState, disparityUVs + float2(1, -1) * fac, 0).x;
             float dispDR = g_disparityTexture.SampleLevel(g_samplerState, disparityUVs + float2(1, 1) * fac, 0).x;
-            
-            float filterX = (g_viewIndex == 0) ? max(0, dispUL + dispL * 2 + dispDL - dispUR - dispR * 2 - dispDR) :
-                min(0, dispUL + dispL * 2 + dispDL - dispUR - dispR * 2 - dispDR);
+
+            float filterX = max(0, dispUL + dispL * 2 + dispDL - dispUR - dispR * 2 - dispDR);
             
             float filterY = dispUL + dispU * 2 + dispUR - dispDL - dispD * 2 - dispDR;
             

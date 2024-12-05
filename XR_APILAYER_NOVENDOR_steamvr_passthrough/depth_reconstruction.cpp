@@ -486,14 +486,11 @@ void DepthReconstruction::RunThread()
             m_confidenceLeft = cv::Mat(m_rawDisparityLeft.rows, m_rawDisparityLeft.cols, CV_32F);
             m_confidenceRight = m_confidenceLeft;
 
-            for (int y = 0; y < m_rawDisparityLeft.rows; y++)
+            m_confidenceLeft.forEach<float>([this](float& element, const int* position) -> void
             {
-                for (int x = 0; x < m_rawDisparityLeft.cols; x++)
-                {
-                    int16_t in = m_rawDisparityLeft.at<int16_t>(y, x);
-                    m_confidenceLeft.at<float>(y, x) = (in < m_maxDisparity && in > 0) ? 1.0f : 0.0f;
-                }
-            }
+            int16_t disp = m_rawDisparityLeft.at<int16_t>(position[0], position[1]);
+            element = (disp < m_maxDisparity * 16 && disp > 0) ? 255.0f : 0.0f;
+            });
 
             cv::ximgproc::fastBilateralSolverFilter(m_scaledExtFrameLeft, m_rawDisparityLeft, m_confidenceLeft, m_bilateralDisparityLeft, stereoConfig.StereoFBS_Spatial, stereoConfig.StereoFBS_Luma, stereoConfig.StereoFBS_Chroma, stereoConfig.StereoFBS_Lambda, stereoConfig.StereoFBS_Iterations);
 
@@ -504,15 +501,11 @@ void DepthReconstruction::RunThread()
             {
                 m_confidenceRight = cv::Mat(m_rawDisparityRight.rows, m_rawDisparityRight.cols, CV_32F);
 
-                for (int y = 0; y < m_rawDisparityRight.rows; y++)
+                m_confidenceRight.forEach<float>([this](float& element, const int* position) -> void
                 {
-                    for (int x = 0; x < m_rawDisparityRight.cols; x++)
-                    {
-                        int16_t in = m_rawDisparityRight.at<int16_t>(y, x);
-                        //m_rawDisparityRight.at<int16_t>(y, x) = in >= m_maxDisparity ? -minDisparity : in;
-                        m_confidenceRight.at<float>(y, x) = (in < m_maxDisparity && in > 0) ? 1.0f : 0.0f;
-                    }
-                }
+                    int16_t& disp = (m_rawDisparityRight.at<int16_t>(position[0], position[1]));
+                    element = (disp > -m_maxDisparity * 16 && disp < 0) ? 255.0f : 0.0f;
+                });
 
                 cv::ximgproc::fastBilateralSolverFilter(m_scaledExtFrameRight, m_rawDisparityRight, m_confidenceRight, m_bilateralDisparityRight, stereoConfig.StereoFBS_Spatial, stereoConfig.StereoFBS_Luma, stereoConfig.StereoFBS_Chroma, stereoConfig.StereoFBS_Lambda, stereoConfig.StereoFBS_Iterations);
 
@@ -650,13 +643,16 @@ void DepthReconstruction::RunThread()
                 cv::mixChannels(rightIn, 2, &m_outputDisparityRight, 1, fromTo, 2);
             }
 
-            if (!m_bDisparityBothEyes)
+            if (m_bDisparityBothEyes)
             {
                 // Invert right eye disparity
-                for (int i = 0; i < m_outputDisparityRight.rows; i++)
+                m_outputDisparityRight.forEach<cv::Vec2s>([this](cv::Vec2s& element, const int* position) -> void
                 {
-                    m_outputDisparityRight.row(i).reshape(1, m_outputDisparityRight.cols).col(0) *= -1;
-                }
+                    if (element[0] > -m_maxDisparity * 16) // Keep the invalid value negative (4 bit fixed point).
+                    {
+                        element[0] *= -1;
+                    }
+                });
             }
             
 
@@ -735,7 +731,14 @@ void DepthReconstruction::RunThread()
                 if (stereoConfig.StereoFiltering == StereoFiltering_WLS)
                 {
                     m_confidenceLeft = m_wlsFilterLeft->getConfidenceMap();
-                    m_confidenceRight = m_wlsFilterRight->getConfidenceMap();
+                    if (m_bDisparityBothEyes)
+                    {
+                        m_confidenceRight = m_wlsFilterRight->getConfidenceMap();
+                    }
+                    else
+                    {
+                        m_confidenceRight = m_wlsFilterLeft->getConfidenceMap();
+                    }
                 }
 
                 if ((uint32_t)m_confidenceLeft.size().width >= m_cvImageWidth + m_maxDisparity)
