@@ -46,8 +46,8 @@ float4 lanczos2_prev(float2 uvs, float2 res)
         {
             float weight = lanczosWeight(x - offset.x, 2) * lanczosWeight(y - offset.y, 2);
             
-            //output += g_prevCameraFilter.Load(int3(floor(uvs * res) + int2(x, y), 0)) * weight;
-            output += weight * g_cameraFrameTexture.Sample(g_samplerState, center + float2(x, y) * res);
+            output += g_prevCameraFilter.Load(int3(floor(uvs * res) + int2(x, y), 0)) * weight;
+            //output += g_prevCameraFilter.SampleLevel(g_samplerState, center + float2(x, y) / res, 0) * weight;
             totalWeight += weight;
         }
     }
@@ -321,6 +321,6 @@ float4 main(VS_OUTPUT input) : SV_TARGET
     }
     
     rgbColor = g_bPremultiplyAlpha ? rgbColor * g_opacity * alpha : rgbColor;
-	
+    
     return float4(rgbColor, g_opacity * alpha);
 }
