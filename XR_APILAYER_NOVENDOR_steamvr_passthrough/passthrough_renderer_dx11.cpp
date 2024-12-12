@@ -56,6 +56,7 @@ struct VSViewConstantBuffer
 	XrMatrix4x4f cameraProjectionToWorld;
 	XrMatrix4x4f worldToCameraProjection;
 	XrMatrix4x4f worldToHMDProjection;
+	XrMatrix4x4f HMDProjectionToWorld;
 	XrMatrix4x4f prevCameraProjectionToWorld;
 	XrMatrix4x4f prevWorldToCameraProjection;
 	XrMatrix4x4f prevWorldToHMDProjection;
@@ -83,7 +84,8 @@ struct PSPassConstantBuffer
 	float contrast;
 	float saturation;
 	float sharpness;
-	int32_t temporalFilterinSampling;
+	int32_t temporalFilteringSampling;
+	float temporalFilteringColorRangeCutoff;
 	uint32_t bDoColorAdjustment;
 	uint32_t bDebugDepth;
 	uint32_t bDebugValidStereo;
@@ -1419,7 +1421,8 @@ void PassthroughRendererDX11::RenderPassthroughFrame(const XrCompositionLayerPro
 	psBuffer.contrast = mainConf.Contrast;
 	psBuffer.saturation = mainConf.Saturation;
 	psBuffer.sharpness = mainConf.Sharpness;
-	psBuffer.temporalFilterinSampling = mainConf.TemporalFilteringSampling;
+	psBuffer.temporalFilteringSampling = mainConf.TemporalFilteringSampling;
+	psBuffer.temporalFilteringColorRangeCutoff = mainConf.ProjectionMode == Projection_StereoReconstruction ? 0.2f : 0.0;
 	psBuffer.bDoColorAdjustment = fabsf(mainConf.Brightness) > 0.01f || fabsf(mainConf.Contrast - 1.0f) > 0.01f || fabsf(mainConf.Saturation - 1.0f) > 0.01f;
 	psBuffer.bDebugDepth = mainConf.DebugDepth;
 	psBuffer.bDebugValidStereo = mainConf.DebugStereoValid;
@@ -1542,6 +1545,7 @@ void PassthroughRendererDX11::RenderPassthroughView(const ERenderEye eye, const 
 	vsViewBuffer.cameraProjectionToWorld = (eye == LEFT_EYE) ? frame->cameraProjectionToWorldLeft : frame->cameraProjectionToWorldRight;
 	vsViewBuffer.worldToCameraProjection = (eye == LEFT_EYE) ? frame->worldToCameraProjectionLeft : frame->worldToCameraProjectionRight;
 	vsViewBuffer.worldToHMDProjection = (eye == LEFT_EYE) ? frame->worldToHMDProjectionLeft : frame->worldToHMDProjectionRight;
+	XrMatrix4x4f_Invert(&vsViewBuffer.HMDProjectionToWorld, &vsViewBuffer.worldToHMDProjection);
 
 	vsViewBuffer.prevCameraProjectionToWorld = (eye == LEFT_EYE) ? frame->prevCameraProjectionToWorldLeft : frame->prevCameraProjectionToWorldRight;
 	vsViewBuffer.prevWorldToCameraProjection = (eye == LEFT_EYE) ? frame->prevWorldToCameraProjectionLeft : frame->prevWorldToCameraProjectionRight;
@@ -1804,6 +1808,7 @@ void PassthroughRendererDX11::RenderMaskedPrepassView(const ERenderEye eye, cons
 	vsViewBuffer.cameraProjectionToWorld = (eye == LEFT_EYE) ? frame->cameraProjectionToWorldLeft : frame->cameraProjectionToWorldRight;
 	vsViewBuffer.worldToCameraProjection = (eye == LEFT_EYE) ? frame->worldToCameraProjectionLeft : frame->worldToCameraProjectionRight;
 	vsViewBuffer.worldToHMDProjection = (eye == LEFT_EYE) ? frame->worldToHMDProjectionLeft : frame->worldToHMDProjectionRight;
+	XrMatrix4x4f_Invert(&vsViewBuffer.HMDProjectionToWorld, &vsViewBuffer.worldToHMDProjection);
 	vsViewBuffer.disparityUVBounds = GetFrameUVBounds(eye, StereoHorizontalLayout);
 	vsViewBuffer.projectionOriginWorld = (eye == LEFT_EYE) ? frame->projectionOriginWorldLeft : frame->projectionOriginWorldRight;
 	vsViewBuffer.projectionDistance = mainConf.ProjectionDistanceFar;

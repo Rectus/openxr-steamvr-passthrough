@@ -45,6 +45,7 @@ struct VSViewConstantBuffer
 	XrMatrix4x4f cameraProjectionToWorld;
 	XrMatrix4x4f worldToCameraProjection;
 	XrMatrix4x4f worldToHMDProjection;
+	XrMatrix4x4f HMDProjectionToWorld;
 	XrMatrix4x4f prevCameraProjectionToWorld;
 	XrMatrix4x4f prevWorldToCameraProjection;
 	XrMatrix4x4f prevWorldToHMDProjection;
@@ -68,7 +69,8 @@ struct PSPassConstantBuffer
 	float contrast;
 	float saturation;
 	float sharpness;
-	int32_t temporalFilterinSampling;
+	int32_t temporalFilteringSampling;
+	float temporalFilteringColorRangeCutoff;
 	uint32_t bDoColorAdjustment;
 	uint32_t bDebugDepth;
 	uint32_t bDebugValidStereo;

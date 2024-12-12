@@ -119,10 +119,10 @@ float4 bicubic_b_spline_4tap(in Texture2D<half4> tex, in SamplerState linearSamp
     float2 f0 = w1 / (w0 + w1);
     float2 f1 = w3 / (w2 + w3);
  
-    float2 t0 = texPos1 - 1 + f0;
-    float2 t1 = texPos1 + 1 + f1;
+    float2 t0 = (texPos1 - 1 + f0) / texSize;
+    float2 t1 = (texPos1 + 1 + f1) / texSize;
 
-    float4 result = 1;
+    float4 result = 0;
     result += tex.SampleLevel(linearSampler, float2(t0.x, t0.y), 0) * s0.x * s0.y;
     result += tex.SampleLevel(linearSampler, float2(t1.x, t0.y), 0) * s1.x * s0.y;
     result += tex.SampleLevel(linearSampler, float2(t0.x, t1.y), 0) * s0.x * s1.y;
@@ -191,7 +191,7 @@ float4 main(VS_OUTPUT input) : SV_TARGET
     float sharpness = g_sharpness + 0.5;
     
     float3 sample = g_cameraFrameTexture.Sample(g_samplerState, outUvs).xyz;
-        
+
     minColor = sample;
     maxColor = sample;
         
@@ -254,8 +254,8 @@ float4 main(VS_OUTPUT input) : SV_TARGET
     }
     
     
-    // Clamp history color to AABB of neighborhood color values.
-    filtered.xyz = min(maxColor, max(filtered.xyz, minColor));
+    // Clamp history color to AABB of neighborhood color values + some configurable leeway.
+    filtered.xyz = min(maxColor * (1.0 + g_temporalFilteringColorRangeCutoff), max(filtered.xyz, minColor * (1.0 - g_temporalFilteringColorRangeCutoff)));
     
 
     float invAlphaFactor = 0.9;
