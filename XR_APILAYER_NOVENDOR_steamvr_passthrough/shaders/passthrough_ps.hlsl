@@ -1,16 +1,7 @@
 
 #include "common_ps.hlsl"
+#include "vs_outputs.hlsl"
 #include "util.hlsl"
-
-struct VS_OUTPUT
-{
-	float4 position : SV_POSITION;
-	float4 clipSpaceCoords : TEXCOORD0;
-	float3 screenCoords : TEXCOORD1;
-	float projectionValidity : TEXCOORD2;
-    float4 prevClipSpaceCoords : TEXCOORD3;
-    float3 velocity : TEXCOORD4;
-};
 
 
 #ifdef VULKAN
@@ -35,22 +26,23 @@ float4 main(VS_OUTPUT input) : SV_TARGET
 	
     if (g_doCutout)
     {
-        alpha = saturate(input.projectionValidity);
-        clip(input.projectionValidity);
+        clip(input.cameraBlendConfidence.x);
+        alpha = saturate(input.cameraBlendConfidence.x);
     }
     
     if (g_bUseDepthCutoffRange)
     {
-        clip(input.screenCoords.z - g_depthCutoffRange.x);
-        clip(g_depthCutoffRange.y - input.screenCoords.z);
+        float depth = (input.screenPos.z / input.screenPos.w);// * (g_depthRange.y - g_depthRange.x) + g_depthRange.x;
+        clip(depth - g_depthCutoffRange.x);
+        clip(g_depthCutoffRange.y - depth);
     }
 
 	// Convert from homogenous clip space coordinates to 0-1.
-	float2 outUvs = (input.clipSpaceCoords.xy / input.clipSpaceCoords.w) * float2(0.5, 0.5) + float2(0.5, 0.5);
+	float2 outUvs = (input.cameraReprojectedPos.xy / input.cameraReprojectedPos.w) * float2(0.5, 0.5) + float2(0.5, 0.5);
 
     if (g_bClampCameraFrame)
     {
-        clip(input.clipSpaceCoords.z);
+        clip(input.cameraReprojectedPos.z);
         clip(outUvs);
         clip(1 - outUvs);
     }
@@ -101,28 +93,32 @@ float4 main(VS_OUTPUT input) : SV_TARGET
 
     if (g_bDebugDepth)
     {
-        float depth = saturate(input.screenCoords.z / (g_depthRange.y - g_depthRange.x) - g_depthRange.x);
+        float depth = saturate((input.screenPos.z / input.screenPos.w) / (g_depthRange.y - g_depthRange.x) - g_depthRange.x);
         rgbColor = float3(depth, depth, depth);
-        if (g_bDebugValidStereo && input.projectionValidity < 0.0)
-        {
-            rgbColor = float3(0.5, 0, 0);
-        }
     }
-    else if (g_bDebugValidStereo)
+    if (g_debugOverlay == 1) // Confidence
     {
-        if (input.projectionValidity < 0.0)
+        if (input.projectionConfidence.x < 0.0)
         {
-            rgbColor.x += 0.5;
+            rgbColor.r += 0.5;
         }
-        else if (input.projectionValidity > 0.0)
+        else if (input.projectionConfidence.x > 0.0)
         {
-            rgbColor.y += input.projectionValidity * 0.25;
+            rgbColor.g += input.projectionConfidence.x * 0.25;
         }
         else
         {
-            rgbColor.z += 0.25;
+            rgbColor.b += 0.25;
         }
     }
+    else if (g_debugOverlay == 2) // Camera selection
+    {
+        if (!g_doCutout)
+        {
+            rgbColor.g += 1.0;
+        }
+    }
+    
     
     rgbColor = g_bPremultiplyAlpha ? rgbColor * g_opacity * alpha : rgbColor;
 	

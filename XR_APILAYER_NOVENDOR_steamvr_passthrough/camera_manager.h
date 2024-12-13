@@ -37,8 +37,10 @@ public:
 	virtual void SetPaused(bool bIsPaused) = 0;
 
 	virtual void GetCameraDisplayStats(uint32_t& width, uint32_t& height, float& fps, std::string& API) const = 0;
-	virtual void GetDistortedFrameSize(uint32_t& width, uint32_t& height, uint32_t& bufferSize) const = 0;
-	virtual void GetUndistortedFrameSize(uint32_t& width, uint32_t& height, uint32_t& bufferSize) const = 0;
+	virtual void GetDistortedTextureSize(uint32_t& width, uint32_t& height, uint32_t& bufferSize) const = 0;
+	virtual void GetUndistortedTextureSize(uint32_t& width, uint32_t& height, uint32_t& bufferSize) const = 0;
+	virtual void GetDistortedFrameSize(uint32_t& width, uint32_t& height) const = 0;
+	virtual void GetUndistortedFrameSize(uint32_t& width, uint32_t& heighte) const = 0;
 	virtual void GetIntrinsics(const ERenderEye cameraEye, XrVector2f& focalLength, XrVector2f& center) const = 0;
 	virtual void GetDistortionCoefficients(ECameraDistortionCoefficients& coeffs) const = 0;
 	virtual EStereoFrameLayout GetFrameLayout() const = 0;
@@ -65,8 +67,10 @@ public:
 	}
 
 	void GetCameraDisplayStats(uint32_t& width, uint32_t& height, float& fps, std::string& API) const;
-	void GetDistortedFrameSize(uint32_t& width, uint32_t& height, uint32_t& bufferSize) const;
-	void GetUndistortedFrameSize(uint32_t& width, uint32_t& height, uint32_t& bufferSize) const;
+	void GetDistortedTextureSize(uint32_t& width, uint32_t& height, uint32_t& bufferSize) const;
+	void GetUndistortedTextureSize(uint32_t& width, uint32_t& height, uint32_t& bufferSize) const;
+	void GetDistortedFrameSize(uint32_t& width, uint32_t& height) const;
+	void GetUndistortedFrameSize(uint32_t& width, uint32_t& height) const;
 	void GetIntrinsics(const ERenderEye cameraEye, XrVector2f& focalLength, XrVector2f& center) const;
 	void GetDistortionCoefficients(ECameraDistortionCoefficients& coeffs) const;
 	EStereoFrameLayout GetFrameLayout() const;
@@ -147,8 +151,10 @@ private:
 	XrMatrix4x4f m_lastCameraProjectionToWorldRight;
 	XrMatrix4x4f m_lastWorldToCameraProjectionLeft;
 	XrMatrix4x4f m_lastWorldToCameraProjectionRight;
-	XrMatrix4x4f m_lastWorldToHMDProjectionLeft;
-	XrMatrix4x4f m_lastWorldToHMDProjectionRight;
+	XrMatrix4x4f m_lastCameraFrame_WorldToHMDProjectionLeft;
+	XrMatrix4x4f m_lastCameraFrame_WorldToHMDProjectionRight;
+	XrMatrix4x4f m_lastHMDFrame_WorldToHMDProjectionLeft;
+	XrMatrix4x4f m_lastHMDFrame_WorldToHMDProjectionRight;
 	uint32_t m_lastFrameSequence;
 
 	XrMatrix4x4f m_lastDispWorldToCameraProjectionLeft;
@@ -178,8 +184,10 @@ public:
 	}
 
 	void GetCameraDisplayStats(uint32_t& width, uint32_t& height, float& fps, std::string& API) const;
-	void GetDistortedFrameSize(uint32_t& width, uint32_t& height, uint32_t& bufferSize) const;
-	void GetUndistortedFrameSize(uint32_t& width, uint32_t& height, uint32_t& bufferSize) const;
+	void GetDistortedTextureSize(uint32_t& width, uint32_t& height, uint32_t& bufferSize) const;
+	void GetUndistortedTextureSize(uint32_t& width, uint32_t& height, uint32_t& bufferSize) const;
+	void GetDistortedFrameSize(uint32_t& width, uint32_t& height) const;
+	void GetUndistortedFrameSize(uint32_t& width, uint32_t& height) const;
 	void GetIntrinsics(const ERenderEye cameraEye, XrVector2f& focalLength, XrVector2f& center) const;
 	void GetDistortionCoefficients(ECameraDistortionCoefficients& coeffs) const;
 	EStereoFrameLayout GetFrameLayout() const;
@@ -253,8 +261,10 @@ private:
 	XrMatrix4x4f m_lastCameraProjectionToWorldRight;
 	XrMatrix4x4f m_lastWorldToCameraProjectionLeft;
 	XrMatrix4x4f m_lastWorldToCameraProjectionRight;
-	XrMatrix4x4f m_lastWorldToHMDProjectionLeft;
-	XrMatrix4x4f m_lastWorldToHMDProjectionRight;
+	XrMatrix4x4f m_lastCameraFrame_WorldToHMDProjectionLeft;
+	XrMatrix4x4f m_lastCameraFrame_WorldToHMDProjectionRight;
+	XrMatrix4x4f m_lastHMDFrame_WorldToHMDProjectionLeft;
+	XrMatrix4x4f m_lastHMDFrame_WorldToHMDProjectionRight;
 	uint32_t m_lastFrameSequence;
 
 	XrMatrix4x4f m_lastDispWorldToCameraProjectionLeft;

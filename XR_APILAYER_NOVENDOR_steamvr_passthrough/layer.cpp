@@ -504,8 +504,8 @@ namespace
 				MenuDisplayValues& vals = m_dashboardMenu->GetDisplayValues();
 				m_cameraManager->GetCameraDisplayStats(vals.CameraFrameWidth, vals.CameraFrameHeight, vals.CameraFrameRate, vals.CameraAPI);
 
-				m_cameraManager->GetDistortedFrameSize(cameraTextureWidth, cameraTextureHeight, cameraFrameBufferSize);
-				m_cameraManager->GetUndistortedFrameSize(cameraUndistortedTextureWidth, cameraUndistortedTextureHeight, cameraUndistortedFrameBufferSize);
+				m_cameraManager->GetDistortedTextureSize(cameraTextureWidth, cameraTextureHeight, cameraFrameBufferSize);
+				m_cameraManager->GetUndistortedTextureSize(cameraUndistortedTextureWidth, cameraUndistortedTextureHeight, cameraUndistortedFrameBufferSize);
 			}
 			else if (mainConfig.CameraProvider == CameraProvider_Augmented)
 			{
@@ -520,8 +520,8 @@ namespace
 				MenuDisplayValues& vals = m_dashboardMenu->GetDisplayValues();
 				m_augmentedCameraManager->GetCameraDisplayStats(vals.CameraFrameWidth, vals.CameraFrameHeight, vals.CameraFrameRate, vals.CameraAPI);
 
-				m_augmentedCameraManager->GetDistortedFrameSize(cameraTextureWidth, cameraTextureHeight, cameraFrameBufferSize);
-				m_augmentedCameraManager->GetUndistortedFrameSize(cameraUndistortedTextureWidth, cameraUndistortedTextureHeight, cameraUndistortedFrameBufferSize);
+				m_augmentedCameraManager->GetDistortedTextureSize(cameraTextureWidth, cameraTextureHeight, cameraFrameBufferSize);
+				m_augmentedCameraManager->GetDistortedTextureSize(cameraUndistortedTextureWidth, cameraUndistortedTextureHeight, cameraUndistortedFrameBufferSize);
 			}
 			else
 			{
@@ -535,8 +535,8 @@ namespace
 				MenuDisplayValues& vals = m_dashboardMenu->GetDisplayValues();
 				m_cameraManager->GetCameraDisplayStats(vals.CameraFrameWidth, vals.CameraFrameHeight, vals.CameraFrameRate, vals.CameraAPI);
 
-				m_cameraManager->GetDistortedFrameSize(cameraTextureWidth, cameraTextureHeight, cameraFrameBufferSize);
-				m_cameraManager->GetUndistortedFrameSize(cameraUndistortedTextureWidth, cameraUndistortedTextureHeight, cameraUndistortedFrameBufferSize);
+				m_cameraManager->GetDistortedTextureSize(cameraTextureWidth, cameraTextureHeight, cameraFrameBufferSize);
+				m_cameraManager->GetDistortedTextureSize(cameraUndistortedTextureWidth, cameraUndistortedTextureHeight, cameraUndistortedFrameBufferSize);
 			}
 
 			m_bCamerasInitialized = true;

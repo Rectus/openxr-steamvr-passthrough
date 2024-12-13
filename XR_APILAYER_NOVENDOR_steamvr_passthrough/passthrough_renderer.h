@@ -61,11 +61,145 @@ inline XrVector4f GetFrameUVBounds(const ERenderEye eye, const EStereoFrameLayou
 }
 
 
+struct alignas(16) CSConstantBuffer
+{
+	uint32_t disparityFrameWidth;
+	uint32_t bHoleFillLastPass;
+	float minDisparity;
+	float maxDisparity;
+};
+
+struct alignas(16) VSPassConstantBuffer
+{
+	XrMatrix4x4f worldToCameraFrameProjectionLeft;
+	XrMatrix4x4f worldToCameraFrameProjectionRight;
+	XrMatrix4x4f worldToPrevCameraFrameProjectionLeft;
+	XrMatrix4x4f worldToPrevCameraFrameProjectionRight;
+	XrMatrix4x4f worldToPrevDepthFrameProjectionLeft;
+	XrMatrix4x4f worldToPrevDepthFrameProjectionRight;
+	XrMatrix4x4f depthFrameViewToWorldLeft;
+	XrMatrix4x4f depthFrameViewToWorldRight;
+	XrMatrix4x4f prevDepthFrameViewToWorldLeft;
+	XrMatrix4x4f prevDepthFrameViewToWorldRight;
+
+	XrMatrix4x4f disparityToDepth;
+	uint32_t disparityTextureSize[2];
+	float minDisparity;
+	float maxDisparity;
+	float disparityDownscaleFactor;
+	float cutoutFactor;
+	float cutoutOffset;
+	float cutoutFilterWidth;
+	int32_t disparityFilterWidth;
+	uint32_t bProjectBorders;
+	uint32_t bFindDiscontinuities;
+	uint32_t bUseDisparityTemporalFilter;
+	uint32_t bBlendDepthMaps;
+	float disparityTemporalFilterStrength;
+	float disparityTemporalFilterDistance;
+	float depthFoldStrength;
+	float depthFoldMaxDistance;
+	float depthFoldFilterWidth;
+};
+
+struct alignas(16) VSViewConstantBuffer
+{
+	XrMatrix4x4f worldToHMDProjection;
+	XrMatrix4x4f HMDProjectionToWorld;
+	XrMatrix4x4f prevHMDFrame_WorldToHMDProjection;
+	XrMatrix4x4f prevCameraFrame_WorldToHMDProjection;
+	XrVector4f disparityUVBounds;
+	XrVector3f projectionOriginWorld;
+	float projectionDistance;
+	float floorHeightOffset;
+	uint32_t cameraViewIndex;
+	uint32_t bWriteDisparityFilter;
+};
+
+struct alignas(16) VSMeshConstantBuffer
+{
+	XrMatrix4x4f meshToWorldTransform;
+};
+
+struct alignas(16) PSPassConstantBuffer
+{
+	XrVector2f depthRange;
+	XrVector2f depthCutoffRange;
+	float opacity;
+	float brightness;
+	float contrast;
+	float saturation;
+	float sharpness;
+	int32_t temporalFilteringSampling;
+	float temporalFilteringFactor;
+	float temporalFilteringColorRangeCutoff;
+	float cutoutCombineFactor;
+	float depthTemporalFilterFactor;
+	float depthTemporalFilterDistance;
+	uint32_t debugOverlay;
+	uint32_t bDoColorAdjustment;
+	uint32_t bDebugDepth;
+	uint32_t bUseFisheyeCorrection;
+	uint32_t bIsFirstRenderOfCameraFrame;
+	uint32_t bUseDepthCutoffRange;
+	uint32_t bClampCameraFrame;
+};
+
+struct alignas(16) PSViewConstantBuffer
+{
+	XrVector4f frameUVBounds;
+	XrVector4f crossUVBounds;
+	XrVector4f prepassUVBounds;
+	uint32_t rtArrayIndex;
+	uint32_t bDoCutout;
+	uint32_t bPremultiplyAlpha;
+};
+
+struct alignas(16) PSMaskedConstantBuffer
+{
+	float maskedKey[3];
+	float maskedFracChroma;
+	float maskedFracLuma;
+	float maskedSmooth;
+	uint32_t bMaskedUseCamera;
+	uint32_t bMaskedInvert;
+};
+
+
+
 struct DX11TemporaryRenderTarget
 {
 	ID3D11Resource* AssociatedRenderTarget = nullptr; // Only for checking the assosiated target. May be invalid.
 	ComPtr<ID3D11Texture2D> Texture;
 	ComPtr<ID3D11RenderTargetView> RTV;
+	ComPtr<ID3D11ShaderResourceView> SRV;
+};
+
+struct DX11RenderTexture
+{
+	ComPtr<ID3D11Texture2D> Texture;
+	ComPtr<ID3D11RenderTargetView> RTV;
+	ComPtr<ID3D11ShaderResourceView> SRV;
+};
+
+
+struct DX11UAVSRVTexture
+{
+	ComPtr<ID3D11Texture2D> Texture;
+	ComPtr<ID3D11UnorderedAccessView> UAV;
+	ComPtr<ID3D11ShaderResourceView> SRV;
+};
+
+struct DX11DepthStencilTexture
+{
+	ComPtr<ID3D11Texture2D> Texture;
+	ComPtr<ID3D11DepthStencilView> DSV;
+	ComPtr<ID3D11ShaderResourceView> SRV;
+};
+
+struct DX11SRVTexture
+{
+	ComPtr<ID3D11Texture2D> Texture;
 	ComPtr<ID3D11ShaderResourceView> SRV;
 };
 
@@ -97,18 +231,14 @@ struct DX11ViewData
 
 	bool bInitialized = false;
 
-	ComPtr<ID3D11Resource> renderTarget;
-	ComPtr<ID3D11RenderTargetView> renderTargetView;
-	ComPtr<ID3D11ShaderResourceView> renderTargetSRV;
-
-	DX11TemporaryRenderTarget temporaryRenderTarget;
-
 	ComPtr<ID3D11Buffer> vsViewConstantBuffer;
 	ComPtr<ID3D11Buffer> psViewConstantBuffer;
 
-	ComPtr<ID3D11UnorderedAccessView> cameraFilterUAV;
-	ComPtr<ID3D11ShaderResourceView> cameraFilterSRV;
-	ComPtr<ID3D11Texture2D> cameraFilterUAVTexture;
+	DX11RenderTexture renderTarget;
+	DX11TemporaryRenderTarget temporaryRenderTarget;
+
+	DX11DepthStencilTexture passthroughDepthStencil[2];
+	DX11RenderTexture passthroughCameraValidity;
 };
 
 
@@ -128,19 +258,11 @@ struct DX11FrameData
 	ComPtr<ID3D11Buffer> psPassConstantBuffer;
 	ComPtr<ID3D11Buffer> psMaskedConstantBuffer;
 	
-	ComPtr<ID3D11Texture2D> cameraFrameTexture;
-	ComPtr<ID3D11ShaderResourceView> cameraFrameSRV;
+	DX11SRVTexture cameraFrame;
+	DX11SRVTexture cameraUndistortedFrame;
 
-	ComPtr<ID3D11Texture2D> cameraUndistortedFrameTexture;
-	ComPtr<ID3D11ShaderResourceView> cameraUndistortedFrameSRV;
-
-	ComPtr<ID3D11Texture2D> disparityMap;
-	ComPtr<ID3D11UnorderedAccessView> disparityMapCSUAV;
-	ComPtr<ID3D11ShaderResourceView> disparityMapSRV;
-
-	ComPtr<ID3D11UnorderedAccessView> disparityMapUAV;
-	ComPtr<ID3D11ShaderResourceView> disparityMapUAVSRV;
-	ComPtr<ID3D11Texture2D> disparityMapUAVTexture;
+	DX11UAVSRVTexture disparityMap;
+	DX11UAVSRVTexture disparityFilter;
 };
 
 
@@ -183,6 +305,7 @@ protected:
 	bool CheckInitViewData(const uint32_t viewIndex, const uint32_t swapchainIndex);
 	bool CheckInitFrameData(const uint32_t imageIndex);
 	void SetupDisparityMap(uint32_t width, uint32_t height);
+	void SetupPassthroughDepthStencil(uint32_t viewIndex, uint32_t swapchainIndex, uint32_t width, uint32_t height);
 	void SetupUVDistortionMap(std::shared_ptr<std::vector<float>> uvDistortionMap);
 	DX11TemporaryRenderTarget& GetTemporaryRenderTarget(const uint32_t swapchainIndex, const uint32_t eyeIndex);
 	void GenerateMesh();
@@ -193,6 +316,7 @@ protected:
 	void RenderHoleFillCS(DX11FrameData& frameData, std::shared_ptr<DepthFrame> depthFrame);
 	void RenderPassthroughView(const ERenderEye eye, const int32_t swapchainIndex, const int32_t depthSwapchainIndex, const XrCompositionLayerProjection* layer, CameraFrame* frame, std::shared_ptr<DepthFrame> depthFrame, EPassthroughBlendMode blendMode, UINT numIndices, FrameRenderParameters& renderParams);
 	void RenderMaskedPrepassView(const ERenderEye eye, const int32_t swapchainIndex, int32_t depthSwapchainIndex, const XrCompositionLayerProjection* layer, CameraFrame* frame, std::shared_ptr<DepthFrame> depthFrame, UINT numIndices, FrameRenderParameters& renderParams);
+	void RenderDepthPrepassView(const ERenderEye eye, const int32_t swapchainIndex, int32_t depthSwapchainIndex, const XrCompositionLayerProjection* layer, CameraFrame* frame, std::shared_ptr<DepthFrame> depthFrame, UINT numIndices, FrameRenderParameters& renderParams);
 	void RenderFrameFinish();
 
 	std::shared_ptr<ConfigManager> m_configManager;
@@ -217,12 +341,16 @@ protected:
 	std::vector<DX11ViewData> m_viewData[2];
 	std::vector<DX11ViewDepthData> m_viewDepthData[2];
 	std::vector<DX11FrameData> m_frameData;
-	
+
+	DX11UAVSRVTexture m_cameraFilter[2][2];
+	int m_currentCameraFilterIndex = 0;
+
 	ComPtr<ID3D11DepthStencilState> m_depthStencilStateDisabled;
 	ComPtr<ID3D11DepthStencilState> m_depthStencilStateLess;
 	ComPtr<ID3D11DepthStencilState> m_depthStencilStateLessWrite;
 	ComPtr<ID3D11DepthStencilState> m_depthStencilStateGreater;
 	ComPtr<ID3D11DepthStencilState> m_depthStencilStateGreaterWrite;
+	ComPtr<ID3D11DepthStencilState> m_depthStencilStateAlwaysWrite;
 
 	ComPtr<ID3D11ComputeShader> m_fillHolesComputeShader;
 	ComPtr<ID3D11VertexShader> m_fullscreenQuadShader;
@@ -230,11 +358,16 @@ protected:
 	ComPtr<ID3D11VertexShader> m_meshRigidVertexShader;
 	ComPtr<ID3D11VertexShader> m_stereoVertexShader;
 	ComPtr<ID3D11VertexShader> m_stereoTemporalVertexShader;
+	ComPtr<ID3D11VertexShader> m_passthroughReadDepthVS;
 	ComPtr<ID3D11PixelShader> m_pixelShader;
 	ComPtr<ID3D11PixelShader> m_pixelShaderTemporal;
 	ComPtr<ID3D11PixelShader> m_prepassShader;
 	ComPtr<ID3D11PixelShader> m_maskedPrepassShader;
 	ComPtr<ID3D11PixelShader> m_maskedAlphaCopyShader;
+	ComPtr<ID3D11PixelShader> m_depthWritePS;
+	ComPtr<ID3D11PixelShader> m_depthWriteTemporalPS;
+	ComPtr<ID3D11PixelShader> m_stereoCompositePS;
+	ComPtr<ID3D11PixelShader> m_stereoCompositeTemporalPS;
 
 	
 	ComPtr<ID3D11Buffer> m_vsMeshConstantBuffer[vr::k_unMaxTrackedDeviceCount];
@@ -251,10 +384,10 @@ protected:
 	ComPtr<ID3D11BlendState> m_blendStatePrepassInverseAppAlpha;
 	ComPtr<ID3D11BlendState> m_blendStatePrepassUseAppAlpha;
 	ComPtr<ID3D11BlendState> m_blendStatePrepassIgnoreAppAlpha;
+	ComPtr<ID3D11BlendState> m_blendStateWriteFactored;
 
-	ComPtr<ID3D11Texture2D> m_debugTexture;
+	DX11SRVTexture m_debugTexture;
 	ComPtr<ID3D11Texture2D> m_debugTextureUpload;
-	ComPtr<ID3D11ShaderResourceView> m_debugTextureSRV;
 	ESelectedDebugTexture m_selectedDebugTexture;
 
 	ComPtr<ID3D11Texture2D> m_cameraFrameUploadTexture;
@@ -262,17 +395,8 @@ protected:
 	ComPtr<ID3D11Texture2D> m_disparityMapUploadTexture;
 	uint32_t m_disparityMapWidth;
 
-	/*ComPtr<ID3D11Texture2D> m_downloadStagingTexture;
-	uint32_t m_downloadStagingTextureWidth = 0;
-	uint32_t m_downloadStagingTextureHeight = 0;*/
-
-	ComPtr<ID3D11Texture2D> m_uvDistortionMap;
-	ComPtr<ID3D11ShaderResourceView> m_uvDistortionMapSRV;
+	DX11SRVTexture m_uvDistortionMap;
 	float m_fovScale;
-
-	ComPtr<ID3D11Texture2D> m_testFrame;
-	ComPtr<ID3D11Texture2D> m_testFrameUploadTexture;
-	ComPtr<ID3D11ShaderResourceView> m_testFrameSRV;
 
 	ComPtr<ID3D11InputLayout> m_inputLayout;
 	

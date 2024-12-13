@@ -10,6 +10,14 @@ enum ECameraProvider
 	CameraProvider_Augmented = 2
 };
 
+enum ECameraDistortionMode
+{
+	CameraDistortionMode_NotSet = -1,
+	CameraDistortionMode_NoDistortion = 0,
+	CameraDistortionMode_RegularLens = 1,
+	CameraDistortionMode_Fisheye = 2
+};
+
 enum EProjectionMode
 {
 	Projection_RoomView2D = 0,
@@ -23,6 +31,15 @@ enum ESelectedDebugTexture
 	DebugTexture_TestImage,
 	DebugTexture_Disparity,
 	DebugTexture_Confidence
+};
+
+enum ESelectedDebugOverlay
+{
+	DebugOverlay_None = 0,
+	DebugOverlay_ProjectionConfidence,
+	DebugOverlay_CameraSelction,
+	DebugOverlay_TemporalBlending,
+	DebugOverlay_TemporalClipping
 };
 
 enum EDebugTextureFormat
@@ -88,6 +105,8 @@ struct Config_Main
 
 	bool EnableTemporalFiltering = false;
 	int TemporalFilteringSampling = 3;
+	float TemporalFilteringFactor = 0.9f;
+	float TemporalFilteringRejectionOffset = 0.0f;
 
 	bool RequireSteamVRRuntime = true;
 	bool ShowSettingDescriptions = true;
@@ -102,7 +121,7 @@ struct Config_Main
 
 	// Transient settings not written to file
 	bool DebugDepth = false;
-	bool DebugStereoValid = false;
+	ESelectedDebugOverlay DebugOverlay = DebugOverlay_None;
 	ESelectedDebugTexture DebugTexture = DebugTexture_None;
 
 	void ParseConfig(CSimpleIniA& ini, const char* section)
@@ -125,6 +144,8 @@ struct Config_Main
 
 		EnableTemporalFiltering = ini.GetBoolValue(section, "EnableTemporalFiltering", EnableTemporalFiltering);
 		TemporalFilteringSampling = (int)ini.GetLongValue(section, "TemporalFilteringSampling", TemporalFilteringSampling);
+		TemporalFilteringFactor = (float)ini.GetDoubleValue(section, "TemporalFilteringFactor", TemporalFilteringFactor);
+		TemporalFilteringRejectionOffset = (float)ini.GetDoubleValue(section, "TemporalFilteringRejectionOffset", TemporalFilteringRejectionOffset);
 
 		RequireSteamVRRuntime = ini.GetBoolValue(section, "RequireSteamVRRuntime", RequireSteamVRRuntime);
 		ShowSettingDescriptions = ini.GetBoolValue(section, "ShowSettingDescriptions", ShowSettingDescriptions);
@@ -159,6 +180,8 @@ struct Config_Main
 
 		ini.SetBoolValue(section, "EnableTemporalFiltering", EnableTemporalFiltering);
 		ini.SetLongValue(section, "TemporalFilteringSampling", TemporalFilteringSampling);
+		ini.SetDoubleValue(section, "TemporalFilteringFactor", TemporalFilteringFactor);
+		ini.SetDoubleValue(section, "TemporalFilteringRejectionOffset", TemporalFilteringRejectionOffset);
 
 		ini.SetBoolValue(section, "RequireSteamVRRuntime", RequireSteamVRRuntime);
 		ini.SetBoolValue(section, "ShowSettingDescriptions", ShowSettingDescriptions);
@@ -191,6 +214,7 @@ struct Config_Camera
 
 	EStereoFrameLayout CameraFrameLayout = Mono;
 	bool CameraHasFisheyeLens = false;
+	ECameraDistortionMode CameraForceDistortionMode = CameraDistortionMode_NotSet;
 
 	int Camera0DeviceIndex = 0;
 
@@ -243,6 +267,7 @@ struct Config_Camera
 
 		CameraFrameLayout = (EStereoFrameLayout)ini.GetLongValue(section, "CameraFrameLayout", CameraFrameLayout);
 		CameraHasFisheyeLens = ini.GetBoolValue(section, "CameraHasFisheyeLens", CameraHasFisheyeLens);
+		CameraForceDistortionMode = (ECameraDistortionMode)ini.GetLongValue(section, "CameraForceDistortionMode", CameraForceDistortionMode);
 
 		Camera0DeviceIndex = (int)ini.GetLongValue(section, "Camera0DeviceIndex", Camera0DeviceIndex);
 
@@ -340,6 +365,7 @@ struct Config_Camera
 
 		ini.SetLongValue(section, "CameraFrameLayout", (long)CameraFrameLayout);
 		ini.SetBoolValue(section, "CameraHasFisheyeLens", CameraHasFisheyeLens);
+		ini.SetLongValue(section, "CameraForceDistortionMode", (long)CameraForceDistortionMode);
 
 		ini.SetLongValue(section, "Camera0DeviceIndex", (long)Camera0DeviceIndex);
 
@@ -523,6 +549,8 @@ struct Config_Stereo
 	bool StereoUseBWInputAlpha= false;
 	bool StereoUseHexagonGridMesh = false;
 	bool StereoFillHoles = true;
+	bool StereoDrawBackground = true;
+	bool StereoUseDeferredDepthPass = true;
 	int StereoFrameSkip = 0;
 	int StereoDownscaleFactor = 2;
 	bool StereoUseDisparityTemporalFiltering = false;
@@ -535,6 +563,11 @@ struct Config_Stereo
 	float StereoCutoutFactor = 0.75f;
 	float StereoCutoutOffset = 1.5f;
 	float StereoCutoutFilterWidth = 0.9f;
+	float StereoCutoutCombineFactor = 1.0f;
+
+	float StereoDepthFoldStrength = 2.0f;
+	float StereoDepthFoldMaxDistance = 3.0f;
+	float StereoDepthFoldFilterWidth = 1.5f;
 
 	int StereoBlockSize = 1;
 	int StereoMinDisparity = 0;
@@ -566,6 +599,8 @@ struct Config_Stereo
 		StereoUseBWInputAlpha = ini.GetBoolValue(section, "StereoUseBWInputAlpha", StereoUseBWInputAlpha);
 		StereoUseHexagonGridMesh = ini.GetBoolValue(section, "StereoUseHexagonGridMesh", StereoUseHexagonGridMesh);
 		StereoFillHoles = ini.GetBoolValue(section, "StereoFillHoles", StereoFillHoles);
+		StereoDrawBackground = ini.GetBoolValue(section, "StereoDrawBackground", StereoDrawBackground);
+		StereoUseDeferredDepthPass = ini.GetBoolValue(section, "StereoUseDeferredDepthPass", StereoUseDeferredDepthPass);
 		StereoFrameSkip = ini.GetLongValue(section, "StereoFrameSkip", StereoFrameSkip);
 		StereoDownscaleFactor = ini.GetLongValue(section, "StereoDownscaleFactor", StereoDownscaleFactor);
 		StereoUseDisparityTemporalFiltering = ini.GetBoolValue(section, "StereoUseDisparityTemporalFiltering", StereoUseDisparityTemporalFiltering);
@@ -578,6 +613,11 @@ struct Config_Stereo
 		StereoCutoutOffset = (float)ini.GetDoubleValue(section, "StereoCutoutOffset", StereoCutoutOffset);
 		StereoDisparityFilterWidth = (int)ini.GetLongValue(section, "StereoDisparityFilterWidth", StereoDisparityFilterWidth);
 		StereoCutoutFilterWidth = (float)ini.GetDoubleValue(section, "StereoCutoutFilterWidth", StereoCutoutFilterWidth);
+		StereoCutoutCombineFactor = (float)ini.GetDoubleValue(section, "StereoCutoutCombineFactor", StereoCutoutCombineFactor);
+
+		StereoDepthFoldStrength = (float)ini.GetDoubleValue(section, "StereoDepthFoldStrength", StereoDepthFoldStrength);
+		StereoDepthFoldMaxDistance = (float)ini.GetDoubleValue(section, "StereoDepthFoldMaxDistance", StereoDepthFoldMaxDistance);
+		StereoDepthFoldFilterWidth = (float)ini.GetDoubleValue(section, "StereoDepthFoldFilterWidth", StereoDepthFoldFilterWidth);
 
 		StereoBlockSize = ini.GetLongValue(section, "StereoBlockSize", StereoBlockSize);
 		StereoMinDisparity = ini.GetLongValue(section, "StereoMinDisparity", StereoMinDisparity);
@@ -610,6 +650,8 @@ struct Config_Stereo
 		ini.SetBoolValue(section, "StereoUseBWInputAlpha", StereoUseBWInputAlpha);
 		ini.SetBoolValue(section, "StereoUseHexagonGridMesh", StereoUseHexagonGridMesh);
 		ini.SetBoolValue(section, "StereoFillHoles", StereoFillHoles);
+		ini.SetBoolValue(section, "StereoDrawBackground", StereoDrawBackground);
+		ini.SetBoolValue(section, "StereoUseDeferredDepthPass", StereoUseDeferredDepthPass);
 		ini.SetLongValue(section, "StereoFrameSkip", StereoFrameSkip);
 		ini.SetLongValue(section, "StereoDownscaleFactor", StereoDownscaleFactor);
 		ini.SetBoolValue(section, "StereoUseDisparityTemporalFiltering", StereoUseDisparityTemporalFiltering);
@@ -622,6 +664,11 @@ struct Config_Stereo
 		ini.SetDoubleValue(section, "StereoCutoutOffset", StereoCutoutOffset);
 		ini.SetLongValue(section, "StereoDisparityFilterWidth", StereoDisparityFilterWidth);
 		ini.SetDoubleValue(section, "StereoCutoutFilterWidth", StereoCutoutFilterWidth);
+		ini.SetDoubleValue(section, "StereoCutoutCombineFactor", StereoCutoutCombineFactor);
+
+		ini.SetDoubleValue(section, "StereoDepthFoldStrength", StereoDepthFoldStrength);
+		ini.SetDoubleValue(section, "StereoDepthFoldMaxDistance", StereoDepthFoldMaxDistance);
+		ini.SetDoubleValue(section, "StereoDepthFoldFilterWidth", StereoDepthFoldFilterWidth);
 
 		ini.SetLongValue(section, "StereoBlockSize", StereoBlockSize);
 		ini.SetLongValue(section, "StereoMinDisparity", StereoMinDisparity);

@@ -233,6 +233,7 @@ bool PassthroughRendererDX11Interop::InitRenderer()
 			if (adapter->GetDesc(&desc) != S_OK)
 			{
 				ErrorLog("GetDesc failure!\n");
+				factory->Release();
 				return false;
 			}
 			bFoundAdapter = true;
@@ -248,17 +249,19 @@ bool PassthroughRendererDX11Interop::InitRenderer()
 			{
 				break;
 			}
+			adapter->Release();
+			adapter = nullptr;
 			i++;
 		}
 
-		if (!bFoundAdapter)
-		{
-			adapter = nullptr;
-		}
+		factory->Release();
 
 		std::vector<D3D_FEATURE_LEVEL> featureLevels = { D3D_FEATURE_LEVEL_12_1, D3D_FEATURE_LEVEL_12_0, D3D_FEATURE_LEVEL_11_1 };
 
 		HRESULT res = D3D11CreateDevice(adapter, D3D_DRIVER_TYPE_UNKNOWN, NULL, 0, featureLevels.data(), (uint32_t)featureLevels.size(), D3D11_SDK_VERSION, &m_d3dDevice, NULL, &m_deviceContext);
+
+		adapter->Release();
+
 		if (FAILED(res))
 		{
 			ErrorLog("D3D11CreateDevice failure: 0x%x\n", res);
@@ -811,7 +814,7 @@ void PassthroughRendererDX11Interop::RenderPassthroughFrame(const XrCompositionL
 	case DirectX12:
 	{
 		{
-			ID3D11Resource* rts[2] = { viewDataLeft.renderTarget.Get(), viewDataRight.renderTarget.Get() };
+			ID3D11Resource* rts[2] = { viewDataLeft.renderTarget.Texture.Get(), viewDataRight.renderTarget.Texture.Get() };
 			m_d3d11On12Device->AcquireWrappedResources(rts, 2);
 
 			ID3D11Resource* dts[2] = { 0 };

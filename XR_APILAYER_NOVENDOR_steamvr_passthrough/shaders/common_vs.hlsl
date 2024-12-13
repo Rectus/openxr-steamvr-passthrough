@@ -2,32 +2,35 @@
 
 cbuffer vsViewConstantBuffer : register(b0)
 {
-    float4x4 g_cameraProjectionToWorld;
-    float4x4 g_worldToCameraProjection;
     float4x4 g_worldToHMDProjection;
     float4x4 g_HMDProjectionToWorld;
-    
-    float4x4 g_prevCameraProjectionToWorld;
-    float4x4 g_prevWorldToCameraProjection;
-    float4x4 g_prevWorldToHMDProjection;
-    float4x4 g_prevDispWorldToCameraProjection;
+    float4x4 g_prevHMDFrame_WorldToHMDProjection;
+    float4x4 g_prevCameraFrame_WorldToHMDProjection;
     float4 g_disparityUVBounds;
     float3 g_projectionOriginWorld;
     float g_projectionDistance;
     float g_floorHeightOffset;
-    uint g_viewIndex;
+    int g_cameraViewIndex;
     bool g_bWriteDisparityFilter;
-    bool g_bIsFirstRender;
 };
 
 cbuffer vsPassConstantBuffer : register(b1)
 {
-    float4x4 g_disparityViewToWorldLeft;
-    float4x4 g_disparityViewToWorldRight;
-    float4x4 g_prevDisparityViewToWorldLeft;
-    float4x4 g_prevDisparityViewToWorldRight;
+    float4x4 g_worldToCameraFrameProjectionLeft;
+	float4x4 g_worldToCameraFrameProjectionRight;
+	float4x4 g_worldToPrevCameraFrameProjectionLeft;
+	float4x4 g_worldToPrevCameraFrameProjectionRight;
+	float4x4 g_worldToPrevDepthFrameProjectionLeft;
+	float4x4 g_worldToPrevDepthFrameProjectionRight;
+	float4x4 g_depthFrameViewToWorldLeft;
+	float4x4 g_depthFrameViewToWorldRight;
+	float4x4 g_prevDepthFrameViewToWorldLeft;
+	float4x4 g_prevDepthFrameViewToWorldRight;
+    
     float4x4 g_disparityToDepth;
     uint2 g_disparityTextureSize;
+    float g_minDisparity;
+	float g_maxDisparity;
     float g_disparityDownscaleFactor;
     float g_cutoutFactor;
     float g_cutoutOffset;
@@ -36,6 +39,10 @@ cbuffer vsPassConstantBuffer : register(b1)
     bool g_bProjectBorders;
     bool g_bFindDiscontinuities;
     bool g_bUseDisparityTemporalFilter;
+    bool g_bBlendDepthMaps;
     float g_disparityTemporalFilterStrength;
     float g_disparityTemporalFilterDistance;
+    float g_depthFoldStrength;
+	float g_depthFoldMaxDistance;
+	float g_depthFoldFilterWidth;
 };

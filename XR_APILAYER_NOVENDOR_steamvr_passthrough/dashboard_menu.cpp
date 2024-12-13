@@ -435,12 +435,17 @@ if (bIsActiveTab) { ImGui::PopStyleColor(1); bIsActiveTab = false; }
 
 				IMGUI_BIG_SPACING;
 
-				ImGui::Checkbox("Enable Temporal Filtering (Experimental)", &mainConfig.EnableTemporalFiltering);
+				ImGui::Checkbox("Enable Temporal Filter (Experimental)", &mainConfig.EnableTemporalFiltering);
 				TextDescriptionSpaced("Improves image quality by removing noise and flickering, and sharpening it. Possibly slightly increases image resolution. Expensive on the GPU.");
 
 				if (ImGui::CollapsingHeader("Advanced"))
 				{
-					ImGui::Text("Temporal Filtering Sampling");
+					ImGui::PushItemWidth(ImGui::GetContentRegionAvail().x * 0.45f);
+					ScrollableSlider("Temporal Filter Factor", &mainConfig.TemporalFilteringFactor, 0.0f, 1.0f, "%.2f", 0.01f);
+					ScrollableSlider("Temporal Filter Rejection Offset", &mainConfig.TemporalFilteringRejectionOffset, -0.2f, 0.2f, "%.2f", 0.01f);
+					ImGui::PopItemWidth();
+
+					ImGui::Text("Temporal Filter Sampling");
 					if (ImGui::RadioButton("Nearest", mainConfig.TemporalFilteringSampling == 0))
 					{
 						mainConfig.TemporalFilteringSampling = 0;
@@ -731,6 +736,9 @@ if (bIsActiveTab) { ImGui::PopStyleColor(1); bIsActiveTab = false; }
 			ImGui::Checkbox("Composite Both Cameras for Each Eye", &stereoCustomConfig.StereoCutoutEnabled);
 			TextDescriptionSpaced("Detects areas occluded to the main camera and renders them with the other camera where possible.");
 
+			ImGui::Checkbox("Deferred Depth Pass", &stereoCustomConfig.StereoUseDeferredDepthPass);
+			TextDescriptionSpaced("Enables a separate render pass generating passthrough depth maps for features that benefit from it, such as Composite Both Cameras for Each Eye.");
+
 			IMGUI_BIG_SPACING;
 		}
 
@@ -758,6 +766,9 @@ if (bIsActiveTab) { ImGui::PopStyleColor(1); bIsActiveTab = false; }
 				TextDescription("Mesh with smoother corners for less artifacting. May introduce warping.");
 
 				ImGui::Checkbox("Fill Holes", &stereoCustomConfig.StereoFillHoles);
+				TextDescription("Fills in invalid depth values from neighboring areas.");
+
+				ImGui::Checkbox("Draw Background", &stereoCustomConfig.StereoDrawBackground);
 				TextDescription("Extra pass to render a cylinder mesh behind the stereo mesh.");
 
 				IMGUI_BIG_SPACING;
@@ -766,7 +777,18 @@ if (bIsActiveTab) { ImGui::PopStyleColor(1); bIsActiveTab = false; }
 				ScrollableSlider("Composition Cutout Factor", &stereoCustomConfig.StereoCutoutFactor, 0.0f, 3.0f, "%.2f", 0.01f);
 				ScrollableSlider("Composition Cutout Offset", &stereoCustomConfig.StereoCutoutOffset, 0.0f, 2.0f, "%.2f", 0.01f);
 				ScrollableSlider("Composition Cutout Filter Distance", &stereoCustomConfig.StereoCutoutFilterWidth, 0.1f, 2.0f, "%.1f", 0.1f);
+				ScrollableSlider("Composition Combine Factor", &stereoCustomConfig.StereoCutoutCombineFactor, 0.0f, 1.0f, "%.1f", 0.1f);
+				TextDescription("Settings for Composite Both Cameras for Each Eye.");
 				EndSoftDisabled(!stereoCustomConfig.StereoCutoutEnabled);
+
+				IMGUI_BIG_SPACING;
+				BeginSoftDisabled(!stereoCustomConfig.StereoUseDeferredDepthPass);
+				ScrollableSlider("Depth Fold Strength", &stereoCustomConfig.StereoDepthFoldStrength, 0.0f, 5.0f, "%.1f", 0.1f);
+				ScrollableSlider("Depth Fold Max Distance", &stereoCustomConfig.StereoDepthFoldMaxDistance, 0.0f, 5.0f, "%.1f", 0.1f);
+				ScrollableSlider("Depth Fold Filter Distance", &stereoCustomConfig.StereoDepthFoldFilterWidth, 0.0f, 3.0f, "%.1f", 0.1f);
+				TextDescription("Settings for Deferred Depth Pass. Depth Fold moves background vertices beind foreground vertices at discontinuities, \nto minimize visible gradient surfaces where none exist.");
+				EndSoftDisabled(!stereoCustomConfig.StereoUseDeferredDepthPass);
+
 				ImGui::PopItemWidth();
 				ImGui::TreePop();
 			}
@@ -774,14 +796,14 @@ if (bIsActiveTab) { ImGui::PopStyleColor(1); bIsActiveTab = false; }
 			ImGui::SetNextItemOpen(true, ImGuiCond_Once);
 			if (ImGui::TreeNode("Temporal Filtering"))
 			{
-				ImGui::Checkbox("Use Disparity Temporal Filtering", &stereoCustomConfig.StereoUseDisparityTemporalFiltering);
+				ImGui::Checkbox("Use Projection Temporal Filtering", &stereoCustomConfig.StereoUseDisparityTemporalFiltering);
 				TextDescription("Possibly smoothes out and improves quality of the projection depth.");
 
 				IMGUI_BIG_SPACING;
 				ImGui::PushItemWidth(ImGui::GetContentRegionAvail().x * 0.45f);
 				BeginSoftDisabled(!stereoCustomConfig.StereoUseDisparityTemporalFiltering);
-				ScrollableSlider("Disparity Temporal Filtering Strength", &stereoCustomConfig.StereoDisparityTemporalFilteringStrength, 0.0f, 1.0f, "%.1f", 0.1f);
-				ScrollableSlider("Disparity Temporal Filtering Cutout Factor", &stereoCustomConfig.StereoDisparityTemporalFilteringDistance, 0.1f, 10.0f, "%.1f", 0.1f);
+				ScrollableSlider("Projection Temporal Filtering Strength", &stereoCustomConfig.StereoDisparityTemporalFilteringStrength, 0.0f, 1.0f, "%.1f", 0.1f);
+				ScrollableSlider("Projection Temporal Filtering Cutout Factor", &stereoCustomConfig.StereoDisparityTemporalFilteringDistance, 0.1f, 10.0f, "%.1f", 0.1f);
 				EndSoftDisabled(!stereoCustomConfig.StereoUseDisparityTemporalFiltering);
 				ImGui::PopItemWidth();
 				ImGui::TreePop();
@@ -1068,6 +1090,26 @@ if (bIsActiveTab) { ImGui::PopStyleColor(1); bIsActiveTab = false; }
 			ImGui::SetNextItemWidth(ImGui::GetContentRegionAvail().x * 0.45f);
 			ScrollableSlider("Field of View Scale", &mainConfig.FieldOfViewScale, 0.1f, 2.0f, "%.2f", 0.01f);
 			TextDescription("Sets the size of the rendered area in the Custom 2D and Stereo 3D projection modes.");
+
+			IMGUI_BIG_SPACING;
+
+			ImGui::Text("Override Distortion Mode");
+			if (ImGui::RadioButton("Off", cameraConfig.CameraForceDistortionMode == CameraDistortionMode_NotSet))
+			{
+				cameraConfig.CameraForceDistortionMode = CameraDistortionMode_NotSet;
+			}
+			ImGui::SameLine();
+			if (ImGui::RadioButton("Normal Lens", cameraConfig.CameraForceDistortionMode == CameraDistortionMode_RegularLens))
+			{
+				cameraConfig.CameraForceDistortionMode = CameraDistortionMode_RegularLens;
+			}
+			ImGui::SameLine();
+			if (ImGui::RadioButton("Fisheye", cameraConfig.CameraForceDistortionMode == CameraDistortionMode_Fisheye))
+			{
+				cameraConfig.CameraForceDistortionMode = CameraDistortionMode_Fisheye;
+			}
+
+			IMGUI_BIG_SPACING;
 		}
 
 		ImGui::SetNextItemOpen(true, ImGuiCond_Once);
@@ -1315,7 +1357,29 @@ if (bIsActiveTab) { ImGui::PopStyleColor(1); bIsActiveTab = false; }
 			ImGui::BeginGroup();
 			ImGui::Checkbox("Freeze Stereo Projection", &stereoConfig.StereoReconstructionFreeze);
 			ImGui::Checkbox("Debug Depth", &mainConfig.DebugDepth);
-			ImGui::Checkbox("Debug Valid Stereo", &mainConfig.DebugStereoValid);
+			ImGui::BeginGroup();
+			ImGui::Text("Overlay");
+			if (ImGui::RadioButton("None###DebugOverlayNone", mainConfig.DebugOverlay == DebugOverlay_None))
+			{
+				mainConfig.DebugOverlay = DebugOverlay_None;
+			}
+			if (ImGui::RadioButton("Stereo Confidence", mainConfig.DebugOverlay == DebugOverlay_ProjectionConfidence))
+			{
+				mainConfig.DebugOverlay = DebugOverlay_ProjectionConfidence;
+			}
+			if (ImGui::RadioButton("Camera Selection", mainConfig.DebugOverlay == DebugOverlay_CameraSelction))
+			{
+				mainConfig.DebugOverlay = DebugOverlay_CameraSelction;
+			}
+			if (ImGui::RadioButton("Temporal Blending", mainConfig.DebugOverlay == DebugOverlay_TemporalBlending))
+			{
+				mainConfig.DebugOverlay = DebugOverlay_TemporalBlending;
+			}
+			if (ImGui::RadioButton("Temporal Clipping", mainConfig.DebugOverlay == DebugOverlay_TemporalClipping))
+			{
+				mainConfig.DebugOverlay = DebugOverlay_TemporalClipping;
+			}
+			ImGui::EndGroup();
 
 			ImGui::BeginGroup();
 			ImGui::Text("Debug Texture");
@@ -1754,6 +1818,10 @@ void DashboardMenu::CreateOverlay()
 			vrOverlay->SetOverlayInputMethod(m_overlayHandle, vr::VROverlayInputMethod_Mouse);
 			vrOverlay->SetOverlayFlag(m_overlayHandle, vr::VROverlayFlags_IsPremultiplied, true);
 			vrOverlay->SetOverlayFlag(m_overlayHandle, vr::VROverlayFlags_SendVRDiscreteScrollEvents, true);
+			vrOverlay->SetOverlayFlag(m_overlayHandle, vr::VROverlayFlags_SortWithNonSceneOverlays, true);
+			vrOverlay->SetOverlayFlag(m_overlayHandle, vr::VROverlayFlags_MakeOverlaysInteractiveIfVisible, true);
+			vrOverlay->SetOverlayFlag(m_overlayHandle, vr::VROverlayFlags_EnableControlBar, true);
+			vrOverlay->SetOverlayFlag(m_overlayHandle, vr::VROverlayFlags_EnableControlBarKeyboard, true);
 			vrOverlay->SetOverlayTextureColorSpace(m_overlayHandle, vr::ColorSpace_Gamma);
 
 			vrOverlay->SetOverlayWidthInMeters(m_overlayHandle, 2.775f);

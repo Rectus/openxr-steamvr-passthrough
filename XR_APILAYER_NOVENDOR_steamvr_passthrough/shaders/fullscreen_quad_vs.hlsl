@@ -1,12 +1,6 @@
-//#include "common_vs.hlsl"
 
-struct VS_OUTPUT
-{
-    float4 position : SV_POSITION;
-    float4 clipSpaceCoords : TEXCOORD0;
-    float3 screenCoords : TEXCOORD1;
-    float projectionValidity : TEXCOORD2;
-};
+//#include "common_vs.hlsl"
+#include "vs_outputs.hlsl"
 
 VS_OUTPUT main(float3 inPosition : POSITION, uint vertexID : SV_VertexID)
 {
@@ -17,9 +11,9 @@ VS_OUTPUT main(float3 inPosition : POSITION, uint vertexID : SV_VertexID)
 
     output.position = float4(clipCoords, 0, 1);
     
-    output.clipSpaceCoords = float4(clipCoords, 1, 1);
-    output.screenCoords = float3(clipCoords, 1);
-    output.projectionValidity = 1;
+    output.cameraReprojectedPos = float4(clipCoords, 1, 1);
+    output.screenPos = float4(clipCoords, 1, 1);
+    output.projectionConfidence = 1;
 
 #ifdef VULKAN
 	output.position.y *= -1.0;

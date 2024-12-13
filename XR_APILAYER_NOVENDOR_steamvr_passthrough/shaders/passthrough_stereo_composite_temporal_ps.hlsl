@@ -4,12 +4,22 @@
 #include "util.hlsl"
 
 
+#ifdef VULKAN
+
+SamplerState g_samplerState : register(s5);
+Texture2D g_cameraFrameTexture : register(t5);
+Texture2D<float2> g_fisheyeCorrectionTexture : register(t6);
+
+#else
+
 SamplerState g_samplerState : register(s0);
-Texture2D g_cameraFrameTexture : register(t0);
+Texture2D<float4> g_cameraFrameTexture : register(t0);
 Texture2D<float2> g_fisheyeCorrectionTexture : register(t1);
 
 Texture2D<half4> g_prevCameraFilter : register(t2);
 RWTexture2D<half4> g_cameraFilter : register(u1);
+
+#endif
 
 
 
@@ -124,6 +134,7 @@ float4 bicubic_b_spline_4tap(in Texture2D<half4> tex, in SamplerState linearSamp
 
 
 
+
 //[earlydepthstencil]
 float4 main(VS_OUTPUT input) : SV_TARGET
 {
@@ -131,19 +142,21 @@ float4 main(VS_OUTPUT input) : SV_TARGET
 	
     if (g_doCutout)
     {
-        alpha = saturate(input.cameraBlendConfidence.x);
-        clip(input.cameraBlendConfidence.x);
+        clip(input.cameraBlendConfidence.x >= 0.5 ? -1 : 1);
+        alpha = 1 - saturate(input.projectionConfidence.x * 2);
     }
     
     if (g_bUseDepthCutoffRange)
     {
-        clip(input.screenPos.w - g_depthCutoffRange.x);
-        clip(g_depthCutoffRange.y - input.screenPos.w);
+        float depth = (input.screenPos.z / input.screenPos.w);// * (g_depthRange.y - g_depthRange.x) + g_depthRange.x;
+        clip(depth - g_depthCutoffRange.x);
+        clip(g_depthCutoffRange.y - depth);
     }
 
 	// Convert from homogenous clip space coordinates to 0-1.
 	float2 outUvs = (input.cameraReprojectedPos.xy / input.cameraReprojectedPos.w) * float2(0.5, 0.5) + float2(0.5, 0.5);
-	
+    float2 crossUvs = (input.crossCameraReprojectedPos.xy / input.crossCameraReprojectedPos.w) * float2(0.5, 0.5) + float2(0.5, 0.5);
+
     if (g_bClampCameraFrame)
     {
         clip(input.cameraReprojectedPos.z);
@@ -151,64 +164,130 @@ float4 main(VS_OUTPUT input) : SV_TARGET
         clip(1 - outUvs);
     }
     
-	// Remap and clamp to frame UV bounds.
-	outUvs = outUvs * (g_uvBounds.zw - g_uvBounds.xy) + g_uvBounds.xy;
-	outUvs = clamp(outUvs, g_uvBounds.xy, g_uvBounds.zw);
-
     float2 correction = 0;
     
     if (g_bUseFisheyeCorrection)
     {
+        // Remap and clamp to frame UV bounds.
+        outUvs = outUvs * (g_uvBounds.zw - g_uvBounds.xy) + g_uvBounds.xy;
+        outUvs = clamp(outUvs, g_uvBounds.xy, g_uvBounds.zw);
+        
         correction = g_fisheyeCorrectionTexture.Sample(g_samplerState, outUvs);
         outUvs += correction;
+        
+        crossUvs = crossUvs * (g_crossUVBounds.zw - g_crossUVBounds.xy) + g_crossUVBounds.xy;
+        crossUvs = clamp(crossUvs, g_crossUVBounds.xy, g_crossUVBounds.zw);
+        
+        correction = g_fisheyeCorrectionTexture.Sample(g_samplerState, crossUvs);
+        crossUvs += correction;
     }
     else
     {
         outUvs.y = 1 - outUvs.y;
+        
+        // Remap and clamp to frame UV bounds.
+        outUvs = outUvs * (g_uvBounds.zw - g_uvBounds.xy) + g_uvBounds.xy;
+        outUvs = clamp(outUvs, g_uvBounds.xy, g_uvBounds.zw);
+        
+        crossUvs = crossUvs * (g_crossUVBounds.zw - g_crossUVBounds.xy) + g_crossUVBounds.xy;
+        crossUvs = clamp(crossUvs, g_crossUVBounds.xy, g_crossUVBounds.zw);
     }
-	
+      
+    float3 rgbColor = g_cameraFrameTexture.Sample(g_samplerState, outUvs).xyz;
+    
+    float3 minColor = rgbColor;
+    float3 maxColor = rgbColor;
+    
+    float3 crossRGBColor = g_cameraFrameTexture.Sample(g_samplerState, crossUvs).xyz;
+    
+    float3 crossMinColor = crossRGBColor;
+    float3 crossMaxColor = crossRGBColor;
+    
+    float sharpness = g_sharpness + 0.5;
+
+    rgbColor *= (1 + sharpness * 4);
+    crossRGBColor *= (1 + sharpness * 4);
+        
+    float3 textureSize;
+    g_cameraFrameTexture.GetDimensions(0, textureSize.x, textureSize.y, textureSize.z);
+    
+    float3 sample = g_cameraFrameTexture.Sample(g_samplerState, outUvs + float2(-1, 0) / textureSize.xy).xyz;
+    rgbColor -= sample * sharpness;
+    minColor = min(minColor, sample);
+    maxColor = max(maxColor, sample);
+        
+    sample = g_cameraFrameTexture.Sample(g_samplerState, outUvs + float2(1, 0) / textureSize.xy).xyz;
+    rgbColor -= sample * sharpness;
+    minColor = min(minColor, sample);
+    maxColor = max(maxColor, sample);
+        
+    sample = g_cameraFrameTexture.Sample(g_samplerState, outUvs + float2(0, -1) / textureSize.xy).xyz;
+    rgbColor -= sample * sharpness;
+    minColor = min(minColor, sample);
+    maxColor = max(maxColor, sample);
+        
+    sample = g_cameraFrameTexture.Sample(g_samplerState, outUvs + float2(0, 1) / textureSize.xy).xyz;
+    rgbColor -= sample * sharpness;
+    minColor = min(minColor, sample);
+    maxColor = max(maxColor, sample);
+        
+    sample = g_cameraFrameTexture.Sample(g_samplerState, crossUvs + float2(-1, 0) / textureSize.xy).xyz;
+    crossRGBColor -= sample * sharpness;
+    crossMinColor = min(crossMinColor, sample);
+    crossMaxColor = max(crossMaxColor, sample);
+    
+    sample = g_cameraFrameTexture.Sample(g_samplerState, crossUvs + float2(1, 0) / textureSize.xy).xyz;
+    crossRGBColor -= sample * sharpness;
+    crossMinColor = min(crossMinColor, sample);
+    crossMaxColor = max(crossMaxColor, sample);
+    
+    sample = g_cameraFrameTexture.Sample(g_samplerState, crossUvs + float2(0, -1) / textureSize.xy).xyz;
+    crossRGBColor -= sample * sharpness;
+    crossMinColor = min(crossMinColor, sample);
+    crossMaxColor = max(crossMaxColor, sample);
+    
+    sample = g_cameraFrameTexture.Sample(g_samplerState, crossUvs + float2(0, 1) / textureSize.xy).xyz;
+    crossRGBColor -= sample * sharpness;
+    crossMinColor = min(crossMinColor, sample);
+    crossMaxColor = max(crossMaxColor, sample);
+
+    
+    //float3 crossRGBColor = min(maxColor, max(crossRGBColor, minColor));
+    float3 crossRGBColorClamped = min(maxColor, max(crossRGBColor, minColor));
+    
     uint texW, texH;
     g_cameraFrameTexture.GetDimensions(texW, texH);
     int2 cameraFrameRes = uint2(texW, texH);
-
-    g_prevCameraFilter.GetDimensions(texW, texH);
-    int2 outputFrameRes = uint2(texW, texH);
     
+    float2 camTexCoords = outUvs * cameraFrameRes;
+    uint2 camPixel = floor(camTexCoords);
     
-    float3 rgbColor = 0; 
-    float3 minColor = 1;
-    float3 maxColor = 0;
+    float2 crossCamTexCoords = crossUvs * cameraFrameRes;
+    uint2 crossCamPixel = floor(crossCamTexCoords);
     
-    float sharpness = g_sharpness + 0.5;
+    // How far the current pixel is to the sampled one
+    float distanceFactor = abs(camTexCoords.x - camPixel.x - 0.5) + abs(camTexCoords.y - camPixel.y - 0.5);
+    float crossDistanceFactor = abs(crossCamTexCoords.x - crossCamPixel.x - 0.5) + abs(crossCamTexCoords.y - crossCamPixel.y - 0.5);
     
-    float3 sample = g_cameraFrameTexture.Sample(g_samplerState, outUvs).xyz;
-
-    minColor = sample;
-    maxColor = sample;
-        
-    float dist = 1;
-        
-    rgbColor = sample * (1 + sharpness * 4);
-    sample = g_cameraFrameTexture.Sample(g_samplerState, outUvs + float2(-dist, 0) / cameraFrameRes).xyz;
-    rgbColor -= sample * sharpness;
-    minColor = min(minColor, sample);
-    maxColor = max(maxColor, sample);
-        
-    sample = g_cameraFrameTexture.Sample(g_samplerState, outUvs + float2(dist, 0) / cameraFrameRes).xyz;
-    rgbColor -= sample * sharpness;
-    minColor = min(minColor, sample);
-    maxColor = max(maxColor, sample);
-        
-    sample = g_cameraFrameTexture.Sample(g_samplerState, outUvs + float2(0, -dist) / cameraFrameRes).xyz;
-    rgbColor -= sample * sharpness;
-    minColor = min(minColor, sample);
-    maxColor = max(maxColor, sample);
-        
-    sample = g_cameraFrameTexture.Sample(g_samplerState, outUvs + float2(0, dist) / cameraFrameRes).xyz;
-    rgbColor -= sample * sharpness;
-    minColor = min(minColor, sample);
-    maxColor = max(maxColor, sample);
-      
+    float cameraBlend = saturate(0.5 - input.projectionConfidence.x * 0.5 + input.projectionConfidence.y * 0.5);
+    float cameraSelect = 1 - step(input.cameraBlendConfidence.y, input.cameraBlendConfidence.x);
+    
+    float pixelDistanceBlend = distanceFactor + (1 - crossDistanceFactor);
+    //float blendfactor = 1 - abs(input.cameraBlend * 2 - 1);
+    
+    float depthFactor = saturate(1 - (abs(input.cameraDepth.x - input.cameraDepth.y) * 1000));
+    
+    float combineFactor = g_cutoutCombineFactor * depthFactor * input.projectionConfidence.x * input.projectionConfidence.y;
+    
+    // Blend together both cameras based on which ones are valid and have the closest pixels.
+    float finalCameraBlendFactor = lerp(cameraSelect, pixelDistanceBlend, combineFactor);
+    
+    rgbColor = lerp(rgbColor, lerp(crossRGBColor, crossRGBColorClamped, combineFactor), finalCameraBlendFactor);
+    minColor = lerp(minColor, lerp(crossMinColor, minColor, combineFactor), finalCameraBlendFactor);
+    maxColor = lerp(maxColor, lerp(crossMaxColor, maxColor, combineFactor), finalCameraBlendFactor);
+    
+    float3 outputTextureSize;
+    g_prevCameraFilter.GetDimensions(0, outputTextureSize.x, outputTextureSize.y, outputTextureSize.z);
     
     float2 prevScreenUvs = (input.prevCameraFrameScreenPos.xy / input.prevCameraFrameScreenPos.w) * float2(0.5, 0.5) + float2(0.5, 0.5);
     prevScreenUvs.y = 1 - prevScreenUvs.y;
@@ -216,7 +295,7 @@ float4 main(VS_OUTPUT input) : SV_TARGET
     float2 newScreenUvs = (input.screenPos.xy / input.screenPos.w) * float2(0.5, 0.5) + float2(0.5, 0.5);
     newScreenUvs.y = 1 - newScreenUvs.y;
      
-    float2 prevTexCoords = prevScreenUvs * outputFrameRes;
+    float2 prevTexCoords = prevScreenUvs * outputTextureSize.xy;
     uint2 prevPixel = floor(prevTexCoords);
     uint2 prevPixel2 = round(prevTexCoords);
     
@@ -233,54 +312,44 @@ float4 main(VS_OUTPUT input) : SV_TARGET
     }
     else if (g_temporalFilteringSampling == 2)
     {
-        filtered = bicubic_b_spline_4tap(g_prevCameraFilter, g_samplerState, prevScreenUvs, outputFrameRes);
+        filtered = bicubic_b_spline_4tap(g_prevCameraFilter, g_samplerState, prevScreenUvs, outputTextureSize.xy);
     }
     else if (g_temporalFilteringSampling == 3)
     {
-        filtered = catmull_rom_9tap(g_prevCameraFilter, g_samplerState, prevScreenUvs, outputFrameRes);
+        filtered = catmull_rom_9tap(g_prevCameraFilter, g_samplerState, prevScreenUvs, outputTextureSize.xy);
     }
     else
     {
-        filtered = lanczos2_prev(prevScreenUvs, outputFrameRes);
+        filtered = lanczos2_prev(prevScreenUvs, outputTextureSize.xy);
     }
-    
-    //filtered.a = g_prevCameraFilter.Load(uint3(prevPixel, 0)).a;
-    
-    
+
     // Clip history color to AABB of neighborhood color values + some configurable leeway.
     
     float3 filteredClipped = min(maxColor * (1.0 + g_temporalFilteringColorRangeCutoff), max(filtered.xyz, minColor * (1.0 - g_temporalFilteringColorRangeCutoff)));
-    
-    // Flicker reduction attempt based on: Callum Glover - Temporal Anti Aliasing Implementation and Extensions
-    // https://static1.squarespace.com/static/5a3beb72692ebe77330b5118/t/5c9d4f5be2c483f0c4108eca/1553813352302/report.pdf
-    
+
     float isClipped = any(filtered.xyz - filteredClipped) ? 1 : 0;
     
     filtered.xyz = isClipped != 0 ? lerp(filtered.xyz, filteredClipped, filtered.a) : filtered.xyz;
+
+    float invAlphaFactor = 0.9;
+
     
-    float2 camTexCoords = outUvs * cameraFrameRes;
-    uint2 camPixel = floor(camTexCoords);
-    
-    // How far the current pixel is to the sampled one
-    float confidenceInv = abs(camTexCoords.x - camPixel.x - 0.5) + abs(camTexCoords.y - camPixel.y - 0.5);
-    
-    float prevConfidenceInv = clamp((abs(prevTexCoords.x - prevPixel.x - 0.5) + abs(prevTexCoords.y - prevPixel.y - 0.5)),
-0.05, 1);  
+    float prevDistanceFactor = clamp((abs(prevTexCoords.x - prevPixel.x - 0.5) + abs(prevTexCoords.y - prevPixel.y - 0.5)), 0.05, 1);
     
     float vLenSq = dot(input.prevCameraFrameVelocity, input.prevCameraFrameVelocity);
-    float factor = saturate(min(g_temporalFilteringFactor, 1 - vLenSq * 500));
-    float confidence = confidenceInv + (1 - prevConfidenceInv);
+    float factor = saturate(g_temporalFilteringFactor - vLenSq * 500);
+    float confidence = lerp(distanceFactor, crossDistanceFactor, finalCameraBlendFactor) + (1 - prevDistanceFactor);
 
-    float finalFactor = clamp(factor * confidence, 0, g_temporalFilteringFactor);
+    float finalHistoryFactor = clamp(factor * confidence, 0, g_temporalFilteringFactor);
+    rgbColor = lerp(rgbColor, filtered.xyz, finalHistoryFactor);
     
-    rgbColor = lerp(rgbColor, filtered.xyz, finalFactor);
-    
-    float clipHistory = (filtered.a == 0) ? isClipped : lerp(isClipped, filtered.a, finalFactor);
+    float clipHistory = (filtered.a == 0) ? isClipped : lerp(isClipped, filtered.a, finalHistoryFactor);
     
     if(g_bIsFirstRenderOfCameraFrame)
     {
-        g_cameraFilter[floor(newScreenUvs * outputFrameRes)] = float4(rgbColor, input.projectionConfidence.x >= 0 ? clipHistory : 1);
+        g_cameraFilter[floor(newScreenUvs * outputTextureSize.xy)] = float4(rgbColor, input.projectionConfidence.x >= 0 ? clipHistory : 1);
     }
+    
     
 	if (g_bDoColorAdjustment)
 	{
@@ -315,14 +384,11 @@ float4 main(VS_OUTPUT input) : SV_TARGET
     }
     else if (g_debugOverlay == 2) // Camera selection
     {
-        if (!g_doCutout)
-        {
-            rgbColor.g += 1.0;
-        }
+        rgbColor.g += finalCameraBlendFactor;
     }
     else if (g_debugOverlay == 3) // Temporal blend
     {
-        rgbColor.g += finalFactor;
+        rgbColor.g += finalHistoryFactor;
     }
     else if (g_debugOverlay == 4) // Temporal clipping
     {
@@ -330,6 +396,6 @@ float4 main(VS_OUTPUT input) : SV_TARGET
     }
     
     rgbColor = g_bPremultiplyAlpha ? rgbColor * g_opacity * alpha : rgbColor;
-    
+	
     return float4(rgbColor, g_opacity * alpha);
 }

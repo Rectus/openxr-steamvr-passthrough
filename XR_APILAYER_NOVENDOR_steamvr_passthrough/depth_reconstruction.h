@@ -50,7 +50,6 @@ private:
 	uint32_t m_cameraFrameHeight;
 	uint32_t m_cvImageWidth;
 	uint32_t m_cvImageHeight;
-	uint32_t m_cameraFrameBufferSize;
 	XrMatrix4x4f m_cameraLeftToRightTransform;
 	EStereoFrameLayout m_frameLayout;
 
