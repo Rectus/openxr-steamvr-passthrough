@@ -6,7 +6,7 @@ struct VS_OUTPUT
 {
 	float4 position : SV_POSITION;
 	float4 clipSpaceCoords : TEXCOORD0;
-	float3 screenCoords : TEXCOORD1;
+	float4 screenCoords : TEXCOORD1;
 	float projectionValidity : TEXCOORD2;
     float4 prevClipSpaceCoords : TEXCOORD3;
     float3 velocity : TEXCOORD4;
@@ -288,7 +288,7 @@ VS_OUTPUT main(float3 inPosition : POSITION, uint vertexID : SV_VertexID)
     }
     
     output.position = mul(g_worldToHMDProjection, worldSpacePoint);
-    output.screenCoords = output.position.xyw;
+    output.screenCoords = output.position;
 	
 #ifndef VULKAN
     float4 outCoords = mul(g_worldToCameraProjection, worldSpacePoint);

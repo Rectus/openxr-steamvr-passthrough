@@ -6,7 +6,7 @@ struct VS_OUTPUT
 {
 	float4 position : SV_POSITION;
 	float4 clipSpaceCoords : TEXCOORD0;
-	float3 screenCoords : TEXCOORD1;
+	float4 screenCoords : TEXCOORD1;
 	float projectionValidity : TEXCOORD2;
     float4 prevClipSpaceCoords : TEXCOORD3;
     float3 velocity : TEXCOORD4;
@@ -41,8 +41,8 @@ float4 main(VS_OUTPUT input) : SV_TARGET
     
     if (g_bUseDepthCutoffRange)
     {
-        clip(input.screenCoords.z - g_depthCutoffRange.x);
-        clip(g_depthCutoffRange.y - input.screenCoords.z);
+        clip(input.screenCoords.w - g_depthCutoffRange.x);
+        clip(g_depthCutoffRange.y - input.screenCoords.w);
     }
 
 	// Convert from homogenous clip space coordinates to 0-1.
@@ -101,7 +101,7 @@ float4 main(VS_OUTPUT input) : SV_TARGET
 
     if (g_bDebugDepth)
     {
-        float depth = saturate(input.screenCoords.z / (g_depthRange.y - g_depthRange.x) - g_depthRange.x);
+        float depth = saturate((input.screenCoords.z / input.screenCoords.w) / (g_depthRange.y - g_depthRange.x) - g_depthRange.x);
         rgbColor = float3(depth, depth, depth);
         if (g_bDebugValidStereo && input.projectionValidity < 0.0)
         {

@@ -5,7 +5,7 @@ struct VS_OUTPUT
 {
     float4 position : SV_POSITION;
     float4 clipSpaceCoords : TEXCOORD0;
-    float3 screenCoords : TEXCOORD1;
+    float4 screenCoords : TEXCOORD1;
     float projectionValidity : TEXCOORD2;
     float4 prevClipSpaceCoords : TEXCOORD3;
     float3 velocity : TEXCOORD4;
@@ -28,7 +28,7 @@ VS_OUTPUT main(float3 inPosition : POSITION, uint vertexID : SV_VertexID)
     output.clipSpaceCoords = clipSpacePos;   
     
     output.position = mul(g_worldToHMDProjection, worldPos);
-    output.screenCoords = output.position.xyw;
+    output.screenCoords = output.position;
     output.prevClipSpaceCoords = mul(g_prevWorldToHMDProjection, worldPos);
     output.projectionValidity = 1.0;
 	

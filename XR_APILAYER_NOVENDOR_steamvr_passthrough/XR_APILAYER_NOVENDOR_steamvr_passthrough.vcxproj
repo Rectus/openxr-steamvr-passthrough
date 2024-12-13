@@ -305,6 +305,11 @@ copy $(SolutionDir)\readme.md $(OutDir)
       <ShaderType Condition="'$(Configuration)|$(Platform)'=='Release|x64'">Pixel</ShaderType>
       <VariableName Condition="'$(Configuration)|$(Platform)'=='Release|x64'">g_AlphaCopyMaskedShaderPS</VariableName>
     </FxCompile>
+    <FxCompile Include="shaders\depth_write_ps.hlsl">
+      <ShaderType Condition="'$(Configuration)|$(Platform)'=='Release|x64'">Pixel</ShaderType>
+      <VariableName Condition="'$(Configuration)|$(Platform)'=='Release|x64'">g_depthWriteShaderPS</VariableName>
+      <HeaderFileOutput Condition="'$(Configuration)|$(Platform)'=='Release|x64'">shaders\depth_write_ps.h</HeaderFileOutput>
+    </FxCompile>
     <FxCompile Include="shaders\fill_holes_cs.hlsl">
       <ShaderType Condition="'$(Configuration)|$(Platform)'=='Release|x64'">Compute</ShaderType>
       <VariableName Condition="'$(Configuration)|$(Platform)'=='Release|x64'">g_FillHolesShaderCS</VariableName>
@@ -331,6 +336,11 @@ copy $(SolutionDir)\readme.md $(OutDir)
       <HeaderFileOutput Condition="'$(Configuration)|$(Platform)'=='Release|x64'">shaders\passthrough_ps.h</HeaderFileOutput>
       <VariableName Condition="'$(Configuration)|$(Platform)'=='Release|x64'">g_PassthroughShaderPS</VariableName>
       <ShaderType Condition="'$(Configuration)|$(Platform)'=='Release|x64'">Pixel</ShaderType>
+    </FxCompile>
+    <FxCompile Include="shaders\passthrough_read_depth_vs.hlsl">
+      <ShaderType Condition="'$(Configuration)|$(Platform)'=='Release|x64'">Vertex</ShaderType>
+      <VariableName Condition="'$(Configuration)|$(Platform)'=='Release|x64'">g_PassthroughReadDepthShaderVS</VariableName>
+      <HeaderFileOutput Condition="'$(Configuration)|$(Platform)'=='Release|x64'">shaders/passthrough_read_depth_vs.h</HeaderFileOutput>
     </FxCompile>
     <FxCompile Include="shaders\passthrough_stereo_temporal_vs.hlsl">
       <HeaderFileOutput Condition="'$(Configuration)|$(Platform)'=='Release|x64'">shaders\passthrough_stereo_temporal_vs.h</HeaderFileOutput>

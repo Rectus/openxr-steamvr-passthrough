@@ -141,6 +141,10 @@ struct DX11FrameData
 	ComPtr<ID3D11UnorderedAccessView> disparityMapUAV;
 	ComPtr<ID3D11ShaderResourceView> disparityMapUAVSRV;
 	ComPtr<ID3D11Texture2D> disparityMapUAVTexture;
+
+	ComPtr<ID3D11Texture2D> passthroughDepthMap;
+	ComPtr<ID3D11ShaderResourceView> passthroughDepthMapSRV[2];
+	ComPtr<ID3D11DepthStencilView> passthroughDepthMapDSV[2];
 };
 
 
@@ -183,6 +187,7 @@ protected:
 	bool CheckInitViewData(const uint32_t viewIndex, const uint32_t swapchainIndex);
 	bool CheckInitFrameData(const uint32_t imageIndex);
 	void SetupDisparityMap(uint32_t width, uint32_t height);
+	void SetupPassthroughDepthMap(uint32_t width, uint32_t height);
 	void SetupUVDistortionMap(std::shared_ptr<std::vector<float>> uvDistortionMap);
 	DX11TemporaryRenderTarget& GetTemporaryRenderTarget(const uint32_t swapchainIndex, const uint32_t eyeIndex);
 	void GenerateMesh();
@@ -193,6 +198,7 @@ protected:
 	void RenderHoleFillCS(DX11FrameData& frameData, std::shared_ptr<DepthFrame> depthFrame);
 	void RenderPassthroughView(const ERenderEye eye, const int32_t swapchainIndex, const int32_t depthSwapchainIndex, const XrCompositionLayerProjection* layer, CameraFrame* frame, std::shared_ptr<DepthFrame> depthFrame, EPassthroughBlendMode blendMode, UINT numIndices, FrameRenderParameters& renderParams);
 	void RenderMaskedPrepassView(const ERenderEye eye, const int32_t swapchainIndex, int32_t depthSwapchainIndex, const XrCompositionLayerProjection* layer, CameraFrame* frame, std::shared_ptr<DepthFrame> depthFrame, UINT numIndices, FrameRenderParameters& renderParams);
+	void RenderDepthPrepassView(const ERenderEye eye, const int32_t swapchainIndex, int32_t depthSwapchainIndex, const XrCompositionLayerProjection* layer, CameraFrame* frame, std::shared_ptr<DepthFrame> depthFrame, UINT numIndices, FrameRenderParameters& renderParams);
 	void RenderFrameFinish();
 
 	std::shared_ptr<ConfigManager> m_configManager;
@@ -230,11 +236,13 @@ protected:
 	ComPtr<ID3D11VertexShader> m_meshRigidVertexShader;
 	ComPtr<ID3D11VertexShader> m_stereoVertexShader;
 	ComPtr<ID3D11VertexShader> m_stereoTemporalVertexShader;
+	ComPtr<ID3D11VertexShader> m_passthroughReadDepthVS;
 	ComPtr<ID3D11PixelShader> m_pixelShader;
 	ComPtr<ID3D11PixelShader> m_pixelShaderTemporal;
 	ComPtr<ID3D11PixelShader> m_prepassShader;
 	ComPtr<ID3D11PixelShader> m_maskedPrepassShader;
 	ComPtr<ID3D11PixelShader> m_maskedAlphaCopyShader;
+	ComPtr<ID3D11PixelShader> m_depthWriteShaderPS;
 
 	
 	ComPtr<ID3D11Buffer> m_vsMeshConstantBuffer[vr::k_unMaxTrackedDeviceCount];

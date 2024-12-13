@@ -6,7 +6,7 @@ struct VS_OUTPUT
 {
 	float4 position : SV_POSITION;
 	float4 clipSpaceCoords : TEXCOORD0;
-	float3 screenCoords : TEXCOORD1;
+	float4 screenCoords : TEXCOORD1;
 	float projectionValidity : TEXCOORD2;
     float4 prevClipSpaceCoords : TEXCOORD3;
     float3 velocity : TEXCOORD4;
@@ -146,8 +146,8 @@ float4 main(VS_OUTPUT input) : SV_TARGET
     
     if (g_bUseDepthCutoffRange)
     {
-        clip(input.screenCoords.z - g_depthCutoffRange.x);
-        clip(g_depthCutoffRange.y - input.screenCoords.z);
+        clip(input.screenCoords.w - g_depthCutoffRange.x);
+        clip(g_depthCutoffRange.y - input.screenCoords.w);
     }
 
 	// Convert from homogenous clip space coordinates to 0-1.
@@ -222,7 +222,7 @@ float4 main(VS_OUTPUT input) : SV_TARGET
     float2 prevScreenUvs = (input.prevClipSpaceCoords.xy / input.prevClipSpaceCoords.w) * float2(0.5, 0.5) + float2(0.5, 0.5);
     prevScreenUvs.y = 1 - prevScreenUvs.y;
     
-    float2 newScreenUvs = (input.screenCoords.xy / input.screenCoords.z) * float2(0.5, 0.5) + float2(0.5, 0.5);
+    float2 newScreenUvs = (input.screenCoords.xy / input.screenCoords.w) * float2(0.5, 0.5) + float2(0.5, 0.5);
     newScreenUvs.y = 1 - newScreenUvs.y;
      
     float2 prevTexCoords = prevScreenUvs * outputFrameRes;
@@ -269,7 +269,7 @@ float4 main(VS_OUTPUT input) : SV_TARGET
     float prevConfidenceInv = clamp((abs(prevTexCoords.x - prevPixel.x - 0.5) + abs(prevTexCoords.y - prevPixel.y - 0.5)),
 0.05, 1);
     
-    float depth = saturate(input.screenCoords.z / (g_depthRange.y - g_depthRange.x) - g_depthRange.x);
+    float depth = saturate((input.screenCoords.z / input.screenCoords.w) / (g_depthRange.y - g_depthRange.x) - g_depthRange.x);
     float depthDiff = abs(depth - filtered.w);  
     
     float vLenSq = dot(input.velocity, input.velocity);
@@ -296,7 +296,7 @@ float4 main(VS_OUTPUT input) : SV_TARGET
 
     if (g_bDebugDepth)
     {
-        float depth = saturate(input.screenCoords.z / (g_depthRange.y - g_depthRange.x) - g_depthRange.x);
+        float depth = saturate(input.screenCoords.z / input.screenCoords.w);
         rgbColor = float3(depth, depth, depth);
         if (g_bDebugValidStereo && input.projectionValidity < 0.0)
         {

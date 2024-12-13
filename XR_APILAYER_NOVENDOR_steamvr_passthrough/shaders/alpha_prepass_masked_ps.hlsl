@@ -6,7 +6,7 @@ struct VS_OUTPUT
 {
 	float4 position : SV_POSITION;
 	float4 clipSpaceCoords : TEXCOORD0;
-	float3 screenCoords : TEXCOORD1;
+	float4 screenCoords : TEXCOORD1;
 	float projectionValidity : TEXCOORD2;
 };
 
@@ -54,7 +54,7 @@ float main(VS_OUTPUT input) : SV_TARGET
     }
 	else
 	{
-		float2 outUvs = input.screenCoords.xy / input.screenCoords.z;
+		float2 outUvs = input.screenCoords.xy / input.screenCoords.w;
 		outUvs = outUvs * float2(0.5, -0.5) + float2(0.5, 0.5);
 
         color = g_texture.Sample(g_samplerState, 

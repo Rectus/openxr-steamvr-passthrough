@@ -1,4 +1,5 @@
 
+
 #include "common_ps.hlsl"
 
 struct VS_OUTPUT
@@ -13,13 +14,9 @@ struct VS_OUTPUT
 //[earlydepthstencil]
 float4 main(VS_OUTPUT input) : SV_TARGET
 {
-    clip(input.projectionValidity);
-	
-    if (g_bUseDepthCutoffRange)
+	if(g_doCutout)
     {
-        clip(input.screenCoords.w - g_depthCutoffRange.x);
-        clip(g_depthCutoffRange.y - input.screenCoords.w);
+        clip(input.projectionValidity);
     }
-	
-    return float4(0, 0, 0, 1.0 - g_opacity);
+    return float4(0, 0, 0, 1.0);
 }
