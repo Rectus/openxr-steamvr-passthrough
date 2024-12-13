@@ -12,11 +12,14 @@ struct VS_OUTPUT
 
 
 //[earlydepthstencil]
-float4 main(VS_OUTPUT input) : SV_TARGET
+float main(VS_OUTPUT input, out float depth : SV_Depth) : SV_TARGET
 {
 	if(g_doCutout)
     {
         clip(input.projectionValidity);
     }
-    return float4(0, 0, 0, 1.0);
+	
+	depth = input.position.z;
+	
+    return g_doCutout ? input.projectionValidity : 0;
 }

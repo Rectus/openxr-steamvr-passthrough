@@ -145,6 +145,7 @@ struct DX11FrameData
 	ComPtr<ID3D11Texture2D> passthroughDepthMap;
 	ComPtr<ID3D11ShaderResourceView> passthroughDepthMapSRV[2];
 	ComPtr<ID3D11DepthStencilView> passthroughDepthMapDSV[2];
+	DX11TemporaryRenderTarget passthroughCameraInvalidation[2];
 };
 
 
@@ -229,6 +230,7 @@ protected:
 	ComPtr<ID3D11DepthStencilState> m_depthStencilStateLessWrite;
 	ComPtr<ID3D11DepthStencilState> m_depthStencilStateGreater;
 	ComPtr<ID3D11DepthStencilState> m_depthStencilStateGreaterWrite;
+	ComPtr<ID3D11DepthStencilState> m_depthStencilStateAlwaysWrite;
 
 	ComPtr<ID3D11ComputeShader> m_fillHolesComputeShader;
 	ComPtr<ID3D11VertexShader> m_fullscreenQuadShader;
