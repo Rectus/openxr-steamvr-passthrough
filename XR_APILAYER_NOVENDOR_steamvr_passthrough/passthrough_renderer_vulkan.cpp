@@ -44,6 +44,7 @@ struct VSViewConstantBuffer
 {
 	XrMatrix4x4f cameraProjectionToWorld;
 	XrMatrix4x4f worldToCameraProjection;
+	XrMatrix4x4f crossWorldToCameraProjection;
 	XrMatrix4x4f worldToHMDProjection;
 	XrMatrix4x4f HMDProjectionToWorld;
 	XrMatrix4x4f prevCameraProjectionToWorld;
@@ -83,6 +84,7 @@ struct PSPassConstantBuffer
 struct PSViewConstantBuffer
 {
 	XrVector4f frameUVBounds;
+	XrVector4f crossUVBounds;
 	XrVector4f prepassUVBounds;
 	uint32_t rtArrayIndex;
 	uint32_t bDoCutout;

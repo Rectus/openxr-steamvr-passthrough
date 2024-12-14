@@ -5,6 +5,7 @@
 cbuffer psViewConstantBuffer : register(b2)
 {
     float4 g_uvBounds;
+    float4 g_crossUVBounds;
     float4 g_uvPrepassBounds;
     uint g_arrayIndex;
     bool g_doCutout;
@@ -46,6 +47,7 @@ cbuffer psMaskedConstantBuffer : register(b4)
 cbuffer psViewConstantBuffer : register(b1)
 {
     float4 g_uvBounds;
+    float4 g_crossUVBounds;
     float4 g_uvPrepassBounds;
     uint g_arrayIndex;
     bool g_doCutout;

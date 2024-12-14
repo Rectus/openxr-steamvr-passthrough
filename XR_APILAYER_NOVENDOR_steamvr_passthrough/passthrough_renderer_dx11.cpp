@@ -17,6 +17,7 @@
 #include "shaders\alpha_prepass_masked_ps.h"
 #include "shaders\depth_write_ps.h"
 #include "shaders\passthrough_ps.h"
+#include "shaders\passthrough_stereo_composite_ps.h"
 #include "shaders\passthrough_temporal_ps.h"
 #include "shaders\alpha_copy_masked_ps.h"
 
@@ -57,6 +58,7 @@ struct VSViewConstantBuffer
 {
 	XrMatrix4x4f cameraProjectionToWorld;
 	XrMatrix4x4f worldToCameraProjection;
+	XrMatrix4x4f crossWorldToCameraProjection;
 	XrMatrix4x4f worldToHMDProjection;
 	XrMatrix4x4f HMDProjectionToWorld;
 	XrMatrix4x4f prevCameraProjectionToWorld;
@@ -100,6 +102,7 @@ struct PSPassConstantBuffer
 struct PSViewConstantBuffer
 {
 	XrVector4f frameUVBounds;
+	XrVector4f crossUVBounds;
 	XrVector4f prepassUVBounds;
 	uint32_t rtArrayIndex;
 	uint32_t bDoCutout;
@@ -246,6 +249,12 @@ bool PassthroughRendererDX11::InitRenderer()
 	if (FAILED(m_d3dDevice->CreatePixelShader(g_depthWriteShaderPS, sizeof(g_depthWriteShaderPS), nullptr, &m_depthWriteShaderPS)))
 	{
 		ErrorLog("g_depthWriteShaderPS creation failure!\n");
+		return false;
+	}
+
+	if (FAILED(m_d3dDevice->CreatePixelShader(g_PassthroughStereoCompositePS, sizeof(g_PassthroughStereoCompositePS), nullptr, &m_stereoCompositePS)))
+	{
+		ErrorLog("g_PassthroughStereoCompositePS creation failure!\n");
 		return false;
 	}
 
@@ -1707,6 +1716,7 @@ void PassthroughRendererDX11::RenderPassthroughView(const ERenderEye eye, const 
 	VSViewConstantBuffer vsViewBuffer = {};
 	vsViewBuffer.cameraProjectionToWorld = (eye == LEFT_EYE) ? frame->cameraProjectionToWorldLeft : frame->cameraProjectionToWorldRight;
 	vsViewBuffer.worldToCameraProjection = (eye == LEFT_EYE) ? frame->worldToCameraProjectionLeft : frame->worldToCameraProjectionRight;
+	vsViewBuffer.crossWorldToCameraProjection = (eye == LEFT_EYE) ? frame->worldToCameraProjectionRight : frame->worldToCameraProjectionLeft;
 	vsViewBuffer.worldToHMDProjection = (eye == LEFT_EYE) ? frame->worldToHMDProjectionLeft : frame->worldToHMDProjectionRight;
 	XrMatrix4x4f_Invert(&vsViewBuffer.HMDProjectionToWorld, &vsViewBuffer.worldToHMDProjection);
 
@@ -1730,8 +1740,9 @@ void PassthroughRendererDX11::RenderPassthroughView(const ERenderEye eye, const 
 	
 	PSViewConstantBuffer psViewBuffer = {};
 	psViewBuffer.frameUVBounds = GetFrameUVBounds(eye, frame->frameLayout);
+	psViewBuffer.crossUVBounds = GetFrameUVBounds((eye == LEFT_EYE ? RIGHT_EYE : LEFT_EYE), frame->frameLayout);
 	psViewBuffer.rtArrayIndex = layer->views[viewIndex].subImage.imageArrayIndex;
-	psViewBuffer.bDoCutout = stereoConf.StereoCutoutEnabled;
+	psViewBuffer.bDoCutout = false;// stereoConf.StereoCutoutEnabled;
 	psViewBuffer.bPremultiplyAlpha = (blendMode == AlphaBlendPremultiplied) && !bCompositeDepth;
 
 	m_renderContext->UpdateSubresource(viewData.psViewConstantBuffer.Get(), 0, nullptr, &psViewBuffer, 0, 0);
@@ -1889,6 +1900,8 @@ void PassthroughRendererDX11::RenderPassthroughView(const ERenderEye eye, const 
 		m_renderContext->IASetIndexBuffer(m_cylinderMeshIndexBuffer.Get(), DXGI_FORMAT_R32_UINT, 0);
 		m_renderContext->VSSetShader(m_vertexShader.Get(), nullptr, 0);
 	}
+
+	m_renderContext->PSSetShader(m_stereoCompositePS.Get(), nullptr, 0);
 	
 	m_renderContext->DrawIndexed(numIndices, 0, 0);
 
@@ -1897,7 +1910,7 @@ void PassthroughRendererDX11::RenderPassthroughView(const ERenderEye eye, const 
 
 	// Draw the other stereo camera on occluded areas. 
 	//TODO: Proper depth and alpha handling by calculating both cameras in the prepass.
-	if (stereoConf.StereoCutoutEnabled)
+	if (false && stereoConf.StereoCutoutEnabled)
 	{
 		float secondaryWidthFactor = 0.6f;
 		int scissorStart = (eye == LEFT_EYE) ? (int)(rect.extent.width * (1.0f - secondaryWidthFactor)) : 0;

@@ -9,6 +9,7 @@ struct VS_OUTPUT
 	float projectionValidity : TEXCOORD2;
     float4 prevClipSpaceCoords : TEXCOORD3;
     float3 velocity : TEXCOORD4;
+    float4 crossClipSpaceCoords : TEXCOORD5;
 };
 
 SamplerState g_samplerState : register(s0);
@@ -16,7 +17,7 @@ Texture2D<half> g_depthMap : register(t0);
 Texture2D<float> g_cameraInvalidation : register(t1);
 
 // B-spline as in http://vec3.ca/bicubic-filtering-in-fewer-taps/
-float bicubic_b_spline_4tap(in Texture2D<half> tex, in SamplerState linearSampler, in float2 uv)
+float bicubic_b_spline_4tap(in Texture2D<float> tex, in SamplerState linearSampler, in float2 uv)
 {
     uint texW, texH;
     tex.GetDimensions(texW, texH);
@@ -55,29 +56,32 @@ float bicubic_b_spline_4tap(in Texture2D<half> tex, in SamplerState linearSample
     return result;
 }
 
+
 VS_OUTPUT main(float3 inPosition : POSITION, uint vertexID : SV_VertexID)
 {
 	VS_OUTPUT output;
     
-    float depth = bicubic_b_spline_4tap(g_depthMap, g_samplerState, inPosition.xy);
-    //float depth = g_depthMap.SampleLevel(g_samplerState, inPosition.xy, 0);
+    //float depth = bicubic_b_spline_4tap(g_depthMap, g_samplerState, inPosition.xy);
+    float depth = g_depthMap.SampleLevel(g_samplerState, inPosition.xy, 0);
     //uint texW, texH;
     //g_depthMap.GetDimensions(texW, texH);
     //float depth = g_depthMap.Load(int3(inPosition.xy * float2(texW, texH), 0));
     
     //g_cameraInvalidation.GetDimensions(texW, texH);
     //float validity = g_cameraInvalidation.Load(int3(inPosition.xy * float2(texW, texH), 0));
-    float validity = g_cameraInvalidation.SampleLevel(g_samplerState, inPosition.xy, 0);
+    //float validity = g_cameraInvalidation.SampleLevel(g_samplerState, inPosition.xy, 0);
+    float validity = bicubic_b_spline_4tap(g_cameraInvalidation, g_samplerState, inPosition.xy);
     
     float4 clipSpacePos = float4((inPosition.xy * float2(2.0, -2.0) + float2(-1, 1)), depth, 1.0);   
     
     float4 worldProjectionPos = mul(g_HMDProjectionToWorld, clipSpacePos);
     float4 clipSpacePos2 = mul(g_worldToHMDProjection, worldProjectionPos / worldProjectionPos.w);
-    //clipSpacePos2 *= depth;
 
     float4 cameraClipSpacePos = mul(g_worldToCameraProjection, worldProjectionPos);
-
+    float4 cameraCrossClipSpacePos = mul(g_crossWorldToCameraProjection, worldProjectionPos);
+    
     output.clipSpaceCoords = cameraClipSpacePos;
+    output.crossClipSpaceCoords = cameraCrossClipSpacePos;
     output.prevClipSpaceCoords = mul(g_prevWorldToHMDProjection, worldProjectionPos);	
     output.position = clipSpacePos;   
     output.screenCoords = clipSpacePos2; 

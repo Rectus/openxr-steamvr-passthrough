@@ -245,6 +245,7 @@ protected:
 	ComPtr<ID3D11PixelShader> m_maskedPrepassShader;
 	ComPtr<ID3D11PixelShader> m_maskedAlphaCopyShader;
 	ComPtr<ID3D11PixelShader> m_depthWriteShaderPS;
+	ComPtr<ID3D11PixelShader> m_stereoCompositePS;
 
 	
 	ComPtr<ID3D11Buffer> m_vsMeshConstantBuffer[vr::k_unMaxTrackedDeviceCount];
