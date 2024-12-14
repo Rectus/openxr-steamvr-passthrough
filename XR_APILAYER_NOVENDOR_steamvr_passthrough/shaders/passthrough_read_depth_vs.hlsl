@@ -55,76 +55,34 @@ float bicubic_b_spline_4tap(in Texture2D<half> tex, in SamplerState linearSample
     return result;
 }
 
-// Based on the code in https://gist.github.com/TheRealMJP/c83b8c0f46b63f3a88a5986f4fa982b1 and http://vec3.ca/bicubic-filtering-in-fewer-taps/
-float catmull_rom_9tap(in Texture2D<half> tex, in SamplerState linearSampler, in float2 uv)
-{
-    uint texW, texH;
-    tex.GetDimensions(texW, texH);
-    float2 texSize = float2(texW, texH);
-    
-    float2 samplePos = uv * texSize;
-    float2 texPos1 = floor(samplePos - 0.5f) + 0.5f;
-    float2 f = samplePos - texPos1;
-
-    float2 w0 = f * (-0.5f + f * (1.0f - 0.5f * f));
-    float2 w1 = 1.0f + f * f * (-2.5f + 1.5f * f);
-    float2 w2 = f * (0.5f + f * (2.0f - 1.5f * f));
-    float2 w3 = f * f * (-0.5f + 0.5f * f);
-
-    float2 w12 = w1 + w2;
-    float2 offset12 = w2 / (w1 + w2);
-
-    float2 texPos0 = texPos1 - 1;
-    float2 texPos3 = texPos1 + 2;
-    float2 texPos12 = texPos1 + offset12;
-
-    texPos0 /= texSize;
-    texPos3 /= texSize;
-    texPos12 /= texSize;
-
-    float result = 0;
-    result += tex.SampleLevel(linearSampler, float2(texPos0.x, texPos0.y), 0) * w0.x * w0.y;
-    result += tex.SampleLevel(linearSampler, float2(texPos12.x, texPos0.y), 0) * w12.x * w0.y;
-    result += tex.SampleLevel(linearSampler, float2(texPos3.x, texPos0.y), 0) * w3.x * w0.y;
-
-    result += tex.SampleLevel(linearSampler, float2(texPos0.x, texPos12.y), 0) * w0.x * w12.y;
-    result += tex.SampleLevel(linearSampler, float2(texPos12.x, texPos12.y), 0) * w12.x * w12.y;
-    result += tex.SampleLevel(linearSampler, float2(texPos3.x, texPos12.y), 0) * w3.x * w12.y;
-
-    result += tex.SampleLevel(linearSampler, float2(texPos0.x, texPos3.y), 0) * w0.x * w3.y;
-    result += tex.SampleLevel(linearSampler, float2(texPos12.x, texPos3.y), 0) * w12.x * w3.y;
-    result += tex.SampleLevel(linearSampler, float2(texPos3.x, texPos3.y), 0) * w3.x * w3.y;
-
-    return result;
-}
-
 VS_OUTPUT main(float3 inPosition : POSITION, uint vertexID : SV_VertexID)
 {
 	VS_OUTPUT output;
     
-    float depth = catmull_rom_9tap(g_depthMap, g_samplerState, inPosition.xy);
-    //float depth = bicubic_b_spline_4tap(g_depthMap, g_samplerState, inPosition.xy);
+    float depth = bicubic_b_spline_4tap(g_depthMap, g_samplerState, inPosition.xy);
     //float depth = g_depthMap.SampleLevel(g_samplerState, inPosition.xy, 0);
-    //float depth = g_depthMap.Load(int3(inPosition.xy * depthMapRes, 0));
-
-    float4 clipSpacePos = float4((inPosition.xy * float2(2.0, -2.0) + float2(-1, 1)), depth, 1.0);
+    //uint texW, texH;
+    //g_depthMap.GetDimensions(texW, texH);
+    //float depth = g_depthMap.Load(int3(inPosition.xy * float2(texW, texH), 0));
     
-    //clipSpacePos *= depth;
-    //clipSpacePos *= -(g_depthRange.y - g_depthRange.x) - g_depthRange.x;
+    //g_cameraInvalidation.GetDimensions(texW, texH);
+    //float validity = g_cameraInvalidation.Load(int3(inPosition.xy * float2(texW, texH), 0));
+    float validity = g_cameraInvalidation.SampleLevel(g_samplerState, inPosition.xy, 0);
     
-    float4 clipSpacePos2 = clipSpacePos;
-    clipSpacePos2 *= depth;
+    float4 clipSpacePos = float4((inPosition.xy * float2(2.0, -2.0) + float2(-1, 1)), depth, 1.0);   
     
     float4 worldProjectionPos = mul(g_HMDProjectionToWorld, clipSpacePos);
+    float4 clipSpacePos2 = mul(g_worldToHMDProjection, worldProjectionPos / worldProjectionPos.w);
+    //clipSpacePos2 *= depth;
 
     float4 cameraClipSpacePos = mul(g_worldToCameraProjection, worldProjectionPos);
 
     output.clipSpaceCoords = cameraClipSpacePos;
     output.prevClipSpaceCoords = mul(g_prevWorldToHMDProjection, worldProjectionPos);	
     output.position = clipSpacePos;   
-    output.screenCoords = output.position; 
-    //output.screenCoords.z *= output.screenCoords.w;
-	output.projectionValidity = g_cameraInvalidation.SampleLevel(g_samplerState, inPosition.xy, 0);
+    output.screenCoords = clipSpacePos2; 
+    output.screenCoords.z *= output.screenCoords.w; //Linearize depth
+	output.projectionValidity = validity;
 	
 #ifndef VULKAN  
     float4 prevOutCoords = mul(g_prevWorldToCameraProjection, worldProjectionPos);

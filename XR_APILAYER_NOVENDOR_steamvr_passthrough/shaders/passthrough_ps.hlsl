@@ -35,14 +35,15 @@ float4 main(VS_OUTPUT input) : SV_TARGET
 	
     if (g_doCutout)
     {
-        alpha = saturate(input.projectionValidity);
-        clip(input.projectionValidity);
+        clip(input.projectionValidity >= 0.5 ? -1 : 1);
+        alpha = 1 - saturate(input.projectionValidity * 2);
     }
     
     if (g_bUseDepthCutoffRange)
     {
-        clip(input.screenCoords.w - g_depthCutoffRange.x);
-        clip(g_depthCutoffRange.y - input.screenCoords.w);
+        float depth = (input.screenCoords.z / input.screenCoords.w);// * (g_depthRange.y - g_depthRange.x) + g_depthRange.x;
+        clip(depth - g_depthCutoffRange.x);
+        clip(g_depthCutoffRange.y - depth);
     }
 
 	// Convert from homogenous clip space coordinates to 0-1.

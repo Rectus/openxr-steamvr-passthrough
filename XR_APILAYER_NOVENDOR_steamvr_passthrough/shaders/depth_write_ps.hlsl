@@ -11,15 +11,13 @@ struct VS_OUTPUT
 };
 
 
-//[earlydepthstencil]
-float main(VS_OUTPUT input, out float depth : SV_Depth) : SV_TARGET
+float main(VS_OUTPUT input) : SV_TARGET
 {
 	if(g_doCutout)
     {
         clip(input.projectionValidity);
     }
 	
-	depth = input.position.z;
-	
-    return g_doCutout ? input.projectionValidity : 0;
+	// Write validity value 0 - 0.5 for primary camera and 0.5 - 1 for secondary.
+    return g_doCutout ? 0.5 - saturate(input.projectionValidity) * 0.5 : saturate(input.projectionValidity) * 0.5 + 0.51;
 }

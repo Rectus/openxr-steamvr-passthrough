@@ -311,6 +311,17 @@ bool PassthroughRendererDX11::InitRenderer()
 
 	depth.DepthWriteMask = D3D11_DEPTH_WRITE_MASK_ALL;
 	depth.DepthFunc = D3D11_COMPARISON_ALWAYS;
+	depth.StencilEnable = true;
+	depth.StencilReadMask = 0x1;
+	depth.StencilWriteMask = 0x1;
+	depth.FrontFace.StencilFunc = D3D11_COMPARISON_NOT_EQUAL;
+	depth.FrontFace.StencilPassOp = D3D11_STENCIL_OP_REPLACE;
+	depth.FrontFace.StencilFailOp = D3D11_STENCIL_OP_KEEP;
+	depth.FrontFace.StencilDepthFailOp = D3D11_STENCIL_OP_KEEP;
+	depth.BackFace.StencilFunc = D3D11_COMPARISON_NEVER;
+	depth.BackFace.StencilPassOp = D3D11_STENCIL_OP_KEEP;
+	depth.BackFace.StencilFailOp = D3D11_STENCIL_OP_KEEP;
+	depth.BackFace.StencilDepthFailOp = D3D11_STENCIL_OP_KEEP;
 	if (FAILED(m_d3dDevice->CreateDepthStencilState(&depth, m_depthStencilStateAlwaysWrite.GetAddressOf())))
 	{
 		ErrorLog("CreateDepthStencilState failure!\n");
@@ -729,7 +740,7 @@ void PassthroughRendererDX11::SetupPassthroughDepthMap(uint32_t width, uint32_t 
 	{
 		D3D11_TEXTURE2D_DESC textureDesc = {};
 		textureDesc.MipLevels = 1;
-		textureDesc.Format = DXGI_FORMAT_R16_TYPELESS;
+		textureDesc.Format = DXGI_FORMAT_R24G8_TYPELESS;
 		textureDesc.Width = width;
 		textureDesc.Height = height;
 		textureDesc.ArraySize = 2;
@@ -741,14 +752,14 @@ void PassthroughRendererDX11::SetupPassthroughDepthMap(uint32_t width, uint32_t 
 
 		D3D11_SHADER_RESOURCE_VIEW_DESC srvDesc = {};
 		srvDesc.ViewDimension = D3D11_SRV_DIMENSION_TEXTURE2DARRAY;
-		srvDesc.Format = DXGI_FORMAT_R16_UNORM;
+		srvDesc.Format = DXGI_FORMAT_R24_UNORM_X8_TYPELESS;
 		srvDesc.Texture2DArray.MipLevels = 1;
 		srvDesc.Texture2DArray.ArraySize = 1;
 
 
 		D3D11_DEPTH_STENCIL_VIEW_DESC dsvDesc = {};
 		dsvDesc.ViewDimension = D3D11_DSV_DIMENSION_TEXTURE2DARRAY;
-		dsvDesc.Format = DXGI_FORMAT_D16_UNORM;
+		dsvDesc.Format = DXGI_FORMAT_D24_UNORM_S8_UINT;
 		dsvDesc.Texture2DArray.MipSlice = 0;
 		dsvDesc.Texture2DArray.ArraySize = 1;
 
@@ -1394,7 +1405,8 @@ void PassthroughRendererDX11::RenderPassthroughFrame(const XrCompositionLayerPro
 			m_bUseHexagonGridMesh = stereoConf.StereoUseHexagonGridMesh;
 			SetupDisparityMap(depthFrame->disparityTextureSize[0], depthFrame->disparityTextureSize[1]);
 			GenerateDepthMesh(depthFrame->disparityTextureSize[0] / 2, depthFrame->disparityTextureSize[1]);
-			SetupPassthroughDepthMap(depthFrame->disparityTextureSize[0] / 2 * depthFrame->disparityDownscaleFactor, depthFrame->disparityTextureSize[1] * depthFrame->disparityDownscaleFactor);
+			//SetupPassthroughDepthMap(depthFrame->disparityTextureSize[0] / 2 * depthFrame->disparityDownscaleFactor, depthFrame->disparityTextureSize[1] * depthFrame->disparityDownscaleFactor);
+			SetupPassthroughDepthMap(depthFrame->disparityTextureSize[0] / 2, depthFrame->disparityTextureSize[1]);
 			bdisparityMapUpdated = true;
 		}
 		if (bdisparityMapUpdated)
@@ -2155,10 +2167,10 @@ void PassthroughRendererDX11::RenderDepthPrepassView(const ERenderEye eye, const
 
 	DX11ViewData& viewData = m_viewData[viewIndex][swapchainIndex];
 
-	XrRect2Di rect = layer->views[viewIndex].subImage.imageRect;
-
-	D3D11_VIEWPORT viewport = { 0.0f, 0.0f, (float)(depthFrame->disparityTextureSize[0] / 2 * depthFrame->disparityDownscaleFactor), (float)depthFrame->disparityTextureSize[1] * depthFrame->disparityDownscaleFactor, 0.0f, 1.0f};
-	D3D11_RECT scissor = { 0, 0, (long)depthFrame->disparityTextureSize[0] / 2 * depthFrame->disparityDownscaleFactor, (long)depthFrame->disparityTextureSize[1] * depthFrame->disparityDownscaleFactor };
+	D3D11_VIEWPORT viewport = { 0.0f, 0.0f, (float)(depthFrame->disparityTextureSize[0] / 2), (float)depthFrame->disparityTextureSize[1], 0.0f, 1.0f};
+	D3D11_RECT scissor = { 0, 0, (long)depthFrame->disparityTextureSize[0] / 2, (long)depthFrame->disparityTextureSize[1] };
+	/*D3D11_VIEWPORT viewport = { 0.0f, 0.0f, (float)(depthFrame->disparityTextureSize[0] / 2 * depthFrame->disparityDownscaleFactor), (float)depthFrame->disparityTextureSize[1] * depthFrame->disparityDownscaleFactor, 0.0f, 1.0f };
+	D3D11_RECT scissor = { 0, 0, (long)depthFrame->disparityTextureSize[0] / 2 * depthFrame->disparityDownscaleFactor, (long)depthFrame->disparityTextureSize[1] * depthFrame->disparityDownscaleFactor };*/
 
 	m_renderContext->RSSetViewports(1, &viewport);
 	m_renderContext->RSSetScissorRects(1, &scissor);
@@ -2199,7 +2211,7 @@ void PassthroughRendererDX11::RenderDepthPrepassView(const ERenderEye eye, const
 	m_renderContext->ClearRenderTargetView(frameData.passthroughCameraInvalidation[eye == LEFT_EYE ? 0 : 1].RTV.Get(), clearColor);
 
 	ID3D11DepthStencilView* depthStencil = frameData.passthroughDepthMapDSV[eye == LEFT_EYE ? 0 : 1].Get();
-	m_renderContext->ClearDepthStencilView(depthStencil, D3D11_CLEAR_DEPTH, 1.0, 0);
+	m_renderContext->ClearDepthStencilView(depthStencil, D3D11_CLEAR_DEPTH | D3D11_CLEAR_STENCIL, 1.0, 0);
 
 	m_renderContext->OMSetRenderTargets(1, frameData.passthroughCameraInvalidation[eye == LEFT_EYE ? 0 : 1].RTV.GetAddressOf(), depthStencil);
 	m_renderContext->OMSetBlendState(nullptr, nullptr, UINT_MAX);
@@ -2228,8 +2240,22 @@ void PassthroughRendererDX11::RenderDepthPrepassView(const ERenderEye eye, const
 	psViewBuffer.prepassUVBounds = { 0.0f, 0.0f, 1.0f, 1.0f };
 	psViewBuffer.frameUVBounds = GetFrameUVBounds(eye, frame->frameLayout);
 	psViewBuffer.rtArrayIndex = layer->views[viewIndex].subImage.imageArrayIndex;
-	psViewBuffer.bDoCutout = false;
+	psViewBuffer.bDoCutout = stereoConf.StereoCutoutEnabled;
 	psViewBuffer.bPremultiplyAlpha = false;
+
+	
+
+	vsViewBuffer.cameraProjectionToWorld = (eye == LEFT_EYE) ? frame->cameraProjectionToWorldLeft : frame->cameraProjectionToWorldRight;
+	vsViewBuffer.worldToCameraProjection = (eye == LEFT_EYE) ? frame->worldToCameraProjectionLeft : frame->worldToCameraProjectionRight;
+	vsViewBuffer.prevCameraProjectionToWorld = (eye == LEFT_EYE) ? frame->prevCameraProjectionToWorldLeft : frame->prevCameraProjectionToWorldRight;
+	vsViewBuffer.prevWorldToCameraProjection = (eye == LEFT_EYE) ? frame->prevWorldToCameraProjectionLeft : frame->prevWorldToCameraProjectionRight;
+	vsViewBuffer.prevDispWorldToCameraProjection = (eye == LEFT_EYE) ? depthFrame->prevDispWorldToCameraProjectionLeft : depthFrame->prevDispWorldToCameraProjectionRight;
+	vsViewBuffer.disparityUVBounds = GetFrameUVBounds(eye, StereoHorizontalLayout);
+
+	m_renderContext->UpdateSubresource(viewData.vsViewConstantBuffer.Get(), 0, nullptr, &vsViewBuffer, 0, 0);
+	m_renderContext->UpdateSubresource(viewData.psViewConstantBuffer.Get(), 0, nullptr, &psViewBuffer, 0, 0);
+
+	m_renderContext->DrawIndexed(numIndices, 0, 0);
 
 	if (stereoConf.StereoCutoutEnabled)
 	{
@@ -2243,24 +2269,15 @@ void PassthroughRendererDX11::RenderDepthPrepassView(const ERenderEye eye, const
 		vsViewBuffer.disparityUVBounds = GetFrameUVBounds((eye == LEFT_EYE) ? RIGHT_EYE : LEFT_EYE, StereoHorizontalLayout);
 
 		m_renderContext->UpdateSubresource(viewData.vsViewConstantBuffer.Get(), 0, nullptr, &vsViewBuffer, 0, 0);
+
+		psViewBuffer.bDoCutout = false;
+
 		m_renderContext->UpdateSubresource(viewData.psViewConstantBuffer.Get(), 0, nullptr, &psViewBuffer, 0, 0);
 
+		//m_renderContext->OMSetDepthStencilState(GET_DEPTH_STENCIL_STATE(true, true, true), 1);
+
 		m_renderContext->DrawIndexed(numIndices, 0, 0);
-
-		psViewBuffer.bDoCutout = true;
 	}
-
-	vsViewBuffer.cameraProjectionToWorld = (eye == LEFT_EYE) ? frame->cameraProjectionToWorldLeft : frame->cameraProjectionToWorldRight;
-	vsViewBuffer.worldToCameraProjection = (eye == LEFT_EYE) ? frame->worldToCameraProjectionLeft : frame->worldToCameraProjectionRight;
-	vsViewBuffer.prevCameraProjectionToWorld = (eye == LEFT_EYE) ? frame->prevCameraProjectionToWorldLeft : frame->prevCameraProjectionToWorldRight;
-	vsViewBuffer.prevWorldToCameraProjection = (eye == LEFT_EYE) ? frame->prevWorldToCameraProjectionLeft : frame->prevWorldToCameraProjectionRight;
-	vsViewBuffer.prevDispWorldToCameraProjection = (eye == LEFT_EYE) ? depthFrame->prevDispWorldToCameraProjectionLeft : depthFrame->prevDispWorldToCameraProjectionRight;
-	vsViewBuffer.disparityUVBounds = GetFrameUVBounds(eye, StereoHorizontalLayout);
-
-	m_renderContext->UpdateSubresource(viewData.vsViewConstantBuffer.Get(), 0, nullptr, &vsViewBuffer, 0, 0);
-	m_renderContext->UpdateSubresource(viewData.psViewConstantBuffer.Get(), 0, nullptr, &psViewBuffer, 0, 0);
-
-	m_renderContext->DrawIndexed(numIndices, 0, 0);
 }
 
 
