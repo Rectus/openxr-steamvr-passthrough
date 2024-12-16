@@ -220,7 +220,9 @@ VS_OUTPUT main(float3 inPosition : POSITION, uint vertexID : SV_VertexID)
             float dispUR = g_disparityTexture.SampleLevel(g_samplerState, disparityUVs + float2(1, -1) * fac, 0).x;
             float dispDR = g_disparityTexture.SampleLevel(g_samplerState, disparityUVs + float2(1, 1) * fac, 0).x;
             
-            float filterX = max(0, dispUL + dispL * 2 + dispDL - dispUR - dispR * 2 - dispDR);
+            float filterX = (g_disparityUVBounds.x < 0.5) ? 
+                max(0, dispUL + dispL * 2 + dispDL - dispUR - dispR * 2 - dispDR) :
+                min(0, dispUL + dispL * 2 + dispDL - dispUR - dispR * 2 - dispDR);
             
             float filterY = dispUL + dispU * 2 + dispUR - dispDL - dispD * 2 - dispDR;
             

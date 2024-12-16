@@ -57,6 +57,32 @@ float bicubic_b_spline_4tap(in Texture2D<float> tex, in SamplerState linearSampl
 }
 
 
+// Returns a vector toward a depth discontinuity if the sampled pixel is on the deep side.
+float2 sobel_discontinuity_direction(in float depth, in float2 uvs)
+{
+    uint texW, texH;
+    g_depthMap.GetDimensions(texW, texH);
+    float2 invTexSize = 1 / float2(texW, texH);
+    
+    float2 fac = 1.5 * invTexSize;
+    
+    float dispU = min(g_depthMap.SampleLevel(g_samplerState, uvs + float2(0, -1) * fac, 0), depth);
+    float dispD = min(g_depthMap.SampleLevel(g_samplerState, uvs + float2(0, 1) * fac, 0), depth);
+    float dispL = min(g_depthMap.SampleLevel(g_samplerState, uvs + float2(-1, 0) * fac, 0), depth);
+    float dispR = min(g_depthMap.SampleLevel(g_samplerState, uvs + float2(1, 0) * fac, 0), depth);
+            
+    float dispUL = min(g_depthMap.SampleLevel(g_samplerState, uvs + float2(-1, -1) * fac, 0), depth);
+    float dispDL = min(g_depthMap.SampleLevel(g_samplerState, uvs + float2(-1, 1) * fac, 0), depth);
+    float dispUR = min(g_depthMap.SampleLevel(g_samplerState, uvs + float2(1, -1) * fac, 0), depth);
+    float dispDR = min(g_depthMap.SampleLevel(g_samplerState, uvs + float2(1, 1) * fac, 0), depth);
+    
+    float filterX = dispUL + dispL * 2 + dispDL - dispUR - dispR * 2 - dispDR; 
+    float filterY = dispUL + dispU * 2 + dispUR - dispDL - dispD * 2 - dispDR;
+    
+    return clamp(float2(filterX, -filterY) * 20, -2, 2) * invTexSize;
+}
+
+
 VS_OUTPUT main(float3 inPosition : POSITION, uint vertexID : SV_VertexID)
 {
 	VS_OUTPUT output;
@@ -68,15 +94,21 @@ VS_OUTPUT main(float3 inPosition : POSITION, uint vertexID : SV_VertexID)
     //float depth = g_depthMap.Load(int3(inPosition.xy * float2(texW, texH), 0));
     
     //g_cameraInvalidation.GetDimensions(texW, texH);
-    //float validity = g_cameraInvalidation.Load(int3(inPosition.xy * float2(texW, texH), 0));
-    //float validity = g_cameraInvalidation.SampleLevel(g_samplerState, inPosition.xy, 0);
-    float validity = bicubic_b_spline_4tap(g_cameraInvalidation, g_samplerState, inPosition.xy);
+    //float cameraBlend = g_cameraInvalidation.Load(int3(inPosition.xy * float2(texW, texH), 0));
+    //float cameraBlend = g_cameraInvalidation.SampleLevel(g_samplerState, inPosition.xy, 0);
+    float cameraBlend = bicubic_b_spline_4tap(g_cameraInvalidation, g_samplerState, inPosition.xy);
     
     float4 clipSpacePos = float4((inPosition.xy * float2(2.0, -2.0) + float2(-1, 1)), depth, 1.0);   
     
+    // Move background vertices underneath foreground vertices to prevent interpolation at discontinuities.
+    clipSpacePos.xy += sobel_discontinuity_direction(depth, inPosition.xy);
+    
     float4 worldProjectionPos = mul(g_HMDProjectionToWorld, clipSpacePos);
-    float4 clipSpacePos2 = mul(g_worldToHMDProjection, worldProjectionPos / worldProjectionPos.w);
+    
+    // Hack to get consistent homogenous coordinates, shouldn't matter for rendering but makes debugging the depth map easier.
+    clipSpacePos = mul(g_worldToHMDProjection, worldProjectionPos / worldProjectionPos.w);
 
+    
     float4 cameraClipSpacePos = mul(g_worldToCameraProjection, worldProjectionPos);
     float4 cameraCrossClipSpacePos = mul(g_crossWorldToCameraProjection, worldProjectionPos);
     
@@ -84,9 +116,9 @@ VS_OUTPUT main(float3 inPosition : POSITION, uint vertexID : SV_VertexID)
     output.crossClipSpaceCoords = cameraCrossClipSpacePos;
     output.prevClipSpaceCoords = mul(g_prevWorldToHMDProjection, worldProjectionPos);	
     output.position = clipSpacePos;   
-    output.screenCoords = clipSpacePos2; 
+    output.screenCoords = clipSpacePos; 
     output.screenCoords.z *= output.screenCoords.w; //Linearize depth
-	output.projectionValidity = validity;
+	output.projectionValidity = cameraBlend;
 	
 #ifndef VULKAN  
     float4 prevOutCoords = mul(g_prevWorldToCameraProjection, worldProjectionPos);
