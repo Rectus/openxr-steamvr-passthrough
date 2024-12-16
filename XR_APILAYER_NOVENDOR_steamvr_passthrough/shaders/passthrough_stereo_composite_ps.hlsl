@@ -108,7 +108,25 @@ float4 main(VS_OUTPUT input) : SV_TARGET
         crossRGBColor -= g_cameraFrameTexture.Sample(g_samplerState, crossUvs + float2(0, 1) / textureSize.xy).xyz * g_sharpness;
     }
     
-    rgbColor = lerp(rgbColor, crossRGBColor, input.projectionValidity);
+    uint texW, texH;
+    g_cameraFrameTexture.GetDimensions(texW, texH);
+    int2 cameraFrameRes = uint2(texW, texH);
+    
+    float2 camTexCoords = outUvs * cameraFrameRes;
+    uint2 camPixel = floor(camTexCoords);
+    
+    float2 crossCamTexCoords = crossUvs * cameraFrameRes;
+    uint2 crossCamPixel = floor(crossCamTexCoords);
+    
+    // How far the current pixel is to the sampled one
+    float confidenceInv = abs(camTexCoords.x - camPixel.x - 0.5) + abs(camTexCoords.y - camPixel.y - 0.5);
+    float crossConfidenceInv = abs(crossCamTexCoords.x - crossCamPixel.x - 0.5) + abs(crossCamTexCoords.y - crossCamPixel.y - 0.5);
+    
+    float pixelDistanceBlend = confidenceInv + (1 - crossConfidenceInv);
+    float blendfactor = 1 -abs(input.projectionValidity * 2 - 1);
+    
+    // Blend together both cameras based on which ones are valid and have the closest pixels.
+    rgbColor = lerp(rgbColor, crossRGBColor, lerp(input.projectionValidity, pixelDistanceBlend, blendfactor));
     
 	if (g_bDoColorAdjustment)
 	{
@@ -132,18 +150,19 @@ float4 main(VS_OUTPUT input) : SV_TARGET
     }
     else if (g_bDebugValidStereo)
     {
-        if (input.projectionValidity < 0.0)
-        {
-            rgbColor.x += 0.5;
-        }
-        else if (input.projectionValidity > 0.0)
-        {
-            rgbColor.y += input.projectionValidity * 0.25;
-        }
-        else
-        {
-            rgbColor.z += 0.25;
-        }
+        //if (input.projectionValidity < 0.0)
+        //{
+        //    rgbColor.x += 0.5;
+        //}
+        //else if (input.projectionValidity > 0.0)
+        //{
+        //    rgbColor.y += input.projectionValidity * 0.25;
+        //}
+        //else
+        //{
+        //    rgbColor.z += 0.25;
+        //}
+        rgbColor = float3(0, lerp(input.projectionValidity, pixelDistanceBlend, blendfactor), 0);
     }
     
     rgbColor = g_bPremultiplyAlpha ? rgbColor * g_opacity * alpha : rgbColor;

@@ -99,12 +99,21 @@ enum ECBV_SRVIndex
 
 struct VSPassConstantBuffer
 {
-	XrMatrix4x4f disparityViewToWorldLeft;
-	XrMatrix4x4f disparityViewToWorldRight;
-	XrMatrix4x4f prevDisparityViewToWorldLeft;
-	XrMatrix4x4f prevDisparityViewToWorldRight;
+	XrMatrix4x4f worldToCameraFrameProjectionLeft;
+	XrMatrix4x4f worldToCameraFrameProjectionRight;
+	XrMatrix4x4f worldToPrevCameraFrameProjectionLeft;
+	XrMatrix4x4f worldToPrevCameraFrameProjectionRight;
+	XrMatrix4x4f worldToPrevDepthFrameProjectionLeft;
+	XrMatrix4x4f worldToPrevDepthFrameProjectionRight;
+	XrMatrix4x4f depthFrameViewToWorldLeft;
+	XrMatrix4x4f depthFrameViewToWorldRight;
+	XrMatrix4x4f prevDepthFrameViewToWorldLeft;
+	XrMatrix4x4f prevDepthFrameViewToWorldRight;
+
 	XrMatrix4x4f disparityToDepth;
 	uint32_t disparityTextureSize[2];
+	float minDisparity;
+	float maxDisparity;
 	float disparityDownscaleFactor;
 	float cutoutFactor;
 	float cutoutOffset;
@@ -119,22 +128,15 @@ struct VSPassConstantBuffer
 
 struct VSViewConstantBuffer
 {
-	XrMatrix4x4f cameraProjectionToWorld;
-	XrMatrix4x4f worldToCameraProjection;
-	XrMatrix4x4f crossWorldToCameraProjection;
 	XrMatrix4x4f worldToHMDProjection;
 	XrMatrix4x4f HMDProjectionToWorld;
-	XrMatrix4x4f prevCameraProjectionToWorld;
-	XrMatrix4x4f prevWorldToCameraProjection;
 	XrMatrix4x4f prevWorldToHMDProjection;
-	XrMatrix4x4f prevDispWorldToCameraProjection;
 	XrVector4f disparityUVBounds;
 	XrVector3f projectionOriginWorld;
 	float projectionDistance;
 	float floorHeightOffset;
 	uint32_t cameraViewIndex;
 	uint32_t bWriteDisparityFilter;
-	uint32_t bisFirstRender;
 };
 
 struct PSPassConstantBuffer
@@ -1220,25 +1222,39 @@ void PassthroughRendererDX12::RenderPassthroughFrame(const XrCompositionLayerPro
 		D3D12_GPU_DESCRIPTOR_HANDLE disparitySRVHandle = m_CBVSRVHeap->GetGPUDescriptorHandleForHeapStart();
 		disparitySRVHandle.ptr += (INDEX_SRV_DISPARITY_0 + m_frameIndex) * m_CBVSRVHeapDescSize;
 		m_commandList->SetGraphicsRootDescriptorTable(8, disparitySRVHandle);
+	}
 
-		VSPassConstantBuffer* vsPassBuffer = (VSPassConstantBuffer*)m_vsPassConstantBufferCPUData[m_frameIndex];
-		vsPassBuffer->disparityViewToWorldLeft = depthFrame->disparityViewToWorldLeft;
-		vsPassBuffer->disparityViewToWorldRight = depthFrame->disparityViewToWorldRight;
+	VSPassConstantBuffer* vsPassBuffer = (VSPassConstantBuffer*)m_vsPassConstantBufferCPUData[m_frameIndex];
+	vsPassBuffer->worldToCameraFrameProjectionLeft = frame->worldToCameraProjectionLeft;
+	vsPassBuffer->worldToCameraFrameProjectionRight = frame->worldToCameraProjectionRight;
+	vsPassBuffer->worldToPrevCameraFrameProjectionLeft = frame->prevWorldToCameraProjectionLeft;
+	vsPassBuffer->worldToPrevCameraFrameProjectionRight = frame->prevWorldToCameraProjectionRight;
+
+	if (mainConf.ProjectionMode == Projection_StereoReconstruction)
+	{
+		vsPassBuffer->worldToPrevDepthFrameProjectionLeft = depthFrame->prevDispWorldToCameraProjectionLeft;
+		vsPassBuffer->worldToPrevDepthFrameProjectionRight = depthFrame->prevDispWorldToCameraProjectionRight;
+		vsPassBuffer->depthFrameViewToWorldLeft = depthFrame->disparityViewToWorldLeft;
+		vsPassBuffer->depthFrameViewToWorldRight = depthFrame->disparityViewToWorldRight;
+		vsPassBuffer->prevDepthFrameViewToWorldLeft = depthFrame->prevDisparityViewToWorldLeft;
+		vsPassBuffer->prevDepthFrameViewToWorldRight = depthFrame->prevDisparityViewToWorldRight;
 		vsPassBuffer->disparityToDepth = depthFrame->disparityToDepth;
 		vsPassBuffer->disparityTextureSize[0] = depthFrame->disparityTextureSize[0];
 		vsPassBuffer->disparityTextureSize[1] = depthFrame->disparityTextureSize[1];
 		vsPassBuffer->disparityDownscaleFactor = depthFrame->disparityDownscaleFactor;
+		vsPassBuffer->minDisparity = depthFrame->minDisparity;
+		vsPassBuffer->maxDisparity = depthFrame->maxDisparity;
 		vsPassBuffer->cutoutFactor = stereoConf.StereoCutoutFactor;
 		vsPassBuffer->cutoutOffset = stereoConf.StereoCutoutOffset;
 		vsPassBuffer->cutoutFilterWidth = stereoConf.StereoCutoutFilterWidth;
 		vsPassBuffer->disparityFilterWidth = stereoConf.StereoDisparityFilterWidth;
 		vsPassBuffer->bProjectBorders = !stereoConf.StereoReconstructionFreeze;
 		vsPassBuffer->bFindDiscontinuities = stereoConf.StereoCutoutEnabled;
-
-		D3D12_GPU_DESCRIPTOR_HANDLE vsPassCBVHandle = m_CBVSRVHeap->GetGPUDescriptorHandleForHeapStart();
-		vsPassCBVHandle.ptr += (INDEX_CBV_VS_PASS_0 + m_frameIndex) * m_CBVSRVHeapDescSize;
-		m_commandList->SetGraphicsRootDescriptorTable(7, vsPassCBVHandle);
 	}
+
+	D3D12_GPU_DESCRIPTOR_HANDLE vsPassCBVHandle = m_CBVSRVHeap->GetGPUDescriptorHandleForHeapStart();
+	vsPassCBVHandle.ptr += (INDEX_CBV_VS_PASS_0 + m_frameIndex) * m_CBVSRVHeapDescSize;
+	m_commandList->SetGraphicsRootDescriptorTable(7, vsPassCBVHandle);
 
 	UINT numIndices;
 	D3D12_VERTEX_BUFFER_VIEW vertexBufferView{};
@@ -1442,8 +1458,6 @@ void PassthroughRendererDX12::RenderPassthroughView(const ERenderEye eye, const 
 	Config_Stereo& stereoConf = m_configManager->GetConfig_Stereo();
 
 	VSViewConstantBuffer* vsViewBuffer = (VSViewConstantBuffer*)m_vsViewConstantBufferCPUData[bufferIndex];
-	vsViewBuffer->cameraProjectionToWorld = (eye == LEFT_EYE) ? frame->cameraProjectionToWorldLeft : frame->cameraProjectionToWorldRight;
-	vsViewBuffer->worldToCameraProjection = (eye == LEFT_EYE) ? frame->worldToCameraProjectionLeft : frame->worldToCameraProjectionRight;
 	vsViewBuffer->worldToHMDProjection = (eye == LEFT_EYE) ? frame->worldToHMDProjectionLeft : frame->worldToHMDProjectionRight;
 	vsViewBuffer->disparityUVBounds = GetFrameUVBounds(eye, StereoHorizontalLayout);
 	vsViewBuffer->projectionOriginWorld = (eye == LEFT_EYE) ? frame->projectionOriginWorldLeft : frame->projectionOriginWorldRight;
@@ -1492,8 +1506,6 @@ void PassthroughRendererDX12::RenderPassthroughView(const ERenderEye eye, const 
 		int crossBufferIndex = NUM_SWAPCHAINS * 2 + bufferIndex;
 		VSViewConstantBuffer* vsCrossViewBuffer = (VSViewConstantBuffer*)m_vsViewConstantBufferCPUData[crossBufferIndex];
 		
-		vsCrossViewBuffer->cameraProjectionToWorld = (eye != LEFT_EYE) ? frame->cameraProjectionToWorldLeft : frame->cameraProjectionToWorldRight;
-		vsCrossViewBuffer->worldToCameraProjection = (eye != LEFT_EYE) ? frame->worldToCameraProjectionLeft : frame->worldToCameraProjectionRight;
 		vsCrossViewBuffer->worldToHMDProjection = (eye == LEFT_EYE) ? frame->worldToHMDProjectionLeft : frame->worldToHMDProjectionRight;
 		vsCrossViewBuffer->disparityUVBounds = GetFrameUVBounds(eye == LEFT_EYE ? RIGHT_EYE : LEFT_EYE, StereoHorizontalLayout);
 		vsCrossViewBuffer->projectionOriginWorld = (eye == LEFT_EYE) ? frame->projectionOriginWorldLeft : frame->projectionOriginWorldRight;
@@ -1585,8 +1597,6 @@ void PassthroughRendererDX12::RenderMaskedPrepassView(const ERenderEye eye, cons
 	Config_Main& mainConf = m_configManager->GetConfig_Main();
 
 	VSViewConstantBuffer* vsViewBuffer = (VSViewConstantBuffer*)m_vsViewConstantBufferCPUData[bufferIndex];
-	vsViewBuffer->cameraProjectionToWorld = (eye == LEFT_EYE) ? frame->cameraProjectionToWorldLeft : frame->cameraProjectionToWorldRight;
-	vsViewBuffer->worldToCameraProjection = (eye == LEFT_EYE) ? frame->worldToCameraProjectionLeft : frame->worldToCameraProjectionRight;
 	vsViewBuffer->worldToHMDProjection = (eye == LEFT_EYE) ? frame->worldToHMDProjectionLeft : frame->worldToHMDProjectionRight;
 	vsViewBuffer->disparityUVBounds = GetFrameUVBounds(eye, StereoHorizontalLayout);
 	vsViewBuffer->projectionOriginWorld = (eye == LEFT_EYE) ? frame->projectionOriginWorldLeft : frame->projectionOriginWorldRight;

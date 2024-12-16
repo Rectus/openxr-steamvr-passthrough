@@ -24,7 +24,7 @@ VS_OUTPUT main(float3 inPosition : POSITION, uint vertexID : SV_VertexID)
 
     float4 worldPos = mul(g_meshToWorldTransform, float4(inPosition, 1.0));
        
-    float4 clipSpacePos = mul(g_worldToCameraProjection, worldPos);
+    float4 clipSpacePos = mul((g_disparityUVBounds.x < 0.5) ? g_worldToCameraFrameProjectionLeft : g_worldToCameraFrameProjectionRight, worldPos);
     output.clipSpaceCoords = clipSpacePos;   
     
     output.position = mul(g_worldToHMDProjection, worldPos);
@@ -33,7 +33,7 @@ VS_OUTPUT main(float3 inPosition : POSITION, uint vertexID : SV_VertexID)
     output.projectionValidity = 1.0;
 	
     
-    float4 prevOutCoords = mul(g_prevWorldToCameraProjection, worldPos);  
+    float4 prevOutCoords = mul((g_disparityUVBounds.x < 0.5) ? g_worldToPrevCameraFrameProjectionLeft : g_worldToPrevCameraFrameProjectionRight, worldPos);  
     float4 prevClipCoords = mul(g_prevWorldToHMDProjection, worldPos);
     
     output.prevClipSpaceCoords = prevClipCoords;  

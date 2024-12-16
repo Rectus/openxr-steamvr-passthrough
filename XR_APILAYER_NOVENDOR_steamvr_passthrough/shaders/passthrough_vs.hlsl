@@ -24,7 +24,7 @@ VS_OUTPUT main(float3 inPosition : POSITION, uint vertexID : SV_VertexID)
     worldProjectionPos.y *= max(g_projectionDistance * 2.0, g_projectionOriginWorld.y + g_projectionDistance - heightOffset);
     worldProjectionPos.y += min(heightOffset, g_projectionOriginWorld.y - 0.1);
     
-    float4 cameraClipSpacePos = mul(g_worldToCameraProjection, worldProjectionPos);
+    float4 cameraClipSpacePos = mul((g_disparityUVBounds.x < 0.5) ? g_worldToCameraFrameProjectionLeft : g_worldToCameraFrameProjectionRight, worldProjectionPos);
 
     output.clipSpaceCoords = cameraClipSpacePos;
     output.prevClipSpaceCoords = mul(g_prevWorldToHMDProjection, worldProjectionPos);	
@@ -33,7 +33,7 @@ VS_OUTPUT main(float3 inPosition : POSITION, uint vertexID : SV_VertexID)
 	output.projectionValidity = 1.0;
 	
 #ifndef VULKAN  
-    float4 prevOutCoords = mul(g_prevWorldToCameraProjection, worldProjectionPos);
+    float4 prevOutCoords = mul((g_cameraViewIndex == 0) ? g_worldToPrevCameraFrameProjectionLeft : g_worldToPrevCameraFrameProjectionRight, worldProjectionPos);
     
     output.velocity = cameraClipSpacePos.xyz / cameraClipSpacePos.w - prevOutCoords.xyz / prevOutCoords.w;
 #endif

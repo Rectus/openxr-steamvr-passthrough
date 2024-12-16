@@ -563,14 +563,14 @@ void DepthReconstruction::RunThread()
 
             if (stereoConfig.StereoFiltering == StereoFiltering_WLS_FBS)
             {
-                cv::ximgproc::fastBilateralSolverFilter(m_scaledExtFrameLeft, m_filteredDisparityLeft, m_confidenceLeft / 255.0f, m_bilateralDisparityLeft, stereoConfig.StereoFBS_Spatial, stereoConfig.StereoFBS_Luma, stereoConfig.StereoFBS_Chroma, stereoConfig.StereoFBS_Lambda, stereoConfig.StereoFBS_Iterations);
+                cv::ximgproc::fastBilateralSolverFilter(m_scaledExtFrameLeft, m_filteredDisparityLeft, m_confidenceLeft, m_bilateralDisparityLeft, stereoConfig.StereoFBS_Spatial, stereoConfig.StereoFBS_Luma, stereoConfig.StereoFBS_Chroma, stereoConfig.StereoFBS_Lambda, stereoConfig.StereoFBS_Iterations);
 
                 outputMatrixLeft = &m_bilateralDisparityLeft;
                 outputMatrixRight = &m_bilateralDisparityLeft;
 
                 if (m_bDisparityBothEyes)
                 {
-                    cv::ximgproc::fastBilateralSolverFilter(m_scaledExtFrameRight, m_filteredDisparityRight, m_confidenceRight / 255.0f, m_bilateralDisparityRight, stereoConfig.StereoFBS_Spatial, stereoConfig.StereoFBS_Luma, stereoConfig.StereoFBS_Chroma, stereoConfig.StereoFBS_Lambda, stereoConfig.StereoFBS_Iterations);
+                    cv::ximgproc::fastBilateralSolverFilter(m_scaledExtFrameRight, m_filteredDisparityRight, m_confidenceRight, m_bilateralDisparityRight, stereoConfig.StereoFBS_Spatial, stereoConfig.StereoFBS_Luma, stereoConfig.StereoFBS_Chroma, stereoConfig.StereoFBS_Lambda, stereoConfig.StereoFBS_Iterations);
 
                     outputMatrixRight = &m_bilateralDisparityRight;
                 }
@@ -669,6 +669,8 @@ void DepthReconstruction::RunThread()
             m_underConstructionDepthFrame->disparityTextureSize[0] = m_cvImageWidth * 2;
             m_underConstructionDepthFrame->disparityTextureSize[1] = m_cvImageHeight;
             m_underConstructionDepthFrame->disparityDownscaleFactor = (float)m_downscaleFactor;
+            m_underConstructionDepthFrame->minDisparity = stereoConfig.StereoMinDisparity / 2048.0f;
+            m_underConstructionDepthFrame->maxDisparity = m_maxDisparity / 2048.0f;
             m_underConstructionDepthFrame->bIsValid = true;
             m_underConstructionDepthFrame->bIsFirstRender = true;
 

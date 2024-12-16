@@ -104,7 +104,7 @@ void main(uint3 pos : SV_DispatchThreadID)
     }
     else if (g_bHoleFillLastPass)
     {
-        dispConf.y = 0.4;
+        //dispConf.y = 0.4;
         g_disparityTexture[pos.xy] = dispConf;
     }
 }

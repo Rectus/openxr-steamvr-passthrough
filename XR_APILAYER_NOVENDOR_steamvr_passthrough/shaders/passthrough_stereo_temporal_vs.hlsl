@@ -109,7 +109,7 @@ float4 DisparityToWorldCoords(float disparity, float2 clipCoords)
     viewSpaceCoords /= viewSpaceCoords.w;
     viewSpaceCoords.z = sign(viewSpaceCoords.z) * min(abs(viewSpaceCoords.z), g_projectionDistance);
 
-    return mul((g_disparityUVBounds.x < 0.5) ? g_disparityViewToWorldLeft : g_disparityViewToWorldRight, viewSpaceCoords);
+    return mul((g_disparityUVBounds.x < 0.5) ? g_depthFrameViewToWorldLeft : g_depthFrameViewToWorldRight, viewSpaceCoords);
 }
 
 
@@ -125,7 +125,7 @@ float4 PrevDisparityToWorldCoords(float disparity, float2 clipCoords)
     viewSpaceCoords /= viewSpaceCoords.w;
     viewSpaceCoords.z = sign(viewSpaceCoords.z) * min(abs(viewSpaceCoords.z), g_projectionDistance);
 
-    return mul((g_disparityUVBounds.x < 0.5) ? g_prevDisparityViewToWorldLeft : g_prevDisparityViewToWorldRight, viewSpaceCoords);
+    return mul((g_disparityUVBounds.x < 0.5) ? g_prevDepthFrameViewToWorldLeft : g_prevDepthFrameViewToWorldRight, viewSpaceCoords);
 }
 
 
@@ -148,7 +148,7 @@ VS_OUTPUT main(float3 inPosition : POSITION, uint vertexID : SV_VertexID)
     
     
     float4 disparityWorldCoords = DisparityToWorldCoords(dispConf.x, inPosition.xy);
-    float4 prevDisparityCoords = mul(g_prevDispWorldToCameraProjection, disparityWorldCoords);
+    float4 prevDisparityCoords = mul((g_disparityUVBounds.x < 0.5) ? g_worldToPrevDepthFrameProjectionLeft : g_worldToPrevDepthFrameProjectionRight, disparityWorldCoords);
     prevDisparityCoords /= prevDisparityCoords.w;
     prevDisparityCoords.xy = (prevDisparityCoords.xy * 0.5 + 0.5);
     
@@ -293,10 +293,10 @@ VS_OUTPUT main(float3 inPosition : POSITION, uint vertexID : SV_VertexID)
     output.screenCoords = output.position;
 	
 #ifndef VULKAN
-    float4 outCoords = mul(g_worldToCameraProjection, worldSpacePoint);
+    float4 outCoords = mul((g_cameraViewIndex == 0) ? g_worldToCameraFrameProjectionLeft : g_worldToCameraFrameProjectionRight, worldSpacePoint);
 	output.clipSpaceCoords = outCoords;
     
-    float4 prevOutCoords = mul(g_prevWorldToCameraProjection, worldSpacePoint);
+    float4 prevOutCoords = mul((g_cameraViewIndex == 0) ? g_worldToPrevCameraFrameProjectionLeft : g_worldToPrevCameraFrameProjectionRight, worldSpacePoint);
     //output.prevClipSpaceCoords = prevOutCoords;
     
     float4 prevClipCoords = mul(g_prevWorldToHMDProjection, worldSpacePoint);

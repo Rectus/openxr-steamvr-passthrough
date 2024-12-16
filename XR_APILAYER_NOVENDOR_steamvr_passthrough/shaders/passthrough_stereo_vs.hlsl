@@ -35,7 +35,7 @@ float4 DisparityToWorldCoords(float disparity, float2 clipCoords)
     viewSpaceCoords /= viewSpaceCoords.w;
     viewSpaceCoords.z = sign(viewSpaceCoords.z) * min(abs(viewSpaceCoords.z), g_projectionDistance);
 
-    return mul((g_disparityUVBounds.x < 0.5) ? g_disparityViewToWorldLeft : g_disparityViewToWorldRight, viewSpaceCoords);
+    return mul((g_disparityUVBounds.x < 0.5) ? g_depthFrameViewToWorldLeft : g_depthFrameViewToWorldRight, viewSpaceCoords);
 }
 
 
@@ -78,9 +78,8 @@ VS_OUTPUT main(float3 inPosition : POSITION, uint vertexID : SV_VertexID)
         disparity = defaultDisparity;
         output.projectionValidity = -100;
     }
-    else if (confidence < 0.5)
-    {
-        
+    else
+    {        
         // Sample neighboring pixels using clamped Sobel filter, and cut out any areas with discontinuities.
         if (g_bFindDiscontinuities)
         {                      
@@ -108,7 +107,7 @@ VS_OUTPUT main(float3 inPosition : POSITION, uint vertexID : SV_VertexID)
         }
         
         // Filter any uncertain areas with a gaussian blur.
-        if (g_disparityFilterWidth > 0)
+        if (confidence < 0.5 && g_disparityFilterWidth > 0)
         {
             float totalWeight = 0;
             float outDisp = 0;
@@ -153,10 +152,10 @@ VS_OUTPUT main(float3 inPosition : POSITION, uint vertexID : SV_VertexID)
     
 	
 #ifndef VULKAN
-    float4 outCoords = mul(g_worldToCameraProjection, worldSpacePoint);
+    float4 outCoords = mul((g_cameraViewIndex == 0) ? g_worldToCameraFrameProjectionLeft : g_worldToCameraFrameProjectionRight, worldSpacePoint);
 	output.clipSpaceCoords = outCoords;
     
-    float4 prevOutCoords = mul(g_prevWorldToCameraProjection, worldSpacePoint);
+    float4 prevOutCoords = mul((g_cameraViewIndex == 0) ? g_worldToPrevCameraFrameProjectionLeft : g_worldToPrevCameraFrameProjectionRight, worldSpacePoint);
     
     float4 prevClipCoords = mul(g_prevWorldToHMDProjection, worldSpacePoint);
     output.prevClipSpaceCoords = prevClipCoords;

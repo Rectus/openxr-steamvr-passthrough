@@ -21,12 +21,21 @@ using namespace steamvr_passthrough::log;
 
 struct VSPassConstantBuffer
 {
-	XrMatrix4x4f disparityViewToWorldLeft;
-	XrMatrix4x4f disparityViewToWorldRight;
-	XrMatrix4x4f prevDisparityViewToWorldLeft;
-	XrMatrix4x4f prevDisparityViewToWorldRight;
+	XrMatrix4x4f worldToCameraFrameProjectionLeft;
+	XrMatrix4x4f worldToCameraFrameProjectionRight;
+	XrMatrix4x4f worldToPrevCameraFrameProjectionLeft;
+	XrMatrix4x4f worldToPrevCameraFrameProjectionRight;
+	XrMatrix4x4f worldToPrevDepthFrameProjectionLeft;
+	XrMatrix4x4f worldToPrevDepthFrameProjectionRight;
+	XrMatrix4x4f depthFrameViewToWorldLeft;
+	XrMatrix4x4f depthFrameViewToWorldRight;
+	XrMatrix4x4f prevDepthFrameViewToWorldLeft;
+	XrMatrix4x4f prevDepthFrameViewToWorldRight;
+
 	XrMatrix4x4f disparityToDepth;
 	uint32_t disparityTextureSize[2];
+	float minDisparity;
+	float maxDisparity;
 	float disparityDownscaleFactor;
 	float cutoutFactor;
 	float cutoutOffset;
@@ -42,22 +51,15 @@ struct VSPassConstantBuffer
 
 struct VSViewConstantBuffer
 {
-	XrMatrix4x4f cameraProjectionToWorld;
-	XrMatrix4x4f worldToCameraProjection;
-	XrMatrix4x4f crossWorldToCameraProjection;
 	XrMatrix4x4f worldToHMDProjection;
 	XrMatrix4x4f HMDProjectionToWorld;
-	XrMatrix4x4f prevCameraProjectionToWorld;
-	XrMatrix4x4f prevWorldToCameraProjection;
 	XrMatrix4x4f prevWorldToHMDProjection;
-	XrMatrix4x4f prevDispWorldToCameraProjection;
 	XrVector4f disparityUVBounds;
 	XrVector3f projectionOriginWorld;
 	float projectionDistance;
 	float floorHeightOffset;
 	uint32_t cameraViewIndex;
 	uint32_t bWriteDisparityFilter;
-	uint32_t bisFirstRender;
 };
 
 
@@ -1806,6 +1808,16 @@ void PassthroughRendererVulkan::RenderPassthroughFrame(const XrCompositionLayerP
 	}
 
 	{
+		VSPassConstantBuffer vsPassBuffer = {};
+		vsPassBuffer.worldToCameraFrameProjectionLeft = frame->worldToCameraProjectionLeft;
+		vsPassBuffer.worldToCameraFrameProjectionRight = frame->worldToCameraProjectionRight;
+		vsPassBuffer.worldToPrevCameraFrameProjectionLeft = frame->prevWorldToCameraProjectionLeft;
+		vsPassBuffer.worldToPrevCameraFrameProjectionRight = frame->prevWorldToCameraProjectionRight;
+
+		memcpy(m_vsPassConstantBufferMappings[m_frameIndex], &vsPassBuffer, sizeof(VSPassConstantBuffer));
+	}
+
+	{
 		PSPassConstantBuffer psPassBuffer = {};
 		psPassBuffer.depthRange = XrVector2f(NEAR_PROJECTION_DISTANCE, mainConf.ProjectionDistanceFar);
 		psPassBuffer.depthCutoffRange = XrVector2f(renderParams.DepthRangeMin, renderParams.DepthRangeMax);
@@ -1901,14 +1913,12 @@ void PassthroughRendererVulkan::RenderPassthroughView(const ERenderEye eye, cons
 		Config_Main& mainConf = m_configManager->GetConfig_Main();
 
 		VSViewConstantBuffer vsViewBuffer = {};
-		vsViewBuffer.cameraProjectionToWorld = (eye == LEFT_EYE) ? frame->cameraProjectionToWorldLeft : frame->cameraProjectionToWorldRight;
-		vsViewBuffer.worldToCameraProjection = (eye == LEFT_EYE) ? frame->worldToCameraProjectionLeft : frame->worldToCameraProjectionRight;
 		vsViewBuffer.worldToHMDProjection = (eye == LEFT_EYE) ? frame->worldToHMDProjectionLeft : frame->worldToHMDProjectionRight;
 		vsViewBuffer.disparityUVBounds = GetFrameUVBounds(eye, StereoHorizontalLayout);
 		vsViewBuffer.projectionOriginWorld = (eye == LEFT_EYE) ? frame->projectionOriginWorldLeft : frame->projectionOriginWorldRight;
 		vsViewBuffer.projectionDistance = mainConf.ProjectionDistanceFar;
 		vsViewBuffer.floorHeightOffset = mainConf.FloorHeightOffset;
-		vsViewBuffer.cameraViewIndex = viewIndex;
+		vsViewBuffer.cameraViewIndex = (eye == LEFT_EYE) ? 0 : 1;
 
 		memcpy(m_vsViewConstantBufferMappings[bufferIndex], &vsViewBuffer, sizeof(VSViewConstantBuffer));
 
@@ -2011,14 +2021,12 @@ void PassthroughRendererVulkan::RenderMaskedPrepassView(const ERenderEye eye, co
 	Config_Main& mainConf = m_configManager->GetConfig_Main();
 
 	VSViewConstantBuffer vsViewBuffer = {};
-	vsViewBuffer.cameraProjectionToWorld = (eye == LEFT_EYE) ? frame->cameraProjectionToWorldLeft : frame->cameraProjectionToWorldRight;
-	vsViewBuffer.worldToCameraProjection = (eye == LEFT_EYE) ? frame->worldToCameraProjectionLeft : frame->worldToCameraProjectionRight;
 	vsViewBuffer.worldToHMDProjection = (eye == LEFT_EYE) ? frame->worldToHMDProjectionLeft : frame->worldToHMDProjectionRight;
 	vsViewBuffer.disparityUVBounds = GetFrameUVBounds(eye, StereoHorizontalLayout);
 	vsViewBuffer.projectionOriginWorld = (eye == LEFT_EYE) ? frame->projectionOriginWorldLeft : frame->projectionOriginWorldRight;
 	vsViewBuffer.projectionDistance = mainConf.ProjectionDistanceFar;
 	vsViewBuffer.floorHeightOffset = mainConf.FloorHeightOffset;
-	vsViewBuffer.cameraViewIndex = viewIndex;
+	vsViewBuffer.cameraViewIndex = (eye == LEFT_EYE) ? 0 : 1;
 
 	memcpy(m_vsViewConstantBufferMappings[bufferIndex], &vsViewBuffer, sizeof(VSViewConstantBuffer));
 

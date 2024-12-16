@@ -168,6 +168,8 @@ struct DepthFrame
 		, prevDispWorldToCameraProjectionLeft()
 		, prevDispWorldToCameraProjectionRight()
 		, disparityDownscaleFactor(0.0f)
+		, minDisparity(0.0f)
+		, maxDisparity(0.0f)
 		, bIsValid(false)
 		, bIsFirstRender(true)
 	{
@@ -187,6 +189,8 @@ struct DepthFrame
 	XrMatrix4x4f prevDispWorldToCameraProjectionRight;
 	uint32_t disparityTextureSize[2];
 	float disparityDownscaleFactor;
+	float minDisparity;
+	float maxDisparity;
 	bool bIsValid;
 	bool bIsFirstRender;
 };
