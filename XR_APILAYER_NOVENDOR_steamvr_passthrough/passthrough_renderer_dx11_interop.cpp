@@ -811,7 +811,7 @@ void PassthroughRendererDX11Interop::RenderPassthroughFrame(const XrCompositionL
 	case DirectX12:
 	{
 		{
-			ID3D11Resource* rts[2] = { viewDataLeft.renderTarget.Get(), viewDataRight.renderTarget.Get() };
+			ID3D11Resource* rts[2] = { viewDataLeft.renderTarget.Texture.Get(), viewDataRight.renderTarget.Texture.Get() };
 			m_d3d11On12Device->AcquireWrappedResources(rts, 2);
 
 			ID3D11Resource* dts[2] = { 0 };

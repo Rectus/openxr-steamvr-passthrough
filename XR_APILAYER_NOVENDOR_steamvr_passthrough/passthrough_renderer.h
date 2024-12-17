@@ -69,6 +69,34 @@ struct DX11TemporaryRenderTarget
 	ComPtr<ID3D11ShaderResourceView> SRV;
 };
 
+struct DX11RenderTexture
+{
+	ComPtr<ID3D11Texture2D> Texture;
+	ComPtr<ID3D11RenderTargetView> RTV;
+	ComPtr<ID3D11ShaderResourceView> SRV;
+};
+
+
+struct DX11UAVSRVTexture
+{
+	ComPtr<ID3D11Texture2D> Texture;
+	ComPtr<ID3D11UnorderedAccessView> UAV;
+	ComPtr<ID3D11ShaderResourceView> SRV;
+};
+
+struct DX11DepthStencilTexture
+{
+	ComPtr<ID3D11Texture2D> Texture;
+	ComPtr<ID3D11DepthStencilView> DSV;
+	ComPtr<ID3D11ShaderResourceView> SRV;
+};
+
+struct DX11SRVTexture
+{
+	ComPtr<ID3D11Texture2D> Texture;
+	ComPtr<ID3D11ShaderResourceView> SRV;
+};
+
 struct DX11RenderModel
 {
 	DX11RenderModel()
@@ -97,18 +125,15 @@ struct DX11ViewData
 
 	bool bInitialized = false;
 
-	ComPtr<ID3D11Resource> renderTarget;
-	ComPtr<ID3D11RenderTargetView> renderTargetView;
-	ComPtr<ID3D11ShaderResourceView> renderTargetSRV;
-
-	DX11TemporaryRenderTarget temporaryRenderTarget;
-
 	ComPtr<ID3D11Buffer> vsViewConstantBuffer;
 	ComPtr<ID3D11Buffer> psViewConstantBuffer;
 
-	ComPtr<ID3D11UnorderedAccessView> cameraFilterUAV;
-	ComPtr<ID3D11ShaderResourceView> cameraFilterSRV;
-	ComPtr<ID3D11Texture2D> cameraFilterUAVTexture;
+	DX11RenderTexture renderTarget;
+	DX11TemporaryRenderTarget temporaryRenderTarget;
+
+	DX11UAVSRVTexture cameraFilter;
+	DX11DepthStencilTexture passthroughDepthStencil;
+	DX11RenderTexture passthroughCameraValidity;
 };
 
 
@@ -128,24 +153,11 @@ struct DX11FrameData
 	ComPtr<ID3D11Buffer> psPassConstantBuffer;
 	ComPtr<ID3D11Buffer> psMaskedConstantBuffer;
 	
-	ComPtr<ID3D11Texture2D> cameraFrameTexture;
-	ComPtr<ID3D11ShaderResourceView> cameraFrameSRV;
+	DX11SRVTexture cameraFrame;
+	DX11SRVTexture cameraUndistortedFrame;
 
-	ComPtr<ID3D11Texture2D> cameraUndistortedFrameTexture;
-	ComPtr<ID3D11ShaderResourceView> cameraUndistortedFrameSRV;
-
-	ComPtr<ID3D11Texture2D> disparityMap;
-	ComPtr<ID3D11UnorderedAccessView> disparityMapCSUAV;
-	ComPtr<ID3D11ShaderResourceView> disparityMapSRV;
-
-	ComPtr<ID3D11UnorderedAccessView> disparityMapUAV;
-	ComPtr<ID3D11ShaderResourceView> disparityMapUAVSRV;
-	ComPtr<ID3D11Texture2D> disparityMapUAVTexture;
-
-	ComPtr<ID3D11Texture2D> passthroughDepthMap;
-	ComPtr<ID3D11ShaderResourceView> passthroughDepthMapSRV[2];
-	ComPtr<ID3D11DepthStencilView> passthroughDepthMapDSV[2];
-	DX11TemporaryRenderTarget passthroughCameraInvalidation[2];
+	DX11UAVSRVTexture disparityMap;
+	DX11UAVSRVTexture disparityFilter;
 };
 
 
@@ -188,7 +200,7 @@ protected:
 	bool CheckInitViewData(const uint32_t viewIndex, const uint32_t swapchainIndex);
 	bool CheckInitFrameData(const uint32_t imageIndex);
 	void SetupDisparityMap(uint32_t width, uint32_t height);
-	void SetupPassthroughDepthMap(uint32_t width, uint32_t height);
+	void SetupPassthroughDepthStencil(uint32_t viewIndex, uint32_t swapchainIndex, uint32_t width, uint32_t height);
 	void SetupUVDistortionMap(std::shared_ptr<std::vector<float>> uvDistortionMap);
 	DX11TemporaryRenderTarget& GetTemporaryRenderTarget(const uint32_t swapchainIndex, const uint32_t eyeIndex);
 	void GenerateMesh();
@@ -263,9 +275,8 @@ protected:
 	ComPtr<ID3D11BlendState> m_blendStatePrepassUseAppAlpha;
 	ComPtr<ID3D11BlendState> m_blendStatePrepassIgnoreAppAlpha;
 
-	ComPtr<ID3D11Texture2D> m_debugTexture;
+	DX11SRVTexture m_debugTexture;
 	ComPtr<ID3D11Texture2D> m_debugTextureUpload;
-	ComPtr<ID3D11ShaderResourceView> m_debugTextureSRV;
 	ESelectedDebugTexture m_selectedDebugTexture;
 
 	ComPtr<ID3D11Texture2D> m_cameraFrameUploadTexture;
@@ -273,17 +284,8 @@ protected:
 	ComPtr<ID3D11Texture2D> m_disparityMapUploadTexture;
 	uint32_t m_disparityMapWidth;
 
-	/*ComPtr<ID3D11Texture2D> m_downloadStagingTexture;
-	uint32_t m_downloadStagingTextureWidth = 0;
-	uint32_t m_downloadStagingTextureHeight = 0;*/
-
-	ComPtr<ID3D11Texture2D> m_uvDistortionMap;
-	ComPtr<ID3D11ShaderResourceView> m_uvDistortionMapSRV;
+	DX11SRVTexture m_uvDistortionMap;
 	float m_fovScale;
-
-	ComPtr<ID3D11Texture2D> m_testFrame;
-	ComPtr<ID3D11Texture2D> m_testFrameUploadTexture;
-	ComPtr<ID3D11ShaderResourceView> m_testFrameSRV;
 
 	ComPtr<ID3D11InputLayout> m_inputLayout;
 	

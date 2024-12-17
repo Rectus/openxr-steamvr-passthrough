@@ -731,6 +731,12 @@ if (bIsActiveTab) { ImGui::PopStyleColor(1); bIsActiveTab = false; }
 			ImGui::Checkbox("Composite Both Cameras for Each Eye", &stereoCustomConfig.StereoCutoutEnabled);
 			TextDescriptionSpaced("Detects areas occluded to the main camera and renders them with the other camera where possible.");
 
+			ImGui::Checkbox("Use Deferred Depth Pass", &stereoCustomConfig.StereoUseDeferredDepthPass);
+			TextDescriptionSpaced("Enables a separate render pass for passthough depth maps for features that benefit from it, such as Composite Both Cameras for Each Eye.");
+
+			ImGui::Checkbox("Force Deferred Depth Pass", &stereoCustomConfig.StereoForceDeferredDepthPass);
+			TextDescriptionSpaced("Aleays use a separate render pass for passthough depth maps.");
+
 			IMGUI_BIG_SPACING;
 		}
 
@@ -766,7 +772,17 @@ if (bIsActiveTab) { ImGui::PopStyleColor(1); bIsActiveTab = false; }
 				ScrollableSlider("Composition Cutout Factor", &stereoCustomConfig.StereoCutoutFactor, 0.0f, 3.0f, "%.2f", 0.01f);
 				ScrollableSlider("Composition Cutout Offset", &stereoCustomConfig.StereoCutoutOffset, 0.0f, 2.0f, "%.2f", 0.01f);
 				ScrollableSlider("Composition Cutout Filter Distance", &stereoCustomConfig.StereoCutoutFilterWidth, 0.1f, 2.0f, "%.1f", 0.1f);
+				TextDescription("Settings for Composite Both Cameras for Each Eye.");
 				EndSoftDisabled(!stereoCustomConfig.StereoCutoutEnabled);
+
+				IMGUI_BIG_SPACING;
+				BeginSoftDisabled(!stereoCustomConfig.StereoUseDeferredDepthPass && !stereoCustomConfig.StereoForceDeferredDepthPass);
+				ScrollableSlider("Depth Fold Strength", &stereoCustomConfig.StereoDepthFoldStrength, 0.0f, 5.0f, "%.1f", 0.1f);
+				ScrollableSlider("Depth Fold Max Distance", &stereoCustomConfig.StereoDepthFoldMaxDistance, 0.0f, 5.0f, "%.1f", 0.1f);
+				ScrollableSlider("Depth Fold Filter Distance", &stereoCustomConfig.StereoDepthFoldFilterWidth, 0.0f, 3.0f, "%.1f", 0.1f);
+				TextDescription("Settings for Deferred Depth Pass.");
+				EndSoftDisabled(!stereoCustomConfig.StereoUseDeferredDepthPass || !stereoCustomConfig.StereoForceDeferredDepthPass);
+
 				ImGui::PopItemWidth();
 				ImGui::TreePop();
 			}

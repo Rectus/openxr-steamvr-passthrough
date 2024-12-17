@@ -523,6 +523,8 @@ struct Config_Stereo
 	bool StereoUseBWInputAlpha= false;
 	bool StereoUseHexagonGridMesh = false;
 	bool StereoFillHoles = true;
+	bool StereoForceDeferredDepthPass = false;
+	bool StereoUseDeferredDepthPass = true;
 	int StereoFrameSkip = 0;
 	int StereoDownscaleFactor = 2;
 	bool StereoUseDisparityTemporalFiltering = false;
@@ -535,6 +537,10 @@ struct Config_Stereo
 	float StereoCutoutFactor = 0.75f;
 	float StereoCutoutOffset = 1.5f;
 	float StereoCutoutFilterWidth = 0.9f;
+
+	float StereoDepthFoldStrength = 2.0f;
+	float StereoDepthFoldMaxDistance = 3.0f;
+	float StereoDepthFoldFilterWidth = 1.5f;
 
 	int StereoBlockSize = 1;
 	int StereoMinDisparity = 0;
@@ -566,6 +572,8 @@ struct Config_Stereo
 		StereoUseBWInputAlpha = ini.GetBoolValue(section, "StereoUseBWInputAlpha", StereoUseBWInputAlpha);
 		StereoUseHexagonGridMesh = ini.GetBoolValue(section, "StereoUseHexagonGridMesh", StereoUseHexagonGridMesh);
 		StereoFillHoles = ini.GetBoolValue(section, "StereoFillHoles", StereoFillHoles);
+		StereoForceDeferredDepthPass = ini.GetBoolValue(section, "StereoForceDeferredDepthPass", StereoForceDeferredDepthPass);
+		StereoUseDeferredDepthPass = ini.GetBoolValue(section, "StereoUseDeferredDepthPass", StereoUseDeferredDepthPass);
 		StereoFrameSkip = ini.GetLongValue(section, "StereoFrameSkip", StereoFrameSkip);
 		StereoDownscaleFactor = ini.GetLongValue(section, "StereoDownscaleFactor", StereoDownscaleFactor);
 		StereoUseDisparityTemporalFiltering = ini.GetBoolValue(section, "StereoUseDisparityTemporalFiltering", StereoUseDisparityTemporalFiltering);
@@ -578,6 +586,10 @@ struct Config_Stereo
 		StereoCutoutOffset = (float)ini.GetDoubleValue(section, "StereoCutoutOffset", StereoCutoutOffset);
 		StereoDisparityFilterWidth = (int)ini.GetLongValue(section, "StereoDisparityFilterWidth", StereoDisparityFilterWidth);
 		StereoCutoutFilterWidth = (float)ini.GetDoubleValue(section, "StereoCutoutFilterWidth", StereoCutoutFilterWidth);
+
+		StereoDepthFoldStrength = (float)ini.GetDoubleValue(section, "StereoDepthFoldStrength", StereoDepthFoldStrength);
+		StereoDepthFoldMaxDistance = (float)ini.GetDoubleValue(section, "StereoDepthFoldMaxDistance", StereoDepthFoldMaxDistance);
+		StereoDepthFoldFilterWidth = (float)ini.GetDoubleValue(section, "StereoDepthFoldFilterWidth", StereoDepthFoldFilterWidth);
 
 		StereoBlockSize = ini.GetLongValue(section, "StereoBlockSize", StereoBlockSize);
 		StereoMinDisparity = ini.GetLongValue(section, "StereoMinDisparity", StereoMinDisparity);
@@ -610,6 +622,8 @@ struct Config_Stereo
 		ini.SetBoolValue(section, "StereoUseBWInputAlpha", StereoUseBWInputAlpha);
 		ini.SetBoolValue(section, "StereoUseHexagonGridMesh", StereoUseHexagonGridMesh);
 		ini.SetBoolValue(section, "StereoFillHoles", StereoFillHoles);
+		ini.SetBoolValue(section, "StereoForceDeferredDepthPass", StereoForceDeferredDepthPass);
+		ini.SetBoolValue(section, "StereoUseDeferredDepthPass", StereoUseDeferredDepthPass);
 		ini.SetLongValue(section, "StereoFrameSkip", StereoFrameSkip);
 		ini.SetLongValue(section, "StereoDownscaleFactor", StereoDownscaleFactor);
 		ini.SetBoolValue(section, "StereoUseDisparityTemporalFiltering", StereoUseDisparityTemporalFiltering);
@@ -622,6 +636,10 @@ struct Config_Stereo
 		ini.SetDoubleValue(section, "StereoCutoutOffset", StereoCutoutOffset);
 		ini.SetLongValue(section, "StereoDisparityFilterWidth", StereoDisparityFilterWidth);
 		ini.SetDoubleValue(section, "StereoCutoutFilterWidth", StereoCutoutFilterWidth);
+
+		ini.SetDoubleValue(section, "StereoDepthFoldStrength", StereoDepthFoldStrength);
+		ini.SetDoubleValue(section, "StereoDepthFoldMaxDistance", StereoDepthFoldMaxDistance);
+		ini.SetDoubleValue(section, "StereoDepthFoldFilterWidth", StereoDepthFoldFilterWidth);
 
 		ini.SetLongValue(section, "StereoBlockSize", StereoBlockSize);
 		ini.SetLongValue(section, "StereoMinDisparity", StereoMinDisparity);
