@@ -747,7 +747,7 @@ void PassthroughRendererDX11::SetupPassthroughDepthStencil(uint32_t viewIndex, u
 	{
 		D3D11_TEXTURE2D_DESC textureDesc = {};
 		textureDesc.MipLevels = 1;
-		textureDesc.Format = DXGI_FORMAT_R24G8_TYPELESS;
+		textureDesc.Format = DXGI_FORMAT_R16_TYPELESS;
 		textureDesc.Width = width;
 		textureDesc.Height = height;
 		textureDesc.ArraySize = 1;
@@ -759,32 +759,35 @@ void PassthroughRendererDX11::SetupPassthroughDepthStencil(uint32_t viewIndex, u
 
 		D3D11_SHADER_RESOURCE_VIEW_DESC srvDesc = {};
 		srvDesc.ViewDimension = D3D11_SRV_DIMENSION_TEXTURE2D;
-		srvDesc.Format = DXGI_FORMAT_R24_UNORM_X8_TYPELESS;
+		srvDesc.Format = DXGI_FORMAT_R16_UNORM;
 		srvDesc.Texture2D.MipLevels = 1;
 
 		D3D11_DEPTH_STENCIL_VIEW_DESC dsvDesc = {};
 		dsvDesc.ViewDimension = D3D11_DSV_DIMENSION_TEXTURE2D;
-		dsvDesc.Format = DXGI_FORMAT_D24_UNORM_S8_UINT;
+		dsvDesc.Format = DXGI_FORMAT_D16_UNORM;
 		dsvDesc.Texture2D.MipSlice = 0;
 
 		DX11ViewData& viewData = m_viewData[viewIndex][swapchainIndex];
-		if (FAILED(m_d3dDevice->CreateTexture2D(&textureDesc, nullptr, &viewData.passthroughDepthStencil.Texture)))
-		{
-			ErrorLog("Passthrough Depth Stencil CreateTexture2D error!\n");
-			return;
-		}
 
-		if (FAILED(m_d3dDevice->CreateShaderResourceView(viewData.passthroughDepthStencil.Texture.Get(), &srvDesc, &viewData.passthroughDepthStencil.SRV)))
+		for (int i = 0; i < 2; i++)
 		{
-			ErrorLog("Passthrough Depth Stencil CreateShaderResourceView error!\n");
-			return;
-		}
+			if (FAILED(m_d3dDevice->CreateTexture2D(&textureDesc, nullptr, &viewData.passthroughDepthStencil[i].Texture)))
+			{
+				ErrorLog("Passthrough Depth Stencil CreateTexture2D error!\n");
+				return;
+			}
 
-		if (FAILED(m_d3dDevice->CreateDepthStencilView(viewData.passthroughDepthStencil.Texture.Get(), &dsvDesc, &viewData.passthroughDepthStencil.DSV)))
-		{
-			ErrorLog("Passthrough Depth Stencil CreateDepthStencilView error!\n");
+			if (FAILED(m_d3dDevice->CreateShaderResourceView(viewData.passthroughDepthStencil[i].Texture.Get(), &srvDesc, &viewData.passthroughDepthStencil[i].SRV)))
+			{
+				ErrorLog("Passthrough Depth Stencil CreateShaderResourceView error!\n");
+				return;
+			}
+
+			if (FAILED(m_d3dDevice->CreateDepthStencilView(viewData.passthroughDepthStencil[i].Texture.Get(), &dsvDesc, &viewData.passthroughDepthStencil[i].DSV)))
+			{
+				ErrorLog("Passthrough Depth Stencil CreateDepthStencilView error!\n");
+			}
 		}
-	
 	}
 
 	{
@@ -1387,8 +1390,10 @@ void PassthroughRendererDX11::RenderPassthroughFrame(const XrCompositionLayerPro
 			GenerateDepthMesh(depthFrame->disparityTextureSize[0] / 2, depthFrame->disparityTextureSize[1]);
 			for (int i = 0; i < m_viewData[0].size(); i++)
 			{
-				m_viewData[0][i].passthroughDepthStencil.Texture = nullptr;
-				m_viewData[1][i].passthroughDepthStencil.Texture = nullptr;
+				m_viewData[0][i].passthroughDepthStencil[0].Texture = nullptr;
+				m_viewData[0][i].passthroughDepthStencil[1].Texture = nullptr;
+				m_viewData[1][i].passthroughDepthStencil[0].Texture = nullptr;
+				m_viewData[0][i].passthroughDepthStencil[1].Texture = nullptr;
 			}
 			bdisparityMapUpdated = true;
 		}
@@ -1411,8 +1416,8 @@ void PassthroughRendererDX11::RenderPassthroughFrame(const XrCompositionLayerPro
 
 		if (bUseDepthPass)
 		{
-			if (viewDataLeft.passthroughDepthStencil.Texture == nullptr) { SetupPassthroughDepthStencil(0, leftSwapchainIndex, depthFrame->disparityTextureSize[0] / 2, depthFrame->disparityTextureSize[1]); }
-			if (viewDataRight.passthroughDepthStencil.Texture == nullptr) { SetupPassthroughDepthStencil(1, rightSwapchainIndex, depthFrame->disparityTextureSize[0] / 2, depthFrame->disparityTextureSize[1]); }
+			if (viewDataLeft.passthroughDepthStencil[0].Texture == nullptr) { SetupPassthroughDepthStencil(0, leftSwapchainIndex, depthFrame->disparityTextureSize[0] / 2, depthFrame->disparityTextureSize[1]); }
+			if (viewDataRight.passthroughDepthStencil[0].Texture == nullptr) { SetupPassthroughDepthStencil(1, rightSwapchainIndex, depthFrame->disparityTextureSize[0] / 2, depthFrame->disparityTextureSize[1]); }
 		}
 	}
 
@@ -1735,8 +1740,8 @@ void PassthroughRendererDX11::RenderPassthroughView(const ERenderEye eye, const 
 	{
 		if (bUseDepthPass)
 		{
-			ID3D11ShaderResourceView* vsSRVs[2] = { viewData.passthroughDepthStencil.SRV.Get(), viewData.passthroughCameraValidity.SRV.Get() };
-			m_renderContext->VSSetShaderResources(0, 2, vsSRVs);
+			ID3D11ShaderResourceView* vsSRVs[3] = { viewData.passthroughDepthStencil[0].SRV.Get(), viewData.passthroughDepthStencil[1].SRV.Get(), viewData.passthroughCameraValidity.SRV.Get()};
+			m_renderContext->VSSetShaderResources(0, 3, vsSRVs);
 		}
 		else if (stereoConf.StereoUseDisparityTemporalFiltering)
 		{
@@ -2058,8 +2063,8 @@ void PassthroughRendererDX11::RenderMaskedPrepassView(const ERenderEye eye, cons
 	{
 		if (bUseDepthPass)
 		{
-			ID3D11ShaderResourceView* vsSRVs[2] = { viewData.passthroughDepthStencil.SRV.Get(), viewData.passthroughCameraValidity.SRV.Get() };
-			m_renderContext->VSSetShaderResources(0, 2, vsSRVs);
+			ID3D11ShaderResourceView* vsSRVs[3] = { viewData.passthroughDepthStencil[0].SRV.Get(), viewData.passthroughDepthStencil[1].SRV.Get(), viewData.passthroughCameraValidity.SRV.Get()};
+			m_renderContext->VSSetShaderResources(0, 3, vsSRVs);
 		}
 		else if (stereoConf.StereoUseDisparityTemporalFiltering)
 		{
@@ -2231,11 +2236,11 @@ void PassthroughRendererDX11::RenderDepthPrepassView(const ERenderEye eye, const
 	float clearColor[4] = { 0,0,0,0 };
 	m_renderContext->ClearRenderTargetView(viewData.passthroughCameraValidity.RTV.Get(), clearColor);
 
-	ID3D11DepthStencilView* depthStencil = viewData.passthroughDepthStencil.DSV.Get();
-	m_renderContext->ClearDepthStencilView(depthStencil, D3D11_CLEAR_DEPTH | D3D11_CLEAR_STENCIL, 1.0, 0);
+	//ID3D11DepthStencilView* depthStencil = viewData.passthroughDepthStencil.DSV.Get();
+	//m_renderContext->ClearDepthStencilView(depthStencil, D3D11_CLEAR_DEPTH | D3D11_CLEAR_STENCIL, 1.0, 0);
 
-	m_renderContext->OMSetRenderTargets(1, viewData.passthroughCameraValidity.RTV.GetAddressOf(), depthStencil);
-	float blendFactor[4] = { 1,0,0,0 };
+	m_renderContext->OMSetRenderTargets(1, viewData.passthroughCameraValidity.RTV.GetAddressOf(), viewData.passthroughDepthStencil[0].DSV.Get());
+	float blendFactor[4] = { 1,1,0,0 };
 	m_renderContext->OMSetBlendState(m_blendStateWriteFactored.Get(), blendFactor, UINT_MAX);
 	m_renderContext->OMSetDepthStencilState(m_depthStencilStateAlwaysWrite.Get(), 1);
 
@@ -2265,7 +2270,7 @@ void PassthroughRendererDX11::RenderDepthPrepassView(const ERenderEye eye, const
 	psViewBuffer.prepassUVBounds = { 0.0f, 0.0f, 1.0f, 1.0f };
 	psViewBuffer.frameUVBounds = GetFrameUVBounds(eye, frame->frameLayout);
 	psViewBuffer.rtArrayIndex = layer->views[viewIndex].subImage.imageArrayIndex;
-	psViewBuffer.bDoCutout = stereoConf.StereoCutoutEnabled;
+	psViewBuffer.bDoCutout = true;
 	psViewBuffer.bPremultiplyAlpha = false;
 
 	m_renderContext->UpdateSubresource(viewData.psViewConstantBuffer.Get(), 0, nullptr, &psViewBuffer, 0, 0);
@@ -2285,29 +2290,15 @@ void PassthroughRendererDX11::RenderDepthPrepassView(const ERenderEye eye, const
 
 		m_renderContext->UpdateSubresource(viewData.psViewConstantBuffer.Get(), 0, nullptr, &psViewBuffer, 0, 0);
 
-		m_renderContext->DrawIndexed(numIndices, 0, 0);
+		m_renderContext->OMSetRenderTargets(1, viewData.passthroughCameraValidity.RTV.GetAddressOf(), viewData.passthroughDepthStencil[1].DSV.Get());
 
-		m_renderContext->OMSetRenderTargets(1, viewData.passthroughCameraValidity.RTV.GetAddressOf(), nullptr);
-
-		blendFactor[0] = 0;
+		blendFactor[1] = 0;
 		blendFactor[2] = 1;
 		m_renderContext->OMSetBlendState(m_blendStateWriteFactored.Get(), blendFactor, UINT_MAX);
 		
+
 		m_renderContext->DrawIndexed(numIndices, 0, 0);
-
-		
 	}
-
-	blendFactor[2] = 0;
-	blendFactor[1] = 1;
-	m_renderContext->OMSetBlendState(m_blendStateWriteFactored.Get(), blendFactor, UINT_MAX);
-
-	vsViewBuffer.cameraViewIndex = (eye == LEFT_EYE) ? 0 : 1;
-	vsViewBuffer.disparityUVBounds = GetFrameUVBounds(eye, StereoHorizontalLayout);
-
-	m_renderContext->UpdateSubresource(viewData.vsViewConstantBuffer.Get(), 0, nullptr, &vsViewBuffer, 0, 0);
-
-	m_renderContext->DrawIndexed(numIndices, 0, 0);
 }
 
 

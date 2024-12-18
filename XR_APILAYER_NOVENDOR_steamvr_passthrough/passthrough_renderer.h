@@ -132,7 +132,7 @@ struct DX11ViewData
 	DX11TemporaryRenderTarget temporaryRenderTarget;
 
 	DX11UAVSRVTexture cameraFilter;
-	DX11DepthStencilTexture passthroughDepthStencil;
+	DX11DepthStencilTexture passthroughDepthStencil[2];
 	DX11RenderTexture passthroughCameraValidity;
 };
 

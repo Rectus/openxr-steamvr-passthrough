@@ -13,6 +13,7 @@ struct VS_OUTPUT
     float4 crossClipSpaceCoords : TEXCOORD5;
     float2 projectionValidity2 : TEXCOORD6;
     float cameraBlend : TEXCOORD7;
+    float2 cameraDepth : TEXCOORD8;
 };
 
 
@@ -127,7 +128,9 @@ float4 main(VS_OUTPUT input) : SV_TARGET
     float pixelDistanceBlend = distanceFactor + (1 - crossDistanceFactor);
     //float blendfactor = 1 - abs(input.cameraBlend * 2 - 1);
     
-    float combineFactor = abs(input.cameraBlend * 2 - 1) * input.projectionValidity2.x * input.projectionValidity2.y;
+    float depthFactor = saturate(1 - (abs(input.cameraDepth.x - input.cameraDepth.y) * 1000));
+    
+    float combineFactor = depthFactor * input.projectionValidity2.x * input.projectionValidity2.y;
     
     // Blend together both cameras based on which ones are valid and have the closest pixels.
     rgbColor = lerp(rgbColor, crossRGBColor, lerp(input.cameraBlend, pixelDistanceBlend, combineFactor));
