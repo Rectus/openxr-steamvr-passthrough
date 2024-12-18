@@ -11,7 +11,7 @@ struct VS_OUTPUT
 };
 
 
-float main(VS_OUTPUT input) : SV_TARGET
+float4 main(VS_OUTPUT input) : SV_TARGET
 {
 	if(g_doCutout)
     {
@@ -19,5 +19,7 @@ float main(VS_OUTPUT input) : SV_TARGET
     }
 	
 	// Write validity value 0 - 0.5 for primary camera and 0.5 - 1 for secondary.
-    return g_doCutout ? 0.5 - saturate(input.projectionValidity) * 0.5 : saturate(input.projectionValidity) * 0.5 + 0.51;
+    float cameraBlend = g_doCutout ? 0.5 - saturate(input.projectionValidity) * 0.5 : saturate(input.projectionValidity) * 0.5 + 0.51;
+
+	return float4(cameraBlend, input.projectionValidity, input.projectionValidity, 0);
 }

@@ -10,11 +10,13 @@ struct VS_OUTPUT
     float4 prevClipSpaceCoords : TEXCOORD3;
     float3 velocity : TEXCOORD4;
     float4 crossClipSpaceCoords : TEXCOORD5;
+    float2 projectionValidity2 : TEXCOORD6;
+    float cameraBlend : TEXCOORD7;
 };
 
 SamplerState g_samplerState : register(s0);
 Texture2D<half> g_depthMap : register(t0);
-Texture2D<float> g_cameraInvalidation : register(t1);
+Texture2D<float4> g_cameraInvalidation : register(t1);
 
 // B-spline as in http://vec3.ca/bicubic-filtering-in-fewer-taps/
 float bicubic_b_spline_4tap(in Texture2D<float> tex, in SamplerState linearSampler, in float2 uv)
@@ -95,8 +97,8 @@ VS_OUTPUT main(float3 inPosition : POSITION, uint vertexID : SV_VertexID)
     
     //g_cameraInvalidation.GetDimensions(texW, texH);
     //float cameraBlend = g_cameraInvalidation.Load(int3(inPosition.xy * float2(texW, texH), 0));
-    //float cameraBlend = g_cameraInvalidation.SampleLevel(g_samplerState, inPosition.xy, 0);
-    float cameraBlend = bicubic_b_spline_4tap(g_cameraInvalidation, g_samplerState, inPosition.xy);
+    float4 cameraValidation = g_cameraInvalidation.SampleLevel(g_samplerState, inPosition.xy, 0);
+    //float4 cameraValidation = bicubic_b_spline_4tap(g_cameraInvalidation, g_samplerState, inPosition.xy);
     
     float4 clipSpacePos = float4((inPosition.xy * float2(2.0, -2.0) + float2(-1, 1)), depth, 1.0);   
     
@@ -118,7 +120,9 @@ VS_OUTPUT main(float3 inPosition : POSITION, uint vertexID : SV_VertexID)
     output.position = clipSpacePos;   
     output.screenCoords = clipSpacePos; 
     output.screenCoords.z *= output.screenCoords.w; //Linearize depth
-	output.projectionValidity = cameraBlend;
+	output.projectionValidity = cameraValidation.y;
+    output.projectionValidity2 = float2(cameraValidation.yz);
+    output.cameraBlend = cameraValidation.x;
 	
 #ifndef VULKAN  
     float4 prevOutCoords = mul((g_cameraViewIndex == 0) ? g_worldToPrevCameraFrameProjectionLeft : g_worldToPrevCameraFrameProjectionRight, worldProjectionPos);

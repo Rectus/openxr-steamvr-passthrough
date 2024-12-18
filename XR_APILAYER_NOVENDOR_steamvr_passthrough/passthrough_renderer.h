@@ -274,6 +274,7 @@ protected:
 	ComPtr<ID3D11BlendState> m_blendStatePrepassInverseAppAlpha;
 	ComPtr<ID3D11BlendState> m_blendStatePrepassUseAppAlpha;
 	ComPtr<ID3D11BlendState> m_blendStatePrepassIgnoreAppAlpha;
+	ComPtr<ID3D11BlendState> m_blendStateWriteFactored;
 
 	DX11SRVTexture m_debugTexture;
 	ComPtr<ID3D11Texture2D> m_debugTextureUpload;

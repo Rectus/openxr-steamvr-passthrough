@@ -11,6 +11,8 @@ struct VS_OUTPUT
     float4 prevClipSpaceCoords : TEXCOORD3;
     float3 velocity : TEXCOORD4;
     float4 crossClipSpaceCoords : TEXCOORD5;
+    float2 projectionValidity2 : TEXCOORD6;
+    float cameraBlend : TEXCOORD7;
 };
 
 
@@ -119,14 +121,16 @@ float4 main(VS_OUTPUT input) : SV_TARGET
     uint2 crossCamPixel = floor(crossCamTexCoords);
     
     // How far the current pixel is to the sampled one
-    float confidenceInv = abs(camTexCoords.x - camPixel.x - 0.5) + abs(camTexCoords.y - camPixel.y - 0.5);
-    float crossConfidenceInv = abs(crossCamTexCoords.x - crossCamPixel.x - 0.5) + abs(crossCamTexCoords.y - crossCamPixel.y - 0.5);
+    float distanceFactor = abs(camTexCoords.x - camPixel.x - 0.5) + abs(camTexCoords.y - camPixel.y - 0.5);
+    float crossDistanceFactor = abs(crossCamTexCoords.x - crossCamPixel.x - 0.5) + abs(crossCamTexCoords.y - crossCamPixel.y - 0.5);
     
-    float pixelDistanceBlend = confidenceInv + (1 - crossConfidenceInv);
-    float blendfactor = 1 -abs(input.projectionValidity * 2 - 1);
+    float pixelDistanceBlend = distanceFactor + (1 - crossDistanceFactor);
+    //float blendfactor = 1 - abs(input.cameraBlend * 2 - 1);
+    
+    float combineFactor = abs(input.cameraBlend * 2 - 1) * input.projectionValidity2.x * input.projectionValidity2.y;
     
     // Blend together both cameras based on which ones are valid and have the closest pixels.
-    rgbColor = lerp(rgbColor, crossRGBColor, lerp(input.projectionValidity, pixelDistanceBlend, blendfactor));
+    rgbColor = lerp(rgbColor, crossRGBColor, lerp(input.cameraBlend, pixelDistanceBlend, combineFactor));
     
 	if (g_bDoColorAdjustment)
 	{
@@ -162,7 +166,7 @@ float4 main(VS_OUTPUT input) : SV_TARGET
         //{
         //    rgbColor.z += 0.25;
         //}
-        rgbColor = float3(0, lerp(input.projectionValidity, pixelDistanceBlend, blendfactor), 0);
+        rgbColor = float3(0, lerp(input.cameraBlend, pixelDistanceBlend, combineFactor), 0);
     }
     
     rgbColor = g_bPremultiplyAlpha ? rgbColor * g_opacity * alpha : rgbColor;
