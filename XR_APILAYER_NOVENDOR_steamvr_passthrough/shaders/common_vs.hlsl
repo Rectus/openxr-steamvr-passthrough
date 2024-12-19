@@ -40,4 +40,7 @@ cbuffer vsPassConstantBuffer : register(b1)
     bool g_bUseDisparityTemporalFilter;
     float g_disparityTemporalFilterStrength;
     float g_disparityTemporalFilterDistance;
+    float g_depthFoldStrength;
+	float g_depthFoldMaxDistance;
+	float g_depthFoldFilterWidth;
 };

@@ -92,24 +92,44 @@ float4 main(VS_OUTPUT input) : SV_TARGET
       
     float3 rgbColor = g_cameraFrameTexture.Sample(g_samplerState, outUvs).xyz;
     
+    float3 minColor = rgbColor;
+    float3 maxColor = rgbColor;
+    
     float3 crossRGBColor = g_cameraFrameTexture.Sample(g_samplerState, crossUvs).xyz;
     
-    if (g_sharpness != 0.0)
-    {
-        float3 textureSize;
-        g_cameraFrameTexture.GetDimensions(0, textureSize.x, textureSize.y, textureSize.z);
-        rgbColor *= 1 + g_sharpness * 4;
-        rgbColor -= g_cameraFrameTexture.Sample(g_samplerState, outUvs + float2(-1, 0) / textureSize.xy).xyz * g_sharpness;
-        rgbColor -= g_cameraFrameTexture.Sample(g_samplerState, outUvs + float2(1, 0) / textureSize.xy).xyz * g_sharpness;
-        rgbColor -= g_cameraFrameTexture.Sample(g_samplerState, outUvs + float2(0, -1) / textureSize.xy).xyz * g_sharpness;
-        rgbColor -= g_cameraFrameTexture.Sample(g_samplerState, outUvs + float2(0, 1) / textureSize.xy).xyz * g_sharpness;
+
+    rgbColor *= (1 + g_sharpness * 4);
         
-        crossRGBColor *= 1 + g_sharpness * 4;
-        crossRGBColor -= g_cameraFrameTexture.Sample(g_samplerState, crossUvs + float2(-1, 0) / textureSize.xy).xyz * g_sharpness;
-        crossRGBColor -= g_cameraFrameTexture.Sample(g_samplerState, crossUvs + float2(1, 0) / textureSize.xy).xyz * g_sharpness;
-        crossRGBColor -= g_cameraFrameTexture.Sample(g_samplerState, crossUvs + float2(0, -1) / textureSize.xy).xyz * g_sharpness;
-        crossRGBColor -= g_cameraFrameTexture.Sample(g_samplerState, crossUvs + float2(0, 1) / textureSize.xy).xyz * g_sharpness;
-    }
+    float3 textureSize;
+    g_cameraFrameTexture.GetDimensions(0, textureSize.x, textureSize.y, textureSize.z);
+    float3 sample = g_cameraFrameTexture.Sample(g_samplerState, outUvs + float2(-1, 0) / textureSize.xy).xyz;
+    rgbColor -= sample * g_sharpness;
+    minColor = min(minColor, sample);
+    maxColor = max(maxColor, sample);
+        
+    sample = g_cameraFrameTexture.Sample(g_samplerState, outUvs + float2(1, 0) / textureSize.xy).xyz;
+    rgbColor -= sample * g_sharpness;
+    minColor = min(minColor, sample);
+    maxColor = max(maxColor, sample);
+        
+    sample = g_cameraFrameTexture.Sample(g_samplerState, outUvs + float2(0, -1) / textureSize.xy).xyz;
+    rgbColor -= sample * g_sharpness;
+    minColor = min(minColor, sample);
+    maxColor = max(maxColor, sample);
+        
+    sample = g_cameraFrameTexture.Sample(g_samplerState, outUvs + float2(0, 1) / textureSize.xy).xyz;
+    rgbColor -= sample * g_sharpness;
+    minColor = min(minColor, sample);
+    maxColor = max(maxColor, sample);
+        
+    crossRGBColor *= 1 + g_sharpness * 4;
+    crossRGBColor -= g_cameraFrameTexture.Sample(g_samplerState, crossUvs + float2(-1, 0) / textureSize.xy).xyz * g_sharpness;
+    crossRGBColor -= g_cameraFrameTexture.Sample(g_samplerState, crossUvs + float2(1, 0) / textureSize.xy).xyz * g_sharpness;
+    crossRGBColor -= g_cameraFrameTexture.Sample(g_samplerState, crossUvs + float2(0, -1) / textureSize.xy).xyz * g_sharpness;
+    crossRGBColor -= g_cameraFrameTexture.Sample(g_samplerState, crossUvs + float2(0, 1) / textureSize.xy).xyz * g_sharpness;
+
+    
+    crossRGBColor = min(maxColor, max(crossRGBColor, minColor));
     
     uint texW, texH;
     g_cameraFrameTexture.GetDimensions(texW, texH);
@@ -126,9 +146,8 @@ float4 main(VS_OUTPUT input) : SV_TARGET
     float crossDistanceFactor = abs(crossCamTexCoords.x - crossCamPixel.x - 0.5) + abs(crossCamTexCoords.y - crossCamPixel.y - 0.5);
     
     float pixelDistanceBlend = distanceFactor + (1 - crossDistanceFactor);
-    //float blendfactor = 1 - abs(input.cameraBlend * 2 - 1);
     
-    float depthFactor = saturate(1 - (abs(input.cameraDepth.x - input.cameraDepth.y) * 1000));
+    float depthFactor =  saturate(1 - (abs(input.cameraDepth.x - input.cameraDepth.y) * 1000));
     
     float combineFactor = depthFactor * input.projectionValidity2.x * input.projectionValidity2.y;
     

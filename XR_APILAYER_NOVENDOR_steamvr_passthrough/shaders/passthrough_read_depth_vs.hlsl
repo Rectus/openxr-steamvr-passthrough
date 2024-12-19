@@ -68,7 +68,7 @@ float2 sobel_discontinuity_direction(in Texture2D<float> tex, in float depth, in
     tex.GetDimensions(texW, texH);
     float2 invTexSize = 1 / float2(texW, texH);
     
-    float2 fac = 1.5 * invTexSize;
+    float2 fac = g_depthFoldFilterWidth * invTexSize;
     
     float dispU = min(tex.SampleLevel(g_samplerState, uvs + float2(0, -1) * fac, 0), depth);
     float dispD = min(tex.SampleLevel(g_samplerState, uvs + float2(0, 1) * fac, 0), depth);
@@ -83,7 +83,7 @@ float2 sobel_discontinuity_direction(in Texture2D<float> tex, in float depth, in
     float filterX = dispUL + dispL * 2 + dispDL - dispUR - dispR * 2 - dispDR; 
     float filterY = dispUL + dispU * 2 + dispUR - dispDL - dispD * 2 - dispDR;
     
-    return clamp(float2(filterX, -filterY) * 20, -2, 2) * invTexSize;
+    return clamp(float2(filterX, -filterY) * g_depthFoldStrength * 10, -g_depthFoldMaxDistance, g_depthFoldMaxDistance) * invTexSize;
 }
 
 

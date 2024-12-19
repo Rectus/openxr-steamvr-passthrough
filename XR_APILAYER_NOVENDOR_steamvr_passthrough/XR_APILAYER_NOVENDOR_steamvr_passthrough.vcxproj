@@ -347,6 +347,11 @@ copy $(SolutionDir)\readme.md $(OutDir)
       <VariableName Condition="'$(Configuration)|$(Platform)'=='Release|x64'">g_PassthroughStereoCompositePS</VariableName>
       <HeaderFileOutput Condition="'$(Configuration)|$(Platform)'=='Release|x64'">shaders\passthrough_stereo_composite_ps.h</HeaderFileOutput>
     </FxCompile>
+    <FxCompile Include="shaders\passthrough_stereo_composite_temporal_ps.hlsl">
+      <HeaderFileOutput Condition="'$(Configuration)|$(Platform)'=='Release|x64'">shaders\passthrough_stereo_composite_temporal_ps.h</HeaderFileOutput>
+      <ShaderType Condition="'$(Configuration)|$(Platform)'=='Release|x64'">Pixel</ShaderType>
+      <VariableName Condition="'$(Configuration)|$(Platform)'=='Release|x64'">g_PassthroughStereoCompositeTemporalPS</VariableName>
+    </FxCompile>
     <FxCompile Include="shaders\passthrough_stereo_temporal_vs.hlsl">
       <HeaderFileOutput Condition="'$(Configuration)|$(Platform)'=='Release|x64'">shaders\passthrough_stereo_temporal_vs.h</HeaderFileOutput>
       <VariableName Condition="'$(Configuration)|$(Platform)'=='Release|x64'">g_PassthroughStereoTemporalShaderVS</VariableName>
