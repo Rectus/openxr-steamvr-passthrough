@@ -147,9 +147,8 @@ VS_OUTPUT main(float3 inPosition : POSITION, uint vertexID : SV_VertexID)
     }
     
     output.position = mul(g_worldToHMDProjection, worldSpacePoint);
-    output.screenCoords = output.position;
-    
-    
+    output.screenCoords = output.position;  
+    output.screenCoords.z *= output.screenCoords.w; //Linearize depth
 	
 #ifndef VULKAN
     float4 outCoords = mul((g_cameraViewIndex == 0) ? g_worldToCameraFrameProjectionLeft : g_worldToCameraFrameProjectionRight, worldSpacePoint);

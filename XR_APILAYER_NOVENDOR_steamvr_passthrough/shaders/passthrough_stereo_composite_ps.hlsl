@@ -129,7 +129,7 @@ float4 main(VS_OUTPUT input) : SV_TARGET
     crossRGBColor -= g_cameraFrameTexture.Sample(g_samplerState, crossUvs + float2(0, 1) / textureSize.xy).xyz * g_sharpness;
 
     
-    crossRGBColor = min(maxColor, max(crossRGBColor, minColor));
+    float3 crossRGBColorClamped = min(maxColor, max(crossRGBColor, minColor));
     
     uint texW, texH;
     g_cameraFrameTexture.GetDimensions(texW, texH);
@@ -152,7 +152,7 @@ float4 main(VS_OUTPUT input) : SV_TARGET
     float combineFactor = depthFactor * input.projectionValidity2.x * input.projectionValidity2.y;
     
     // Blend together both cameras based on which ones are valid and have the closest pixels.
-    rgbColor = lerp(rgbColor, crossRGBColor, lerp(input.cameraBlend, pixelDistanceBlend, combineFactor));
+    rgbColor = lerp(rgbColor, lerp(crossRGBColor, crossRGBColorClamped, combineFactor), lerp(input.cameraBlend, pixelDistanceBlend, combineFactor));
     
 	if (g_bDoColorAdjustment)
 	{
