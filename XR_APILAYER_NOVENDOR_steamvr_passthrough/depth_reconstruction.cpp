@@ -332,6 +332,57 @@ void DepthReconstruction::CreateDistortionMap()
 }
 
 
+void DisparityFillHoles(cv::Mat& disparity, cv::Mat& confidence, int maxDisparity, int minDisparity, bool bRightToLeft)
+{
+    //cv::Mat clippedDisp = disparity(cv::Rect(maxDisparity, 0, disparity.cols - maxDisparity, disparity.rows));
+    confidence = cv::Mat(disparity.rows, disparity.cols, CV_32F, 255.0);
+
+    for (int x = (bRightToLeft ? disparity.cols - 1 : 0); bRightToLeft ? (x > 0) : (x < disparity.cols - 1); x += (bRightToLeft ? -1 : 1))
+    //for (int x = 0; x < disparity.cols - 1; x++)
+    {
+        for (int y = 0; y < disparity.rows; y++)
+        {
+            int16_t disp = disparity.at<int16_t>(y, x);
+            if (disp < maxDisparity * 16 && disp > minDisparity * 16)
+            {
+                int pos = x + (bRightToLeft ? -1 : 1);
+                bool bFirst = true;
+                while (pos >= 0 && pos < disparity.rows - 1)
+                {
+                    
+                    int16_t& element = disparity.at<int16_t>(y, pos);
+
+                    if (element <= maxDisparity * 16 && element >= minDisparity * 16)
+                    {
+                        if (!bFirst)
+                        {
+                            confidence.at<float>(y, pos) = 0.0;
+                        }
+                        break;
+                    }
+
+                    if (bFirst)
+                    {
+                        confidence.at<float>(y, x) = 0.0;
+                    }
+
+                    confidence.at<float>(y, pos) = 0.0;
+
+                    element = disp;
+
+                    pos += (bRightToLeft ? -1 : 1);
+                }
+            }
+            else
+            {
+                disparity.at<int16_t>(y, x) = (minDisparity < 0 ? maxDisparity * 16 : minDisparity * 16);
+                confidence.at<float>(y, x) = 0.0;
+            }
+        }
+    }
+}
+
+
 void DepthReconstruction::RunThread()
 {
     while (m_bRunThread)
@@ -438,13 +489,13 @@ void DepthReconstruction::RunThread()
 
         cv::resize(m_rectifiedFrameLeft, m_scaledFrameLeft, cv::Size(m_cvImageWidth, m_cvImageHeight), resizeFilter);
         cv::resize(m_rectifiedFrameRight, m_scaledFrameRight, cv::Size(m_cvImageWidth, m_cvImageHeight), resizeFilter);      
+        //int minDisparity = m_bDisparityBothEyes ? stereoConfig.StereoMinDisparity - m_maxDisparity + 1 : 0;
+        //int numDisparities = m_bDisparityBothEyes ? m_maxDisparity * 2 - stereoConfig.StereoMinDisparity : m_maxDisparity - stereoConfig.StereoMinDisparity;
+        int minDisparity = stereoConfig.StereoMinDisparity;
+        int numDisparities = m_maxDisparity - stereoConfig.StereoMinDisparity;
 
-        m_scaledFrameLeft.copyTo(m_scaledExtFrameLeft(cv::Rect(m_maxDisparity, 0, m_cvImageWidth, m_cvImageHeight)));
-        m_scaledFrameRight.copyTo(m_scaledExtFrameRight(cv::Rect(m_maxDisparity, 0, m_cvImageWidth, m_cvImageHeight)));
-
-
-        int minDisparity = m_bDisparityBothEyes ? stereoConfig.StereoMinDisparity - m_maxDisparity + 1 : 0;
-        int numDisparities = m_bDisparityBothEyes ? m_maxDisparity * 2 - stereoConfig.StereoMinDisparity : m_maxDisparity - stereoConfig.StereoMinDisparity;
+        m_scaledFrameLeft.copyTo(m_scaledExtFrameLeft(cv::Rect(numDisparities, 0, m_cvImageWidth, m_cvImageHeight)));
+        m_scaledFrameRight.copyTo(m_scaledExtFrameRight(cv::Rect(numDisparities, 0, m_cvImageWidth, m_cvImageHeight)));
 
         int filterMultiplier = stereoConfig.StereoBlockSize * stereoConfig.StereoBlockSize;
         int speckleRange = stereoConfig.StereoSGBM_SpeckleWindowSize > 0 ? stereoConfig.StereoSGBM_SpeckleRange : 0;
@@ -463,12 +514,13 @@ void DepthReconstruction::RunThread()
 
         if (m_bDisparityBothEyes)
         {
-            m_stereoRightMatcher = cv::StereoSGBM::create(minDisparity, numDisparities, stereoConfig.StereoBlockSize,
+            m_stereoRightMatcher = cv::StereoSGBM::create(-m_maxDisparity, numDisparities, stereoConfig.StereoBlockSize,
                 stereoConfig.StereoSGBM_P1 * filterMultiplier, stereoConfig.StereoSGBM_P2 * filterMultiplier, stereoConfig.StereoSGBM_DispMaxDiff,
                 stereoConfig.StereoSGBM_PreFilterCap, stereoConfig.StereoSGBM_UniquenessRatio,
                 stereoConfig.StereoSGBM_SpeckleWindowSize, speckleRange,
                 (int)stereoConfig.StereoSGBM_Mode);
 
+            //m_stereoRightMatcher = cv::ximgproc::createRightMatcher(m_stereoLeftMatcher);
             m_stereoRightMatcher->compute(m_scaledExtFrameRight, m_scaledExtFrameLeft, m_rawDisparityRight);
 
             outputMatrixLeft = &m_rawDisparityLeft;
@@ -483,7 +535,18 @@ void DepthReconstruction::RunThread()
 
         if (stereoConfig.StereoFiltering == StereoFiltering_FBS)
         {
-            m_confidenceLeft = cv::Mat(m_rawDisparityLeft.rows, m_rawDisparityLeft.cols, CV_32F);
+            DisparityFillHoles(m_rawDisparityLeft, m_confidenceLeft, m_maxDisparity, minDisparity, false);
+            if (!m_bDisparityBothEyes)
+            {
+                m_confidenceRight = m_confidenceLeft;
+            }
+            cv::Mat inL, outL;
+            m_rawDisparityLeft.convertTo(inL, CV_32F);
+            cv::bilateralFilter(inL, outL, 5, 100, 100);
+            outL.convertTo(m_bilateralDisparityLeft, CV_16S);
+            //outputMatrixLeft = &m_rawDisparityLeft;
+            //outputMatrixRight = &m_rawDisparityLeft;
+            /*m_confidenceLeft = cv::Mat(m_rawDisparityLeft.rows, m_rawDisparityLeft.cols, CV_32F);
             m_confidenceRight = m_confidenceLeft;
 
             m_confidenceLeft.forEach<float>([this](float& element, const int* position) -> void
@@ -492,14 +555,20 @@ void DepthReconstruction::RunThread()
             element = (disp < m_maxDisparity * 16 && disp > 0) ? 255.0f : 0.0f;
             });
 
-            cv::ximgproc::fastBilateralSolverFilter(m_scaledExtFrameLeft, m_rawDisparityLeft, m_confidenceLeft, m_bilateralDisparityLeft, stereoConfig.StereoFBS_Spatial, stereoConfig.StereoFBS_Luma, stereoConfig.StereoFBS_Chroma, stereoConfig.StereoFBS_Lambda, stereoConfig.StereoFBS_Iterations);
+            cv::ximgproc::fastBilateralSolverFilter(m_scaledExtFrameLeft, m_rawDisparityLeft, m_confidenceLeft, m_bilateralDisparityLeft, stereoConfig.StereoFBS_Spatial, stereoConfig.StereoFBS_Luma, stereoConfig.StereoFBS_Chroma, stereoConfig.StereoFBS_Lambda, stereoConfig.StereoFBS_Iterations);*/
 
             outputMatrixLeft = &m_bilateralDisparityLeft;
             outputMatrixRight = &m_bilateralDisparityLeft;
 
             if (m_bDisparityBothEyes)
             {
-                m_confidenceRight = cv::Mat(m_rawDisparityRight.rows, m_rawDisparityRight.cols, CV_32F);
+                DisparityFillHoles(m_rawDisparityRight, m_confidenceRight, minDisparity, -m_maxDisparity, true);
+                //outputMatrixRight = &m_rawDisparityRight;
+                cv::Mat inR, outR;
+                m_rawDisparityRight.convertTo(inR, CV_32F);
+                cv::bilateralFilter(inR, outR, 5, 100, 100);
+                outR.convertTo(m_bilateralDisparityRight, CV_16S);
+                /*m_confidenceRight = cv::Mat(m_rawDisparityRight.rows, m_rawDisparityRight.cols, CV_32F);
 
                 m_confidenceRight.forEach<float>([this](float& element, const int* position) -> void
                 {
@@ -507,14 +576,14 @@ void DepthReconstruction::RunThread()
                     element = (disp > -m_maxDisparity * 16 && disp < 0) ? 255.0f : 0.0f;
                 });
 
-                cv::ximgproc::fastBilateralSolverFilter(m_scaledExtFrameRight, m_rawDisparityRight, m_confidenceRight, m_bilateralDisparityRight, stereoConfig.StereoFBS_Spatial, stereoConfig.StereoFBS_Luma, stereoConfig.StereoFBS_Chroma, stereoConfig.StereoFBS_Lambda, stereoConfig.StereoFBS_Iterations);
+                cv::ximgproc::fastBilateralSolverFilter(m_scaledExtFrameRight, m_rawDisparityRight, m_confidenceRight, m_bilateralDisparityRight, stereoConfig.StereoFBS_Spatial, stereoConfig.StereoFBS_Luma, stereoConfig.StereoFBS_Chroma, stereoConfig.StereoFBS_Lambda, stereoConfig.StereoFBS_Iterations);*/
 
                 outputMatrixRight = &m_bilateralDisparityRight;
             }
         }
         else if(stereoConfig.StereoFiltering != StereoFiltering_None)
         {
-            cv::Rect leftROI = cv::Rect(0, 0, m_cvImageWidth + m_maxDisparity, m_cvImageHeight);
+            cv::Rect leftROI = cv::Rect(0, 0, m_cvImageWidth + numDisparities, m_cvImageHeight);
 
             if (!m_bDisparityBothEyes)
             {
@@ -541,7 +610,7 @@ void DepthReconstruction::RunThread()
                 m_wlsFilterRight->setLambda(stereoConfig.StereoWLS_Lambda);
                 m_wlsFilterRight->setSigmaColor(stereoConfig.StereoWLS_Sigma);
                 m_wlsFilterRight->setDepthDiscontinuityRadius((int)ceil(stereoConfig.StereoWLS_ConfidenceRadius * stereoConfig.StereoBlockSize));
-                cv::Rect filterROI = cv::Rect(0, 0, m_cvImageWidth + m_maxDisparity, m_cvImageHeight);
+                cv::Rect filterROI = cv::Rect(0, 0, m_cvImageWidth + numDisparities, m_cvImageHeight);
 
                 m_wlsFilterRight->filter(m_rawDisparityRight, m_scaledExtFrameRight, m_filteredDisparityRight, m_rawDisparityLeft, filterROI, m_scaledExtFrameLeft);
 
@@ -590,20 +659,20 @@ void DepthReconstruction::RunThread()
             cv::Mat leftIn[2];
             cv::Mat rightIn[2];
 
-            leftIn[0] = (*outputMatrixLeft)(cv::Rect(m_maxDisparity, 0, m_cvImageWidth, m_cvImageHeight));
-            rightIn[0] = (*outputMatrixRight)(cv::Rect(m_maxDisparity, 0, m_cvImageWidth, m_cvImageHeight));
+            leftIn[0] = (*outputMatrixLeft)(cv::Rect(numDisparities, 0, m_cvImageWidth, m_cvImageHeight));
+            rightIn[0] = (*outputMatrixRight)(cv::Rect(numDisparities, 0, m_cvImageWidth, m_cvImageHeight));
 
             if (stereoConfig.StereoFiltering != StereoFiltering_None)
             {
                 float confFactor = (stereoConfig.StereoFiltering != StereoFiltering_None) ? 32768.0f / 255.0f : 32768.0f;
 
-                if ((uint32_t)m_confidenceLeft.size().width >= m_cvImageWidth + m_maxDisparity)
+                if ((uint32_t)m_confidenceLeft.size().width >= m_cvImageWidth + numDisparities)
                 {
-                    m_confidenceLeft(cv::Rect(m_maxDisparity, 0, m_cvImageWidth, m_cvImageHeight)).convertTo(leftIn[1], CV_16S, confFactor);
+                    m_confidenceLeft(cv::Rect(numDisparities, 0, m_cvImageWidth, m_cvImageHeight)).convertTo(leftIn[1], CV_16S, confFactor);
 
                     if (!m_bDisparityBothEyes)
                     {
-                        m_confidenceLeft(cv::Rect(m_maxDisparity, 0, m_cvImageWidth, m_cvImageHeight)).convertTo(rightIn[1], CV_16S, confFactor);
+                        m_confidenceLeft(cv::Rect(numDisparities, 0, m_cvImageWidth, m_cvImageHeight)).convertTo(rightIn[1], CV_16S, confFactor);
                     }
                 }
                 else
@@ -618,9 +687,9 @@ void DepthReconstruction::RunThread()
 
                 if (m_bDisparityBothEyes)
                 {
-                    if ((uint32_t)m_confidenceRight.size().width >= m_cvImageWidth + m_maxDisparity)
+                    if ((uint32_t)m_confidenceRight.size().width >= m_cvImageWidth + numDisparities)
                     {
-                        m_confidenceRight(cv::Rect(m_maxDisparity, 0, m_cvImageWidth, m_cvImageHeight)).convertTo(rightIn[1], CV_16S, confFactor);
+                        m_confidenceRight(cv::Rect(numDisparities, 0, m_cvImageWidth, m_cvImageHeight)).convertTo(rightIn[1], CV_16S, confFactor);
                     }
                     else
                     {
@@ -648,10 +717,10 @@ void DepthReconstruction::RunThread()
                 // Invert right eye disparity
                 m_outputDisparityRight.forEach<cv::Vec2s>([this](cv::Vec2s& element, const int* position) -> void
                 {
-                    if (element[0] > -m_maxDisparity * 16) // Keep the invalid value negative (4 bit fixed point).
-                    {
+                    //if (element[0] > -m_maxDisparity * 16) // Keep the invalid value negative (4 bit fixed point).
+                    //{
                         element[0] *= -1;
-                    }
+                    //}
                 });
             }
             
@@ -697,10 +766,10 @@ void DepthReconstruction::RunThread()
                 cv::Mat left = debugTextureMat(cv::Rect(0, 0, m_cvImageWidth, m_cvImageHeight));
                 cv::Mat right = debugTextureMat(cv::Rect(m_cvImageWidth, 0, m_cvImageWidth, m_cvImageHeight));
 
-                (*outputMatrixLeft)(cv::Rect(m_maxDisparity, 0, m_cvImageWidth, m_cvImageHeight)).convertTo(left, CV_16S);
+                (*outputMatrixLeft)(cv::Rect(numDisparities, 0, m_cvImageWidth, m_cvImageHeight)).convertTo(left, CV_16S);
 
                 cv::Mat rightFlip;
-                (*outputMatrixRight)(cv::Rect(m_maxDisparity, 0, m_cvImageWidth, m_cvImageHeight)).copyTo(rightFlip);
+                (*outputMatrixRight)(cv::Rect(numDisparities, 0, m_cvImageWidth, m_cvImageHeight)).copyTo(rightFlip);
 
                 rightFlip.convertTo(right, CV_16S);
 
@@ -743,13 +812,13 @@ void DepthReconstruction::RunThread()
                     }
                 }
 
-                if ((uint32_t)m_confidenceLeft.size().width >= m_cvImageWidth + m_maxDisparity)
+                if ((uint32_t)m_confidenceLeft.size().width >= m_cvImageWidth + numDisparities)
                 {
-                    m_confidenceLeft(cv::Rect(m_maxDisparity, 0, m_cvImageWidth, m_cvImageHeight)).convertTo(left, CV_8U);
+                    m_confidenceLeft(cv::Rect(numDisparities, 0, m_cvImageWidth, m_cvImageHeight)).convertTo(left, CV_8U);
                 }
-                if ((uint32_t)m_confidenceRight.size().width >= m_cvImageWidth + m_maxDisparity)
+                if ((uint32_t)m_confidenceRight.size().width >= m_cvImageWidth + numDisparities)
                 {
-                    m_confidenceRight(cv::Rect(m_maxDisparity, 0, m_cvImageWidth, m_cvImageHeight)).convertTo(right, CV_8U);
+                    m_confidenceRight(cv::Rect(numDisparities, 0, m_cvImageWidth, m_cvImageHeight)).convertTo(right, CV_8U);
                 }
 
                 if (texture.Width != m_cvImageWidth || texture.Height != m_cvImageHeight)
