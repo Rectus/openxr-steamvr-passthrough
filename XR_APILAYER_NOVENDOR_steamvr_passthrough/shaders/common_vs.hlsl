@@ -38,6 +38,7 @@ cbuffer vsPassConstantBuffer : register(b1)
     bool g_bProjectBorders;
     bool g_bFindDiscontinuities;
     bool g_bUseDisparityTemporalFilter;
+    bool g_bBlendDepthMaps;
     float g_disparityTemporalFilterStrength;
     float g_disparityTemporalFilterDistance;
     float g_depthFoldStrength;

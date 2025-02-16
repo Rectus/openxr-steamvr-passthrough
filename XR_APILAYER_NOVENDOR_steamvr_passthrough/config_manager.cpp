@@ -99,6 +99,7 @@ void ConfigManager::SetupStereoPresets()
 	m_stereoPresets[1].StereoUseBWInputAlpha = false;
 	m_stereoPresets[1].StereoUseHexagonGridMesh = false;
 	m_stereoPresets[1].StereoFillHoles = false;
+	m_stereoPresets[1].StereoDrawBackground = false;
 	m_stereoPresets[1].StereoFrameSkip = 0;
 	m_stereoPresets[1].StereoDownscaleFactor = 6;
 
@@ -113,8 +114,8 @@ void ConfigManager::SetupStereoPresets()
 	m_stereoPresets[1].StereoMinDisparity = 0;
 	m_stereoPresets[1].StereoMaxDisparity = 96;
 	m_stereoPresets[1].StereoSGBM_Mode = StereoMode_SGBM3Way;
-	m_stereoPresets[5].StereoSGBM_P1 = 200;
-	m_stereoPresets[5].StereoSGBM_P2 = 220;
+	m_stereoPresets[1].StereoSGBM_P1 = 200;
+	m_stereoPresets[1].StereoSGBM_P2 = 220;
 	m_stereoPresets[1].StereoSGBM_DispMaxDiff = 3;
 	m_stereoPresets[1].StereoSGBM_PreFilterCap = 4;
 	m_stereoPresets[1].StereoSGBM_UniquenessRatio = 4;
@@ -138,6 +139,7 @@ void ConfigManager::SetupStereoPresets()
 	m_stereoPresets[2].StereoUseBWInputAlpha = false;
 	m_stereoPresets[2].StereoUseHexagonGridMesh = false;
 	m_stereoPresets[2].StereoFillHoles = true;
+	m_stereoPresets[2].StereoDrawBackground = true;
 	m_stereoPresets[2].StereoFrameSkip = 0;
 	m_stereoPresets[2].StereoDownscaleFactor = 4;
 
@@ -152,8 +154,8 @@ void ConfigManager::SetupStereoPresets()
 	m_stereoPresets[2].StereoMinDisparity = 0;
 	m_stereoPresets[2].StereoMaxDisparity = 96;
 	m_stereoPresets[2].StereoSGBM_Mode = StereoMode_SGBM3Way;
-	m_stereoPresets[5].StereoSGBM_P1 = 200;
-	m_stereoPresets[5].StereoSGBM_P2 = 220;
+	m_stereoPresets[2].StereoSGBM_P1 = 200;
+	m_stereoPresets[2].StereoSGBM_P2 = 220;
 	m_stereoPresets[2].StereoSGBM_DispMaxDiff = 3;
 	m_stereoPresets[2].StereoSGBM_PreFilterCap = 4;
 	m_stereoPresets[2].StereoSGBM_UniquenessRatio = 4;
@@ -177,6 +179,7 @@ void ConfigManager::SetupStereoPresets()
 	m_stereoPresets[3].StereoUseBWInputAlpha = false;
 	m_stereoPresets[3].StereoUseHexagonGridMesh = false;
 	m_stereoPresets[3].StereoFillHoles = true;
+	m_stereoPresets[3].StereoDrawBackground = true;
 	m_stereoPresets[3].StereoFrameSkip = 0;
 	m_stereoPresets[3].StereoDownscaleFactor = 4;
 
@@ -191,8 +194,8 @@ void ConfigManager::SetupStereoPresets()
 	m_stereoPresets[3].StereoMinDisparity = 0;
 	m_stereoPresets[3].StereoMaxDisparity = 96;
 	m_stereoPresets[3].StereoSGBM_Mode = StereoMode_SGBM3Way;
-	m_stereoPresets[5].StereoSGBM_P1 = 200;
-	m_stereoPresets[5].StereoSGBM_P2 = 220;
+	m_stereoPresets[3].StereoSGBM_P1 = 200;
+	m_stereoPresets[3].StereoSGBM_P2 = 220;
 	m_stereoPresets[3].StereoSGBM_DispMaxDiff = 3;
 	m_stereoPresets[3].StereoSGBM_PreFilterCap = 4;
 	m_stereoPresets[3].StereoSGBM_UniquenessRatio = 4;
@@ -216,6 +219,7 @@ void ConfigManager::SetupStereoPresets()
 	m_stereoPresets[4].StereoUseBWInputAlpha = false;
 	m_stereoPresets[4].StereoUseHexagonGridMesh = false;
 	m_stereoPresets[4].StereoFillHoles = true;
+	m_stereoPresets[4].StereoDrawBackground = true;
 	m_stereoPresets[4].StereoFrameSkip = 0;
 	m_stereoPresets[4].StereoDownscaleFactor = 3;
 
@@ -230,8 +234,8 @@ void ConfigManager::SetupStereoPresets()
 	m_stereoPresets[4].StereoMinDisparity = 0;
 	m_stereoPresets[4].StereoMaxDisparity = 96;
 	m_stereoPresets[4].StereoSGBM_Mode = StereoMode_SGBM3Way;
-	m_stereoPresets[5].StereoSGBM_P1 = 200;
-	m_stereoPresets[5].StereoSGBM_P2 = 220;
+	m_stereoPresets[4].StereoSGBM_P1 = 200;
+	m_stereoPresets[4].StereoSGBM_P2 = 220;
 	m_stereoPresets[4].StereoSGBM_DispMaxDiff = 3;
 	m_stereoPresets[4].StereoSGBM_PreFilterCap = 4;
 	m_stereoPresets[4].StereoSGBM_UniquenessRatio = 4;
@@ -255,6 +259,7 @@ void ConfigManager::SetupStereoPresets()
 	m_stereoPresets[5].StereoUseBWInputAlpha = false;
 	m_stereoPresets[5].StereoUseHexagonGridMesh = false;
 	m_stereoPresets[5].StereoFillHoles = true;
+	m_stereoPresets[5].StereoDrawBackground = true;
 	m_stereoPresets[5].StereoFrameSkip = 0;
 	m_stereoPresets[5].StereoDownscaleFactor = 2;
 

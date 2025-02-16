@@ -731,11 +731,8 @@ if (bIsActiveTab) { ImGui::PopStyleColor(1); bIsActiveTab = false; }
 			ImGui::Checkbox("Composite Both Cameras for Each Eye", &stereoCustomConfig.StereoCutoutEnabled);
 			TextDescriptionSpaced("Detects areas occluded to the main camera and renders them with the other camera where possible.");
 
-			ImGui::Checkbox("Use Deferred Depth Pass", &stereoCustomConfig.StereoUseDeferredDepthPass);
-			TextDescriptionSpaced("Enables a separate render pass for passthough depth maps for features that benefit from it, such as Composite Both Cameras for Each Eye.");
-
-			ImGui::Checkbox("Force Deferred Depth Pass", &stereoCustomConfig.StereoForceDeferredDepthPass);
-			TextDescriptionSpaced("Aleays use a separate render pass for passthough depth maps.");
+			ImGui::Checkbox("Deferred Depth Pass", &stereoCustomConfig.StereoUseDeferredDepthPass);
+			TextDescriptionSpaced("Enables a separate render pass generating passthrough depth maps for features that benefit from it, such as Composite Both Cameras for Each Eye.");
 
 			IMGUI_BIG_SPACING;
 		}
@@ -764,6 +761,9 @@ if (bIsActiveTab) { ImGui::PopStyleColor(1); bIsActiveTab = false; }
 				TextDescription("Mesh with smoother corners for less artifacting. May introduce warping.");
 
 				ImGui::Checkbox("Fill Holes", &stereoCustomConfig.StereoFillHoles);
+				TextDescription("Fills in invalid depth values from neighboring areas.");
+
+				ImGui::Checkbox("Draw Background", &stereoCustomConfig.StereoDrawBackground);
 				TextDescription("Extra pass to render a cylinder mesh behind the stereo mesh.");
 
 				IMGUI_BIG_SPACING;
@@ -776,12 +776,12 @@ if (bIsActiveTab) { ImGui::PopStyleColor(1); bIsActiveTab = false; }
 				EndSoftDisabled(!stereoCustomConfig.StereoCutoutEnabled);
 
 				IMGUI_BIG_SPACING;
-				BeginSoftDisabled(!stereoCustomConfig.StereoUseDeferredDepthPass && !stereoCustomConfig.StereoForceDeferredDepthPass);
+				BeginSoftDisabled(!stereoCustomConfig.StereoUseDeferredDepthPass);
 				ScrollableSlider("Depth Fold Strength", &stereoCustomConfig.StereoDepthFoldStrength, 0.0f, 5.0f, "%.1f", 0.1f);
 				ScrollableSlider("Depth Fold Max Distance", &stereoCustomConfig.StereoDepthFoldMaxDistance, 0.0f, 5.0f, "%.1f", 0.1f);
 				ScrollableSlider("Depth Fold Filter Distance", &stereoCustomConfig.StereoDepthFoldFilterWidth, 0.0f, 3.0f, "%.1f", 0.1f);
-				TextDescription("Settings for Deferred Depth Pass.");
-				EndSoftDisabled(!stereoCustomConfig.StereoUseDeferredDepthPass || !stereoCustomConfig.StereoForceDeferredDepthPass);
+				TextDescription("Settings for Deferred Depth Pass. Depth Fold moves background vertices beind foreground vertices at discontinuities, \nto minimize visible gradient surfaces where none exist.");
+				EndSoftDisabled(!stereoCustomConfig.StereoUseDeferredDepthPass);
 
 				ImGui::PopItemWidth();
 				ImGui::TreePop();
@@ -1770,6 +1770,10 @@ void DashboardMenu::CreateOverlay()
 			vrOverlay->SetOverlayInputMethod(m_overlayHandle, vr::VROverlayInputMethod_Mouse);
 			vrOverlay->SetOverlayFlag(m_overlayHandle, vr::VROverlayFlags_IsPremultiplied, true);
 			vrOverlay->SetOverlayFlag(m_overlayHandle, vr::VROverlayFlags_SendVRDiscreteScrollEvents, true);
+			vrOverlay->SetOverlayFlag(m_overlayHandle, vr::VROverlayFlags_SortWithNonSceneOverlays, true);
+			vrOverlay->SetOverlayFlag(m_overlayHandle, vr::VROverlayFlags_MakeOverlaysInteractiveIfVisible, true);
+			vrOverlay->SetOverlayFlag(m_overlayHandle, vr::VROverlayFlags_EnableControlBar, true);
+			vrOverlay->SetOverlayFlag(m_overlayHandle, vr::VROverlayFlags_EnableControlBarKeyboard, true);
 			vrOverlay->SetOverlayTextureColorSpace(m_overlayHandle, vr::ColorSpace_Gamma);
 
 			vrOverlay->SetOverlayWidthInMeters(m_overlayHandle, 2.775f);

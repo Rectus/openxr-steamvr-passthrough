@@ -334,11 +334,9 @@ void DepthReconstruction::CreateDistortionMap()
 
 void DisparityFillHoles(cv::Mat& disparity, cv::Mat& confidence, int maxDisparity, int minDisparity, bool bRightToLeft)
 {
-    //cv::Mat clippedDisp = disparity(cv::Rect(maxDisparity, 0, disparity.cols - maxDisparity, disparity.rows));
     confidence = cv::Mat(disparity.rows, disparity.cols, CV_32F, 255.0);
 
     for (int x = (bRightToLeft ? disparity.cols - 1 : 0); bRightToLeft ? (x > 0) : (x < disparity.cols - 1); x += (bRightToLeft ? -1 : 1))
-    //for (int x = 0; x < disparity.cols - 1; x++)
     {
         for (int y = 0; y < disparity.rows; y++)
         {
@@ -489,8 +487,6 @@ void DepthReconstruction::RunThread()
 
         cv::resize(m_rectifiedFrameLeft, m_scaledFrameLeft, cv::Size(m_cvImageWidth, m_cvImageHeight), resizeFilter);
         cv::resize(m_rectifiedFrameRight, m_scaledFrameRight, cv::Size(m_cvImageWidth, m_cvImageHeight), resizeFilter);      
-        //int minDisparity = m_bDisparityBothEyes ? stereoConfig.StereoMinDisparity - m_maxDisparity + 1 : 0;
-        //int numDisparities = m_bDisparityBothEyes ? m_maxDisparity * 2 - stereoConfig.StereoMinDisparity : m_maxDisparity - stereoConfig.StereoMinDisparity;
         int minDisparity = stereoConfig.StereoMinDisparity;
         int numDisparities = m_maxDisparity - stereoConfig.StereoMinDisparity;
 
@@ -508,8 +504,11 @@ void DepthReconstruction::RunThread()
 
         m_stereoLeftMatcher->compute(m_scaledExtFrameLeft, m_scaledExtFrameRight, m_rawDisparityLeft);
 
-        cv::Mat* outputMatrixLeft = &m_rawDisparityLeft;
-        cv::Mat* outputMatrixRight = &m_rawDisparityLeft;
+        cv::Mat* outputMatrixLeft;
+        cv::Mat* outputMatrixRight;
+
+        cv::Mat* outputConfMatrixLeft;
+        cv::Mat* outputConfMatrixRight;
 
 
         if (m_bDisparityBothEyes)
@@ -520,65 +519,55 @@ void DepthReconstruction::RunThread()
                 stereoConfig.StereoSGBM_SpeckleWindowSize, speckleRange,
                 (int)stereoConfig.StereoSGBM_Mode);
 
-            //m_stereoRightMatcher = cv::ximgproc::createRightMatcher(m_stereoLeftMatcher);
             m_stereoRightMatcher->compute(m_scaledExtFrameRight, m_scaledExtFrameLeft, m_rawDisparityRight);
 
             outputMatrixLeft = &m_rawDisparityLeft;
             outputMatrixRight = &m_rawDisparityRight;
+
+            outputConfMatrixLeft = &m_confidenceLeft;
+            outputConfMatrixRight = &m_confidenceRight;
         }
         else
         {
             outputMatrixLeft = &m_rawDisparityLeft;
             outputMatrixRight = &m_rawDisparityLeft;
+
+            outputConfMatrixLeft = &m_confidenceLeft;
+            outputConfMatrixRight = &m_confidenceLeft;
+        }
+
+        if (stereoConfig.StereoFiltering == StereoFiltering_None && stereoConfig.StereoFillHoles)
+        {
+            DisparityFillHoles(m_rawDisparityLeft, m_confidenceLeft, m_maxDisparity, minDisparity, false);
+
+            if (m_bDisparityBothEyes)
+            {
+                DisparityFillHoles(m_rawDisparityRight, m_confidenceRight, minDisparity, -m_maxDisparity, true);
+            }
         }
 
 
         if (stereoConfig.StereoFiltering == StereoFiltering_FBS)
         {
             DisparityFillHoles(m_rawDisparityLeft, m_confidenceLeft, m_maxDisparity, minDisparity, false);
-            if (!m_bDisparityBothEyes)
-            {
-                m_confidenceRight = m_confidenceLeft;
-            }
-            cv::Mat inL, outL;
-            m_rawDisparityLeft.convertTo(inL, CV_32F);
-            cv::bilateralFilter(inL, outL, 5, 100, 100);
-            outL.convertTo(m_bilateralDisparityLeft, CV_16S);
-            //outputMatrixLeft = &m_rawDisparityLeft;
-            //outputMatrixRight = &m_rawDisparityLeft;
-            /*m_confidenceLeft = cv::Mat(m_rawDisparityLeft.rows, m_rawDisparityLeft.cols, CV_32F);
-            m_confidenceRight = m_confidenceLeft;
 
-            m_confidenceLeft.forEach<float>([this](float& element, const int* position) -> void
-            {
-            int16_t disp = m_rawDisparityLeft.at<int16_t>(position[0], position[1]);
-            element = (disp < m_maxDisparity * 16 && disp > 0) ? 255.0f : 0.0f;
-            });
-
-            cv::ximgproc::fastBilateralSolverFilter(m_scaledExtFrameLeft, m_rawDisparityLeft, m_confidenceLeft, m_bilateralDisparityLeft, stereoConfig.StereoFBS_Spatial, stereoConfig.StereoFBS_Luma, stereoConfig.StereoFBS_Chroma, stereoConfig.StereoFBS_Lambda, stereoConfig.StereoFBS_Iterations);*/
+            cv::ximgproc::fastBilateralSolverFilter(m_scaledExtFrameLeft, m_rawDisparityLeft, m_confidenceLeft, m_bilateralDisparityLeft, stereoConfig.StereoFBS_Spatial, stereoConfig.StereoFBS_Luma, stereoConfig.StereoFBS_Chroma, stereoConfig.StereoFBS_Lambda, stereoConfig.StereoFBS_Iterations);
 
             outputMatrixLeft = &m_bilateralDisparityLeft;
-            outputMatrixRight = &m_bilateralDisparityLeft;
+
+            
 
             if (m_bDisparityBothEyes)
             {
                 DisparityFillHoles(m_rawDisparityRight, m_confidenceRight, minDisparity, -m_maxDisparity, true);
-                //outputMatrixRight = &m_rawDisparityRight;
-                cv::Mat inR, outR;
-                m_rawDisparityRight.convertTo(inR, CV_32F);
-                cv::bilateralFilter(inR, outR, 5, 100, 100);
-                outR.convertTo(m_bilateralDisparityRight, CV_16S);
-                /*m_confidenceRight = cv::Mat(m_rawDisparityRight.rows, m_rawDisparityRight.cols, CV_32F);
 
-                m_confidenceRight.forEach<float>([this](float& element, const int* position) -> void
-                {
-                    int16_t& disp = (m_rawDisparityRight.at<int16_t>(position[0], position[1]));
-                    element = (disp > -m_maxDisparity * 16 && disp < 0) ? 255.0f : 0.0f;
-                });
-
-                cv::ximgproc::fastBilateralSolverFilter(m_scaledExtFrameRight, m_rawDisparityRight, m_confidenceRight, m_bilateralDisparityRight, stereoConfig.StereoFBS_Spatial, stereoConfig.StereoFBS_Luma, stereoConfig.StereoFBS_Chroma, stereoConfig.StereoFBS_Lambda, stereoConfig.StereoFBS_Iterations);*/
+                cv::ximgproc::fastBilateralSolverFilter(m_scaledExtFrameRight, m_rawDisparityRight, m_confidenceRight, m_bilateralDisparityRight, stereoConfig.StereoFBS_Spatial, stereoConfig.StereoFBS_Luma, stereoConfig.StereoFBS_Chroma, stereoConfig.StereoFBS_Lambda, stereoConfig.StereoFBS_Iterations);
 
                 outputMatrixRight = &m_bilateralDisparityRight;
+            }
+            else
+            {
+                outputMatrixRight = &m_bilateralDisparityLeft;
             }
         }
         else if(stereoConfig.StereoFiltering != StereoFiltering_None)
@@ -635,13 +624,17 @@ void DepthReconstruction::RunThread()
                 cv::ximgproc::fastBilateralSolverFilter(m_scaledExtFrameLeft, m_filteredDisparityLeft, m_confidenceLeft, m_bilateralDisparityLeft, stereoConfig.StereoFBS_Spatial, stereoConfig.StereoFBS_Luma, stereoConfig.StereoFBS_Chroma, stereoConfig.StereoFBS_Lambda, stereoConfig.StereoFBS_Iterations);
 
                 outputMatrixLeft = &m_bilateralDisparityLeft;
-                outputMatrixRight = &m_bilateralDisparityLeft;
+                
 
                 if (m_bDisparityBothEyes)
                 {
                     cv::ximgproc::fastBilateralSolverFilter(m_scaledExtFrameRight, m_filteredDisparityRight, m_confidenceRight, m_bilateralDisparityRight, stereoConfig.StereoFBS_Spatial, stereoConfig.StereoFBS_Luma, stereoConfig.StereoFBS_Chroma, stereoConfig.StereoFBS_Lambda, stereoConfig.StereoFBS_Iterations);
 
                     outputMatrixRight = &m_bilateralDisparityRight;
+                }
+                else
+                {
+                    outputMatrixRight = &m_bilateralDisparityLeft;
                 }
             }
         }
@@ -662,17 +655,17 @@ void DepthReconstruction::RunThread()
             leftIn[0] = (*outputMatrixLeft)(cv::Rect(numDisparities, 0, m_cvImageWidth, m_cvImageHeight));
             rightIn[0] = (*outputMatrixRight)(cv::Rect(numDisparities, 0, m_cvImageWidth, m_cvImageHeight));
 
-            if (stereoConfig.StereoFiltering != StereoFiltering_None)
+            if (stereoConfig.StereoFiltering != StereoFiltering_None || stereoConfig.StereoFillHoles)
             {
                 float confFactor = (stereoConfig.StereoFiltering != StereoFiltering_None) ? 32768.0f / 255.0f : 32768.0f;
 
-                if ((uint32_t)m_confidenceLeft.size().width >= m_cvImageWidth + numDisparities)
+                if ((uint32_t)outputConfMatrixLeft->size().width >= m_cvImageWidth + numDisparities)
                 {
-                    m_confidenceLeft(cv::Rect(numDisparities, 0, m_cvImageWidth, m_cvImageHeight)).convertTo(leftIn[1], CV_16S, confFactor);
+                    (*outputConfMatrixLeft)(cv::Rect(numDisparities, 0, m_cvImageWidth, m_cvImageHeight)).convertTo(leftIn[1], CV_16S, confFactor);
 
                     if (!m_bDisparityBothEyes)
                     {
-                        m_confidenceLeft(cv::Rect(numDisparities, 0, m_cvImageWidth, m_cvImageHeight)).convertTo(rightIn[1], CV_16S, confFactor);
+                        (*outputConfMatrixLeft)(cv::Rect(numDisparities, 0, m_cvImageWidth, m_cvImageHeight)).convertTo(rightIn[1], CV_16S, confFactor);
                     }
                 }
                 else
@@ -687,9 +680,9 @@ void DepthReconstruction::RunThread()
 
                 if (m_bDisparityBothEyes)
                 {
-                    if ((uint32_t)m_confidenceRight.size().width >= m_cvImageWidth + numDisparities)
+                    if ((uint32_t)(*outputConfMatrixRight).size().width >= m_cvImageWidth + numDisparities)
                     {
-                        m_confidenceRight(cv::Rect(numDisparities, 0, m_cvImageWidth, m_cvImageHeight)).convertTo(rightIn[1], CV_16S, confFactor);
+                        (*outputConfMatrixRight)(cv::Rect(numDisparities, 0, m_cvImageWidth, m_cvImageHeight)).convertTo(rightIn[1], CV_16S, confFactor);
                     }
                     else
                     {
@@ -717,10 +710,7 @@ void DepthReconstruction::RunThread()
                 // Invert right eye disparity
                 m_outputDisparityRight.forEach<cv::Vec2s>([this](cv::Vec2s& element, const int* position) -> void
                 {
-                    //if (element[0] > -m_maxDisparity * 16) // Keep the invalid value negative (4 bit fixed point).
-                    //{
-                        element[0] *= -1;
-                    //}
+                    element[0] *= -1;
                 });
             }
             

@@ -35,8 +35,8 @@ float4 main(VS_OUTPUT input) : SV_TARGET
 	
     if (g_doCutout)
     {
-        clip(input.projectionValidity >= 0.5 ? -1 : 1);
-        alpha = 1 - saturate(input.projectionValidity * 2);
+        clip(input.projectionValidity);
+        alpha = saturate(input.projectionValidity);
     }
     
     if (g_bUseDepthCutoffRange)

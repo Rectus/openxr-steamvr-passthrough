@@ -1451,7 +1451,7 @@ void PassthroughRendererDX12::RenderPassthroughView(const ERenderEye eye, const 
 
 
 	// Draw cylinder mesh to fill out any holes
-	if (stereoConf.StereoFillHoles && mainConf.ProjectionMode == Projection_StereoReconstruction && !stereoConf.StereoReconstructionFreeze)
+	if (stereoConf.StereoDrawBackground && mainConf.ProjectionMode == Projection_StereoReconstruction && !stereoConf.StereoReconstructionFreeze)
 	{
 		m_commandList->RSSetScissorRects(1, &scissor);
 		m_commandList->SetGraphicsRootDescriptorTable(6, cbvVSHandle);

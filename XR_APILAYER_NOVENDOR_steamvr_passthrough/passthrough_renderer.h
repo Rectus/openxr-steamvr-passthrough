@@ -94,6 +94,7 @@ struct alignas(16) VSPassConstantBuffer
 	uint32_t bProjectBorders;
 	uint32_t bFindDiscontinuities;
 	uint32_t bUseDisparityTemporalFilter;
+	uint32_t bBlendDepthMaps;
 	float disparityTemporalFilterStrength;
 	float disparityTemporalFilterDistance;
 	float depthFoldStrength;

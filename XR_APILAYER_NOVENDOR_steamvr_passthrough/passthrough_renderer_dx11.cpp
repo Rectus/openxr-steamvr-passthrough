@@ -1290,7 +1290,7 @@ void PassthroughRendererDX11::RenderPassthroughFrame(const XrCompositionLayerPro
 		if (viewDataRight.cameraFilter.Texture == nullptr) { SetupTemporalUAV(1, rightSwapchainIndex); }
 	}
 
-	bool bUseDepthPass = (mainConf.ProjectionMode == Projection_StereoReconstruction) && ((stereoConf.StereoUseDeferredDepthPass && stereoConf.StereoCutoutEnabled) || stereoConf.StereoForceDeferredDepthPass);
+	bool bUseDepthPass = mainConf.ProjectionMode == Projection_StereoReconstruction && stereoConf.StereoUseDeferredDepthPass;
 
 	if (mainConf.ProjectionMode == Projection_StereoReconstruction)
 	{
@@ -1363,6 +1363,7 @@ void PassthroughRendererDX11::RenderPassthroughFrame(const XrCompositionLayerPro
 		vsBuffer.bProjectBorders = !stereoConf.StereoReconstructionFreeze;
 		vsBuffer.bFindDiscontinuities = stereoConf.StereoCutoutEnabled;
 		vsBuffer.bUseDisparityTemporalFilter = stereoConf.StereoUseDisparityTemporalFiltering;
+		vsBuffer.bBlendDepthMaps = stereoConf.StereoCutoutEnabled;
 		vsBuffer.disparityTemporalFilterStrength = stereoConf.StereoDisparityTemporalFilteringStrength;
 		vsBuffer.disparityTemporalFilterDistance = stereoConf.StereoDisparityTemporalFilteringDistance;
 		vsBuffer.depthFoldStrength = stereoConf.StereoDepthFoldStrength;
@@ -1608,7 +1609,7 @@ void PassthroughRendererDX11::RenderPassthroughView(const ERenderEye eye, const 
 	bool bCompositeDepth = renderParams.bEnableDepthBlending && depthStencil != nullptr;
 	bool bWriteDepth = depthConfig.DepthWriteOutput && depthConfig.DepthReadFromApplication;
 
-	bool bUseDepthPass = (mainConf.ProjectionMode == Projection_StereoReconstruction) && ((stereoConf.StereoUseDeferredDepthPass && stereoConf.StereoCutoutEnabled) || stereoConf.StereoForceDeferredDepthPass);
+	bool bUseDepthPass = mainConf.ProjectionMode == Projection_StereoReconstruction && stereoConf.StereoUseDeferredDepthPass;
 
 	ID3D11UnorderedAccessView* UAVs[2] = { viewData.cameraFilter.UAV.Get(), frameData.disparityFilter.UAV.Get() };
 
@@ -1645,7 +1646,7 @@ void PassthroughRendererDX11::RenderPassthroughView(const ERenderEye eye, const 
 	psViewBuffer.frameUVBounds = GetFrameUVBounds(eye, frame->frameLayout);
 	psViewBuffer.crossUVBounds = GetFrameUVBounds((eye == LEFT_EYE ? RIGHT_EYE : LEFT_EYE), frame->frameLayout);
 	psViewBuffer.rtArrayIndex = layer->views[viewIndex].subImage.imageArrayIndex;
-	psViewBuffer.bDoCutout = false;// stereoConf.StereoCutoutEnabled;
+	psViewBuffer.bDoCutout = stereoConf.StereoCutoutEnabled && !bUseDepthPass;
 	psViewBuffer.bPremultiplyAlpha = (blendMode == AlphaBlendPremultiplied) && !bCompositeDepth;
 
 	m_renderContext->UpdateSubresource(viewData.psViewConstantBuffer.Get(), 0, nullptr, &psViewBuffer, 0, 0);
@@ -1857,7 +1858,7 @@ void PassthroughRendererDX11::RenderPassthroughView(const ERenderEye eye, const 
 
 
 	// Draw cylinder mesh to fill out any holes
-	if(stereoConf.StereoFillHoles && mainConf.ProjectionMode == Projection_StereoReconstruction && !stereoConf.StereoReconstructionFreeze && !renderParams.bEnableDepthRange && !m_configManager->GetConfig_Camera().ClampCameraFrame)
+	if(stereoConf.StereoDrawBackground && mainConf.ProjectionMode == Projection_StereoReconstruction && !stereoConf.StereoReconstructionFreeze && !renderParams.bEnableDepthRange && !m_configManager->GetConfig_Camera().ClampCameraFrame)
 	{
 		m_renderContext->RSSetScissorRects(1, &scissor);
 
@@ -1921,7 +1922,7 @@ void PassthroughRendererDX11::RenderMaskedPrepassView(const ERenderEye eye, cons
 	bool bCompositeDepth = renderParams.bEnableDepthBlending && depthStencil != nullptr;
 	bool bWriteDepth = depthConfig.DepthWriteOutput && depthConfig.DepthReadFromApplication;
 
-	bool bUseDepthPass = (mainConf.ProjectionMode == Projection_StereoReconstruction) && ((stereoConf.StereoUseDeferredDepthPass && stereoConf.StereoCutoutEnabled) || stereoConf.StereoForceDeferredDepthPass);
+	bool bUseDepthPass = mainConf.ProjectionMode == Projection_StereoReconstruction && stereoConf.StereoUseDeferredDepthPass;
 
 	XrRect2Di rect = layer->views[viewIndex].subImage.imageRect;
 

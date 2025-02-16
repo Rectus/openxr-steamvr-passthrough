@@ -97,19 +97,50 @@ VS_OUTPUT main(float3 inPosition : POSITION, uint vertexID : SV_VertexID)
     //g_depthMap.GetDimensions(texW, texH);
     //float depth = g_depthMap.Load(int3(inPosition.xy * float2(texW, texH), 0));
     
-    float crossDepth = g_crossDepthMap.SampleLevel(g_samplerState, inPosition.xy, 0);
     
     //g_cameraInvalidation.GetDimensions(texW, texH);
-    //float cameraBlend = g_cameraInvalidation.Load(int3(inPosition.xy * float2(texW, texH), 0));
+    //cameraBlend = g_cameraInvalidation.Load(int3(inPosition.xy * float2(texW, texH), 0));
     float4 cameraValidation = g_cameraInvalidation.SampleLevel(g_samplerState, inPosition.xy, 0);
-    //float4 cameraValidation = bicubic_b_spline_4tap(g_cameraInvalidation, g_samplerState, inPosition.xy);
+    //cameraValidation = bicubic_b_spline_4tap(g_cameraInvalidation, g_samplerState, inPosition.xy);
     
-    float cameraBlend = cameraValidation.y <= 0 ?  0.5 + cameraValidation.z * 0.5 : 0.5 - cameraValidation.y * 0.5;
-    float cameraSelect = cameraValidation.y > 0 || cameraValidation.z <= 0 ? 0 : 1;
+    float crossDepth = depth;
+    float cameraBlend = 0;
+    float activeDepth = depth;
     
-    //float activeDepth = cameraValidation.y > 0 ? depth : lerp(depth, crossDepth, cameraBlend);
-    float activeDepth = cameraValidation.y > 0 ? depth : crossDepth;
-      
+    if(g_bBlendDepthMaps)
+    {
+        crossDepth = g_crossDepthMap.SampleLevel(g_samplerState, inPosition.xy, 0);
+    
+        
+    
+    
+        // Hand removal test
+        //float4 clipSpacePos1 = float4((inPosition.xy * float2(2.0, -2.0) + float2(-1, 1)), depth, 1.0);   
+        //float4 worldProjectionPos1 = mul(g_HMDProjectionToWorld, clipSpacePos1);
+        //clipSpacePos1 = mul(g_worldToHMDProjection, worldProjectionPos1 / worldProjectionPos1.w);
+    
+        //if(clipSpacePos1.z * clipSpacePos1.w < 1.0)
+        //{
+        //    cameraValidation.y = 0.0;
+        //}
+    
+        //float4 clipSpacePos2 = float4((inPosition.xy * float2(2.0, -2.0) + float2(-1, 1)), crossDepth, 1.0);   
+        //float4 worldProjectionPos2 = mul(g_HMDProjectionToWorld, clipSpacePos2);
+        //clipSpacePos2 = mul(g_worldToHMDProjection, worldProjectionPos2 / worldProjectionPos2.w);
+    
+        //if(clipSpacePos2.z * clipSpacePos2.w < 1.0)
+        //{
+        //    cameraValidation.z = 0.0;
+        //}
+    
+    
+        bool selectMainCamera = cameraValidation.y > 0 || cameraValidation.z <= 0;   
+        cameraBlend = selectMainCamera ? 0.5 - cameraValidation.y * 0.5 : 0.5 + cameraValidation.z * 0.5;
+    
+        //float activeDepth = cameraValidation.y > 0 ? depth : lerp(depth, crossDepth, cameraBlend);
+        activeDepth = selectMainCamera ? depth : crossDepth;
+    }
+    
     float4 clipSpacePos = float4((inPosition.xy * float2(2.0, -2.0) + float2(-1, 1)), activeDepth, 1.0);   
     
     // Move background vertices underneath foreground vertices to prevent interpolation at discontinuities.
