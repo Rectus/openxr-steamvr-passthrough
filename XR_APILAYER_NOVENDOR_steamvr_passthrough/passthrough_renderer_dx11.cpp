@@ -707,7 +707,7 @@ void PassthroughRendererDX11::SetupPassthroughDepthStencil(uint32_t viewIndex, u
 	{
 		D3D11_TEXTURE2D_DESC textureDesc = {};
 		textureDesc.MipLevels = 1;
-		textureDesc.Format = DXGI_FORMAT_R8G8B8A8_UNORM;
+		textureDesc.Format = DXGI_FORMAT_R8G8_UNORM;
 		textureDesc.Width = width;
 		textureDesc.Height = height;
 		textureDesc.ArraySize = 1;
@@ -2117,8 +2117,6 @@ void PassthroughRendererDX11::RenderDepthPrepassView(const ERenderEye eye, const
 
 	D3D11_VIEWPORT viewport = { 0.0f, 0.0f, (float)(depthFrame->disparityTextureSize[0] / 2), (float)depthFrame->disparityTextureSize[1], 0.0f, 1.0f};
 	D3D11_RECT scissor = { 0, 0, (long)depthFrame->disparityTextureSize[0] / 2, (long)depthFrame->disparityTextureSize[1] };
-	/*D3D11_VIEWPORT viewport = { 0.0f, 0.0f, (float)(depthFrame->disparityTextureSize[0] / 2 * depthFrame->disparityDownscaleFactor), (float)depthFrame->disparityTextureSize[1] * depthFrame->disparityDownscaleFactor, 0.0f, 1.0f };
-	D3D11_RECT scissor = { 0, 0, (long)depthFrame->disparityTextureSize[0] / 2 * depthFrame->disparityDownscaleFactor, (long)depthFrame->disparityTextureSize[1] * depthFrame->disparityDownscaleFactor };*/
 
 	m_renderContext->RSSetViewports(1, &viewport);
 	m_renderContext->RSSetScissorRects(1, &scissor);
@@ -2162,7 +2160,7 @@ void PassthroughRendererDX11::RenderDepthPrepassView(const ERenderEye eye, const
 	//m_renderContext->ClearDepthStencilView(depthStencil, D3D11_CLEAR_DEPTH | D3D11_CLEAR_STENCIL, 1.0, 0);
 
 	m_renderContext->OMSetRenderTargets(1, viewData.passthroughCameraValidity.RTV.GetAddressOf(), viewData.passthroughDepthStencil[0].DSV.Get());
-	float blendFactor[4] = { 1,1,0,0 };
+	float blendFactor[4] = { 1,0,0,0 };
 	m_renderContext->OMSetBlendState(m_blendStateWriteFactored.Get(), blendFactor, UINT_MAX);
 	m_renderContext->OMSetDepthStencilState(m_depthStencilStateAlwaysWrite.Get(), 1);
 
@@ -2192,7 +2190,6 @@ void PassthroughRendererDX11::RenderDepthPrepassView(const ERenderEye eye, const
 	psViewBuffer.prepassUVBounds = { 0.0f, 0.0f, 1.0f, 1.0f };
 	psViewBuffer.frameUVBounds = GetFrameUVBounds(eye, frame->frameLayout);
 	psViewBuffer.rtArrayIndex = layer->views[viewIndex].subImage.imageArrayIndex;
-	psViewBuffer.bDoCutout = true;
 	psViewBuffer.bPremultiplyAlpha = false;
 
 	m_renderContext->UpdateSubresource(viewData.psViewConstantBuffer.Get(), 0, nullptr, &psViewBuffer, 0, 0);
@@ -2208,14 +2205,12 @@ void PassthroughRendererDX11::RenderDepthPrepassView(const ERenderEye eye, const
 
 		m_renderContext->UpdateSubresource(viewData.vsViewConstantBuffer.Get(), 0, nullptr, &vsViewBuffer, 0, 0);
 
-		psViewBuffer.bDoCutout = false;
-
 		m_renderContext->UpdateSubresource(viewData.psViewConstantBuffer.Get(), 0, nullptr, &psViewBuffer, 0, 0);
 
 		m_renderContext->OMSetRenderTargets(1, viewData.passthroughCameraValidity.RTV.GetAddressOf(), viewData.passthroughDepthStencil[1].DSV.Get());
 
-		blendFactor[1] = 0;
-		blendFactor[2] = 1;
+		blendFactor[0] = 0;
+		blendFactor[1] = 1;
 		m_renderContext->OMSetBlendState(m_blendStateWriteFactored.Get(), blendFactor, UINT_MAX);
 		
 

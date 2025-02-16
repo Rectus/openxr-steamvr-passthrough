@@ -13,14 +13,6 @@ struct VS_OUTPUT
 
 float4 main(VS_OUTPUT input) : SV_TARGET
 {
-	// Write validity value 0 - 0.5 for primary camera and 0.5 - 1 for secondary.
-    float cameraBlend = g_doCutout ? 0.5 - saturate(input.projectionValidity) * 0.5 : saturate(input.projectionValidity) * 0.5 + 0.51;
-	
-	if(input.projectionValidity <= 0)
-    {
-		cameraBlend = 0;
-    }
-
 	// Written channels are selected with the pipeline.
-	return float4(cameraBlend, input.projectionValidity, input.projectionValidity, 0);
+	return float4(input.projectionValidity, input.projectionValidity, 0, 0);
 }

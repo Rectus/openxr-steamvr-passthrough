@@ -10,15 +10,14 @@ struct VS_OUTPUT
     float4 prevClipSpaceCoords : TEXCOORD3;
     float3 velocity : TEXCOORD4;
     float4 crossClipSpaceCoords : TEXCOORD5;
-    float2 projectionValidity2 : TEXCOORD6;
-    float cameraBlend : TEXCOORD7;
-    float2 cameraDepth : TEXCOORD8;
+    float projectionValidity2 : TEXCOORD6;
+    float2 cameraDepth : TEXCOORD7;
 };
 
 SamplerState g_samplerState : register(s0);
 Texture2D<float> g_depthMap : register(t0);
 Texture2D<float> g_crossDepthMap : register(t1);
-Texture2D<float4> g_cameraInvalidation : register(t2);
+Texture2D<float2> g_cameraValidation : register(t2);
 
 // B-spline as in http://vec3.ca/bicubic-filtering-in-fewer-taps/
 float bicubic_b_spline_4tap(in Texture2D<float> tex, in SamplerState linearSampler, in float2 uv)
@@ -100,11 +99,11 @@ VS_OUTPUT main(float3 inPosition : POSITION, uint vertexID : SV_VertexID)
     
     //g_cameraInvalidation.GetDimensions(texW, texH);
     //cameraBlend = g_cameraInvalidation.Load(int3(inPosition.xy * float2(texW, texH), 0));
-    float4 cameraValidation = g_cameraInvalidation.SampleLevel(g_samplerState, inPosition.xy, 0);
+    float2 cameraValidation = g_cameraValidation.SampleLevel(g_samplerState, inPosition.xy, 0);
     //cameraValidation = bicubic_b_spline_4tap(g_cameraInvalidation, g_samplerState, inPosition.xy);
     
     float crossDepth = depth;
-    float cameraBlend = 0;
+    //float cameraBlend = 0;
     float activeDepth = depth;
     
     if(g_bBlendDepthMaps)
@@ -121,7 +120,7 @@ VS_OUTPUT main(float3 inPosition : POSITION, uint vertexID : SV_VertexID)
     
         //if(clipSpacePos1.z * clipSpacePos1.w < 1.0)
         //{
-        //    cameraValidation.y = 0.0;
+        //    cameraValidation.x = 0.0;
         //}
     
         //float4 clipSpacePos2 = float4((inPosition.xy * float2(2.0, -2.0) + float2(-1, 1)), crossDepth, 1.0);   
@@ -130,21 +129,21 @@ VS_OUTPUT main(float3 inPosition : POSITION, uint vertexID : SV_VertexID)
     
         //if(clipSpacePos2.z * clipSpacePos2.w < 1.0)
         //{
-        //    cameraValidation.z = 0.0;
+        //    cameraValidation.y = 0.0;
         //}
     
     
-        bool selectMainCamera = cameraValidation.y > 0 || cameraValidation.z <= 0;   
-        cameraBlend = selectMainCamera ? 0.5 - cameraValidation.y * 0.5 : 0.5 + cameraValidation.z * 0.5;
+        bool selectMainCamera = cameraValidation.x > 0 || cameraValidation.y <= 0;   
+        //cameraBlend = selectMainCamera ? 0.5 - cameraValidation.x * 0.5 : 0.5 + cameraValidation.y * 0.5;
     
-        //float activeDepth = cameraValidation.y > 0 ? depth : lerp(depth, crossDepth, cameraBlend);
+        //float activeDepth = cameraValidation.x > 0 ? depth : lerp(depth, crossDepth, cameraBlend);
         activeDepth = selectMainCamera ? depth : crossDepth;
     }
     
     float4 clipSpacePos = float4((inPosition.xy * float2(2.0, -2.0) + float2(-1, 1)), activeDepth, 1.0);   
     
     // Move background vertices underneath foreground vertices to prevent interpolation at discontinuities.
-    clipSpacePos.xy += max(sobel_discontinuity_direction(g_depthMap, depth, inPosition.xy) * cameraValidation.y, sobel_discontinuity_direction(g_crossDepthMap, crossDepth, inPosition.xy) * cameraValidation.z);
+    clipSpacePos.xy += max(sobel_discontinuity_direction(g_depthMap, depth, inPosition.xy) * cameraValidation.x, sobel_discontinuity_direction(g_crossDepthMap, crossDepth, inPosition.xy) * cameraValidation.y);
     
     float4 worldProjectionPos = mul(g_HMDProjectionToWorld, clipSpacePos);
     
@@ -161,9 +160,8 @@ VS_OUTPUT main(float3 inPosition : POSITION, uint vertexID : SV_VertexID)
     output.position = clipSpacePos;   
     output.screenCoords = clipSpacePos; 
     output.screenCoords.z *= output.screenCoords.w; //Linearize depth
-	output.projectionValidity = cameraValidation.y;
-    output.projectionValidity2 = float2(cameraValidation.yz);
-    output.cameraBlend = cameraBlend;
+	output.projectionValidity = cameraValidation.x;
+    output.projectionValidity2 = cameraValidation.y;
     output.cameraDepth = float2(depth, crossDepth);
 	
 #ifndef VULKAN  

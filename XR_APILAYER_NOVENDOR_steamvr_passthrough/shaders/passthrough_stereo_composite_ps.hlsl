@@ -11,9 +11,8 @@ struct VS_OUTPUT
     float4 prevClipSpaceCoords : TEXCOORD3;
     float3 velocity : TEXCOORD4;
     float4 crossClipSpaceCoords : TEXCOORD5;
-    float2 projectionValidity2 : TEXCOORD6;
-    float cameraBlend : TEXCOORD7;
-    float2 cameraDepth : TEXCOORD8;
+    float projectionValidity2 : TEXCOORD6;
+    float2 cameraDepth : TEXCOORD7;
 };
 
 
@@ -149,10 +148,12 @@ float4 main(VS_OUTPUT input) : SV_TARGET
     
     float depthFactor =  saturate(1 - (abs(input.cameraDepth.x - input.cameraDepth.y) * 1000));
     
-    float combineFactor = depthFactor * input.projectionValidity2.x * input.projectionValidity2.y;
+    float combineFactor = depthFactor * input.projectionValidity * input.projectionValidity2;
+    
+    float cameraBlend = saturate(0.5 - input.projectionValidity * 0.5 + input.projectionValidity2 * 0.5);
     
     // Blend together both cameras based on which ones are valid and have the closest pixels.
-    rgbColor = lerp(rgbColor, lerp(crossRGBColor, crossRGBColorClamped, combineFactor), lerp(input.cameraBlend, pixelDistanceBlend, combineFactor));
+    rgbColor = lerp(rgbColor, lerp(crossRGBColor, crossRGBColorClamped, combineFactor), lerp(cameraBlend, pixelDistanceBlend, combineFactor));
     
 	if (g_bDoColorAdjustment)
 	{
@@ -188,7 +189,7 @@ float4 main(VS_OUTPUT input) : SV_TARGET
         //{
         //    rgbColor.z += 0.25;
         //}
-        rgbColor = float3(0, lerp(input.cameraBlend, pixelDistanceBlend, combineFactor), 0);
+        rgbColor = float3(0, lerp(cameraBlend, pixelDistanceBlend, combineFactor), 0);
     }
     
     rgbColor = g_bPremultiplyAlpha ? rgbColor * g_opacity * alpha : rgbColor;
