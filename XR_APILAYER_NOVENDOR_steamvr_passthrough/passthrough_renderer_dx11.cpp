@@ -340,10 +340,10 @@ bool PassthroughRendererDX11::InitRenderer()
 	blendState.RenderTarget[0].RenderTargetWriteMask = D3D11_COLOR_WRITE_ENABLE_ALL;
 	blendState.RenderTarget[0].BlendOp = D3D11_BLEND_OP_ADD;
 	blendState.RenderTarget[0].SrcBlend = D3D11_BLEND_BLEND_FACTOR;
-	blendState.RenderTarget[0].DestBlend = D3D11_BLEND_ONE;
+	blendState.RenderTarget[0].DestBlend = D3D11_BLEND_INV_BLEND_FACTOR;
 	blendState.RenderTarget[0].BlendOpAlpha = D3D11_BLEND_OP_ADD;
 	blendState.RenderTarget[0].SrcBlendAlpha = D3D11_BLEND_BLEND_FACTOR;
-	blendState.RenderTarget[0].DestBlendAlpha = D3D11_BLEND_ONE;
+	blendState.RenderTarget[0].DestBlendAlpha = D3D11_BLEND_INV_BLEND_FACTOR;
 
 	if (FAILED(m_d3dDevice->CreateBlendState(&blendState, m_blendStateWriteFactored.GetAddressOf())))
 	{
@@ -1482,7 +1482,7 @@ void PassthroughRendererDX11::RenderPassthroughFrame(const XrCompositionLayerPro
 	psBuffer.saturation = mainConf.Saturation;
 	psBuffer.sharpness = mainConf.Sharpness;
 	psBuffer.temporalFilteringSampling = mainConf.TemporalFilteringSampling;
-	psBuffer.temporalFilteringColorRangeCutoff = mainConf.ProjectionMode == Projection_StereoReconstruction ? 0.0f : 0.0f;
+	psBuffer.temporalFilteringColorRangeCutoff = stereoConf.StereoDisparityTemporalFilteringStrength; // TODO
 	psBuffer.cutoutCombineFactor = stereoConf.StereoCutoutCombineFactor;
 	psBuffer.bDoColorAdjustment = fabsf(mainConf.Brightness) > 0.01f || fabsf(mainConf.Contrast - 1.0f) > 0.01f || fabsf(mainConf.Saturation - 1.0f) > 0.01f;
 	psBuffer.bDebugDepth = mainConf.DebugDepth;
@@ -2173,11 +2173,8 @@ void PassthroughRendererDX11::RenderDepthPrepassView(const ERenderEye eye, const
 		m_renderContext->VSSetShader(m_stereoVertexShader.Get(), nullptr, 0);
 	}
 
-	float clearColor[4] = { 0,0,0,0 };
-	m_renderContext->ClearRenderTargetView(viewData.passthroughCameraValidity.RTV.Get(), clearColor);
-
-	//ID3D11DepthStencilView* depthStencil = viewData.passthroughDepthStencil.DSV.Get();
-	//m_renderContext->ClearDepthStencilView(depthStencil, D3D11_CLEAR_DEPTH | D3D11_CLEAR_STENCIL, 1.0, 0);
+	//float clearColor[4] = { 0,0,0,0 };
+	//m_renderContext->ClearRenderTargetView(viewData.passthroughCameraValidity.RTV.Get(), clearColor);
 
 	m_renderContext->OMSetRenderTargets(1, viewData.passthroughCameraValidity.RTV.GetAddressOf(), viewData.passthroughDepthStencil[0].DSV.Get());
 	float blendFactor[4] = { 1,0,0,0 };
