@@ -218,6 +218,7 @@ float4 main(VS_OUTPUT input) : SV_TARGET
     float sharpness = g_sharpness + 0.5;
 
     rgbColor *= (1 + sharpness * 4);
+    crossRGBColor *= (1 + sharpness * 4);
         
     float3 textureSize;
     g_cameraFrameTexture.GetDimensions(0, textureSize.x, textureSize.y, textureSize.z);
@@ -242,7 +243,6 @@ float4 main(VS_OUTPUT input) : SV_TARGET
     minColor = min(minColor, sample);
     maxColor = max(maxColor, sample);
         
-    crossRGBColor *= (1 + sharpness * 4);
     sample = g_cameraFrameTexture.Sample(g_samplerState, crossUvs + float2(-1, 0) / textureSize.xy).xyz;
     crossRGBColor -= sample * sharpness;
     crossMinColor = min(crossMinColor, sample);
@@ -265,6 +265,7 @@ float4 main(VS_OUTPUT input) : SV_TARGET
 
     
     //float3 crossRGBColor = min(maxColor, max(crossRGBColor, minColor));
+    float3 crossRGBColorClamped = min(maxColor, max(crossRGBColor, minColor));
     
     uint texW, texH;
     g_cameraFrameTexture.GetDimensions(texW, texH);
@@ -281,20 +282,21 @@ float4 main(VS_OUTPUT input) : SV_TARGET
     float crossDistanceFactor = abs(crossCamTexCoords.x - crossCamPixel.x - 0.5) + abs(crossCamTexCoords.y - crossCamPixel.y - 0.5);
     
     float cameraBlend = saturate(0.5 - input.projectionValidity * 0.5 + input.projectionValidity2 * 0.5);
+    float cameraSelect = 1 - step(input.projectionValidity2, input.projectionValidity);
     
     float pixelDistanceBlend = distanceFactor + (1 - crossDistanceFactor);
     //float blendfactor = 1 - abs(input.cameraBlend * 2 - 1);
     
     float depthFactor = saturate(1 - (abs(input.cameraDepth.x - input.cameraDepth.y) * 1000));
     
-    float combineFactor = depthFactor * input.projectionValidity * input.projectionValidity2;
+    float combineFactor = g_cutoutCombineFactor * depthFactor * input.projectionValidity * input.projectionValidity2;
     
     // Blend together both cameras based on which ones are valid and have the closest pixels.
-    float finalBlendFactor = lerp(cameraBlend, pixelDistanceBlend, combineFactor);
+    float finalBlendFactor = lerp(cameraSelect, pixelDistanceBlend, combineFactor);
     
-    rgbColor = lerp(rgbColor, crossRGBColor, finalBlendFactor);
-    minColor = lerp(minColor, crossMinColor, finalBlendFactor);
-    maxColor = lerp(maxColor, crossMaxColor, finalBlendFactor);
+    rgbColor = lerp(rgbColor, lerp(crossRGBColor, crossRGBColorClamped, combineFactor), finalBlendFactor);
+    minColor = lerp(minColor, lerp(crossMinColor, minColor, combineFactor), finalBlendFactor);
+    maxColor = lerp(maxColor, lerp(crossMaxColor, maxColor, combineFactor), finalBlendFactor);
     
     float3 outputTextureSize;
     g_prevCameraFilter.GetDimensions(0, outputTextureSize.x, outputTextureSize.y, outputTextureSize.z);

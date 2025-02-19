@@ -634,7 +634,7 @@ void PassthroughRendererDX11::SetupDisparityMap(uint32_t width, uint32_t height)
 			return;
 		}
 
-		if (m_configManager->GetConfig_Stereo().StereoUseDisparityTemporalFiltering)
+		if (m_configManager->GetConfig_Stereo().StereoUseDisparityTemporalFiltering && m_bIsVSUAVSupported)
 		{
 
 			if (FAILED(m_d3dDevice->CreateTexture2D(&uavTextureDesc, nullptr, &frameData.disparityFilter.Texture)))
@@ -1296,7 +1296,7 @@ void PassthroughRendererDX11::RenderPassthroughFrame(const XrCompositionLayerPro
 	{
 		bool bdisparityMapUpdated = depthFrame->bIsFirstRender;
 
-		if (depthFrame->disparityTextureSize[0] != m_disparityMapWidth || m_bUseHexagonGridMesh != stereoConf.StereoUseHexagonGridMesh || (stereoConf.StereoUseDisparityTemporalFiltering && frameData.disparityFilter.Texture == nullptr))
+		if (depthFrame->disparityTextureSize[0] != m_disparityMapWidth || m_bUseHexagonGridMesh != stereoConf.StereoUseHexagonGridMesh || (stereoConf.StereoUseDisparityTemporalFiltering && m_bIsVSUAVSupported && frameData.disparityFilter.Texture == nullptr))
 		{
 			m_disparityMapWidth = depthFrame->disparityTextureSize[0];
 			m_bUseHexagonGridMesh = stereoConf.StereoUseHexagonGridMesh;
@@ -1362,7 +1362,7 @@ void PassthroughRendererDX11::RenderPassthroughFrame(const XrCompositionLayerPro
 		vsBuffer.disparityFilterWidth = stereoConf.StereoDisparityFilterWidth;
 		vsBuffer.bProjectBorders = !stereoConf.StereoReconstructionFreeze;
 		vsBuffer.bFindDiscontinuities = stereoConf.StereoCutoutEnabled;
-		vsBuffer.bUseDisparityTemporalFilter = stereoConf.StereoUseDisparityTemporalFiltering;
+		vsBuffer.bUseDisparityTemporalFilter = stereoConf.StereoUseDisparityTemporalFiltering && m_bIsVSUAVSupported;
 		vsBuffer.bBlendDepthMaps = stereoConf.StereoCutoutEnabled;
 		vsBuffer.disparityTemporalFilterStrength = stereoConf.StereoDisparityTemporalFilteringStrength;
 		vsBuffer.disparityTemporalFilterDistance = stereoConf.StereoDisparityTemporalFilteringDistance;
@@ -1483,6 +1483,7 @@ void PassthroughRendererDX11::RenderPassthroughFrame(const XrCompositionLayerPro
 	psBuffer.sharpness = mainConf.Sharpness;
 	psBuffer.temporalFilteringSampling = mainConf.TemporalFilteringSampling;
 	psBuffer.temporalFilteringColorRangeCutoff = mainConf.ProjectionMode == Projection_StereoReconstruction ? 0.0f : 0.0f;
+	psBuffer.cutoutCombineFactor = stereoConf.StereoCutoutCombineFactor;
 	psBuffer.bDoColorAdjustment = fabsf(mainConf.Brightness) > 0.01f || fabsf(mainConf.Contrast - 1.0f) > 0.01f || fabsf(mainConf.Saturation - 1.0f) > 0.01f;
 	psBuffer.bDebugDepth = mainConf.DebugDepth;
 	psBuffer.bDebugValidStereo = mainConf.DebugStereoValid;
@@ -1611,9 +1612,28 @@ void PassthroughRendererDX11::RenderPassthroughView(const ERenderEye eye, const 
 
 	bool bUseDepthPass = mainConf.ProjectionMode == Projection_StereoReconstruction && stereoConf.StereoUseDeferredDepthPass;
 
-	ID3D11UnorderedAccessView* UAVs[2] = { viewData.cameraFilter.UAV.Get(), frameData.disparityFilter.UAV.Get() };
+	bool bUseDisparityTemporalFiltering = stereoConf.StereoUseDisparityTemporalFiltering && m_bIsVSUAVSupported;
 
-	m_renderContext->OMSetRenderTargetsAndUnorderedAccessViews(1, &rendertarget, depthStencil, 1, 2, UAVs, nullptr);
+	if (!bUseDepthPass && bUseDisparityTemporalFiltering && mainConf.EnableTemporalFiltering)
+	{
+		ID3D11UnorderedAccessView* UAVs[2] = { viewData.cameraFilter.UAV.Get(), frameData.disparityFilter.UAV.Get() };
+		m_renderContext->OMSetRenderTargetsAndUnorderedAccessViews(1, &rendertarget, depthStencil, 1, 2, UAVs, nullptr);
+	}
+	else if (!bUseDepthPass && bUseDisparityTemporalFiltering)
+	{
+		ID3D11UnorderedAccessView* UAVs[1] = { frameData.disparityFilter.UAV.Get() };
+		m_renderContext->OMSetRenderTargetsAndUnorderedAccessViews(1, &rendertarget, depthStencil, 2, 1, UAVs, nullptr);
+	}
+	else if (mainConf.EnableTemporalFiltering)
+	{
+		ID3D11UnorderedAccessView* UAVs[1] = { viewData.cameraFilter.UAV.Get() };
+		m_renderContext->OMSetRenderTargetsAndUnorderedAccessViews(1, &rendertarget, depthStencil, 1, 1, UAVs, nullptr);
+	}
+	else
+	{
+		m_renderContext->OMSetRenderTargets(1, &rendertarget, depthStencil);
+	}
+	
 
 
 	XrRect2Di rect = layer->views[viewIndex].subImage.imageRect;
@@ -1634,7 +1654,7 @@ void PassthroughRendererDX11::RenderPassthroughView(const ERenderEye eye, const 
 	vsViewBuffer.projectionDistance = mainConf.ProjectionDistanceFar;
 	vsViewBuffer.floorHeightOffset = mainConf.FloorHeightOffset;
 	vsViewBuffer.cameraViewIndex = viewIndex;
-	vsViewBuffer.bWriteDisparityFilter = stereoConf.StereoUseDisparityTemporalFiltering && depthFrame->bIsFirstRender;
+	vsViewBuffer.bWriteDisparityFilter = bUseDisparityTemporalFiltering && depthFrame->bIsFirstRender;
 
 	
 	m_renderContext->UpdateSubresource(viewData.vsViewConstantBuffer.Get(), 0, nullptr, &vsViewBuffer, 0, 0);
@@ -1661,7 +1681,7 @@ void PassthroughRendererDX11::RenderPassthroughView(const ERenderEye eye, const 
 			ID3D11ShaderResourceView* vsSRVs[3] = { viewData.passthroughDepthStencil[0].SRV.Get(), viewData.passthroughDepthStencil[1].SRV.Get(), viewData.passthroughCameraValidity.SRV.Get()};
 			m_renderContext->VSSetShaderResources(0, 3, vsSRVs);
 		}
-		else if (stereoConf.StereoUseDisparityTemporalFiltering)
+		else if (bUseDisparityTemporalFiltering)
 		{
 			ID3D11ShaderResourceView* vsSRVs[2] = { m_frameData[m_depthUpdatedFrameIndex].disparityMap.SRV.Get(), m_frameData[m_prevDepthUpdatedFrameIndex].disparityFilter.SRV.Get() };
 			m_renderContext->VSSetShaderResources(0, 2, vsSRVs);
@@ -1683,7 +1703,7 @@ void PassthroughRendererDX11::RenderPassthroughView(const ERenderEye eye, const 
 			{
 				m_renderContext->VSSetShader(m_passthroughReadDepthVS.Get(), nullptr, 0);
 			}
-			else if (stereoConf.StereoUseDisparityTemporalFiltering && m_bIsVSUAVSupported)
+			else if (bUseDisparityTemporalFiltering)
 			{
 				m_renderContext->VSSetShader(m_stereoTemporalVertexShader.Get(), nullptr, 0);
 			}
@@ -1724,7 +1744,7 @@ void PassthroughRendererDX11::RenderPassthroughView(const ERenderEye eye, const 
 			m_renderContext->UpdateSubresource(viewData.vsViewConstantBuffer.Get(), 0, nullptr, &vsViewBuffer, 0, 0);
 		}
 	}
-	else if(stereoConf.StereoUseDisparityTemporalFiltering && m_bIsVSUAVSupported && depthFrame->bIsFirstRender)
+	else if(bUseDisparityTemporalFiltering && depthFrame->bIsFirstRender)
 	{
 		vsViewBuffer.bWriteDisparityFilter = true;
 		m_renderContext->UpdateSubresource(viewData.vsViewConstantBuffer.Get(), 0, nullptr, &vsViewBuffer, 0, 0);
@@ -1799,7 +1819,7 @@ void PassthroughRendererDX11::RenderPassthroughView(const ERenderEye eye, const 
 		{
 			m_renderContext->VSSetShader(m_passthroughReadDepthVS.Get(), nullptr, 0);
 		}
-		else if (stereoConf.StereoUseDisparityTemporalFiltering && m_bIsVSUAVSupported)
+		else if (bUseDisparityTemporalFiltering)
 		{
 			m_renderContext->VSSetShader(m_stereoTemporalVertexShader.Get(), nullptr, 0);
 		}
@@ -1883,7 +1903,7 @@ void PassthroughRendererDX11::RenderPassthroughView(const ERenderEye eye, const 
 
 		m_renderContext->IASetVertexBuffers(0, 1, m_gridMeshVertexBuffer.GetAddressOf(), strides, offsets);
 		m_renderContext->IASetIndexBuffer(m_gridMeshIndexBuffer.Get(), DXGI_FORMAT_R32_UINT, 0);
-		if (stereoConf.StereoUseDisparityTemporalFiltering && m_bIsVSUAVSupported)
+		if (bUseDisparityTemporalFiltering)
 		{
 			m_renderContext->VSSetShader(m_stereoTemporalVertexShader.Get(), nullptr, 0);
 		}
@@ -1988,7 +2008,7 @@ void PassthroughRendererDX11::RenderMaskedPrepassView(const ERenderEye eye, cons
 			ID3D11ShaderResourceView* vsSRVs[3] = { viewData.passthroughDepthStencil[0].SRV.Get(), viewData.passthroughDepthStencil[1].SRV.Get(), viewData.passthroughCameraValidity.SRV.Get()};
 			m_renderContext->VSSetShaderResources(0, 3, vsSRVs);
 		}
-		else if (stereoConf.StereoUseDisparityTemporalFiltering)
+		else if (stereoConf.StereoUseDisparityTemporalFiltering && m_bIsVSUAVSupported)
 		{
 			ID3D11ShaderResourceView* vsSRVs[2] = { m_frameData[m_depthUpdatedFrameIndex].disparityMap.SRV.Get(), m_frameData[m_prevDepthUpdatedFrameIndex].disparityFilter.SRV.Get() };
 			m_renderContext->VSSetShaderResources(0, 2, vsSRVs);
@@ -2127,7 +2147,7 @@ void PassthroughRendererDX11::RenderDepthPrepassView(const ERenderEye eye, const
 	ID3D11Buffer* vsBuffers[2] = { viewData.vsViewConstantBuffer.Get(), frameData.vsPassConstantBuffer.Get() };
 	m_renderContext->VSSetConstantBuffers(0, 2, vsBuffers);
 
-	if (stereoConf.StereoUseDisparityTemporalFiltering)
+	if (stereoConf.StereoUseDisparityTemporalFiltering && m_bIsVSUAVSupported)
 	{
 		ID3D11ShaderResourceView* vsSRVs[2] = { m_frameData[m_depthUpdatedFrameIndex].disparityMap.SRV.Get(), m_frameData[m_prevDepthUpdatedFrameIndex].disparityFilter.SRV.Get() };
 		m_renderContext->VSSetShaderResources(0, 2, vsSRVs);

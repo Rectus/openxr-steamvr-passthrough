@@ -23,6 +23,7 @@ cbuffer psPassConstantBuffer : register(b3)
     float g_sharpness;
     int g_temporalFilteringSampling;
     float g_temporalFilteringColorRangeCutoff;
+    float g_cutoutCombineFactor;
     bool g_bDoColorAdjustment;
     bool g_bDebugDepth;
     bool g_bDebugValidStereo;
@@ -65,6 +66,7 @@ cbuffer psPassConstantBuffer : register(b0)
     float g_sharpness;
     int g_temporalFilteringSampling;
     float g_temporalFilteringColorRangeCutoff;
+    float g_cutoutCombineFactor;
     bool g_bDoColorAdjustment;
     bool g_bDebugDepth;
     bool g_bDebugValidStereo;

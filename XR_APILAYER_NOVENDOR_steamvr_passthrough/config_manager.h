@@ -537,6 +537,7 @@ struct Config_Stereo
 	float StereoCutoutFactor = 0.75f;
 	float StereoCutoutOffset = 1.5f;
 	float StereoCutoutFilterWidth = 0.9f;
+	float StereoCutoutCombineFactor = 1.0f;
 
 	float StereoDepthFoldStrength = 2.0f;
 	float StereoDepthFoldMaxDistance = 3.0f;
@@ -586,6 +587,7 @@ struct Config_Stereo
 		StereoCutoutOffset = (float)ini.GetDoubleValue(section, "StereoCutoutOffset", StereoCutoutOffset);
 		StereoDisparityFilterWidth = (int)ini.GetLongValue(section, "StereoDisparityFilterWidth", StereoDisparityFilterWidth);
 		StereoCutoutFilterWidth = (float)ini.GetDoubleValue(section, "StereoCutoutFilterWidth", StereoCutoutFilterWidth);
+		StereoCutoutCombineFactor = (float)ini.GetDoubleValue(section, "StereoCutoutCombineFactor", StereoCutoutCombineFactor);
 
 		StereoDepthFoldStrength = (float)ini.GetDoubleValue(section, "StereoDepthFoldStrength", StereoDepthFoldStrength);
 		StereoDepthFoldMaxDistance = (float)ini.GetDoubleValue(section, "StereoDepthFoldMaxDistance", StereoDepthFoldMaxDistance);
@@ -636,6 +638,7 @@ struct Config_Stereo
 		ini.SetDoubleValue(section, "StereoCutoutOffset", StereoCutoutOffset);
 		ini.SetLongValue(section, "StereoDisparityFilterWidth", StereoDisparityFilterWidth);
 		ini.SetDoubleValue(section, "StereoCutoutFilterWidth", StereoCutoutFilterWidth);
+		ini.SetDoubleValue(section, "StereoCutoutCombineFactor", StereoCutoutCombineFactor);
 
 		ini.SetDoubleValue(section, "StereoDepthFoldStrength", StereoDepthFoldStrength);
 		ini.SetDoubleValue(section, "StereoDepthFoldMaxDistance", StereoDepthFoldMaxDistance);
