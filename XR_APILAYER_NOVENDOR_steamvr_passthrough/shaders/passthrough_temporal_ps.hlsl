@@ -132,37 +132,6 @@ float4 bicubic_b_spline_4tap(in Texture2D<half4> tex, in SamplerState linearSamp
 }
 
 
-float3 ClipVectorToAABB(float3 start, float3 end, float3 boxMin, float3 boxMax)
-{   
-    float3 len = end - start;
-    float3 inv_dir = rcp(end - start);
-    
-    if(abs(len.x) < 0.0001) {inv_dir.x = 0;}
-    if(abs(len.y) < 0.0001) {inv_dir.y = 0;}
-    if(abs(len.z) < 0.0001) {inv_dir.z = 0;}
-    
-    float tx1 = (boxMin.x - start.x) * inv_dir.x;
-    float tx2 = (boxMax.x - start.x) * inv_dir.x;
-    
-    float tmin = min(tx1, tx2);
-    float tmax = max(tx1, tx2);
-    
-    float ty1 = (boxMin.y - start.y) * inv_dir.y;
-    float ty2 = (boxMax.y - start.y) * inv_dir.y;
-    
-    tmin = max(tmin, min(ty1, ty2));
-    tmax = min(tmax, max(ty1, ty2));
-    
-    float tz1 = (boxMin.z - start.z) * inv_dir.z;
-    float tz2 = (boxMax.z - start.z) * inv_dir.z;
-    
-    tmin = max(tmin, min(tz1, tz2));
-    tmax = min(tmax, max(tz1, tz2));
-    
-    return  (tmax >= tmin && tmax >= 0) ? (start + normalize(len) * tmax) : end;
-}
-
-
 
 //[earlydepthstencil]
 float4 main(VS_OUTPUT input) : SV_TARGET
@@ -289,16 +258,10 @@ float4 main(VS_OUTPUT input) : SV_TARGET
     
     // Clip history color to AABB of neighborhood color values + some configurable leeway.
     
-    float3 rgbLAB = LinearRGBtoLAB_D65(rgbColor.xyz);
-    float3 filteredLAB = LinearRGBtoLAB_D65(filtered.xyz);
-    float3 minColorLAB = LinearRGBtoLAB_D65(minColor.xyz);
-    float3 maxColorLAB = LinearRGBtoLAB_D65(maxColor.xyz);
-    
-    //float3 filteredClippedLAB = ClipVectorToAABB(rgbLAB, filteredLAB, minColorLAB * (1.0 - g_temporalFilteringColorRangeCutoff * 0.1), maxColorLAB * (1.0 + g_temporalFilteringColorRangeCutoff * 0.1));
     float3 filteredClipped = min(maxColor * (1.0 + g_temporalFilteringColorRangeCutoff), max(filtered.xyz, minColor * (1.0 - g_temporalFilteringColorRangeCutoff)));
-    //float3 filteredClippedLAB = min(maxColorLAB * (1.0 + g_temporalFilteringColorRangeCutoff), max(filteredLAB, minColorLAB * (1.0 - g_temporalFilteringColorRangeCutoff)));
     
-    //float3 filteredClipped = LABtoLinearRGB_D65(filteredClippedLAB);
+    // Flicker reduction attempt based on Callum Glover - Temporal Anti Aliasing Implementation and Extensions
+    // https://static1.squarespace.com/static/5a3beb72692ebe77330b5118/t/5c9d4f5be2c483f0c4108eca/1553813352302/report.pdf
     
     float isClipped = any(filtered.xyz - filteredClipped) ? 1 : 0;
     

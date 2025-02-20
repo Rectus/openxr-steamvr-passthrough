@@ -56,6 +56,46 @@ float2 lanczos2(in Texture2D<float2> tex, float2 uvs, float2 res)
     return output / totalWeight;
 }
 
+// B-spline as in http://vec3.ca/bicubic-filtering-in-fewer-taps/
+float2 bicubic_b_spline_4tap(in Texture2D<float2> tex, in SamplerState linearSampler, in float2 uv)
+{
+    uint texW, texH;
+    tex.GetDimensions(texW, texH);
+    float2 texSize = float2(texW, texH);
+    
+    float2 samplePos = uv * texSize;
+    float2 texPos1 = floor(samplePos - 0.5f) + 0.5f;
+
+    float2 f = samplePos - texPos1;
+    float2 f2 = f * f;
+    float2 f3 = f2 * f;
+    
+    float2 w0 = f2 - 0.5 * (f3 + f);
+    float2 w1 = 1.5 * f3 - 2.5 * f2 + 1.0;
+    float2 w3 = 0.5 * (f3 - f2);
+    float2 w2 = 1.0 - w0 - w1 - w3;
+ 
+    float2 w12 = w1 + w2;
+    float2 offset12 = w2 / (w1 + w2);
+    
+    float2 s0 = w0 + w1;
+    float2 s1 = w2 + w3;
+ 
+    float2 f0 = w1 / (w0 + w1);
+    float2 f1 = w3 / (w2 + w3);
+ 
+    float2 t0 = (texPos1 - 1 + f0) / texSize;
+    float2 t1 = (texPos1 + 1 + f1) / texSize;
+
+    float2 result = 0;
+    result += tex.SampleLevel(linearSampler, float2(t0.x, t0.y), 0) * s0.x * s0.y;
+    result += tex.SampleLevel(linearSampler, float2(t1.x, t0.y), 0) * s1.x * s0.y;
+    result += tex.SampleLevel(linearSampler, float2(t0.x, t1.y), 0) * s0.x * s1.y;
+    result += tex.SampleLevel(linearSampler, float2(t1.x, t1.y), 0) * s1.x * s1.y;
+
+    return result;
+}
+
 
 // Based on the code in https://gist.github.com/TheRealMJP/c83b8c0f46b63f3a88a5986f4fa982b1 and http://vec3.ca/bicubic-filtering-in-fewer-taps/
 float2 catmull_rom_9tap(in Texture2D<float2> tex, in SamplerState linearSampler, in float2 uv, in float2 texSize)
@@ -137,9 +177,9 @@ VS_OUTPUT main(float3 inPosition : POSITION, uint vertexID : SV_VertexID)
     uint3 uvPos = uint3(floor(disparityUVs * g_disparityTextureSize), 0);
     
     // Load unfiltered value so that invalid values are not filtered into the texture.
-    float2 dispConf = g_disparityTexture.Load(uvPos);
+    //float2 dispConf = g_disparityTexture.Load(uvPos);
 
-    //float2 dispConf = g_disparityTexture.SampleLevel(g_samplerState, disparityUVs, 0); 
+    float2 dispConf = g_disparityTexture.SampleLevel(g_samplerState, disparityUVs, 0); 
     //float2 dispConf = lanczos2(g_disparityTexture, disparityUVs, g_disparityTextureSize);
     //float2 dispConf = catmull_rom_9tap(g_disparityTexture, g_samplerState, disparityUVs, g_disparityTextureSize);
     
@@ -156,12 +196,14 @@ VS_OUTPUT main(float3 inPosition : POSITION, uint vertexID : SV_VertexID)
     int3 prevUvPos = int3(floor(prevDisparityUVs * g_disparityTextureSize), 0);
     
     //float2 prevDispConf = g_prevDisparityFilter.Load(prevUvPos);
-    float2 prevDispConf = g_prevDisparityFilter.SampleLevel(g_samplerState, prevDisparityUVs, 0);
+    //float2 prevDispConf = g_prevDisparityFilter.SampleLevel(g_samplerState, prevDisparityUVs, 0);
+    float2 prevDispConf = bicubic_b_spline_4tap(g_prevDisparityFilter, g_samplerState, prevDisparityUVs);
     //float2 prevDispConf = lanczos2(g_prevDisparityFilter, prevDisparityUVs, g_disparityTextureSize);
     //float2 prevDispConf = catmull_rom_9tap(g_prevDisparityFilter, g_samplerState, prevDisparityUVs, g_disparityTextureSize);
         
 
-    float4 prevDisparityWorldCoords = PrevDisparityToWorldCoords(prevDispConf.x, prevDisparityCoords.xy);
+    //float4 prevDisparityWorldCoords = PrevDisparityToWorldCoords(prevDispConf.x, prevDisparityCoords.xy);
+    float4 prevDisparityWorldCoords = DisparityToWorldCoords(prevDispConf.x, inPosition.xy);
      
     prevDisparityWorldCoords /= prevDisparityWorldCoords.w;
     
@@ -260,19 +302,21 @@ VS_OUTPUT main(float3 inPosition : POSITION, uint vertexID : SV_VertexID)
     float4 worldSpacePoint = DisparityToWorldCoords(disparity, inPosition.xy);
     worldSpacePoint /= worldSpacePoint.w;
     
+    uint2 writeUVPos = floor(disparityUVs * g_disparityTextureSize * 2);
+    
     if (bUsePrev && length(worldSpacePoint.xyz - prevDisparityWorldCoords.xyz) < g_disparityTemporalFilterDistance)
     {
-        float factor = saturate(min(g_disparityTemporalFilterStrength, (prevDispConf.y - dispConf.y + 0.5)));
+        float factor = saturate(min(g_disparityTemporalFilterStrength, smoothstep(0.4, 0.6, prevDispConf.y - dispConf.y)));
         worldSpacePoint.xyz = lerp(worldSpacePoint.xyz, prevDisparityWorldCoords.xyz, factor);
         
         if (g_bWriteDisparityFilter)
         {
-            g_disparityFilter[uvPos.xy] = lerp(float2(disparity, confidence), prevDispConf, factor);
+            g_disparityFilter[writeUVPos] = lerp(float2(disparity, confidence), prevDispConf, factor);
         }
     }
     else if (g_bWriteDisparityFilter)
     {
-        g_disparityFilter[uvPos.xy] = float2(disparity, confidence);
+        g_disparityFilter[writeUVPos] = float2(disparity, confidence);
     }
     
     // Clamp positions to floor height

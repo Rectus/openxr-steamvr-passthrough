@@ -335,9 +335,10 @@ float4 main(VS_OUTPUT input) : SV_TARGET
         filtered = lanczos2_prev(prevScreenUvs, outputTextureSize.xy);
     }
 
-    // Clamp history color to AABB of neighborhood color values.
+    // Clip history color to AABB of neighborhood color values + some configurable leeway.
+    
+    float3 filteredClipped = min(maxColor * (1.0 + g_temporalFilteringColorRangeCutoff), max(filtered.xyz, minColor * (1.0 - g_temporalFilteringColorRangeCutoff)));
 
-    float3 filteredClipped = min(maxColor, max(filtered.xyz, minColor));
     float isClipped = any(filtered.xyz - filteredClipped) ? 1 : 0;
     
     filtered.xyz = isClipped != 0 ? lerp(filtered.xyz, filteredClipped, filtered.a) : filtered.xyz;
