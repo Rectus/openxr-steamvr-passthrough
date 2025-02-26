@@ -910,14 +910,19 @@ void PassthroughRendererDX11::InitRenderTarget(const ERenderEye eye, void* rende
 
 	if (m_configManager->GetConfig_Main().EnableTemporalFiltering)
 	{
-		SetupTemporalUAV(viewIndex, imageIndex);
+		SetupTemporalUAV(viewIndex, 0);
+		SetupTemporalUAV(viewIndex, 1);
 	}
-	else if (viewData.cameraFilter.SRV != nullptr)
+	else if (m_cameraFilter[viewIndex][0].SRV != nullptr)
 	{
 		// Free the UAV resources so that they will be recreated with the correct size in case it changed while temporal filtering was turned off.
-		viewData.cameraFilter.SRV.Reset();
-		viewData.cameraFilter.UAV.Reset();
-		viewData.cameraFilter.Texture.Reset();
+		m_cameraFilter[viewIndex][0].SRV.Reset();
+		m_cameraFilter[viewIndex][0].UAV.Reset();
+		m_cameraFilter[viewIndex][0].Texture.Reset();
+
+		m_cameraFilter[viewIndex][1].SRV.Reset();
+		m_cameraFilter[viewIndex][1].UAV.Reset();
+		m_cameraFilter[viewIndex][1].Texture.Reset();
 	}
 }
 
@@ -1015,12 +1020,10 @@ bool PassthroughRendererDX11::CheckInitFrameData(const uint32_t imageIndex)
 
 
 
-void PassthroughRendererDX11::SetupTemporalUAV(const uint32_t viewIndex, const uint32_t swapchainIndex)
+void PassthroughRendererDX11::SetupTemporalUAV(const uint32_t viewIndex, const uint32_t frameIndex)
 {
-	DX11ViewData& viewData = m_viewData[viewIndex][swapchainIndex];
-
 	D3D11_TEXTURE2D_DESC rtDesc;
-	((ID3D11Texture2D*)viewData.renderTarget.Texture.Get())->GetDesc(&rtDesc);
+	((ID3D11Texture2D*)m_viewData[viewIndex][0].renderTarget.Texture.Get())->GetDesc(&rtDesc);
 
 	D3D11_TEXTURE2D_DESC uavTextureDesc = {};
 	uavTextureDesc.MipLevels = 1;
@@ -1034,7 +1037,7 @@ void PassthroughRendererDX11::SetupTemporalUAV(const uint32_t viewIndex, const u
 	uavTextureDesc.Usage = D3D11_USAGE_DEFAULT;
 	uavTextureDesc.CPUAccessFlags = 0;
 
-	if (FAILED(m_d3dDevice->CreateTexture2D(&uavTextureDesc, nullptr, &viewData.cameraFilter.Texture)))
+	if (FAILED(m_d3dDevice->CreateTexture2D(&uavTextureDesc, nullptr, &m_cameraFilter[viewIndex][frameIndex].Texture)))
 	{
 		ErrorLog("UAV CreateTexture2D error!\n");
 		return;
@@ -1044,7 +1047,7 @@ void PassthroughRendererDX11::SetupTemporalUAV(const uint32_t viewIndex, const u
 	uavDesc.Format = DXGI_FORMAT_R16G16B16A16_UNORM;
 	uavDesc.ViewDimension = D3D11_UAV_DIMENSION_TEXTURE2D;
 
-	if (FAILED(m_d3dDevice->CreateUnorderedAccessView(viewData.cameraFilter.Texture.Get(), &uavDesc, &viewData.cameraFilter.UAV)))
+	if (FAILED(m_d3dDevice->CreateUnorderedAccessView(m_cameraFilter[viewIndex][frameIndex].Texture.Get(), &uavDesc, &m_cameraFilter[viewIndex][frameIndex].UAV)))
 	{
 		ErrorLog("UAV CreateUnorderedAccessView error!\n");
 		return;
@@ -1056,7 +1059,7 @@ void PassthroughRendererDX11::SetupTemporalUAV(const uint32_t viewIndex, const u
 	filterSRVDesc.Texture2DArray.MipLevels = 1;
 	filterSRVDesc.Texture2DArray.ArraySize = 1;
 
-	if (FAILED(m_d3dDevice->CreateShaderResourceView(viewData.cameraFilter.Texture.Get(), &filterSRVDesc, &viewData.cameraFilter.SRV)))
+	if (FAILED(m_d3dDevice->CreateShaderResourceView(m_cameraFilter[viewIndex][frameIndex].Texture.Get(), &filterSRVDesc, &m_cameraFilter[viewIndex][frameIndex].SRV)))
 	{
 		ErrorLog("UAV CreateShaderResourceView error!\n");
 		return;
@@ -1249,6 +1252,8 @@ void PassthroughRendererDX11::RenderPassthroughFrame(const XrCompositionLayerPro
 	//Relying on the application not doing anything too weird with the swaphain indices
 	m_frameIndex = leftSwapchainIndex;
 
+	if (frame->bIsFirstRender) { m_currentCameraFilterIndex = m_currentCameraFilterIndex == 0 ? 1 : 0; }
+
 	DX11FrameData& frameData = m_frameData[m_frameIndex];
 	DX11FrameData& prevFrameData = m_frameData[m_prevFrameIndex];
 
@@ -1293,8 +1298,13 @@ void PassthroughRendererDX11::RenderPassthroughFrame(const XrCompositionLayerPro
 
 	if (mainConf.EnableTemporalFiltering)
 	{
-		if (viewDataLeft.cameraFilter.Texture == nullptr) { SetupTemporalUAV(0, leftSwapchainIndex); }
-		if (viewDataRight.cameraFilter.Texture == nullptr) { SetupTemporalUAV(1, rightSwapchainIndex); }
+		if (m_cameraFilter[0][0].Texture == nullptr) 
+		{ 
+			SetupTemporalUAV(0, 0);
+			SetupTemporalUAV(0, 1);
+			SetupTemporalUAV(1, 0);
+			SetupTemporalUAV(1, 1);
+		}
 	}
 
 	bool bUseDepthPass = mainConf.ProjectionMode == Projection_StereoReconstruction && stereoConf.StereoUseDeferredDepthPass;
@@ -1624,7 +1634,7 @@ void PassthroughRendererDX11::RenderPassthroughView(const ERenderEye eye, const 
 
 	if (!bUseDepthPass && bUseDisparityTemporalFiltering && mainConf.EnableTemporalFiltering)
 	{
-		ID3D11UnorderedAccessView* UAVs[2] = { viewData.cameraFilter.UAV.Get(), frameData.disparityFilter.UAV.Get() };
+		ID3D11UnorderedAccessView* UAVs[2] = { m_cameraFilter[viewIndex][m_currentCameraFilterIndex].UAV.Get(), frameData.disparityFilter.UAV.Get()};
 		m_renderContext->OMSetRenderTargetsAndUnorderedAccessViews(1, &rendertarget, depthStencil, 1, 2, UAVs, nullptr);
 	}
 	else if (!bUseDepthPass && bUseDisparityTemporalFiltering)
@@ -1634,7 +1644,7 @@ void PassthroughRendererDX11::RenderPassthroughView(const ERenderEye eye, const 
 	}
 	else if (mainConf.EnableTemporalFiltering)
 	{
-		ID3D11UnorderedAccessView* UAVs[1] = { viewData.cameraFilter.UAV.Get() };
+		ID3D11UnorderedAccessView* UAVs[1] = { m_cameraFilter[viewIndex][m_currentCameraFilterIndex].UAV.Get() };
 		m_renderContext->OMSetRenderTargetsAndUnorderedAccessViews(1, &rendertarget, depthStencil, 1, 1, UAVs, nullptr);
 	}
 	else
@@ -1796,7 +1806,7 @@ void PassthroughRendererDX11::RenderPassthroughView(const ERenderEye eye, const 
 		m_renderContext->PSGetShaderResources(0, 2, psSRVs);
 
 		int prevSwapchain = (eye == LEFT_EYE) ? m_prevSwapchainLeft : m_prevSwapchainRight;
-		psSRVs[2] = m_viewData[viewIndex][prevSwapchain].cameraFilter.SRV.Get();
+		psSRVs[2] = m_cameraFilter[viewIndex][m_currentCameraFilterIndex == 0 ? 1 : 0].SRV.Get();
 		m_renderContext->PSSetShaderResources(0, 3, psSRVs);
 	}
 

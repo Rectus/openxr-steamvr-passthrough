@@ -7,8 +7,8 @@ struct VS_OUTPUT
     float2 cameraBlendConfidence : TEXCOORD2;
     float4 cameraReprojectedPos : TEXCOORD3;
     float4 crossCameraReprojectedPos : TEXCOORD4;
-    float4 prevHMDFrameCameraReprojectedPos : TEXCOORD5;
-    float4 prevCameraFrameCameraReprojectedPos : TEXCOORD6;
+    float4 prevHMDFrameScreenPos : TEXCOORD5;
+    float4 prevCameraFrameScreenPos : TEXCOORD6;
     float3 prevCameraFrameVelocity : TEXCOORD7;
     float2 cameraDepth : TEXCOORD8;
 };

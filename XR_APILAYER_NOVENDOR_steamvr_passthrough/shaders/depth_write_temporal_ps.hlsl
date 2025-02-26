@@ -10,29 +10,32 @@ Texture2D<float4> g_prevCameraValidation : register(t1);
 
 float4 main(VS_OUTPUT input, out float outDepth : SV_Depth ) : SV_Target
 {
-	float outProjectionValidity = input.projectionConfidence.x;
+	float outProjectionConfidence = input.projectionConfidence.x;
 	float outBlendValidity = input.cameraBlendConfidence.x;
 	
 	outDepth = input.position.z;
 	
-	if(input.projectionConfidence.x < 0.5)
+	if(input.projectionConfidence.x < 0.5 || input.cameraBlendConfidence.x < 0.5)
     {
-		float2 prevScreenUvs = (input.prevHMDFrameCameraReprojectedPos.xy / input.prevHMDFrameCameraReprojectedPos.w) * float2(0.5, 0.5) + float2(0.5, 0.5);
+		float2 prevScreenUvs = (input.prevHMDFrameScreenPos.xy / input.prevHMDFrameScreenPos.w) * float2(0.5, 0.5) + float2(0.5, 0.5);
 		prevScreenUvs.y = 1 - prevScreenUvs.y;
+		
+		prevScreenUvs = clamp(prevScreenUvs, float2(0, 0), float2(1, 1));
 		
 		float prevDepth = g_prevDepthMap.SampleLevel(g_samplerState, prevScreenUvs, 0);
 		float4 prevValid4 = g_prevCameraValidation.SampleLevel(g_samplerState, prevScreenUvs, 0);
 		
-		float prevValidity = g_doCutout ? prevValid4.z : prevValid4.w;
+		float prevProjectionConfidence = g_doCutout ? prevValid4.y : prevValid4.x;
 		
-		if(prevValidity >= input.projectionConfidence.x && abs(prevDepth - input.position.z) < 0.5 && prevDepth > input.position.z)
+		if(prevProjectionConfidence >= input.projectionConfidence.x && abs(prevDepth - input.position.z) < 0.5 && prevDepth > input.position.z)
         {
 			outDepth = prevDepth;
-			outBlendValidity = g_doCutout ? prevValid4.x : prevValid4.y;
-			outProjectionValidity = prevValidity;
+			outProjectionConfidence = prevProjectionConfidence;
+			outBlendValidity = min(input.cameraBlendConfidence.x, g_doCutout ? prevValid4.w : prevValid4.z);
+			
         }
     }
 
 	// Written channels are selected with the pipeline.
-	return float4(outProjectionValidity, outProjectionValidity, outBlendValidity, outBlendValidity);
+	return float4(outProjectionConfidence, outProjectionConfidence, outBlendValidity, outBlendValidity);
 }

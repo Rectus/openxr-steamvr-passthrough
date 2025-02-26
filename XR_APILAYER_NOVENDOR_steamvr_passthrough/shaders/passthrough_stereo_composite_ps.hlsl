@@ -136,10 +136,10 @@ float4 main(VS_OUTPUT input) : SV_TARGET
     
     float depthFactor =  saturate(1 - (abs(input.cameraDepth.x - input.cameraDepth.y) * 1000));
     
-    float combineFactor = g_cutoutCombineFactor * depthFactor * input.projectionConfidence.x * input.projectionConfidence.x;
+    float combineFactor = g_cutoutCombineFactor * depthFactor * input.projectionConfidence.x * input.projectionConfidence.y;
     
-    float cameraBlend = saturate(0.5 - input.projectionConfidence.x * 0.5 + input.projectionConfidence.y * 0.5);
-    float cameraSelect = 1 - step(input.projectionConfidence.y, input.projectionConfidence.x);
+    float cameraBlend = saturate(0.5 - input.cameraBlendConfidence.x * 0.5 + input.cameraBlendConfidence.y * 0.5);
+    float cameraSelect = 1 - step(input.cameraBlendConfidence.y, input.cameraBlendConfidence.x);
     
     // Blend together both cameras based on which ones are valid and have the closest pixels.
     rgbColor = lerp(rgbColor, lerp(crossRGBColor, crossRGBColorClamped, combineFactor), lerp(cameraSelect, cameraBlend, combineFactor));
@@ -178,7 +178,7 @@ float4 main(VS_OUTPUT input) : SV_TARGET
         //{
         //    rgbColor.z += 0.25;
         //}
-        rgbColor = float3(0, lerp(cameraBlend, pixelDistanceBlend, combineFactor), 0);
+        rgbColor = float3(0, lerp(cameraSelect, cameraBlend, combineFactor), 0);
     }
     
     rgbColor = g_bPremultiplyAlpha ? rgbColor * g_opacity * alpha : rgbColor;

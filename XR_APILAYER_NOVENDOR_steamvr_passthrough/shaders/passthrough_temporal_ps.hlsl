@@ -210,7 +210,7 @@ float4 main(VS_OUTPUT input) : SV_TARGET
     maxColor = max(maxColor, sample);
       
     
-    float2 prevScreenUvs = (input.prevHMDFrameCameraReprojectedPos.xy / input.prevHMDFrameCameraReprojectedPos.w) * float2(0.5, 0.5) + float2(0.5, 0.5);
+    float2 prevScreenUvs = (input.prevCameraFrameScreenPos.xy / input.prevCameraFrameScreenPos.w) * float2(0.5, 0.5) + float2(0.5, 0.5);
     prevScreenUvs.y = 1 - prevScreenUvs.y;
     
     float2 newScreenUvs = (input.screenPos.xy / input.screenPos.w) * float2(0.5, 0.5) + float2(0.5, 0.5);
@@ -281,8 +281,10 @@ float4 main(VS_OUTPUT input) : SV_TARGET
     
     float clipHistory = filtered.a == 0 ? isClipped : lerp(isClipped, filtered.a, finalFactor);
     
-    g_cameraFilter[floor(newScreenUvs * outputFrameRes)] = float4(g_bIsFirstRenderOfCameraFrame ? rgbColor : filtered.xyz, input.projectionConfidence.x >= 0 ? clipHistory : 1);
-    
+    if(g_bIsFirstRenderOfCameraFrame)
+    {
+        g_cameraFilter[floor(newScreenUvs * outputFrameRes)] = float4(rgbColor, input.projectionConfidence.x >= 0 ? clipHistory : 1);
+    }
     
 	if (g_bDoColorAdjustment)
 	{

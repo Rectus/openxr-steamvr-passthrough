@@ -128,8 +128,8 @@ VS_OUTPUT main(float3 inPosition : POSITION, uint vertexID : SV_VertexID)
     
     output.cameraReprojectedPos = cameraClipSpacePos;
     output.crossCameraReprojectedPos = cameraCrossClipSpacePos;
-    output.prevHMDFrameCameraReprojectedPos = mul(g_prevHMDFrame_WorldToHMDProjection, worldProjectionPos);	
-    output.prevCameraFrameCameraReprojectedPos = mul(g_prevCameraFrame_WorldToHMDProjection, worldProjectionPos);	
+    output.prevHMDFrameScreenPos = mul(g_prevHMDFrame_WorldToHMDProjection, worldProjectionPos);	
+    output.prevCameraFrameScreenPos = mul(g_prevCameraFrame_WorldToHMDProjection, worldProjectionPos);	
      
     output.cameraDepth = float2(depth, crossDepth);
 	

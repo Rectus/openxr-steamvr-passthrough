@@ -135,7 +135,7 @@ float4 bicubic_b_spline_4tap(in Texture2D<half4> tex, in SamplerState linearSamp
 
 
 
-[earlydepthstencil]
+//[earlydepthstencil]
 float4 main(VS_OUTPUT input) : SV_TARGET
 {
     float alpha = 1.0;
@@ -270,7 +270,7 @@ float4 main(VS_OUTPUT input) : SV_TARGET
     float crossDistanceFactor = abs(crossCamTexCoords.x - crossCamPixel.x - 0.5) + abs(crossCamTexCoords.y - crossCamPixel.y - 0.5);
     
     float cameraBlend = saturate(0.5 - input.projectionConfidence.x * 0.5 + input.projectionConfidence.y * 0.5);
-    float cameraSelect = 1 - step(input.projectionConfidence.y, input.projectionConfidence.x);
+    float cameraSelect = 1 - step(input.cameraBlendConfidence.y, input.cameraBlendConfidence.x);
     
     float pixelDistanceBlend = distanceFactor + (1 - crossDistanceFactor);
     //float blendfactor = 1 - abs(input.cameraBlend * 2 - 1);
@@ -289,7 +289,7 @@ float4 main(VS_OUTPUT input) : SV_TARGET
     float3 outputTextureSize;
     g_prevCameraFilter.GetDimensions(0, outputTextureSize.x, outputTextureSize.y, outputTextureSize.z);
     
-    float2 prevScreenUvs = (input.prevHMDFrameCameraReprojectedPos.xy / input.prevHMDFrameCameraReprojectedPos.w) * float2(0.5, 0.5) + float2(0.5, 0.5);
+    float2 prevScreenUvs = (input.prevCameraFrameScreenPos.xy / input.prevCameraFrameScreenPos.w) * float2(0.5, 0.5) + float2(0.5, 0.5);
     prevScreenUvs.y = 1 - prevScreenUvs.y;
     
     float2 newScreenUvs = (input.screenPos.xy / input.screenPos.w) * float2(0.5, 0.5) + float2(0.5, 0.5);
@@ -345,8 +345,10 @@ float4 main(VS_OUTPUT input) : SV_TARGET
     
     float clipHistory = filtered.a == 0 ? isClipped : lerp(isClipped, filtered.a, finalFactor);
     
-    g_cameraFilter[floor(newScreenUvs * outputTextureSize.xy)] = float4(g_bIsFirstRenderOfCameraFrame ? rgbColor : filtered.xyz, input.projectionConfidence.x >= 0 ? clipHistory : 1);
-
+    if(g_bIsFirstRenderOfCameraFrame)
+    {
+        g_cameraFilter[floor(newScreenUvs * outputTextureSize.xy)] = float4(rgbColor, input.projectionConfidence.x >= 0 ? clipHistory : 1);
+    }
     
     
 	if (g_bDoColorAdjustment)
@@ -383,7 +385,7 @@ float4 main(VS_OUTPUT input) : SV_TARGET
         //{
         //    rgbColor.z += 0.25;
         //}
-        rgbColor = float3(0, lerp(cameraBlend, pixelDistanceBlend, combineFactor), 0);
+        rgbColor = float3(0, lerp(cameraSelect, pixelDistanceBlend, combineFactor), finalFactor);
     }
     
     rgbColor = g_bPremultiplyAlpha ? rgbColor * g_opacity * alpha : rgbColor;

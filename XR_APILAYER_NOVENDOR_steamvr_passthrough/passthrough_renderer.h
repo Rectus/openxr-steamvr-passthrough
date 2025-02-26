@@ -234,7 +234,6 @@ struct DX11ViewData
 	DX11RenderTexture renderTarget;
 	DX11TemporaryRenderTarget temporaryRenderTarget;
 
-	DX11UAVSRVTexture cameraFilter;
 	DX11DepthStencilTexture passthroughDepthStencil[2];
 	DX11RenderTexture passthroughCameraValidity;
 };
@@ -339,7 +338,10 @@ protected:
 	std::vector<DX11ViewData> m_viewData[2];
 	std::vector<DX11ViewDepthData> m_viewDepthData[2];
 	std::vector<DX11FrameData> m_frameData;
-	
+
+	DX11UAVSRVTexture m_cameraFilter[2][2];
+	int m_currentCameraFilterIndex = 0;
+
 	ComPtr<ID3D11DepthStencilState> m_depthStencilStateDisabled;
 	ComPtr<ID3D11DepthStencilState> m_depthStencilStateLess;
 	ComPtr<ID3D11DepthStencilState> m_depthStencilStateLessWrite;

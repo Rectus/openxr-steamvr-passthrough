@@ -53,14 +53,14 @@ VS_OUTPUT main(float3 inPosition : POSITION, uint vertexID : SV_VertexID)
     float disparity = clamp(dispConf.x, minDisparity, g_maxDisparity);
     float confidence = dispConf.y;
     
-    output.projectionConfidence.x = confidence;
+    output.projectionConfidence = confidence;
     output.cameraBlendConfidence = confidence;
     
     if (dispConf.x > g_maxDisparity || dispConf.x < g_minDisparity)
     {
         disparity = defaultDisparity;
-        output.projectionConfidence = -10000;
-        output.cameraBlendConfidence = -10000;
+        output.projectionConfidence.x = -10000;
+        output.cameraBlendConfidence.x = -10000;
     }
     // Prevent filtering if it would sample across the image edge
     else if (uvPos.x < maxFilterWidth || uvPos.x >= g_disparityTextureSize.x - maxFilterWidth || 
@@ -151,8 +151,8 @@ VS_OUTPUT main(float3 inPosition : POSITION, uint vertexID : SV_VertexID)
     
     float4 prevOutCoords = mul((g_cameraViewIndex == 0) ? g_worldToPrevCameraFrameProjectionLeft : g_worldToPrevCameraFrameProjectionRight, worldSpacePoint);
     
-    output.prevCameraFrameCameraReprojectedPos = mul(g_prevCameraFrame_WorldToHMDProjection, worldSpacePoint);
-    output.prevHMDFrameCameraReprojectedPos = mul(g_prevHMDFrame_WorldToHMDProjection, worldSpacePoint);
+    output.prevCameraFrameScreenPos = mul(g_prevCameraFrame_WorldToHMDProjection, worldSpacePoint);
+    output.prevHMDFrameScreenPos = mul(g_prevHMDFrame_WorldToHMDProjection, worldSpacePoint);
     
     output.prevCameraFrameVelocity = outCoords.xyz / outCoords.w - prevOutCoords.xyz / prevOutCoords.w;
 #endif

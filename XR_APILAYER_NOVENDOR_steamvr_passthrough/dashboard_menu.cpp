@@ -791,6 +791,7 @@ if (bIsActiveTab) { ImGui::PopStyleColor(1); bIsActiveTab = false; }
 			ImGui::SetNextItemOpen(true, ImGuiCond_Once);
 			if (ImGui::TreeNode("Temporal Filtering"))
 			{
+				// ToDO split out
 				ImGui::Checkbox("Use Disparity Temporal Filtering", &stereoCustomConfig.StereoUseDisparityTemporalFiltering);
 				TextDescription("Possibly smoothes out and improves quality of the projection depth.");
 
