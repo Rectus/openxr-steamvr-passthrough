@@ -1,16 +1,7 @@
 
 #include "common_ps.hlsl"
+#include "vs_outputs.hlsl"
 #include "util.hlsl"
-
-struct VS_OUTPUT
-{
-	float4 position : SV_POSITION;
-	float4 clipSpaceCoords : TEXCOORD0;
-	float4 screenCoords : TEXCOORD1;
-	float projectionValidity : TEXCOORD2;
-    float4 prevClipSpaceCoords : TEXCOORD3;
-    float3 velocity : TEXCOORD4;
-};
 
 
 SamplerState g_samplerState : register(s0);
@@ -140,22 +131,22 @@ float4 main(VS_OUTPUT input) : SV_TARGET
 	
     if (g_doCutout)
     {
-        alpha = saturate(input.projectionValidity);
-        clip(input.projectionValidity);
+        alpha = saturate(input.projectionConfidence.x);
+        clip(input.projectionConfidence.x);
     }
     
     if (g_bUseDepthCutoffRange)
     {
-        clip(input.screenCoords.w - g_depthCutoffRange.x);
-        clip(g_depthCutoffRange.y - input.screenCoords.w);
+        clip(input.screenPos.w - g_depthCutoffRange.x);
+        clip(g_depthCutoffRange.y - input.screenPos.w);
     }
 
 	// Convert from homogenous clip space coordinates to 0-1.
-	float2 outUvs = (input.clipSpaceCoords.xy / input.clipSpaceCoords.w) * float2(0.5, 0.5) + float2(0.5, 0.5);
+	float2 outUvs = (input.cameraReprojectedPos.xy / input.cameraReprojectedPos.w) * float2(0.5, 0.5) + float2(0.5, 0.5);
 	
     if (g_bClampCameraFrame)
     {
-        clip(input.clipSpaceCoords.z);
+        clip(input.cameraReprojectedPos.z);
         clip(outUvs);
         clip(1 - outUvs);
     }
@@ -219,10 +210,10 @@ float4 main(VS_OUTPUT input) : SV_TARGET
     maxColor = max(maxColor, sample);
       
     
-    float2 prevScreenUvs = (input.prevClipSpaceCoords.xy / input.prevClipSpaceCoords.w) * float2(0.5, 0.5) + float2(0.5, 0.5);
+    float2 prevScreenUvs = (input.prevHMDFrameCameraReprojectedPos.xy / input.prevHMDFrameCameraReprojectedPos.w) * float2(0.5, 0.5) + float2(0.5, 0.5);
     prevScreenUvs.y = 1 - prevScreenUvs.y;
     
-    float2 newScreenUvs = (input.screenCoords.xy / input.screenCoords.w) * float2(0.5, 0.5) + float2(0.5, 0.5);
+    float2 newScreenUvs = (input.screenPos.xy / input.screenPos.w) * float2(0.5, 0.5) + float2(0.5, 0.5);
     newScreenUvs.y = 1 - newScreenUvs.y;
      
     float2 prevTexCoords = prevScreenUvs * outputFrameRes;
@@ -281,7 +272,7 @@ float4 main(VS_OUTPUT input) : SV_TARGET
     //float depth = saturate((input.screenCoords.z / input.screenCoords.w) / (g_depthRange.y - g_depthRange.x) - g_depthRange.x);
     float depthDiff = 0;// abs(depth - filtered.w);  
     
-    float vLenSq = dot(input.velocity, input.velocity);
+    float vLenSq = dot(input.prevCameraFrameVelocity, input.prevCameraFrameVelocity);
     float factor = saturate(min(invAlphaFactor, 1 - max(vLenSq * 500, depthDiff * 200)));
     float confidence = confidenceInv + (1 - prevConfidenceInv);
 
@@ -290,7 +281,7 @@ float4 main(VS_OUTPUT input) : SV_TARGET
     
     float clipHistory = filtered.a == 0 ? isClipped : lerp(isClipped, filtered.a, finalFactor);
     
-    g_cameraFilter[floor(newScreenUvs * outputFrameRes)] = float4(g_bIsFirstRenderOfCameraFrame ? rgbColor : filtered.xyz, input.projectionValidity >= 0 ? clipHistory : 1);
+    g_cameraFilter[floor(newScreenUvs * outputFrameRes)] = float4(g_bIsFirstRenderOfCameraFrame ? rgbColor : filtered.xyz, input.projectionConfidence.x >= 0 ? clipHistory : 1);
     
     
 	if (g_bDoColorAdjustment)
@@ -306,22 +297,22 @@ float4 main(VS_OUTPUT input) : SV_TARGET
 
     if (g_bDebugDepth)
     {
-        float depth = saturate(input.screenCoords.z / input.screenCoords.w);
+        float depth = saturate(input.screenPos.z / input.screenPos.w);
         rgbColor = float3(depth, depth, depth);
-        if (g_bDebugValidStereo && input.projectionValidity < 0.0)
+        if (g_bDebugValidStereo && input.projectionConfidence.x < 0.0)
         {
             rgbColor = float3(0.5, 0, 0);
         }
     }
     else if (g_bDebugValidStereo)
     {
-        if (input.projectionValidity < 0.0)
+        if (input.projectionConfidence.x < 0.0)
         {
             rgbColor.x += 0.5;
         }
 		else
         {
-            rgbColor.y += input.projectionValidity * 0.25;
+            rgbColor.y += input.projectionConfidence.x * 0.25;
 			
 
             rgbColor.z += isClipped;

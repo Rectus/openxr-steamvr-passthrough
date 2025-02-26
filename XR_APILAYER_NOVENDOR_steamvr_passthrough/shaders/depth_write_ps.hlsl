@@ -1,18 +1,15 @@
 
 
 #include "common_ps.hlsl"
+#include "vs_outputs.hlsl"
 
-struct VS_OUTPUT
+
+
+float4 main(VS_OUTPUT input) : SV_Target
 {
-	float4 position : SV_POSITION;
-	float4 clipSpaceCoords : TEXCOORD0;
-	float4 screenCoords : TEXCOORD1;
-	float projectionValidity : TEXCOORD2;
-};
-
-
-float4 main(VS_OUTPUT input) : SV_TARGET
-{
+	float outBlendValidity = input.projectionConfidence;
+	float outTempValidity = input.projectionConfidence;
+	
 	// Written channels are selected with the pipeline.
-	return float4(input.projectionValidity, input.projectionValidity, 0, 0);
+	return float4(outTempValidity, outTempValidity, outBlendValidity, outBlendValidity);
 }

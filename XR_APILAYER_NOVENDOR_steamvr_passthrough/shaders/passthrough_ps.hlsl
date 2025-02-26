@@ -1,16 +1,7 @@
 
 #include "common_ps.hlsl"
+#include "vs_outputs.hlsl"
 #include "util.hlsl"
-
-struct VS_OUTPUT
-{
-	float4 position : SV_POSITION;
-	float4 clipSpaceCoords : TEXCOORD0;
-	float4 screenCoords : TEXCOORD1;
-	float projectionValidity : TEXCOORD2;
-    float4 prevClipSpaceCoords : TEXCOORD3;
-    float3 velocity : TEXCOORD4;
-};
 
 
 #ifdef VULKAN
@@ -35,23 +26,23 @@ float4 main(VS_OUTPUT input) : SV_TARGET
 	
     if (g_doCutout)
     {
-        clip(input.projectionValidity);
-        alpha = saturate(input.projectionValidity);
+        clip(input.projectionConfidence.x);
+        alpha = saturate(input.projectionConfidence.x);
     }
     
     if (g_bUseDepthCutoffRange)
     {
-        float depth = (input.screenCoords.z / input.screenCoords.w);// * (g_depthRange.y - g_depthRange.x) + g_depthRange.x;
+        float depth = (input.screenPos.z / input.screenPos.w);// * (g_depthRange.y - g_depthRange.x) + g_depthRange.x;
         clip(depth - g_depthCutoffRange.x);
         clip(g_depthCutoffRange.y - depth);
     }
 
 	// Convert from homogenous clip space coordinates to 0-1.
-	float2 outUvs = (input.clipSpaceCoords.xy / input.clipSpaceCoords.w) * float2(0.5, 0.5) + float2(0.5, 0.5);
+	float2 outUvs = (input.cameraReprojectedPos.xy / input.cameraReprojectedPos.w) * float2(0.5, 0.5) + float2(0.5, 0.5);
 
     if (g_bClampCameraFrame)
     {
-        clip(input.clipSpaceCoords.z);
+        clip(input.cameraReprojectedPos.z);
         clip(outUvs);
         clip(1 - outUvs);
     }
@@ -102,22 +93,22 @@ float4 main(VS_OUTPUT input) : SV_TARGET
 
     if (g_bDebugDepth)
     {
-        float depth = saturate((input.screenCoords.z / input.screenCoords.w) / (g_depthRange.y - g_depthRange.x) - g_depthRange.x);
+        float depth = saturate((input.screenPos.z / input.screenPos.w) / (g_depthRange.y - g_depthRange.x) - g_depthRange.x);
         rgbColor = float3(depth, depth, depth);
-        if (g_bDebugValidStereo && input.projectionValidity < 0.0)
+        if (g_bDebugValidStereo && input.projectionConfidence.x < 0.0)
         {
             rgbColor = float3(0.5, 0, 0);
         }
     }
     else if (g_bDebugValidStereo)
     {
-        if (input.projectionValidity < 0.0)
+        if (input.projectionConfidence.x < 0.0)
         {
             rgbColor.x += 0.5;
         }
-        else if (input.projectionValidity > 0.0)
+        else if (input.projectionConfidence.x > 0.0)
         {
-            rgbColor.y += input.projectionValidity * 0.25;
+            rgbColor.y += input.projectionConfidence.x * 0.25;
         }
         else
         {

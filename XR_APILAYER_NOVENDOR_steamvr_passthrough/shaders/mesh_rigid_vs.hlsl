@@ -1,15 +1,6 @@
 
 #include "common_vs.hlsl"
-
-struct VS_OUTPUT
-{
-    float4 position : SV_POSITION;
-    float4 clipSpaceCoords : TEXCOORD0;
-    float4 screenCoords : TEXCOORD1;
-    float projectionValidity : TEXCOORD2;
-    float4 prevClipSpaceCoords : TEXCOORD3;
-    float3 velocity : TEXCOORD4;
-};
+#include "vs_outputs.hlsl"
 
 
 cbuffer vsMeshConstantBuffer : register(b2)
@@ -25,19 +16,17 @@ VS_OUTPUT main(float3 inPosition : POSITION, uint vertexID : SV_VertexID)
     float4 worldPos = mul(g_meshToWorldTransform, float4(inPosition, 1.0));
        
     float4 clipSpacePos = mul((g_disparityUVBounds.x < 0.5) ? g_worldToCameraFrameProjectionLeft : g_worldToCameraFrameProjectionRight, worldPos);
-    output.clipSpaceCoords = clipSpacePos;   
+    output.cameraReprojectedPos = clipSpacePos;   
     
     output.position = mul(g_worldToHMDProjection, worldPos);
-    output.screenCoords = output.position;
-    output.prevClipSpaceCoords = mul(g_prevWorldToHMDProjection, worldPos);
-    output.projectionValidity = 1.0;
+    output.screenPos = output.position;
+    output.prevCameraFrameCameraReprojectedPos = mul(g_prevCameraFrame_WorldToHMDProjection, worldPos);
+    output.prevHMDFrameCameraReprojectedPos = mul(g_prevHMDFrame_WorldToHMDProjection, worldPos);
+    output.projectionConfidence = 1.0;
 	
-    
     float4 prevOutCoords = mul((g_disparityUVBounds.x < 0.5) ? g_worldToPrevCameraFrameProjectionLeft : g_worldToPrevCameraFrameProjectionRight, worldPos);  
-    float4 prevClipCoords = mul(g_prevWorldToHMDProjection, worldPos);
-    
-    output.prevClipSpaceCoords = prevClipCoords;  
-    output.velocity = clipSpacePos.xyz / clipSpacePos.w - prevOutCoords.xyz / prevOutCoords.w;
+
+    output.prevCameraFrameVelocity = clipSpacePos.xyz / clipSpacePos.w - prevOutCoords.xyz / prevOutCoords.w;
 
     return output;
 }

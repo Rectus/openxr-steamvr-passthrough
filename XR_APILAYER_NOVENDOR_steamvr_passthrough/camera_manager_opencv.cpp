@@ -729,7 +729,11 @@ void CameraManagerOpenCV::CalculateFrameProjection(std::shared_ptr<CameraFrame>&
         frame->prevWorldToCameraProjectionLeft = m_lastWorldToCameraProjectionLeft;
         frame->prevCameraProjectionToWorldRight = m_lastCameraProjectionToWorldRight;
         frame->prevWorldToCameraProjectionRight = m_lastWorldToCameraProjectionRight;
+        frame->prevCameraFrame_WorldToHMDProjectionLeft = m_lastCameraFrame_WorldToHMDProjectionLeft;
+        frame->prevCameraFrame_WorldToHMDProjectionRight = m_lastCameraFrame_WorldToHMDProjectionRight;
 
+        m_lastCameraFrame_WorldToHMDProjectionLeft = frame->worldToHMDProjectionLeft;
+        m_lastCameraFrame_WorldToHMDProjectionRight = frame->worldToHMDProjectionRight;
         m_lastCameraProjectionToWorldLeft = frame->cameraProjectionToWorldLeft;
         m_lastWorldToCameraProjectionLeft = frame->worldToCameraProjectionLeft;
         m_lastCameraProjectionToWorldRight = frame->cameraProjectionToWorldRight;
@@ -750,11 +754,11 @@ void CameraManagerOpenCV::CalculateFrameProjection(std::shared_ptr<CameraFrame>&
         frame->bIsFirstRender = false;
     }
 
-    frame->prevWorldToHMDProjectionLeft = m_lastWorldToHMDProjectionLeft;
-    frame->prevWorldToHMDProjectionRight = m_lastWorldToHMDProjectionRight;
+    frame->prevHMDFrame_WorldToHMDProjectionLeft = m_lastHMDFrame_WorldToHMDProjectionLeft;
+    frame->prevHMDFrame_WorldToHMDProjectionRight = m_lastHMDFrame_WorldToHMDProjectionRight;
 
-    m_lastWorldToHMDProjectionLeft = frame->worldToHMDProjectionLeft;
-    m_lastWorldToHMDProjectionRight = frame->worldToHMDProjectionRight;
+    m_lastHMDFrame_WorldToHMDProjectionLeft = frame->worldToHMDProjectionLeft;
+    m_lastHMDFrame_WorldToHMDProjectionRight = frame->worldToHMDProjectionRight;
 
 
     if (m_configManager->GetConfig_Main().ProjectToRenderModels)

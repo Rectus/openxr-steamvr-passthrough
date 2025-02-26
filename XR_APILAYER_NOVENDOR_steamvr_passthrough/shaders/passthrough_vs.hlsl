@@ -1,16 +1,6 @@
 
 #include "common_vs.hlsl"
-
-struct VS_OUTPUT
-{
-	float4 position : SV_POSITION;
-	float4 clipSpaceCoords : TEXCOORD0;
-	float4 screenCoords : TEXCOORD1;
-	float projectionValidity : TEXCOORD2;
-    float4 prevClipSpaceCoords : TEXCOORD3;
-    float3 velocity : TEXCOORD4;
-};
-
+#include "vs_outputs.hlsl"
 
 
 VS_OUTPUT main(float3 inPosition : POSITION, uint vertexID : SV_VertexID)
@@ -26,16 +16,17 @@ VS_OUTPUT main(float3 inPosition : POSITION, uint vertexID : SV_VertexID)
     
     float4 cameraClipSpacePos = mul((g_disparityUVBounds.x < 0.5) ? g_worldToCameraFrameProjectionLeft : g_worldToCameraFrameProjectionRight, worldProjectionPos);
 
-    output.clipSpaceCoords = cameraClipSpacePos;
-    output.prevClipSpaceCoords = mul(g_prevWorldToHMDProjection, worldProjectionPos);	
+    output.cameraReprojectedPos = cameraClipSpacePos;
+    output.prevCameraFrameCameraReprojectedPos = mul(g_prevCameraFrame_WorldToHMDProjection, worldProjectionPos);
+    output.prevHMDFrameCameraReprojectedPos = mul(g_prevHMDFrame_WorldToHMDProjection, worldProjectionPos);	
     output.position = mul(g_worldToHMDProjection, worldProjectionPos);   
-    output.screenCoords = output.position; 
-	output.projectionValidity = 1.0;
+    output.screenPos = output.position; 
+	output.projectionConfidence = 1.0;
 	
 #ifndef VULKAN  
     float4 prevOutCoords = mul((g_cameraViewIndex == 0) ? g_worldToPrevCameraFrameProjectionLeft : g_worldToPrevCameraFrameProjectionRight, worldProjectionPos);
     
-    output.velocity = cameraClipSpacePos.xyz / cameraClipSpacePos.w - prevOutCoords.xyz / prevOutCoords.w;
+    output.prevCameraFrameVelocity = cameraClipSpacePos.xyz / cameraClipSpacePos.w - prevOutCoords.xyz / prevOutCoords.w;
 #endif
 
 #ifdef VULKAN

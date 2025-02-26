@@ -1,24 +1,17 @@
 
 #include "common_ps.hlsl"
-
-struct VS_OUTPUT
-{
-	float4 position : SV_POSITION;
-	float4 clipSpaceCoords : TEXCOORD0;
-	float4 screenCoords : TEXCOORD1;
-	float projectionValidity : TEXCOORD2;
-};
+#include "vs_outputs.hlsl"
 
 
 //[earlydepthstencil]
 float4 main(VS_OUTPUT input) : SV_TARGET
 {
-    clip(input.projectionValidity);
+    clip(input.projectionConfidence.x);
 	
     if (g_bUseDepthCutoffRange)
     {
-        clip(input.screenCoords.w - g_depthCutoffRange.x);
-        clip(g_depthCutoffRange.y - input.screenCoords.w);
+        clip(input.screenPos.w - g_depthCutoffRange.x);
+        clip(g_depthCutoffRange.y - input.screenPos.w);
     }
 	
     return float4(0, 0, 0, 1.0 - g_opacity);

@@ -1,23 +1,12 @@
 
 #include "common_vs.hlsl"
-
-struct VS_OUTPUT
-{
-	float4 position : SV_POSITION;
-	float4 clipSpaceCoords : TEXCOORD0;
-	float4 screenCoords : TEXCOORD1;
-	float projectionValidity : TEXCOORD2;
-    float4 prevClipSpaceCoords : TEXCOORD3;
-    float3 velocity : TEXCOORD4;
-    float4 crossClipSpaceCoords : TEXCOORD5;
-    float projectionValidity2 : TEXCOORD6;
-    float2 cameraDepth : TEXCOORD7;
-};
+#include "vs_outputs.hlsl"
 
 SamplerState g_samplerState : register(s0);
 Texture2D<float> g_depthMap : register(t0);
 Texture2D<float> g_crossDepthMap : register(t1);
-Texture2D<float2> g_cameraValidation : register(t2);
+Texture2D<float4> g_cameraValidation : register(t2);
+
 
 // B-spline as in http://vec3.ca/bicubic-filtering-in-fewer-taps/
 float bicubic_b_spline_4tap(in Texture2D<float> tex, in SamplerState linearSampler, in float2 uv)
@@ -99,51 +88,27 @@ VS_OUTPUT main(float3 inPosition : POSITION, uint vertexID : SV_VertexID)
     
     //g_cameraInvalidation.GetDimensions(texW, texH);
     //cameraBlend = g_cameraInvalidation.Load(int3(inPosition.xy * float2(texW, texH), 0));
-    float2 cameraValidation = g_cameraValidation.SampleLevel(g_samplerState, inPosition.xy, 0);
+    float4 cameraValidation = g_cameraValidation.SampleLevel(g_samplerState, inPosition.xy, 0);
     //cameraValidation = bicubic_b_spline_4tap(g_cameraInvalidation, g_samplerState, inPosition.xy);
     
+    float2 projectionConfidence = cameraValidation.xy;
+    float2 cameraBlendValidity = cameraValidation.zw;
+    
     float crossDepth = depth;
-    //float cameraBlend = 0;
     float activeDepth = depth;
     
     if(g_bBlendDepthMaps)
     {
         crossDepth = g_crossDepthMap.SampleLevel(g_samplerState, inPosition.xy, 0);
-    
-        
-    
-    
-        // Hand removal test
-        //float4 clipSpacePos1 = float4((inPosition.xy * float2(2.0, -2.0) + float2(-1, 1)), depth, 1.0);   
-        //float4 worldProjectionPos1 = mul(g_HMDProjectionToWorld, clipSpacePos1);
-        //clipSpacePos1 = mul(g_worldToHMDProjection, worldProjectionPos1 / worldProjectionPos1.w);
-    
-        //if(clipSpacePos1.z * clipSpacePos1.w < 1.0)
-        //{
-        //    cameraValidation.x = 0.0;
-        //}
-    
-        //float4 clipSpacePos2 = float4((inPosition.xy * float2(2.0, -2.0) + float2(-1, 1)), crossDepth, 1.0);   
-        //float4 worldProjectionPos2 = mul(g_HMDProjectionToWorld, clipSpacePos2);
-        //clipSpacePos2 = mul(g_worldToHMDProjection, worldProjectionPos2 / worldProjectionPos2.w);
-    
-        //if(clipSpacePos2.z * clipSpacePos2.w < 1.0)
-        //{
-        //    cameraValidation.y = 0.0;
-        //}
-    
-    
-        bool selectMainCamera = cameraValidation.x > 0 || cameraValidation.y <= 0;   
-        //cameraBlend = selectMainCamera ? 0.5 - cameraValidation.x * 0.5 : 0.5 + cameraValidation.y * 0.5;
-    
-        //float activeDepth = cameraValidation.x > 0 ? depth : lerp(depth, crossDepth, cameraBlend);
+  
+        bool selectMainCamera = cameraBlendValidity.x > 0 || cameraBlendValidity.y <= 0;   
         activeDepth = selectMainCamera ? depth : crossDepth;
     }
     
     float4 clipSpacePos = float4((inPosition.xy * float2(2.0, -2.0) + float2(-1, 1)), activeDepth, 1.0);   
     
     // Move background vertices underneath foreground vertices to prevent interpolation at discontinuities.
-    clipSpacePos.xy += max(sobel_discontinuity_direction(g_depthMap, depth, inPosition.xy) * cameraValidation.x, sobel_discontinuity_direction(g_crossDepthMap, crossDepth, inPosition.xy) * cameraValidation.y);
+    clipSpacePos.xy += max(sobel_discontinuity_direction(g_depthMap, depth, inPosition.xy) * projectionConfidence.x, sobel_discontinuity_direction(g_crossDepthMap, crossDepth, inPosition.xy) * projectionConfidence.y);
     
     float4 worldProjectionPos = mul(g_HMDProjectionToWorld, clipSpacePos);
     
@@ -154,20 +119,24 @@ VS_OUTPUT main(float3 inPosition : POSITION, uint vertexID : SV_VertexID)
     float4 cameraClipSpacePos = mul((g_cameraViewIndex == 0) ? g_worldToCameraFrameProjectionLeft : g_worldToCameraFrameProjectionRight, worldProjectionPos);
     float4 cameraCrossClipSpacePos = mul((g_cameraViewIndex == 0) ? g_worldToCameraFrameProjectionRight : g_worldToCameraFrameProjectionLeft, worldProjectionPos);
     
-    output.clipSpaceCoords = cameraClipSpacePos;
-    output.crossClipSpaceCoords = cameraCrossClipSpacePos;
-    output.prevClipSpaceCoords = mul(g_prevWorldToHMDProjection, worldProjectionPos);	
-    output.position = clipSpacePos;   
-    output.screenCoords = clipSpacePos; 
-    output.screenCoords.z *= output.screenCoords.w; //Linearize depth
-	output.projectionValidity = cameraValidation.x;
-    output.projectionValidity2 = cameraValidation.y;
+    output.position = clipSpacePos;
+    output.screenPos = clipSpacePos;
+    output.screenPos.z *= output.screenPos.w; //Linearize depth
+    
+    output.projectionConfidence = projectionConfidence;
+    output.cameraBlendConfidence = cameraBlendValidity;
+    
+    output.cameraReprojectedPos = cameraClipSpacePos;
+    output.crossCameraReprojectedPos = cameraCrossClipSpacePos;
+    output.prevHMDFrameCameraReprojectedPos = mul(g_prevHMDFrame_WorldToHMDProjection, worldProjectionPos);	
+    output.prevCameraFrameCameraReprojectedPos = mul(g_prevCameraFrame_WorldToHMDProjection, worldProjectionPos);	
+     
     output.cameraDepth = float2(depth, crossDepth);
 	
 #ifndef VULKAN  
     float4 prevOutCoords = mul((g_cameraViewIndex == 0) ? g_worldToPrevCameraFrameProjectionLeft : g_worldToPrevCameraFrameProjectionRight, worldProjectionPos);
     
-    output.velocity = cameraClipSpacePos.xyz / cameraClipSpacePos.w - prevOutCoords.xyz / prevOutCoords.w;
+    output.prevCameraFrameVelocity = cameraClipSpacePos.xyz / cameraClipSpacePos.w - prevOutCoords.xyz / prevOutCoords.w;
 #endif
 
 #ifdef VULKAN

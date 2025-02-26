@@ -1,14 +1,8 @@
 
 #include "common_ps.hlsl"
+#include "vs_outputs.hlsl"
 #include "util.hlsl"
 
-struct VS_OUTPUT
-{
-	float4 position : SV_POSITION;
-	float4 clipSpaceCoords : TEXCOORD0;
-	float4 screenCoords : TEXCOORD1;
-	float projectionValidity : TEXCOORD2;
-};
 
 #ifdef VULKAN
 
@@ -34,7 +28,7 @@ float main(VS_OUTPUT input) : SV_TARGET
 
 	if (g_bMaskedUseCamera)
 	{
-		float2 outUvs = input.clipSpaceCoords.xy / input.clipSpaceCoords.w;
+		float2 outUvs = input.cameraReprojectedPos.xy / input.cameraReprojectedPos.w;
 		outUvs = outUvs * float2(0.5, 0.5) + float2(0.5, 0.5);
 		outUvs = outUvs * (g_uvBounds.zw - g_uvBounds.xy) + g_uvBounds.xy;
 		outUvs = clamp(outUvs, g_uvBounds.xy, g_uvBounds.zw);
@@ -54,7 +48,7 @@ float main(VS_OUTPUT input) : SV_TARGET
     }
 	else
 	{
-		float2 outUvs = input.screenCoords.xy / input.screenCoords.w;
+		float2 outUvs = input.screenPos.xy / input.screenPos.w;
 		outUvs = outUvs * float2(0.5, -0.5) + float2(0.5, 0.5);
 
         color = g_texture.Sample(g_samplerState, 

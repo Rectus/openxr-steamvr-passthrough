@@ -106,7 +106,8 @@ struct alignas(16) VSViewConstantBuffer
 {
 	XrMatrix4x4f worldToHMDProjection;
 	XrMatrix4x4f HMDProjectionToWorld;
-	XrMatrix4x4f prevWorldToHMDProjection;
+	XrMatrix4x4f prevHMDFrame_WorldToHMDProjection;
+	XrMatrix4x4f prevCameraFrame_WorldToHMDProjection;
 	XrVector4f disparityUVBounds;
 	XrVector3f projectionOriginWorld;
 	float projectionDistance;
@@ -358,7 +359,8 @@ protected:
 	ComPtr<ID3D11PixelShader> m_prepassShader;
 	ComPtr<ID3D11PixelShader> m_maskedPrepassShader;
 	ComPtr<ID3D11PixelShader> m_maskedAlphaCopyShader;
-	ComPtr<ID3D11PixelShader> m_depthWriteShaderPS;
+	ComPtr<ID3D11PixelShader> m_depthWritePS;
+	ComPtr<ID3D11PixelShader> m_depthWriteTemporalPS;
 	ComPtr<ID3D11PixelShader> m_stereoCompositePS;
 	ComPtr<ID3D11PixelShader> m_stereoCompositeTemporalPS;
 

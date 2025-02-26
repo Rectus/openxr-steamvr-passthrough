@@ -147,8 +147,10 @@ private:
 	XrMatrix4x4f m_lastCameraProjectionToWorldRight;
 	XrMatrix4x4f m_lastWorldToCameraProjectionLeft;
 	XrMatrix4x4f m_lastWorldToCameraProjectionRight;
-	XrMatrix4x4f m_lastWorldToHMDProjectionLeft;
-	XrMatrix4x4f m_lastWorldToHMDProjectionRight;
+	XrMatrix4x4f m_lastCameraFrame_WorldToHMDProjectionLeft;
+	XrMatrix4x4f m_lastCameraFrame_WorldToHMDProjectionRight;
+	XrMatrix4x4f m_lastHMDFrame_WorldToHMDProjectionLeft;
+	XrMatrix4x4f m_lastHMDFrame_WorldToHMDProjectionRight;
 	uint32_t m_lastFrameSequence;
 
 	XrMatrix4x4f m_lastDispWorldToCameraProjectionLeft;
@@ -253,8 +255,10 @@ private:
 	XrMatrix4x4f m_lastCameraProjectionToWorldRight;
 	XrMatrix4x4f m_lastWorldToCameraProjectionLeft;
 	XrMatrix4x4f m_lastWorldToCameraProjectionRight;
-	XrMatrix4x4f m_lastWorldToHMDProjectionLeft;
-	XrMatrix4x4f m_lastWorldToHMDProjectionRight;
+	XrMatrix4x4f m_lastCameraFrame_WorldToHMDProjectionLeft;
+	XrMatrix4x4f m_lastCameraFrame_WorldToHMDProjectionRight;
+	XrMatrix4x4f m_lastHMDFrame_WorldToHMDProjectionLeft;
+	XrMatrix4x4f m_lastHMDFrame_WorldToHMDProjectionRight;
 	uint32_t m_lastFrameSequence;
 
 	XrMatrix4x4f m_lastDispWorldToCameraProjectionLeft;

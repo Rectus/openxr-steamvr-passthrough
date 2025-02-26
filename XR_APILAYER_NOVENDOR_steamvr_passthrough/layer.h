@@ -110,8 +110,10 @@ struct CameraFrame
 		, prevCameraProjectionToWorldRight()
 		, prevWorldToCameraProjectionLeft()
 		, prevWorldToCameraProjectionRight()
-		, prevWorldToHMDProjectionLeft()
-		, prevWorldToHMDProjectionRight()
+		, prevCameraFrame_WorldToHMDProjectionLeft()
+		, prevCameraFrame_WorldToHMDProjectionRight()
+		, prevHMDFrame_WorldToHMDProjectionLeft()
+		, prevHMDFrame_WorldToHMDProjectionRight()
 		, projectionOriginWorldLeft()
 		, projectionOriginWorldRight()
 		, frameLayout(Mono)
@@ -137,12 +139,17 @@ struct CameraFrame
 	XrMatrix4x4f worldToHMDProjectionLeft;
 	XrMatrix4x4f worldToHMDProjectionRight;
 
+	// relative to the previous camera frame
 	XrMatrix4x4f prevCameraProjectionToWorldLeft;
 	XrMatrix4x4f prevCameraProjectionToWorldRight;
 	XrMatrix4x4f prevWorldToCameraProjectionLeft;
 	XrMatrix4x4f prevWorldToCameraProjectionRight;
-	XrMatrix4x4f prevWorldToHMDProjectionLeft;
-	XrMatrix4x4f prevWorldToHMDProjectionRight;
+	XrMatrix4x4f prevCameraFrame_WorldToHMDProjectionLeft;
+	XrMatrix4x4f prevCameraFrame_WorldToHMDProjectionRight;
+
+	// relative to the previous rendered frame
+	XrMatrix4x4f prevHMDFrame_WorldToHMDProjectionLeft;
+	XrMatrix4x4f prevHMDFrame_WorldToHMDProjectionRight;
 
 	XrVector3f projectionOriginWorldLeft;
 	XrVector3f projectionOriginWorldRight;	

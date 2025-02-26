@@ -1,19 +1,7 @@
 
 #include "common_ps.hlsl"
+#include "vs_outputs.hlsl"
 #include "util.hlsl"
-
-struct VS_OUTPUT
-{
-	float4 position : SV_POSITION;
-	float4 clipSpaceCoords : TEXCOORD0;
-	float4 screenCoords : TEXCOORD1;
-	float projectionValidity : TEXCOORD2;
-    float4 prevClipSpaceCoords : TEXCOORD3;
-    float3 velocity : TEXCOORD4;
-    float4 crossClipSpaceCoords : TEXCOORD5;
-    float projectionValidity2 : TEXCOORD6;
-    float2 cameraDepth : TEXCOORD7;
-};
 
 
 #ifdef VULKAN
@@ -38,24 +26,24 @@ float4 main(VS_OUTPUT input) : SV_TARGET
 	
     if (g_doCutout)
     {
-        clip(input.projectionValidity);
-        alpha = saturate(input.projectionValidity);
+        clip(input.projectionConfidence.x);
+        alpha = saturate(input.projectionConfidence.x);
     }
     
     if (g_bUseDepthCutoffRange)
     {
-        float depth = (input.screenCoords.z / input.screenCoords.w);// * (g_depthRange.y - g_depthRange.x) + g_depthRange.x;
+        float depth = (input.screenPos.z / input.screenPos.w);// * (g_depthRange.y - g_depthRange.x) + g_depthRange.x;
         clip(depth - g_depthCutoffRange.x);
         clip(g_depthCutoffRange.y - depth);
     }
 
 	// Convert from homogenous clip space coordinates to 0-1.
-	float2 outUvs = (input.clipSpaceCoords.xy / input.clipSpaceCoords.w) * float2(0.5, 0.5) + float2(0.5, 0.5);
-    float2 crossUvs = (input.crossClipSpaceCoords.xy / input.crossClipSpaceCoords.w) * float2(0.5, 0.5) + float2(0.5, 0.5);
+	float2 outUvs = (input.cameraReprojectedPos.xy / input.cameraReprojectedPos.w) * float2(0.5, 0.5) + float2(0.5, 0.5);
+    float2 crossUvs = (input.crossCameraReprojectedPos.xy / input.crossCameraReprojectedPos.w) * float2(0.5, 0.5) + float2(0.5, 0.5);
 
     if (g_bClampCameraFrame)
     {
-        clip(input.clipSpaceCoords.z);
+        clip(input.cameraReprojectedPos.z);
         clip(outUvs);
         clip(1 - outUvs);
     }
@@ -148,10 +136,10 @@ float4 main(VS_OUTPUT input) : SV_TARGET
     
     float depthFactor =  saturate(1 - (abs(input.cameraDepth.x - input.cameraDepth.y) * 1000));
     
-    float combineFactor = g_cutoutCombineFactor * depthFactor * input.projectionValidity * input.projectionValidity2;
+    float combineFactor = g_cutoutCombineFactor * depthFactor * input.projectionConfidence.x * input.projectionConfidence.x;
     
-    float cameraBlend = saturate(0.5 - input.projectionValidity * 0.5 + input.projectionValidity2 * 0.5);
-    float cameraSelect = 1 - step(input.projectionValidity2, input.projectionValidity);
+    float cameraBlend = saturate(0.5 - input.projectionConfidence.x * 0.5 + input.projectionConfidence.y * 0.5);
+    float cameraSelect = 1 - step(input.projectionConfidence.y, input.projectionConfidence.x);
     
     // Blend together both cameras based on which ones are valid and have the closest pixels.
     rgbColor = lerp(rgbColor, lerp(crossRGBColor, crossRGBColorClamped, combineFactor), lerp(cameraSelect, cameraBlend, combineFactor));
@@ -169,9 +157,9 @@ float4 main(VS_OUTPUT input) : SV_TARGET
 
     if (g_bDebugDepth)
     {
-        float depth = saturate((input.screenCoords.z / input.screenCoords.w) / (g_depthRange.y - g_depthRange.x) - g_depthRange.x);
+        float depth = saturate((input.screenPos.z / input.screenPos.w) / (g_depthRange.y - g_depthRange.x) - g_depthRange.x);
         rgbColor = float3(depth, depth, depth);
-        if (g_bDebugValidStereo && input.projectionValidity < 0.0)
+        if (g_bDebugValidStereo && input.projectionConfidence.x < 0.0)
         {
             rgbColor = float3(0.5, 0, 0);
         }

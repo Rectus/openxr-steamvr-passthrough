@@ -1,16 +1,8 @@
 
 #include "common_vs.hlsl"
+#include "vs_outputs.hlsl"
 #include "util.hlsl"
 
-struct VS_OUTPUT
-{
-	float4 position : SV_POSITION;
-	float4 clipSpaceCoords : TEXCOORD0;
-	float4 screenCoords : TEXCOORD1;
-	float projectionValidity : TEXCOORD2;
-    float4 prevClipSpaceCoords : TEXCOORD3;
-    float3 velocity : TEXCOORD4;
-};
 
 SamplerState g_samplerState : register(s0);
 Texture2D<float2> g_disparityTexture : register(t0);
@@ -182,10 +174,7 @@ VS_OUTPUT main(float3 inPosition : POSITION, uint vertexID : SV_VertexID)
     float2 dispConf = g_disparityTexture.SampleLevel(g_samplerState, disparityUVs, 0); 
     //float2 dispConf = lanczos2(g_disparityTexture, disparityUVs, g_disparityTextureSize);
     //float2 dispConf = catmull_rom_9tap(g_disparityTexture, g_samplerState, disparityUVs, g_disparityTextureSize);
-    
-    float disparity;
-    float confidence;
-    
+      
     
     float4 disparityWorldCoords = DisparityToWorldCoords(dispConf.x, inPosition.xy);
     float4 prevDisparityCoords = mul((g_disparityUVBounds.x < 0.5) ? g_worldToPrevDepthFrameProjectionLeft : g_worldToPrevDepthFrameProjectionRight, disparityWorldCoords);
@@ -196,14 +185,12 @@ VS_OUTPUT main(float3 inPosition : POSITION, uint vertexID : SV_VertexID)
     int3 prevUvPos = int3(floor(prevDisparityUVs * g_disparityTextureSize), 0);
     
     //float2 prevDispConf = g_prevDisparityFilter.Load(prevUvPos);
-    //float2 prevDispConf = g_prevDisparityFilter.SampleLevel(g_samplerState, prevDisparityUVs, 0);
-    float2 prevDispConf = bicubic_b_spline_4tap(g_prevDisparityFilter, g_samplerState, prevDisparityUVs);
+    float2 prevDispConf = g_prevDisparityFilter.SampleLevel(g_samplerState, prevDisparityUVs, 0);
+    //float2 prevDispConf = bicubic_b_spline_4tap(g_prevDisparityFilter, g_samplerState, prevDisparityUVs);
     //float2 prevDispConf = lanczos2(g_prevDisparityFilter, prevDisparityUVs, g_disparityTextureSize);
     //float2 prevDispConf = catmull_rom_9tap(g_prevDisparityFilter, g_samplerState, prevDisparityUVs, g_disparityTextureSize);
         
-
-    //float4 prevDisparityWorldCoords = PrevDisparityToWorldCoords(prevDispConf.x, prevDisparityCoords.xy);
-    float4 prevDisparityWorldCoords = DisparityToWorldCoords(prevDispConf.x, inPosition.xy);
+    float4 prevDisparityWorldCoords = PrevDisparityToWorldCoords(prevDispConf.x, prevDisparityCoords.xy);
      
     prevDisparityWorldCoords /= prevDisparityWorldCoords.w;
     
@@ -214,35 +201,35 @@ VS_OUTPUT main(float3 inPosition : POSITION, uint vertexID : SV_VertexID)
         bUsePrev = false;
     }
     
-    disparity = dispConf.x;
-    confidence = dispConf.y;
-    
-    
-    output.projectionValidity = confidence;
-    
-	// Disparity at the max projection distance
-    float minDisparity = max(0, g_disparityToDepth[2][3] /
+    // Disparity at the max projection distance
+    float minDisparity = max(g_minDisparity, g_disparityToDepth[2][3] /
     (g_projectionDistance * 2048.0 * g_disparityDownscaleFactor * g_disparityToDepth[3][2]));
     
-    float maxDisparity = 0.0465;
+    float disparity = clamp(dispConf.x, minDisparity, g_maxDisparity);
+    float confidence = dispConf.y;
+    
+    
+    output.projectionConfidence = confidence;
+    output.cameraBlendConfidence = confidence;
+
     
     float defaultDisparity = g_disparityToDepth[2][3] /
     (min(2.0, g_projectionDistance) * 2048.0 * g_disparityDownscaleFactor * g_disparityToDepth[3][2]);  
     
     uint maxFilterWidth = max(g_disparityFilterWidth, (int)ceil(g_cutoutFilterWidth));
     
-    if (disparity > maxDisparity || disparity < minDisparity)
+    if (dispConf.x > g_maxDisparity || dispConf.x < g_minDisparity)
     {
-        // Hack that causes some artifacting. Ideally patch any holes or discard and render behind instead.
         disparity = defaultDisparity;
-        output.projectionValidity = -10000;
+        output.projectionConfidence = -10000;
+        output.cameraBlendConfidence = -10000;
     }
     // Prevent filtering if it would sample across the image edge
     else if (uvPos.x < maxFilterWidth || uvPos.x >= g_disparityTextureSize.x - maxFilterWidth || 
              uvPos.y < maxFilterWidth || uvPos.y >= g_disparityTextureSize.y - maxFilterWidth)
     {
         disparity = defaultDisparity;
-        output.projectionValidity = -100;
+        output.projectionConfidence = -100;
     }
     else if (confidence < 0.5)
     {
@@ -270,7 +257,11 @@ VS_OUTPUT main(float3 inPosition : POSITION, uint vertexID : SV_VertexID)
             
             float filter = sqrt(pow(filterX, 2) + pow(filterY, 2));
 
-            output.projectionValidity = 1 + g_cutoutOffset - 100 * g_cutoutFactor * filter;
+            // Output optimistic values for camera composition to only filter occlusions
+            output.cameraBlendConfidence = 1 + g_cutoutOffset - 100 * g_cutoutFactor * filter;
+            
+            // Output pessimistic values for temporal filter to force invalidation on movement
+            output.projectionConfidence = min(confidence, 1 + g_cutoutOffset - 100 * g_cutoutFactor * filter);
         }
         
         // Filter any uncertain areas with a gaussian blur.
@@ -289,7 +280,7 @@ VS_OUTPUT main(float3 inPosition : POSITION, uint vertexID : SV_VertexID)
                     //float sampleDisp = g_disparityTexture.Load(uvPos + uint3(x, y, 0)).x;
                     float weight = gaussian(float2(x, y));
                     totalWeight += weight;
-                    outDisp += clamp(sampleDisp, minDisparity, maxDisparity) * weight;
+                    outDisp += clamp(sampleDisp, minDisparity, g_maxDisparity) * weight;
                 }
             }
 
@@ -302,7 +293,7 @@ VS_OUTPUT main(float3 inPosition : POSITION, uint vertexID : SV_VertexID)
     float4 worldSpacePoint = DisparityToWorldCoords(disparity, inPosition.xy);
     worldSpacePoint /= worldSpacePoint.w;
     
-    uint2 writeUVPos = floor(disparityUVs * g_disparityTextureSize * 2);
+    uint2 writeUVPos = floor(disparityUVs * g_disparityTextureSize);
     
     if (bUsePrev && length(worldSpacePoint.xyz - prevDisparityWorldCoords.xyz) < g_disparityTemporalFilterDistance)
     {
@@ -334,20 +325,19 @@ VS_OUTPUT main(float3 inPosition : POSITION, uint vertexID : SV_VertexID)
     }
     
     output.position = mul(g_worldToHMDProjection, worldSpacePoint);
-    output.screenCoords = output.position;
-    output.screenCoords.z *= output.screenCoords.w; //Linearize depth
+    output.screenPos = output.position;
+    output.screenPos.z *= output.screenPos.w; //Linearize depth
 	
 #ifndef VULKAN
     float4 outCoords = mul((g_cameraViewIndex == 0) ? g_worldToCameraFrameProjectionLeft : g_worldToCameraFrameProjectionRight, worldSpacePoint);
-	output.clipSpaceCoords = outCoords;
+	output.cameraReprojectedPos = outCoords;
+    
+    output.prevCameraFrameCameraReprojectedPos = mul(g_prevCameraFrame_WorldToHMDProjection, worldSpacePoint);
+    output.prevHMDFrameCameraReprojectedPos = mul(g_prevHMDFrame_WorldToHMDProjection, worldSpacePoint);
     
     float4 prevOutCoords = mul((g_cameraViewIndex == 0) ? g_worldToPrevCameraFrameProjectionLeft : g_worldToPrevCameraFrameProjectionRight, worldSpacePoint);
-    //output.prevClipSpaceCoords = prevOutCoords;
     
-    float4 prevClipCoords = mul(g_prevWorldToHMDProjection, worldSpacePoint);
-    output.prevClipSpaceCoords = prevClipCoords;
-    
-    output.velocity = outCoords.xyz / outCoords.w - prevOutCoords.xyz / prevOutCoords.w;
+    output.prevCameraFrameVelocity = outCoords.xyz / outCoords.w - prevOutCoords.xyz / prevOutCoords.w;
 #endif
     
     

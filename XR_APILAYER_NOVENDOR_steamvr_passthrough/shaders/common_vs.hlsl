@@ -4,7 +4,8 @@ cbuffer vsViewConstantBuffer : register(b0)
 {
     float4x4 g_worldToHMDProjection;
     float4x4 g_HMDProjectionToWorld;
-    float4x4 g_prevWorldToHMDProjection;
+    float4x4 g_prevHMDFrame_WorldToHMDProjection;
+    float4x4 g_prevCameraFrame_WorldToHMDProjection;
     float4 g_disparityUVBounds;
     float3 g_projectionOriginWorld;
     float g_projectionDistance;
@@ -28,8 +29,8 @@ cbuffer vsPassConstantBuffer : register(b1)
     
     float4x4 g_disparityToDepth;
     uint2 g_disparityTextureSize;
-    float minDisparity;
-	float maxDisparity;
+    float g_minDisparity;
+	float g_maxDisparity;
     float g_disparityDownscaleFactor;
     float g_cutoutFactor;
     float g_cutoutOffset;

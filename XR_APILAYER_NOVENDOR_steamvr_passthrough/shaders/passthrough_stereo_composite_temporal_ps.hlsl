@@ -1,19 +1,7 @@
 
 #include "common_ps.hlsl"
+#include "vs_outputs.hlsl"
 #include "util.hlsl"
-
-struct VS_OUTPUT
-{
-	float4 position : SV_POSITION;
-	float4 clipSpaceCoords : TEXCOORD0;
-	float4 screenCoords : TEXCOORD1;
-	float projectionValidity : TEXCOORD2;
-    float4 prevClipSpaceCoords : TEXCOORD3;
-    float3 velocity : TEXCOORD4;
-    float4 crossClipSpaceCoords : TEXCOORD5;
-    float projectionValidity2 : TEXCOORD6;
-    float2 cameraDepth : TEXCOORD7;
-};
 
 
 #ifdef VULKAN
@@ -154,24 +142,24 @@ float4 main(VS_OUTPUT input) : SV_TARGET
 	
     if (g_doCutout)
     {
-        clip(input.projectionValidity >= 0.5 ? -1 : 1);
-        alpha = 1 - saturate(input.projectionValidity * 2);
+        clip(input.projectionConfidence.x >= 0.5 ? -1 : 1);
+        alpha = 1 - saturate(input.projectionConfidence.x * 2);
     }
     
     if (g_bUseDepthCutoffRange)
     {
-        float depth = (input.screenCoords.z / input.screenCoords.w);// * (g_depthRange.y - g_depthRange.x) + g_depthRange.x;
+        float depth = (input.screenPos.z / input.screenPos.w);// * (g_depthRange.y - g_depthRange.x) + g_depthRange.x;
         clip(depth - g_depthCutoffRange.x);
         clip(g_depthCutoffRange.y - depth);
     }
 
 	// Convert from homogenous clip space coordinates to 0-1.
-	float2 outUvs = (input.clipSpaceCoords.xy / input.clipSpaceCoords.w) * float2(0.5, 0.5) + float2(0.5, 0.5);
-    float2 crossUvs = (input.crossClipSpaceCoords.xy / input.crossClipSpaceCoords.w) * float2(0.5, 0.5) + float2(0.5, 0.5);
+	float2 outUvs = (input.cameraReprojectedPos.xy / input.cameraReprojectedPos.w) * float2(0.5, 0.5) + float2(0.5, 0.5);
+    float2 crossUvs = (input.crossCameraReprojectedPos.xy / input.crossCameraReprojectedPos.w) * float2(0.5, 0.5) + float2(0.5, 0.5);
 
     if (g_bClampCameraFrame)
     {
-        clip(input.clipSpaceCoords.z);
+        clip(input.cameraReprojectedPos.z);
         clip(outUvs);
         clip(1 - outUvs);
     }
@@ -281,15 +269,15 @@ float4 main(VS_OUTPUT input) : SV_TARGET
     float distanceFactor = abs(camTexCoords.x - camPixel.x - 0.5) + abs(camTexCoords.y - camPixel.y - 0.5);
     float crossDistanceFactor = abs(crossCamTexCoords.x - crossCamPixel.x - 0.5) + abs(crossCamTexCoords.y - crossCamPixel.y - 0.5);
     
-    float cameraBlend = saturate(0.5 - input.projectionValidity * 0.5 + input.projectionValidity2 * 0.5);
-    float cameraSelect = 1 - step(input.projectionValidity2, input.projectionValidity);
+    float cameraBlend = saturate(0.5 - input.projectionConfidence.x * 0.5 + input.projectionConfidence.y * 0.5);
+    float cameraSelect = 1 - step(input.projectionConfidence.y, input.projectionConfidence.x);
     
     float pixelDistanceBlend = distanceFactor + (1 - crossDistanceFactor);
     //float blendfactor = 1 - abs(input.cameraBlend * 2 - 1);
     
     float depthFactor = saturate(1 - (abs(input.cameraDepth.x - input.cameraDepth.y) * 1000));
     
-    float combineFactor = g_cutoutCombineFactor * depthFactor * input.projectionValidity * input.projectionValidity2;
+    float combineFactor = g_cutoutCombineFactor * depthFactor * input.projectionConfidence.x * input.projectionConfidence.y;
     
     // Blend together both cameras based on which ones are valid and have the closest pixels.
     float finalBlendFactor = lerp(cameraSelect, pixelDistanceBlend, combineFactor);
@@ -301,10 +289,10 @@ float4 main(VS_OUTPUT input) : SV_TARGET
     float3 outputTextureSize;
     g_prevCameraFilter.GetDimensions(0, outputTextureSize.x, outputTextureSize.y, outputTextureSize.z);
     
-    float2 prevScreenUvs = (input.prevClipSpaceCoords.xy / input.prevClipSpaceCoords.w) * float2(0.5, 0.5) + float2(0.5, 0.5);
+    float2 prevScreenUvs = (input.prevHMDFrameCameraReprojectedPos.xy / input.prevHMDFrameCameraReprojectedPos.w) * float2(0.5, 0.5) + float2(0.5, 0.5);
     prevScreenUvs.y = 1 - prevScreenUvs.y;
     
-    float2 newScreenUvs = (input.screenCoords.xy / input.screenCoords.w) * float2(0.5, 0.5) + float2(0.5, 0.5);
+    float2 newScreenUvs = (input.screenPos.xy / input.screenPos.w) * float2(0.5, 0.5) + float2(0.5, 0.5);
     newScreenUvs.y = 1 - newScreenUvs.y;
      
     float2 prevTexCoords = prevScreenUvs * outputTextureSize.xy;
@@ -348,7 +336,7 @@ float4 main(VS_OUTPUT input) : SV_TARGET
     
     float prevDistanceFactor = clamp((abs(prevTexCoords.x - prevPixel.x - 0.5) + abs(prevTexCoords.y - prevPixel.y - 0.5)), 0.05, 1);
     
-    float vLenSq = dot(input.velocity, input.velocity);
+    float vLenSq = dot(input.prevCameraFrameVelocity, input.prevCameraFrameVelocity);
     float factor = saturate(1 - vLenSq * 500);
     float confidence = distanceFactor + (1 - prevDistanceFactor);
 
@@ -357,7 +345,7 @@ float4 main(VS_OUTPUT input) : SV_TARGET
     
     float clipHistory = filtered.a == 0 ? isClipped : lerp(isClipped, filtered.a, finalFactor);
     
-    g_cameraFilter[floor(newScreenUvs * outputTextureSize.xy)] = float4(g_bIsFirstRenderOfCameraFrame ? rgbColor : filtered.xyz, input.projectionValidity >= 0 ? clipHistory : 1);
+    g_cameraFilter[floor(newScreenUvs * outputTextureSize.xy)] = float4(g_bIsFirstRenderOfCameraFrame ? rgbColor : filtered.xyz, input.projectionConfidence.x >= 0 ? clipHistory : 1);
 
     
     
@@ -374,9 +362,9 @@ float4 main(VS_OUTPUT input) : SV_TARGET
 
     if (g_bDebugDepth)
     {
-        float depth = saturate((input.screenCoords.z / input.screenCoords.w) / (g_depthRange.y - g_depthRange.x) - g_depthRange.x);
+        float depth = saturate((input.screenPos.z / input.screenPos.w) / (g_depthRange.y - g_depthRange.x) - g_depthRange.x);
         rgbColor = float3(depth, depth, depth);
-        if (g_bDebugValidStereo && input.projectionValidity < 0.0)
+        if (g_bDebugValidStereo && input.projectionConfidence.x < 0.0)
         {
             rgbColor = float3(0.5, 0, 0);
         }

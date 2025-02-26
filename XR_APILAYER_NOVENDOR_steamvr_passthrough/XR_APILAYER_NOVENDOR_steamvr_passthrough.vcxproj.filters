@@ -180,6 +180,9 @@
     <None Include="shaders\common_ps.hlsl">
       <Filter>Shaders</Filter>
     </None>
+    <None Include="shaders\vs_outputs.hlsl">
+      <Filter>Shaders</Filter>
+    </None>
   </ItemGroup>
   <ItemGroup>
     <FxCompile Include="shaders\alpha_prepass_masked_ps.hlsl">
@@ -225,6 +228,9 @@
       <Filter>Shaders</Filter>
     </FxCompile>
     <FxCompile Include="shaders\passthrough_stereo_composite_temporal_ps.hlsl">
+      <Filter>Shaders</Filter>
+    </FxCompile>
+    <FxCompile Include="shaders\depth_write_temporal_ps.hlsl">
       <Filter>Shaders</Filter>
     </FxCompile>
   </ItemGroup>

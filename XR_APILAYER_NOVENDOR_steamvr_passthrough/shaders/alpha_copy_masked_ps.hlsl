@@ -1,15 +1,7 @@
 
 #include "common_ps.hlsl"
+#include "vs_outputs.hlsl"
 #include "util.hlsl"
-
-struct VS_OUTPUT
-{
-	float4 position : SV_POSITION;
-	float4 clipSpaceCoords : TEXCOORD0;
-	float4 screenCoords : TEXCOORD1;
-	float projectionValidity : TEXCOORD2;
-};
-
 
 #ifdef VULKAN
 
@@ -26,7 +18,7 @@ Texture2D<float> g_blendMask : register(t2);
 
 float4 main(VS_OUTPUT input) : SV_TARGET
 {   
-    float2 screenUvs = input.screenCoords.xy;
+    float2 screenUvs = input.screenPos.xy;
     screenUvs = screenUvs * float2(0.5, -0.5) + float2(0.5, 0.5);
     screenUvs = screenUvs * (g_uvPrepassBounds.zw - g_uvPrepassBounds.xy) + g_uvPrepassBounds.xy;
     screenUvs = clamp(screenUvs, g_uvPrepassBounds.xy, g_uvPrepassBounds.zw);
