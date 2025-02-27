@@ -1303,7 +1303,7 @@ void PassthroughRendererDX12::RenderPassthroughFrame(const XrCompositionLayerPro
 	psPassBuffer->sharpness = mainConf.Sharpness;
 	psPassBuffer->bDoColorAdjustment = fabsf(mainConf.Brightness) > 0.01f || fabsf(mainConf.Contrast - 1.0f) > 0.01f || fabsf(mainConf.Saturation - 1.0f) > 0.01f;
 	psPassBuffer->bDebugDepth = mainConf.DebugDepth;
-	psPassBuffer->bDebugValidStereo = mainConf.DebugStereoValid;
+	psPassBuffer->debugOverlay = mainConf.DebugOverlay;
 	psPassBuffer->bUseFisheyeCorrection = mainConf.ProjectionMode != Projection_RoomView2D;
 	psPassBuffer->bUseDepthCutoffRange = renderParams.bEnableDepthRange;
 	psPassBuffer->bClampCameraFrame = m_configManager->GetConfig_Camera().ClampCameraFrame;

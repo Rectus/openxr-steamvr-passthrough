@@ -25,6 +25,15 @@ enum ESelectedDebugTexture
 	DebugTexture_Confidence
 };
 
+enum ESelectedDebugOverlay
+{
+	DebugOverlay_None = 0,
+	DebugOverlay_ProjectionConfidence,
+	DebugOverlay_CameraSelction,
+	DebugOverlay_TemporalBlending,
+	DebugOverlay_TemporalClipping
+};
+
 enum EDebugTextureFormat
 {
 	DebugTextureFormat_RGBA8,
@@ -88,6 +97,8 @@ struct Config_Main
 
 	bool EnableTemporalFiltering = false;
 	int TemporalFilteringSampling = 3;
+	float TemporalFilteringFactor = 0.9f;
+	float TemporalFilteringRejectionOffset = 0.0f;
 
 	bool RequireSteamVRRuntime = true;
 	bool ShowSettingDescriptions = true;
@@ -102,7 +113,7 @@ struct Config_Main
 
 	// Transient settings not written to file
 	bool DebugDepth = false;
-	bool DebugStereoValid = false;
+	ESelectedDebugOverlay DebugOverlay = DebugOverlay_None;
 	ESelectedDebugTexture DebugTexture = DebugTexture_None;
 
 	void ParseConfig(CSimpleIniA& ini, const char* section)
@@ -125,6 +136,8 @@ struct Config_Main
 
 		EnableTemporalFiltering = ini.GetBoolValue(section, "EnableTemporalFiltering", EnableTemporalFiltering);
 		TemporalFilteringSampling = (int)ini.GetLongValue(section, "TemporalFilteringSampling", TemporalFilteringSampling);
+		TemporalFilteringFactor = (float)ini.GetDoubleValue(section, "TemporalFilteringFactor", TemporalFilteringFactor);
+		TemporalFilteringRejectionOffset = (float)ini.GetDoubleValue(section, "TemporalFilteringRejectionOffset", TemporalFilteringRejectionOffset);
 
 		RequireSteamVRRuntime = ini.GetBoolValue(section, "RequireSteamVRRuntime", RequireSteamVRRuntime);
 		ShowSettingDescriptions = ini.GetBoolValue(section, "ShowSettingDescriptions", ShowSettingDescriptions);
@@ -159,6 +172,8 @@ struct Config_Main
 
 		ini.SetBoolValue(section, "EnableTemporalFiltering", EnableTemporalFiltering);
 		ini.SetLongValue(section, "TemporalFilteringSampling", TemporalFilteringSampling);
+		ini.SetDoubleValue(section, "TemporalFilteringFactor", TemporalFilteringFactor);
+		ini.SetDoubleValue(section, "TemporalFilteringRejectionOffset", TemporalFilteringRejectionOffset);
 
 		ini.SetBoolValue(section, "RequireSteamVRRuntime", RequireSteamVRRuntime);
 		ini.SetBoolValue(section, "ShowSettingDescriptions", ShowSettingDescriptions);

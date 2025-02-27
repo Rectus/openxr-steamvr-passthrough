@@ -131,8 +131,8 @@ float4 main(VS_OUTPUT input) : SV_TARGET
 	
     if (g_doCutout)
     {
-        alpha = saturate(input.projectionConfidence.x);
-        clip(input.projectionConfidence.x);
+        alpha = saturate(input.cameraBlendConfidence.x);
+        clip(input.cameraBlendConfidence.x);
     }
     
     if (g_bUseDepthCutoffRange)
@@ -251,14 +251,12 @@ float4 main(VS_OUTPUT input) : SV_TARGET
     
     float3 filteredClipped = min(maxColor * (1.0 + g_temporalFilteringColorRangeCutoff), max(filtered.xyz, minColor * (1.0 - g_temporalFilteringColorRangeCutoff)));
     
-    // Flicker reduction attempt based on Callum Glover - Temporal Anti Aliasing Implementation and Extensions
+    // Flicker reduction attempt based on: Callum Glover - Temporal Anti Aliasing Implementation and Extensions
     // https://static1.squarespace.com/static/5a3beb72692ebe77330b5118/t/5c9d4f5be2c483f0c4108eca/1553813352302/report.pdf
     
     float isClipped = any(filtered.xyz - filteredClipped) ? 1 : 0;
     
     filtered.xyz = isClipped != 0 ? lerp(filtered.xyz, filteredClipped, filtered.a) : filtered.xyz;
-
-    float invAlphaFactor = 0.9;
     
     float2 camTexCoords = outUvs * cameraFrameRes;
     uint2 camPixel = floor(camTexCoords);
@@ -267,19 +265,17 @@ float4 main(VS_OUTPUT input) : SV_TARGET
     float confidenceInv = abs(camTexCoords.x - camPixel.x - 0.5) + abs(camTexCoords.y - camPixel.y - 0.5);
     
     float prevConfidenceInv = clamp((abs(prevTexCoords.x - prevPixel.x - 0.5) + abs(prevTexCoords.y - prevPixel.y - 0.5)),
-0.05, 1);
-    
-    //float depth = saturate((input.screenCoords.z / input.screenCoords.w) / (g_depthRange.y - g_depthRange.x) - g_depthRange.x);
-    float depthDiff = 0;// abs(depth - filtered.w);  
+0.05, 1);  
     
     float vLenSq = dot(input.prevCameraFrameVelocity, input.prevCameraFrameVelocity);
-    float factor = saturate(min(invAlphaFactor, 1 - max(vLenSq * 500, depthDiff * 200)));
+    float factor = saturate(min(g_temporalFilteringFactor, 1 - vLenSq * 500));
     float confidence = confidenceInv + (1 - prevConfidenceInv);
 
-    float finalFactor = clamp(factor * confidence, 0, invAlphaFactor);
+    float finalFactor = clamp(factor * confidence, 0, g_temporalFilteringFactor);
+    
     rgbColor = lerp(rgbColor, filtered.xyz, finalFactor);
     
-    float clipHistory = filtered.a == 0 ? isClipped : lerp(isClipped, filtered.a, finalFactor);
+    float clipHistory = (filtered.a == 0) ? isClipped : lerp(isClipped, filtered.a, finalFactor);
     
     if(g_bIsFirstRenderOfCameraFrame)
     {
@@ -299,27 +295,38 @@ float4 main(VS_OUTPUT input) : SV_TARGET
 
     if (g_bDebugDepth)
     {
-        float depth = saturate(input.screenPos.z / input.screenPos.w);
+        float depth = saturate((input.screenPos.z / input.screenPos.w) / (g_depthRange.y - g_depthRange.x) - g_depthRange.x);
         rgbColor = float3(depth, depth, depth);
-        if (g_bDebugValidStereo && input.projectionConfidence.x < 0.0)
-        {
-            rgbColor = float3(0.5, 0, 0);
-        }
     }
-    else if (g_bDebugValidStereo)
+    if (g_debugOverlay == 1) // Confidence
     {
         if (input.projectionConfidence.x < 0.0)
         {
-            rgbColor.x += 0.5;
+            rgbColor.r += 0.5;
         }
-		else
+        else if (input.projectionConfidence.x > 0.0)
         {
-            rgbColor.y += input.projectionConfidence.x * 0.25;
-			
-
-            rgbColor.z += isClipped;
-
+            rgbColor.g += input.projectionConfidence.x * 0.25;
         }
+        else
+        {
+            rgbColor.b += 0.25;
+        }
+    }
+    else if (g_debugOverlay == 2) // Camera selection
+    {
+        if (!g_doCutout)
+        {
+            rgbColor.g += 1.0;
+        }
+    }
+    else if (g_debugOverlay == 3) // Temporal blend
+    {
+        rgbColor.g += finalFactor;
+    }
+    else if (g_debugOverlay == 4) // Temporal clipping
+    {
+        rgbColor.b += clipHistory;
     }
     
     rgbColor = g_bPremultiplyAlpha ? rgbColor * g_opacity * alpha : rgbColor;

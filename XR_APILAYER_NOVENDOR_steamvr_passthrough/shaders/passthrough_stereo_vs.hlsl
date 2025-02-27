@@ -71,8 +71,8 @@ VS_OUTPUT main(float3 inPosition : POSITION, uint vertexID : SV_VertexID)
     }
     else
     {        
-        // Sample neighboring pixels using clamped Sobel filter, and cut out any areas with discontinuities.
-        if (g_bFindDiscontinuities || true)
+        // Sample neighboring pixels using clamped Sobel filter, and mask out any areas with discontinuities.
+        if (g_bFindDiscontinuities)
         {                      
             float2 fac = g_cutoutFilterWidth / g_disparityTextureSize;
             
@@ -97,7 +97,7 @@ VS_OUTPUT main(float3 inPosition : POSITION, uint vertexID : SV_VertexID)
             // Output optimistic values for camera composition to only filter occlusions
             output.cameraBlendConfidence = 1 + g_cutoutOffset - 100 * g_cutoutFactor * filter;
             
-            // Output pessimistic values for temporal filter to force invalidation on movement
+            // Output pessimistic values for depth temporal filter to force invalidation on movement
             output.projectionConfidence = min(confidence, 1 + g_cutoutOffset - 100 * g_cutoutFactor * filter);
         }
         

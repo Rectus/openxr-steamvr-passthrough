@@ -435,12 +435,17 @@ if (bIsActiveTab) { ImGui::PopStyleColor(1); bIsActiveTab = false; }
 
 				IMGUI_BIG_SPACING;
 
-				ImGui::Checkbox("Enable Temporal Filtering (Experimental)", &mainConfig.EnableTemporalFiltering);
+				ImGui::Checkbox("Enable Temporal Filter (Experimental)", &mainConfig.EnableTemporalFiltering);
 				TextDescriptionSpaced("Improves image quality by removing noise and flickering, and sharpening it. Possibly slightly increases image resolution. Expensive on the GPU.");
 
 				if (ImGui::CollapsingHeader("Advanced"))
 				{
-					ImGui::Text("Temporal Filtering Sampling");
+					ImGui::PushItemWidth(ImGui::GetContentRegionAvail().x * 0.45f);
+					ScrollableSlider("Temporal Filter Factor", &mainConfig.TemporalFilteringFactor, 0.0f, 1.0f, "%.2f", 0.01f);
+					ScrollableSlider("Temporal Filter Rejection Offset", &mainConfig.TemporalFilteringRejectionOffset, -0.2f, 0.2f, "%.2f", 0.01f);
+					ImGui::PopItemWidth();
+
+					ImGui::Text("Temporal Filter Sampling");
 					if (ImGui::RadioButton("Nearest", mainConfig.TemporalFilteringSampling == 0))
 					{
 						mainConfig.TemporalFilteringSampling = 0;
@@ -791,15 +796,14 @@ if (bIsActiveTab) { ImGui::PopStyleColor(1); bIsActiveTab = false; }
 			ImGui::SetNextItemOpen(true, ImGuiCond_Once);
 			if (ImGui::TreeNode("Temporal Filtering"))
 			{
-				// ToDO split out
-				ImGui::Checkbox("Use Disparity Temporal Filtering", &stereoCustomConfig.StereoUseDisparityTemporalFiltering);
+				ImGui::Checkbox("Use Projection Temporal Filtering", &stereoCustomConfig.StereoUseDisparityTemporalFiltering);
 				TextDescription("Possibly smoothes out and improves quality of the projection depth.");
 
 				IMGUI_BIG_SPACING;
 				ImGui::PushItemWidth(ImGui::GetContentRegionAvail().x * 0.45f);
 				BeginSoftDisabled(!stereoCustomConfig.StereoUseDisparityTemporalFiltering);
-				ScrollableSlider("Disparity Temporal Filtering Strength", &stereoCustomConfig.StereoDisparityTemporalFilteringStrength, 0.0f, 1.0f, "%.1f", 0.1f);
-				ScrollableSlider("Disparity Temporal Filtering Cutout Factor", &stereoCustomConfig.StereoDisparityTemporalFilteringDistance, 0.1f, 10.0f, "%.1f", 0.1f);
+				ScrollableSlider("Projection Temporal Filtering Strength", &stereoCustomConfig.StereoDisparityTemporalFilteringStrength, 0.0f, 1.0f, "%.1f", 0.1f);
+				ScrollableSlider("Projection Temporal Filtering Cutout Factor", &stereoCustomConfig.StereoDisparityTemporalFilteringDistance, 0.1f, 10.0f, "%.1f", 0.1f);
 				EndSoftDisabled(!stereoCustomConfig.StereoUseDisparityTemporalFiltering);
 				ImGui::PopItemWidth();
 				ImGui::TreePop();
@@ -1333,7 +1337,29 @@ if (bIsActiveTab) { ImGui::PopStyleColor(1); bIsActiveTab = false; }
 			ImGui::BeginGroup();
 			ImGui::Checkbox("Freeze Stereo Projection", &stereoConfig.StereoReconstructionFreeze);
 			ImGui::Checkbox("Debug Depth", &mainConfig.DebugDepth);
-			ImGui::Checkbox("Debug Valid Stereo", &mainConfig.DebugStereoValid);
+			ImGui::BeginGroup();
+			ImGui::Text("Overlay");
+			if (ImGui::RadioButton("None###DebugOverlayNone", mainConfig.DebugOverlay == DebugOverlay_None))
+			{
+				mainConfig.DebugOverlay = DebugOverlay_None;
+			}
+			if (ImGui::RadioButton("Stereo Confidence", mainConfig.DebugOverlay == DebugOverlay_ProjectionConfidence))
+			{
+				mainConfig.DebugOverlay = DebugOverlay_ProjectionConfidence;
+			}
+			if (ImGui::RadioButton("Camera Selection", mainConfig.DebugOverlay == DebugOverlay_CameraSelction))
+			{
+				mainConfig.DebugOverlay = DebugOverlay_CameraSelction;
+			}
+			if (ImGui::RadioButton("Temporal Blending", mainConfig.DebugOverlay == DebugOverlay_TemporalBlending))
+			{
+				mainConfig.DebugOverlay = DebugOverlay_TemporalBlending;
+			}
+			if (ImGui::RadioButton("Temporal Clipping", mainConfig.DebugOverlay == DebugOverlay_TemporalClipping))
+			{
+				mainConfig.DebugOverlay = DebugOverlay_TemporalClipping;
+			}
+			ImGui::EndGroup();
 
 			ImGui::BeginGroup();
 			ImGui::Text("Debug Texture");

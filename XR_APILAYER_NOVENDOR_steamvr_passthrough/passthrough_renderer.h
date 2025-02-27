@@ -131,11 +131,14 @@ struct alignas(16) PSPassConstantBuffer
 	float saturation;
 	float sharpness;
 	int32_t temporalFilteringSampling;
+	float temporalFilteringFactor;
 	float temporalFilteringColorRangeCutoff;
 	float cutoutCombineFactor;
+	float depthTemporalFilterFactor;
+	float depthTemporalFilterDistance;
+	uint32_t debugOverlay;
 	uint32_t bDoColorAdjustment;
 	uint32_t bDebugDepth;
-	uint32_t bDebugValidStereo;
 	uint32_t bUseFisheyeCorrection;
 	uint32_t bIsFirstRenderOfCameraFrame;
 	uint32_t bUseDepthCutoffRange;

@@ -234,7 +234,7 @@ VS_OUTPUT main(float3 inPosition : POSITION, uint vertexID : SV_VertexID)
     else if (confidence < 0.5)
     {
         
-        // Sample neighboring pixels using clamped Sobel filter, and cut out any areas with discontinuities.
+        // Sample neighboring pixels using clamped Sobel filter, and mask out any areas with discontinuities.
         if (g_bFindDiscontinuities)
         {                      
             float2 fac = g_cutoutFilterWidth / g_disparityTextureSize;

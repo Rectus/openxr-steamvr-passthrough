@@ -22,6 +22,7 @@ VS_OUTPUT main(float3 inPosition : POSITION, uint vertexID : SV_VertexID)
     output.position = mul(g_worldToHMDProjection, worldProjectionPos);   
     output.screenPos = output.position; 
 	output.projectionConfidence = 1.0;
+    output.cameraBlendConfidence = 1.0;
 	
 #ifndef VULKAN  
     float4 prevOutCoords = mul((g_cameraViewIndex == 0) ? g_worldToPrevCameraFrameProjectionLeft : g_worldToPrevCameraFrameProjectionRight, worldProjectionPos);

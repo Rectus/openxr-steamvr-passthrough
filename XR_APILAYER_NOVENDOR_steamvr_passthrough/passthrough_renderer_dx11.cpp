@@ -1379,7 +1379,7 @@ void PassthroughRendererDX11::RenderPassthroughFrame(const XrCompositionLayerPro
 		vsBuffer.cutoutFilterWidth = stereoConf.StereoCutoutFilterWidth;
 		vsBuffer.disparityFilterWidth = stereoConf.StereoDisparityFilterWidth;
 		vsBuffer.bProjectBorders = !stereoConf.StereoReconstructionFreeze;
-		vsBuffer.bFindDiscontinuities = stereoConf.StereoCutoutEnabled;
+		vsBuffer.bFindDiscontinuities = stereoConf.StereoCutoutEnabled || (stereoConf.StereoUseDeferredDepthPass && stereoConf.StereoUseDisparityTemporalFiltering);
 		vsBuffer.bUseDisparityTemporalFilter = stereoConf.StereoUseDisparityTemporalFiltering && m_bIsVSUAVSupported;
 		vsBuffer.bBlendDepthMaps = stereoConf.StereoCutoutEnabled;
 		vsBuffer.disparityTemporalFilterStrength = stereoConf.StereoDisparityTemporalFilteringStrength;
@@ -1500,11 +1500,14 @@ void PassthroughRendererDX11::RenderPassthroughFrame(const XrCompositionLayerPro
 	psBuffer.saturation = mainConf.Saturation;
 	psBuffer.sharpness = mainConf.Sharpness;
 	psBuffer.temporalFilteringSampling = mainConf.TemporalFilteringSampling;
-	psBuffer.temporalFilteringColorRangeCutoff = stereoConf.StereoDisparityTemporalFilteringStrength; // TODO
+	psBuffer.temporalFilteringFactor = mainConf.TemporalFilteringFactor;
+	psBuffer.temporalFilteringColorRangeCutoff = mainConf.TemporalFilteringRejectionOffset;
 	psBuffer.cutoutCombineFactor = stereoConf.StereoCutoutCombineFactor;
 	psBuffer.bDoColorAdjustment = fabsf(mainConf.Brightness) > 0.01f || fabsf(mainConf.Contrast - 1.0f) > 0.01f || fabsf(mainConf.Saturation - 1.0f) > 0.01f;
+	psBuffer.depthTemporalFilterFactor = stereoConf.StereoDisparityTemporalFilteringStrength;
+	psBuffer.depthTemporalFilterDistance = stereoConf.StereoDisparityTemporalFilteringDistance;
 	psBuffer.bDebugDepth = mainConf.DebugDepth;
-	psBuffer.bDebugValidStereo = mainConf.DebugStereoValid;
+	psBuffer.debugOverlay = mainConf.DebugOverlay;
 	psBuffer.bUseFisheyeCorrection = mainConf.ProjectionMode != Projection_RoomView2D;
 	psBuffer.bIsFirstRenderOfCameraFrame = frame->bIsFirstRender;
 	psBuffer.bUseDepthCutoffRange = renderParams.bEnableDepthRange;

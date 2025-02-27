@@ -26,7 +26,7 @@ float4 main(VS_OUTPUT input) : SV_TARGET
 	
     if (g_doCutout)
     {
-        clip(input.projectionConfidence.x);
+        clip(input.cameraBlendConfidence.x);
         alpha = saturate(input.projectionConfidence.x);
     }
     
@@ -141,8 +141,10 @@ float4 main(VS_OUTPUT input) : SV_TARGET
     float cameraBlend = saturate(0.5 - input.cameraBlendConfidence.x * 0.5 + input.cameraBlendConfidence.y * 0.5);
     float cameraSelect = 1 - step(input.cameraBlendConfidence.y, input.cameraBlendConfidence.x);
     
+    float finalFactor = lerp(cameraSelect, cameraBlend, combineFactor);
+    
     // Blend together both cameras based on which ones are valid and have the closest pixels.
-    rgbColor = lerp(rgbColor, lerp(crossRGBColor, crossRGBColorClamped, combineFactor), lerp(cameraSelect, cameraBlend, combineFactor));
+    rgbColor = lerp(rgbColor, lerp(crossRGBColor, crossRGBColorClamped, combineFactor), finalFactor);
     
 	if (g_bDoColorAdjustment)
 	{
@@ -159,27 +161,27 @@ float4 main(VS_OUTPUT input) : SV_TARGET
     {
         float depth = saturate((input.screenPos.z / input.screenPos.w) / (g_depthRange.y - g_depthRange.x) - g_depthRange.x);
         rgbColor = float3(depth, depth, depth);
-        if (g_bDebugValidStereo && input.projectionConfidence.x < 0.0)
+    }
+    if (g_debugOverlay == 1) // Confidence
+    {
+        if (input.projectionConfidence.x < 0.0)
         {
-            rgbColor = float3(0.5, 0, 0);
+            rgbColor.r += 0.5;
+        }
+        else if (input.projectionConfidence.x > 0.0)
+        {
+            rgbColor.g += input.projectionConfidence.x * 0.25;
+        }
+        else
+        {
+            rgbColor.b += 0.25;
         }
     }
-    else if (g_bDebugValidStereo)
+    else if (g_debugOverlay == 2) // Camera selection
     {
-        //if (input.projectionValidity < 0.0)
-        //{
-        //    rgbColor.x += 0.5;
-        //}
-        //else if (input.projectionValidity > 0.0)
-        //{
-        //    rgbColor.y += input.projectionValidity * 0.25;
-        //}
-        //else
-        //{
-        //    rgbColor.z += 0.25;
-        //}
-        rgbColor = float3(0, lerp(cameraSelect, cameraBlend, combineFactor), 0);
+        rgbColor.g += finalFactor;
     }
+
     
     rgbColor = g_bPremultiplyAlpha ? rgbColor * g_opacity * alpha : rgbColor;
 	

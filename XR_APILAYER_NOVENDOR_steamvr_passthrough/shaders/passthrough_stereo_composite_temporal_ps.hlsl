@@ -142,7 +142,7 @@ float4 main(VS_OUTPUT input) : SV_TARGET
 	
     if (g_doCutout)
     {
-        clip(input.projectionConfidence.x >= 0.5 ? -1 : 1);
+        clip(input.cameraBlendConfidence.x >= 0.5 ? -1 : 1);
         alpha = 1 - saturate(input.projectionConfidence.x * 2);
     }
     
@@ -280,11 +280,11 @@ float4 main(VS_OUTPUT input) : SV_TARGET
     float combineFactor = g_cutoutCombineFactor * depthFactor * input.projectionConfidence.x * input.projectionConfidence.y;
     
     // Blend together both cameras based on which ones are valid and have the closest pixels.
-    float finalBlendFactor = lerp(cameraSelect, pixelDistanceBlend, combineFactor);
+    float finalCameraBlendFactor = lerp(cameraSelect, pixelDistanceBlend, combineFactor);
     
-    rgbColor = lerp(rgbColor, lerp(crossRGBColor, crossRGBColorClamped, combineFactor), finalBlendFactor);
-    minColor = lerp(minColor, lerp(crossMinColor, minColor, combineFactor), finalBlendFactor);
-    maxColor = lerp(maxColor, lerp(crossMaxColor, maxColor, combineFactor), finalBlendFactor);
+    rgbColor = lerp(rgbColor, lerp(crossRGBColor, crossRGBColorClamped, combineFactor), finalCameraBlendFactor);
+    minColor = lerp(minColor, lerp(crossMinColor, minColor, combineFactor), finalCameraBlendFactor);
+    maxColor = lerp(maxColor, lerp(crossMaxColor, maxColor, combineFactor), finalCameraBlendFactor);
     
     float3 outputTextureSize;
     g_prevCameraFilter.GetDimensions(0, outputTextureSize.x, outputTextureSize.y, outputTextureSize.z);
@@ -337,13 +337,13 @@ float4 main(VS_OUTPUT input) : SV_TARGET
     float prevDistanceFactor = clamp((abs(prevTexCoords.x - prevPixel.x - 0.5) + abs(prevTexCoords.y - prevPixel.y - 0.5)), 0.05, 1);
     
     float vLenSq = dot(input.prevCameraFrameVelocity, input.prevCameraFrameVelocity);
-    float factor = saturate(1 - vLenSq * 500);
-    float confidence = distanceFactor + (1 - prevDistanceFactor);
+    float factor = saturate(g_temporalFilteringFactor - vLenSq * 500);
+    float confidence = lerp(distanceFactor, crossDistanceFactor, finalCameraBlendFactor) + (1 - prevDistanceFactor);
 
-    float finalFactor = saturate(factor * confidence);
-    rgbColor = lerp(rgbColor, filtered.xyz, finalFactor);
+    float finalHistoryFactor = clamp(factor * confidence, 0, g_temporalFilteringFactor);
+    rgbColor = lerp(rgbColor, filtered.xyz, finalHistoryFactor);
     
-    float clipHistory = filtered.a == 0 ? isClipped : lerp(isClipped, filtered.a, finalFactor);
+    float clipHistory = (filtered.a == 0) ? isClipped : lerp(isClipped, filtered.a, finalHistoryFactor);
     
     if(g_bIsFirstRenderOfCameraFrame)
     {
@@ -366,26 +366,33 @@ float4 main(VS_OUTPUT input) : SV_TARGET
     {
         float depth = saturate((input.screenPos.z / input.screenPos.w) / (g_depthRange.y - g_depthRange.x) - g_depthRange.x);
         rgbColor = float3(depth, depth, depth);
-        if (g_bDebugValidStereo && input.projectionConfidence.x < 0.0)
+    }
+    if (g_debugOverlay == 1) // Confidence
+    {
+        if (input.projectionConfidence.x < 0.0)
         {
-            rgbColor = float3(0.5, 0, 0);
+            rgbColor.r += 0.5;
+        }
+        else if (input.projectionConfidence.x > 0.0)
+        {
+            rgbColor.g += input.projectionConfidence.x * 0.25;
+        }
+        else
+        {
+            rgbColor.b += 0.25;
         }
     }
-    else if (g_bDebugValidStereo)
+    else if (g_debugOverlay == 2) // Camera selection
     {
-        //if (input.projectionValidity < 0.0)
-        //{
-        //    rgbColor.x += 0.5;
-        //}
-        //else if (input.projectionValidity > 0.0)
-        //{
-        //    rgbColor.y += input.projectionValidity * 0.25;
-        //}
-        //else
-        //{
-        //    rgbColor.z += 0.25;
-        //}
-        rgbColor = float3(0, lerp(cameraSelect, pixelDistanceBlend, combineFactor), finalFactor);
+        rgbColor.g += finalCameraBlendFactor;
+    }
+    else if (g_debugOverlay == 3) // Temporal blend
+    {
+        rgbColor.g += finalHistoryFactor;
+    }
+    else if (g_debugOverlay == 4) // Temporal clipping
+    {
+        rgbColor.b += clipHistory;
     }
     
     rgbColor = g_bPremultiplyAlpha ? rgbColor * g_opacity * alpha : rgbColor;
