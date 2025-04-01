@@ -183,18 +183,30 @@ void CameraManagerOpenCV::GetCameraDisplayStats(uint32_t& width, uint32_t& heigh
     }
 }
 
-void CameraManagerOpenCV::GetDistortedFrameSize(uint32_t& width, uint32_t& height, uint32_t& bufferSize) const
+void CameraManagerOpenCV::GetDistortedTextureSize(uint32_t& width, uint32_t& height, uint32_t& bufferSize) const
 {
     width = m_cameraTextureWidth;
     height = m_cameraTextureHeight;
     bufferSize = m_cameraFrameBufferSize;
 }
 
-void CameraManagerOpenCV::GetUndistortedFrameSize(uint32_t& width, uint32_t& height, uint32_t& bufferSize) const
+void CameraManagerOpenCV::GetUndistortedTextureSize(uint32_t& width, uint32_t& height, uint32_t& bufferSize) const
 {
     width = m_cameraUndistortedTextureWidth;
     height = m_cameraUndistortedTextureHeight;
     bufferSize = m_cameraUndistortedFrameBufferSize;
+}
+
+void CameraManagerOpenCV::GetDistortedFrameSize(uint32_t& width, uint32_t& height) const
+{
+    width = m_cameraFrameWidth;
+    height = m_cameraFrameHeight;
+}
+
+void CameraManagerOpenCV::GetUndistortedFrameSize(uint32_t& width, uint32_t& height) const
+{
+    width = m_cameraUndistortedFrameWidth;
+    height = m_cameraUndistortedFrameHeight;
 }
 
 void CameraManagerOpenCV::GetIntrinsics(const ERenderEye cameraEye, XrVector2f& focalLength, XrVector2f& center) const
@@ -203,29 +215,18 @@ void CameraManagerOpenCV::GetIntrinsics(const ERenderEye cameraEye, XrVector2f& 
 
     if(m_frameLayout == EStereoFrameLayout::Mono || cameraEye == LEFT_EYE)
     {
-        focalLength.x = cameraConf.Camera0_IntrinsicsFocal[0] / (float)cameraConf.Camera0_IntrinsicsSensorPixels[0] * m_cameraTextureWidth;
-        focalLength.y = cameraConf.Camera0_IntrinsicsFocal[1] / (float)cameraConf.Camera0_IntrinsicsSensorPixels[1] * m_cameraTextureHeight;
-        center.x = cameraConf.Camera0_IntrinsicsCenter[0] / (float)cameraConf.Camera0_IntrinsicsSensorPixels[0] * m_cameraTextureWidth;
-        center.y = cameraConf.Camera0_IntrinsicsCenter[1] / (float)cameraConf.Camera0_IntrinsicsSensorPixels[1] * m_cameraTextureHeight;
+        focalLength.x = cameraConf.Camera0_IntrinsicsFocal[0] / (float)cameraConf.Camera0_IntrinsicsSensorPixels[0] * m_cameraFrameWidth;
+        focalLength.y = cameraConf.Camera0_IntrinsicsFocal[1] / (float)cameraConf.Camera0_IntrinsicsSensorPixels[1] * m_cameraFrameHeight;
+        center.x = cameraConf.Camera0_IntrinsicsCenter[0] / (float)cameraConf.Camera0_IntrinsicsSensorPixels[0] * m_cameraFrameWidth;
+        center.y = cameraConf.Camera0_IntrinsicsCenter[1] / (float)cameraConf.Camera0_IntrinsicsSensorPixels[1] * m_cameraFrameHeight;
     }
     else
     {
-        focalLength.x = cameraConf.Camera1_IntrinsicsFocal[0] / (float)cameraConf.Camera1_IntrinsicsSensorPixels[0] * m_cameraTextureWidth;
-        focalLength.y = cameraConf.Camera1_IntrinsicsFocal[1] / (float)cameraConf.Camera1_IntrinsicsSensorPixels[1] * m_cameraTextureHeight;
-        center.x = cameraConf.Camera1_IntrinsicsCenter[0] / (float)cameraConf.Camera1_IntrinsicsSensorPixels[0] * m_cameraTextureWidth;
-        center.y = cameraConf.Camera1_IntrinsicsCenter[1] / (float)cameraConf.Camera1_IntrinsicsSensorPixels[1] * m_cameraTextureHeight;
+        focalLength.x = cameraConf.Camera1_IntrinsicsFocal[0] / (float)cameraConf.Camera1_IntrinsicsSensorPixels[0] * m_cameraFrameWidth;
+        focalLength.y = cameraConf.Camera1_IntrinsicsFocal[1] / (float)cameraConf.Camera1_IntrinsicsSensorPixels[1] * m_cameraFrameHeight;
+        center.x = cameraConf.Camera1_IntrinsicsCenter[0] / (float)cameraConf.Camera1_IntrinsicsSensorPixels[0] * m_cameraFrameWidth;
+        center.y = cameraConf.Camera1_IntrinsicsCenter[1] / (float)cameraConf.Camera1_IntrinsicsSensorPixels[1] * m_cameraFrameHeight;
     }
-
-    if (m_frameLayout == EStereoFrameLayout::StereoVerticalLayout)
-    {
-        focalLength.y /= 2.0f;
-        center.y /= 2.0f;
-    }
-    else if(m_frameLayout == EStereoFrameLayout::StereoHorizontalLayout)
-    {
-        focalLength.x /= 2.0f;
-        center.x /= 2.0f;
-    } 
 }
 
 void CameraManagerOpenCV::GetDistortionCoefficients(ECameraDistortionCoefficients& coeffs) const
@@ -250,6 +251,10 @@ EStereoFrameLayout CameraManagerOpenCV::GetFrameLayout() const
 bool CameraManagerOpenCV::IsUsingFisheyeModel() const
 {
     Config_Camera& cameraConf = m_configManager->GetConfig_Camera();
+
+    if (cameraConf.CameraForceDistortionMode == CameraDistortionMode_Fisheye) { return true; }
+    if (cameraConf.CameraForceDistortionMode == CameraDistortionMode_RegularLens) { return false; }
+
     return cameraConf.CameraHasFisheyeLens;
 }
 

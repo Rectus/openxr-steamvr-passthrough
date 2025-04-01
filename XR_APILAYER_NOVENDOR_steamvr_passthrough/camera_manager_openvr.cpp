@@ -184,18 +184,30 @@ void CameraManagerOpenVR::GetCameraDisplayStats(uint32_t& width, uint32_t& heigh
     }
 }
 
-void CameraManagerOpenVR::GetDistortedFrameSize(uint32_t& width, uint32_t& height, uint32_t& bufferSize) const
+void CameraManagerOpenVR::GetDistortedTextureSize(uint32_t& width, uint32_t& height, uint32_t& bufferSize) const
 {
     width = m_cameraTextureWidth;
     height = m_cameraTextureHeight;
     bufferSize = m_cameraFrameBufferSize;
 }
 
-void CameraManagerOpenVR::GetUndistortedFrameSize(uint32_t& width, uint32_t& height, uint32_t& bufferSize) const
+void CameraManagerOpenVR::GetUndistortedTextureSize(uint32_t& width, uint32_t& height, uint32_t& bufferSize) const
 {
     width = m_cameraUndistortedTextureWidth;
     height = m_cameraUndistortedTextureHeight;
     bufferSize = m_cameraUndistortedFrameBufferSize;
+}
+
+void CameraManagerOpenVR::GetDistortedFrameSize(uint32_t& width, uint32_t& height) const
+{
+    width = m_cameraFrameWidth;
+    height = m_cameraFrameHeight;
+}
+
+void CameraManagerOpenVR::GetUndistortedFrameSize(uint32_t& width, uint32_t& height) const
+{
+    width = m_cameraUndistortedFrameWidth;
+    height = m_cameraUndistortedFrameHeight;
 }
 
 void CameraManagerOpenVR::GetIntrinsics(const ERenderEye cameraEye, XrVector2f& focalLength, XrVector2f& center) const
@@ -218,14 +230,14 @@ void CameraManagerOpenVR::GetIntrinsics(const ERenderEye cameraEye, XrVector2f& 
 
         vr::IVRTrackedCamera* trackedCamera = m_openVRManager->GetVRTrackedCamera();
 
-        // OpenVR only provides camera inrinsics for the undistorted image dimesions for some reason.
+        // Use the OpenVR undistorted intrinsics as a baseline for the custom undistortion.
         vr::EVRTrackedCameraError cameraError = trackedCamera->GetCameraIntrinsics(m_hmdDeviceId, cameraIndex, vr::VRTrackedCameraFrameType_MaximumUndistorted, (vr::HmdVector2_t*)&focalLength, (vr::HmdVector2_t*)&center);
         if (cameraError != vr::VRTrackedCameraError_None)
         {
             ErrorLog("GetCameraIntrinsics error %i on device Id %i\n", cameraError, m_hmdDeviceId);
         }
 
-        // Multiply the values by the distorted/undistorted ratio, since we need the values for the distorted image.
+        // Multiply the values by the distorted/undistorted ratio, since we need the values for the distorted resolution.
         float xRatio = ((float)m_cameraFrameWidth) / m_cameraUndistortedFrameWidth;
         float yRatio = ((float)m_cameraFrameHeight) / m_cameraUndistortedFrameHeight;
 
@@ -241,30 +253,18 @@ void CameraManagerOpenVR::GetIntrinsics(const ERenderEye cameraEye, XrVector2f& 
             (m_frameLayout == EStereoFrameLayout::StereoHorizontalLayout && cameraEye == LEFT_EYE) || 
             (m_frameLayout == EStereoFrameLayout::StereoVerticalLayout && cameraEye == RIGHT_EYE))
         {
-            focalLength.x = cameraConf.OpenVR_Camera0_IntrinsicsFocal[0] / (float)cameraConf.OpenVR_Camera0_IntrinsicsSensorPixels[0] * m_cameraTextureWidth;
-            focalLength.y = cameraConf.OpenVR_Camera0_IntrinsicsFocal[1] / (float)cameraConf.OpenVR_Camera0_IntrinsicsSensorPixels[1] * m_cameraTextureHeight;
-            center.x = cameraConf.OpenVR_Camera0_IntrinsicsCenter[0] / (float)cameraConf.OpenVR_Camera0_IntrinsicsSensorPixels[0] * m_cameraTextureWidth;
-            center.y = cameraConf.OpenVR_Camera0_IntrinsicsCenter[1] / (float)cameraConf.OpenVR_Camera0_IntrinsicsSensorPixels[1] * m_cameraTextureHeight;
+            focalLength.x = cameraConf.OpenVR_Camera0_IntrinsicsFocal[0] / (float)cameraConf.OpenVR_Camera0_IntrinsicsSensorPixels[0] * m_cameraFrameWidth;
+            focalLength.y = cameraConf.OpenVR_Camera0_IntrinsicsFocal[1] / (float)cameraConf.OpenVR_Camera0_IntrinsicsSensorPixels[1] * m_cameraFrameHeight;
+            center.x = cameraConf.OpenVR_Camera0_IntrinsicsCenter[0] / (float)cameraConf.OpenVR_Camera0_IntrinsicsSensorPixels[0] * m_cameraFrameWidth;
+            center.y = cameraConf.OpenVR_Camera0_IntrinsicsCenter[1] / (float)cameraConf.OpenVR_Camera0_IntrinsicsSensorPixels[1] * m_cameraFrameHeight;
         }
         else
         {
-            focalLength.x = cameraConf.OpenVR_Camera1_IntrinsicsFocal[0] / (float)cameraConf.OpenVR_Camera1_IntrinsicsSensorPixels[0] * m_cameraTextureWidth;
-            focalLength.y = cameraConf.OpenVR_Camera1_IntrinsicsFocal[1] / (float)cameraConf.OpenVR_Camera1_IntrinsicsSensorPixels[1] * m_cameraTextureHeight;
-            center.x = cameraConf.OpenVR_Camera1_IntrinsicsCenter[0] / (float)cameraConf.OpenVR_Camera1_IntrinsicsSensorPixels[0] * m_cameraTextureWidth;
-            center.y = cameraConf.OpenVR_Camera1_IntrinsicsCenter[1] / (float)cameraConf.OpenVR_Camera1_IntrinsicsSensorPixels[1] * m_cameraTextureHeight;
+            focalLength.x = cameraConf.OpenVR_Camera1_IntrinsicsFocal[0] / (float)cameraConf.OpenVR_Camera1_IntrinsicsSensorPixels[0] * m_cameraFrameWidth;
+            focalLength.y = cameraConf.OpenVR_Camera1_IntrinsicsFocal[1] / (float)cameraConf.OpenVR_Camera1_IntrinsicsSensorPixels[1] * m_cameraFrameHeight;
+            center.x = cameraConf.OpenVR_Camera1_IntrinsicsCenter[0] / (float)cameraConf.OpenVR_Camera1_IntrinsicsSensorPixels[0] * m_cameraFrameWidth;
+            center.y = cameraConf.OpenVR_Camera1_IntrinsicsCenter[1] / (float)cameraConf.OpenVR_Camera1_IntrinsicsSensorPixels[1] * m_cameraFrameHeight;
         }
-
-        if (m_frameLayout == EStereoFrameLayout::StereoVerticalLayout)
-        {
-            focalLength.y /= 2.0f;
-            center.y /= 2.0f;
-        }
-        else if (m_frameLayout == EStereoFrameLayout::StereoHorizontalLayout)
-        {
-            focalLength.x /= 2.0f;
-            center.x /= 2.0f;
-        }
-
     }
 }
 
@@ -318,6 +318,10 @@ EStereoFrameLayout CameraManagerOpenVR::GetFrameLayout() const
 bool CameraManagerOpenVR::IsUsingFisheyeModel() const
 {
     Config_Camera& cameraConf = m_configManager->GetConfig_Camera();
+
+    if (cameraConf.CameraForceDistortionMode == CameraDistortionMode_Fisheye) { return true; }
+    if (cameraConf.CameraForceDistortionMode == CameraDistortionMode_RegularLens) { return false; }
+
     if (cameraConf.OpenVRCustomCalibration)
     {
         return cameraConf.OpenVR_CameraHasFisheyeLens;

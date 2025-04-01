@@ -10,6 +10,14 @@ enum ECameraProvider
 	CameraProvider_Augmented = 2
 };
 
+enum ECameraDistortionMode
+{
+	CameraDistortionMode_NotSet = -1,
+	CameraDistortionMode_NoDistortion = 0,
+	CameraDistortionMode_RegularLens = 1,
+	CameraDistortionMode_Fisheye = 2
+};
+
 enum EProjectionMode
 {
 	Projection_RoomView2D = 0,
@@ -206,6 +214,7 @@ struct Config_Camera
 
 	EStereoFrameLayout CameraFrameLayout = Mono;
 	bool CameraHasFisheyeLens = false;
+	ECameraDistortionMode CameraForceDistortionMode = CameraDistortionMode_NotSet;
 
 	int Camera0DeviceIndex = 0;
 
@@ -258,6 +267,7 @@ struct Config_Camera
 
 		CameraFrameLayout = (EStereoFrameLayout)ini.GetLongValue(section, "CameraFrameLayout", CameraFrameLayout);
 		CameraHasFisheyeLens = ini.GetBoolValue(section, "CameraHasFisheyeLens", CameraHasFisheyeLens);
+		CameraForceDistortionMode = (ECameraDistortionMode)ini.GetLongValue(section, "CameraForceDistortionMode", CameraForceDistortionMode);
 
 		Camera0DeviceIndex = (int)ini.GetLongValue(section, "Camera0DeviceIndex", Camera0DeviceIndex);
 
@@ -355,6 +365,7 @@ struct Config_Camera
 
 		ini.SetLongValue(section, "CameraFrameLayout", (long)CameraFrameLayout);
 		ini.SetBoolValue(section, "CameraHasFisheyeLens", CameraHasFisheyeLens);
+		ini.SetLongValue(section, "CameraForceDistortionMode", (long)CameraForceDistortionMode);
 
 		ini.SetLongValue(section, "Camera0DeviceIndex", (long)Camera0DeviceIndex);
 

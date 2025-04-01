@@ -90,23 +90,9 @@ std::shared_ptr<DepthFrame> DepthReconstruction::GetDepthFrame()
 void DepthReconstruction::InitReconstruction()
 {
     m_frameLayout = m_cameraManager->GetFrameLayout();
-    m_cameraManager->GetDistortedFrameSize(m_cameraTextureWidth, m_cameraTextureHeight, m_cameraFrameBufferSize);
-
-    if (m_frameLayout == StereoHorizontalLayout)
-    {
-        m_cameraFrameWidth = m_cameraTextureWidth / 2;
-        m_cameraFrameHeight = m_cameraTextureHeight;
-    }
-    else if (m_frameLayout == StereoVerticalLayout)
-    {
-        m_cameraFrameWidth = m_cameraTextureWidth;
-        m_cameraFrameHeight = m_cameraTextureHeight / 2;
-    }
-    else
-    {
-        m_cameraFrameWidth = m_cameraTextureWidth;
-        m_cameraFrameHeight = m_cameraTextureHeight;
-    }
+    uint32_t frameBufferSize;
+    m_cameraManager->GetDistortedTextureSize(m_cameraTextureWidth, m_cameraTextureHeight, frameBufferSize);
+    m_cameraManager->GetDistortedFrameSize(m_cameraFrameWidth, m_cameraFrameHeight);
 
     m_cvImageHeight = m_cameraFrameHeight / m_downscaleFactor;
     m_cvImageWidth = m_cameraFrameWidth / m_downscaleFactor;

@@ -1090,6 +1090,26 @@ if (bIsActiveTab) { ImGui::PopStyleColor(1); bIsActiveTab = false; }
 			ImGui::SetNextItemWidth(ImGui::GetContentRegionAvail().x * 0.45f);
 			ScrollableSlider("Field of View Scale", &mainConfig.FieldOfViewScale, 0.1f, 2.0f, "%.2f", 0.01f);
 			TextDescription("Sets the size of the rendered area in the Custom 2D and Stereo 3D projection modes.");
+
+			IMGUI_BIG_SPACING;
+
+			ImGui::Text("Override Distortion Mode");
+			if (ImGui::RadioButton("Off", cameraConfig.CameraForceDistortionMode == CameraDistortionMode_NotSet))
+			{
+				cameraConfig.CameraForceDistortionMode = CameraDistortionMode_NotSet;
+			}
+			ImGui::SameLine();
+			if (ImGui::RadioButton("Normal Lens", cameraConfig.CameraForceDistortionMode == CameraDistortionMode_RegularLens))
+			{
+				cameraConfig.CameraForceDistortionMode = CameraDistortionMode_RegularLens;
+			}
+			ImGui::SameLine();
+			if (ImGui::RadioButton("Fisheye", cameraConfig.CameraForceDistortionMode == CameraDistortionMode_Fisheye))
+			{
+				cameraConfig.CameraForceDistortionMode = CameraDistortionMode_Fisheye;
+			}
+
+			IMGUI_BIG_SPACING;
 		}
 
 		ImGui::SetNextItemOpen(true, ImGuiCond_Once);
