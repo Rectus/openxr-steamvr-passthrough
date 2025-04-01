@@ -4,6 +4,7 @@
 #include "passthrough_renderer.h"
 #include <log.h>
 #include <xr_linear.h>
+#include <dxgidebug.h>
 
 
 #include "shaders\fullscreen_quad_vs.h"
@@ -28,6 +29,10 @@
 using namespace steamvr_passthrough;
 using namespace steamvr_passthrough::log;
 
+
+#define SET_DXGI_DEBUGNAME(object) \
+constexpr char object##_Name[] = #object; \
+object->SetPrivateData(WKPDID_D3DDebugObjectName, sizeof(object##_Name), object##_Name);
 
 
 
@@ -90,35 +95,44 @@ bool PassthroughRendererDX11::InitRenderer()
 		ErrorLog("g_FillHolesShaderCS creation failure!\n");
 		return false;
 	}
+	SET_DXGI_DEBUGNAME(m_fillHolesComputeShader);
 
 	if (FAILED(m_d3dDevice->CreateVertexShader(g_FullscreenQuadShaderVS, sizeof(g_FullscreenQuadShaderVS), nullptr, &m_fullscreenQuadShader)))
 	{
 		ErrorLog("g_FullscreenQuadShaderVS creation failure!\n");
 		return false;
 	}
+	SET_DXGI_DEBUGNAME(m_fullscreenQuadShader);
 
 	if (FAILED(m_d3dDevice->CreateVertexShader(g_MeshRigidShaderVS, sizeof(g_MeshRigidShaderVS), nullptr, &m_meshRigidVertexShader)))
 	{
 		ErrorLog("g_MeshRigidShaderVS creation failure!\n");
 		return false;
 	}
+	SET_DXGI_DEBUGNAME(m_meshRigidVertexShader);
 
 	if (FAILED(m_d3dDevice->CreateVertexShader(g_PassthroughShaderVS, sizeof(g_PassthroughShaderVS), nullptr, &m_vertexShader)))
 	{
 		ErrorLog("g_PassthroughShaderVS creation failure!\n");
 		return false;
 	}
+	SET_DXGI_DEBUGNAME(m_vertexShader);
 
 	if (FAILED(m_d3dDevice->CreateVertexShader(g_PassthroughStereoShaderVS, sizeof(g_PassthroughStereoShaderVS), nullptr, &m_stereoVertexShader)))
 	{
 		ErrorLog("g_PassthroughStereoShaderVS creation failure!\n");
 		return false;
 	}
+	SET_DXGI_DEBUGNAME(m_stereoVertexShader);
 
 	if (FAILED(m_d3dDevice->CreateVertexShader(g_PassthroughStereoTemporalShaderVS, sizeof(g_PassthroughStereoTemporalShaderVS), nullptr, &m_stereoTemporalVertexShader)))
 	{
 		ErrorLog("g_PassthroughStereoTemporalShaderVS creation failure, temporal disparity filter disabled.\n");
 		m_bIsVSUAVSupported = false;
+	}
+	else
+	{
+		SET_DXGI_DEBUGNAME(m_stereoTemporalVertexShader);
 	}
 
 	if (FAILED(m_d3dDevice->CreateVertexShader(g_PassthroughReadDepthShaderVS, sizeof(g_PassthroughReadDepthShaderVS), nullptr, &m_passthroughReadDepthVS)))
@@ -126,60 +140,70 @@ bool PassthroughRendererDX11::InitRenderer()
 		ErrorLog("g_PassthroughReadDepthShaderVS creation failure!\n");
 		return false;
 	}
+	SET_DXGI_DEBUGNAME(m_passthroughReadDepthVS);
 
 	if (FAILED(m_d3dDevice->CreatePixelShader(g_PassthroughShaderPS, sizeof(g_PassthroughShaderPS), nullptr, &m_pixelShader)))
 	{
 		ErrorLog("g_PassthroughShaderPS creation failure!\n");
 		return false;
 	}
+	SET_DXGI_DEBUGNAME(m_pixelShader);
 
 	if (FAILED(m_d3dDevice->CreatePixelShader(g_PassthroughTemporalShaderPS, sizeof(g_PassthroughTemporalShaderPS), nullptr, &m_pixelShaderTemporal)))
 	{
 		ErrorLog("g_PassthroughTemporalShaderPS creation failure.\n");
 		return false;
 	}
+	SET_DXGI_DEBUGNAME(m_pixelShaderTemporal);
 
 	if (FAILED(m_d3dDevice->CreatePixelShader(g_AlphaPrepassShaderPS, sizeof(g_AlphaPrepassShaderPS), nullptr, &m_prepassShader)))
 	{
 		ErrorLog("g_AlphaPrepassShaderPS creation failure!\n");
 		return false;
 	}
+	SET_DXGI_DEBUGNAME(m_prepassShader);
 
 	if (FAILED(m_d3dDevice->CreatePixelShader(g_AlphaPrepassMaskedShaderPS, sizeof(g_AlphaPrepassMaskedShaderPS), nullptr, &m_maskedPrepassShader)))
 	{
 		ErrorLog("g_AlphaPrepassMaskedShaderPS creation failure!\n");
 		return false;
 	}
+	SET_DXGI_DEBUGNAME(m_maskedPrepassShader);
 
 	if (FAILED(m_d3dDevice->CreatePixelShader(g_AlphaCopyMaskedShaderPS, sizeof(g_AlphaCopyMaskedShaderPS), nullptr, &m_maskedAlphaCopyShader)))
 	{
 		ErrorLog("g_AlphaCopyMaskedShaderPS creation failure!\n");
 		return false;
 	}
+	SET_DXGI_DEBUGNAME(m_maskedAlphaCopyShader);
 
 	if (FAILED(m_d3dDevice->CreatePixelShader(g_depthWritePS, sizeof(g_depthWritePS), nullptr, &m_depthWritePS)))
 	{
 		ErrorLog("g_depthWritePS creation failure!\n");
 		return false;
 	}
+	SET_DXGI_DEBUGNAME(m_depthWritePS);
 
 	if (FAILED(m_d3dDevice->CreatePixelShader(g_depthWriteTemporalPS, sizeof(g_depthWriteTemporalPS), nullptr, &m_depthWriteTemporalPS)))
 	{
 		ErrorLog("g_depthWriteTemporalPS creation failure!\n");
 		return false;
 	}
+	SET_DXGI_DEBUGNAME(m_depthWriteTemporalPS);
 
 	if (FAILED(m_d3dDevice->CreatePixelShader(g_PassthroughStereoCompositePS, sizeof(g_PassthroughStereoCompositePS), nullptr, &m_stereoCompositePS)))
 	{
 		ErrorLog("g_PassthroughStereoCompositePS creation failure!\n");
 		return false;
 	}
+	SET_DXGI_DEBUGNAME(m_stereoCompositePS);
 
 	if (FAILED(m_d3dDevice->CreatePixelShader(g_PassthroughStereoCompositeTemporalPS, sizeof(g_PassthroughStereoCompositeTemporalPS), nullptr, &m_stereoCompositeTemporalPS)))
 	{
 		ErrorLog("g_PassthroughStereoCompositeTemporalPS creation failure!\n");
 		return false;
 	}
+	SET_DXGI_DEBUGNAME(m_stereoCompositeTemporalPS);
 
 
 	D3D11_BUFFER_DESC bufferDesc = {};
@@ -207,6 +231,7 @@ bool PassthroughRendererDX11::InitRenderer()
 		ErrorLog("CreateDepthStencilState failure!\n");
 		return false;
 	}
+	SET_DXGI_DEBUGNAME(m_depthStencilStateDisabled);
 
 	depth.DepthEnable = true;
 	depth.DepthWriteMask = D3D11_DEPTH_WRITE_MASK_ZERO;
@@ -216,6 +241,7 @@ bool PassthroughRendererDX11::InitRenderer()
 		ErrorLog("CreateDepthStencilState failure!\n");
 		return false;
 	}
+	SET_DXGI_DEBUGNAME(m_depthStencilStateLess);
 
 	depth.DepthWriteMask = D3D11_DEPTH_WRITE_MASK_ALL;
 	depth.DepthFunc = D3D11_COMPARISON_LESS_EQUAL;
@@ -224,6 +250,7 @@ bool PassthroughRendererDX11::InitRenderer()
 		ErrorLog("CreateDepthStencilState failure!\n");
 		return false;
 	}
+	SET_DXGI_DEBUGNAME(m_depthStencilStateLessWrite);
 
 	depth.DepthWriteMask = D3D11_DEPTH_WRITE_MASK_ZERO;
 	depth.DepthFunc = D3D11_COMPARISON_GREATER_EQUAL;
@@ -232,6 +259,7 @@ bool PassthroughRendererDX11::InitRenderer()
 		ErrorLog("CreateDepthStencilState failure!\n");
 		return false;
 	}
+	SET_DXGI_DEBUGNAME(m_depthStencilStateGreater);
 
 	depth.DepthWriteMask = D3D11_DEPTH_WRITE_MASK_ALL;
 	depth.DepthFunc = D3D11_COMPARISON_GREATER_EQUAL;
@@ -240,6 +268,7 @@ bool PassthroughRendererDX11::InitRenderer()
 		ErrorLog("CreateDepthStencilState failure!\n");
 		return false;
 	}
+	SET_DXGI_DEBUGNAME(m_depthStencilStateGreaterWrite);
 
 	depth.DepthWriteMask = D3D11_DEPTH_WRITE_MASK_ALL;
 	depth.DepthFunc = D3D11_COMPARISON_ALWAYS;
@@ -259,6 +288,7 @@ bool PassthroughRendererDX11::InitRenderer()
 		ErrorLog("CreateDepthStencilState failure!\n");
 		return false;
 	}
+	SET_DXGI_DEBUGNAME(m_depthStencilStateAlwaysWrite);
 
 
 	D3D11_SAMPLER_DESC sampler = {};
@@ -273,6 +303,7 @@ bool PassthroughRendererDX11::InitRenderer()
 		ErrorLog("CreateSamplerState failure!\n");
 		return false;
 	}
+	SET_DXGI_DEBUGNAME(m_defaultSampler);
 
 	D3D11_BLEND_DESC blendState = {};
 	blendState.RenderTarget[0].BlendEnable = true;
@@ -288,6 +319,7 @@ bool PassthroughRendererDX11::InitRenderer()
 		ErrorLog("CreateBlendState failure!\n");
 		return false;
 	}
+	SET_DXGI_DEBUGNAME(m_blendStateDestAlpha);
 
 	blendState.RenderTarget[0].DestBlend = D3D11_BLEND_ONE;
 
@@ -296,6 +328,7 @@ bool PassthroughRendererDX11::InitRenderer()
 		ErrorLog("CreateBlendState failure!\n");
 		return false;
 	}
+	SET_DXGI_DEBUGNAME(m_blendStateDestAlphaPremultiplied);
 
 	blendState.RenderTarget[0].RenderTargetWriteMask = D3D11_COLOR_WRITE_ENABLE_ALPHA;
 	blendState.RenderTarget[0].SrcBlend = D3D11_BLEND_ZERO;
@@ -309,6 +342,7 @@ bool PassthroughRendererDX11::InitRenderer()
 		ErrorLog("CreateBlendState failure!\n");
 		return false;
 	}
+	SET_DXGI_DEBUGNAME(m_blendStateSrcAlpha);
 
 	blendState.RenderTarget[0].RenderTargetWriteMask = D3D11_COLOR_WRITE_ENABLE_ALPHA;
 	blendState.RenderTarget[0].SrcBlend = D3D11_BLEND_ZERO;
@@ -322,6 +356,7 @@ bool PassthroughRendererDX11::InitRenderer()
 		ErrorLog("CreateBlendState failure!\n");
 		return false;
 	}
+	SET_DXGI_DEBUGNAME(m_blendStatePrepassUseAppAlpha);
 
 	blendState.RenderTarget[0].DestBlendAlpha = D3D11_BLEND_ZERO;
 
@@ -330,6 +365,7 @@ bool PassthroughRendererDX11::InitRenderer()
 		ErrorLog("CreateBlendState failure!\n");
 		return false;
 	}
+	SET_DXGI_DEBUGNAME(m_blendStatePrepassIgnoreAppAlpha);
 
 	blendState.RenderTarget[0].RenderTargetWriteMask = D3D11_COLOR_WRITE_ENABLE_ALL;
 	blendState.RenderTarget[0].SrcBlend = D3D11_BLEND_DEST_ALPHA;
@@ -343,6 +379,7 @@ bool PassthroughRendererDX11::InitRenderer()
 		ErrorLog("CreateBlendState failure!\n");
 		return false;
 	}
+	SET_DXGI_DEBUGNAME(m_blendStatePrepassInverseAppAlpha);
 
 	blendState.RenderTarget[0].RenderTargetWriteMask = D3D11_COLOR_WRITE_ENABLE_ALL;
 	blendState.RenderTarget[0].BlendOp = D3D11_BLEND_OP_ADD;
@@ -357,6 +394,7 @@ bool PassthroughRendererDX11::InitRenderer()
 		ErrorLog("CreateBlendState failure!\n");
 		return false;
 	}
+	SET_DXGI_DEBUGNAME(m_blendStateWriteFactored);
 
 
 	D3D11_RASTERIZER_DESC rasterizerDesc = {};
@@ -371,6 +409,7 @@ bool PassthroughRendererDX11::InitRenderer()
 		ErrorLog("CreateRasterizerState failure!\n");
 		return false;
 	}
+	SET_DXGI_DEBUGNAME(m_rasterizerState);
 
 	rasterizerDesc.FrontCounterClockwise = true;
 	if (FAILED(m_d3dDevice->CreateRasterizerState(&rasterizerDesc, m_rasterizerStateMirrored.GetAddressOf())))
@@ -378,6 +417,7 @@ bool PassthroughRendererDX11::InitRenderer()
 		ErrorLog("CreateRasterizerState failure!\n");
 		return false;
 	}
+	SET_DXGI_DEBUGNAME(m_rasterizerStateMirrored);
 
 	rasterizerDesc.FrontCounterClockwise = false;
 	rasterizerDesc.DepthBias = 16;
@@ -386,6 +426,7 @@ bool PassthroughRendererDX11::InitRenderer()
 		ErrorLog("CreateRasterizerState failure!\n");
 		return false;
 	}
+	SET_DXGI_DEBUGNAME(m_rasterizerStateDepthBias);
 
 	rasterizerDesc.FrontCounterClockwise = true;
 	if (FAILED(m_d3dDevice->CreateRasterizerState(&rasterizerDesc, m_rasterizerStateDepthBiasMirrored.GetAddressOf())))
@@ -393,6 +434,7 @@ bool PassthroughRendererDX11::InitRenderer()
 		ErrorLog("CreateRasterizerState failure!\n");
 		return false;
 	}
+	SET_DXGI_DEBUGNAME(m_rasterizerStateDepthBiasMirrored);
 
 	D3D11_INPUT_ELEMENT_DESC vertexDesc{};
 	vertexDesc.SemanticName = "POSITION";
@@ -408,6 +450,7 @@ bool PassthroughRendererDX11::InitRenderer()
 		ErrorLog("CreateInputLayout failure!\n");
 		return false;
 	}
+	SET_DXGI_DEBUGNAME(m_inputLayout);
 
 	GenerateMesh();
 
@@ -511,6 +554,7 @@ void PassthroughRendererDX11::SetupCameraFrameResource(const uint32_t imageIndex
 		ErrorLog("Frame Resource CreateTexture2D error!\n");
 		return;
 	}
+	SET_DXGI_DEBUGNAME(m_cameraFrameUploadTexture);
 
 	DX11FrameData& frameData = m_frameData[imageIndex];
 
@@ -556,6 +600,7 @@ void PassthroughRendererDX11::SetupCameraUndistortedFrameResource(const uint32_t
 		ErrorLog("Frame Resource CreateTexture2D error!\n");
 		return;
 	}
+	SET_DXGI_DEBUGNAME(m_cameraUndistortedFrameUploadTexture);
 
 	DX11FrameData& frameData = m_frameData[imageIndex];
 
@@ -618,6 +663,7 @@ void PassthroughRendererDX11::SetupDisparityMap(uint32_t width, uint32_t height)
 		ErrorLog("Disparity Map CreateTexture2D error!\n");
 		return;
 	}
+	SET_DXGI_DEBUGNAME(m_disparityMapUploadTexture);
 
 
 	for (int i = 0; i < m_frameData.size(); i++)
@@ -1124,6 +1170,7 @@ void PassthroughRendererDX11::GenerateMesh()
 		ErrorLog("Mesh vertex buffer creation error!\n");
 		return;
 	}
+	SET_DXGI_DEBUGNAME(m_cylinderMeshVertexBuffer);
 
 	D3D11_SUBRESOURCE_DATA indexBufferData{};
 	indexBufferData.pSysMem = m_cylinderMesh.triangles.data();
@@ -1134,6 +1181,7 @@ void PassthroughRendererDX11::GenerateMesh()
 		ErrorLog("Mesh index buffer creation error!\n");
 		return;
 	}
+	SET_DXGI_DEBUGNAME(m_cylinderMeshIndexBuffer);
 }
 
 
@@ -1150,6 +1198,7 @@ void PassthroughRendererDX11::GenerateDepthMesh(uint32_t width, uint32_t height)
 		ErrorLog("Depth mesh vertex buffer creation error!\n");
 		return;
 	}
+	SET_DXGI_DEBUGNAME(m_gridMeshVertexBuffer);
 
 	D3D11_SUBRESOURCE_DATA indexBufferData{};
 	indexBufferData.pSysMem = m_gridMesh.triangles.data();
@@ -1160,6 +1209,7 @@ void PassthroughRendererDX11::GenerateDepthMesh(uint32_t width, uint32_t height)
 		ErrorLog("Depth mesh index buffer creation error!\n");
 		return;
 	}
+	SET_DXGI_DEBUGNAME(m_gridMeshIndexBuffer);
 }
 
 

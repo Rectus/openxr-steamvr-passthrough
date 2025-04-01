@@ -321,12 +321,31 @@ bool CameraManagerOpenVR::IsUsingFisheyeModel() const
 
     if (cameraConf.CameraForceDistortionMode == CameraDistortionMode_Fisheye) { return true; }
     if (cameraConf.CameraForceDistortionMode == CameraDistortionMode_RegularLens) { return false; }
+    if (cameraConf.CameraForceDistortionMode == CameraDistortionMode_NoDistortion) { return false; }
 
     if (cameraConf.OpenVRCustomCalibration)
     {
         return cameraConf.OpenVR_CameraHasFisheyeLens;
     }
-    return true;
+    
+    vr::EVRDistortionFunctionType distTypes[4] = {};
+
+    vr::TrackedPropertyError error;
+    uint32_t numBytes = m_openVRManager->GetVRSystem()->GetArrayTrackedDeviceProperty(m_hmdDeviceId, vr::Prop_CameraDistortionFunction_Int32_Array, vr::k_unInt32PropertyTag, &distTypes, 4 * sizeof(int32_t), &error);
+    if (error != vr::TrackedProp_Success || numBytes == 0)
+    {
+        ErrorLog("Failed to get tracked camera distortion types, error [%i]\n", error);
+        return false;
+    }
+
+    if (m_frameLayout != Mono && distTypes[0] != distTypes[1])
+    {
+        ErrorLog("Error: Mismatched camera distortion functions are not supported %i != %%i\n", distTypes[0], distTypes[1]);
+        return false;
+    }
+
+    // Assuming that cameras with VRDistortionFunctionType_FTheta are non-fisheye, since there seems to be no proper way of finding out.
+    return distTypes[0] == vr::VRDistortionFunctionType_Extended_FTheta;
 }
 
 XrMatrix4x4f CameraManagerOpenVR::GetLeftToRightCameraTransform() const

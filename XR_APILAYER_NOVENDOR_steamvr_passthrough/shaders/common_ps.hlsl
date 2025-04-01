@@ -7,7 +7,7 @@
 #else
 #define REGISTER_PSVIEW register(b1)
 #define REGISTER_PSPASS register(b0)
-#define REGISTER_PSMASKED register(b4)
+#define REGISTER_PSMASKED register(b2)
 #endif
 
 
