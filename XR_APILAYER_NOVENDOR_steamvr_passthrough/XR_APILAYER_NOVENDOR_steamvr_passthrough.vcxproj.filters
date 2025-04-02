@@ -86,6 +86,9 @@
     <ClInclude Include="camera_enumerator.h">
       <Filter>Header Files</Filter>
     </ClInclude>
+    <ClInclude Include="mathutil.h">
+      <Filter>Header Files</Filter>
+    </ClInclude>
   </ItemGroup>
   <ItemGroup>
     <ClCompile Include="pch.cpp">

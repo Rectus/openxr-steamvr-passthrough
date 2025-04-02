@@ -106,13 +106,13 @@ void ConfigManager::SetupStereoPresets()
 	m_stereoPresets[1].StereoUseDisparityTemporalFiltering = false;
 
 	m_stereoPresets[1].StereoDisparityBothEyes = false;
-	m_stereoPresets[1].StereoDisparityFilterWidth = 2;
+	m_stereoPresets[1].StereoDisparityFilterWidth = 0;
 	m_stereoPresets[1].StereoCutoutEnabled = false;
 	m_stereoPresets[1].StereoCutoutFactor = 0.75f;
 	m_stereoPresets[1].StereoCutoutOffset = 1.5f;
 	m_stereoPresets[1].StereoCutoutFilterWidth = 0.9f;
 
-	m_stereoPresets[1].StereoBlockSize = 11;
+	m_stereoPresets[1].StereoBlockSize = 9;
 	m_stereoPresets[1].StereoMinDisparity = 0;
 	m_stereoPresets[1].StereoMaxDisparity = 96;
 	m_stereoPresets[1].StereoSGBM_Mode = StereoMode_SGBM3Way;
@@ -126,7 +126,7 @@ void ConfigManager::SetupStereoPresets()
 
 	m_stereoPresets[1].StereoFiltering = StereoFiltering_WLS;
 	m_stereoPresets[1].StereoWLS_Lambda = 8000.0f;
-	m_stereoPresets[1].StereoWLS_Sigma = 1.5f;
+	m_stereoPresets[1].StereoWLS_Sigma = 1.9f;
 	m_stereoPresets[1].StereoWLS_ConfidenceRadius = 0.5f;
 	m_stereoPresets[1].StereoFBS_Spatial = 6.0f;
 	m_stereoPresets[1].StereoFBS_Luma = 8.0f;
@@ -141,14 +141,14 @@ void ConfigManager::SetupStereoPresets()
 	m_stereoPresets[2].StereoUseBWInputAlpha = false;
 	m_stereoPresets[2].StereoUseHexagonGridMesh = false;
 	m_stereoPresets[2].StereoFillHoles = true;
-	m_stereoPresets[2].StereoDrawBackground = true;
+	m_stereoPresets[2].StereoDrawBackground = false;
 	m_stereoPresets[2].StereoFrameSkip = 0;
 	m_stereoPresets[2].StereoDownscaleFactor = 4;
-	m_stereoPresets[2].StereoUseDeferredDepthPass = false;
+	m_stereoPresets[2].StereoUseDeferredDepthPass = true;
 	m_stereoPresets[2].StereoUseDisparityTemporalFiltering = false;
 
 	m_stereoPresets[2].StereoDisparityBothEyes = false;
-	m_stereoPresets[2].StereoDisparityFilterWidth = 1;
+	m_stereoPresets[2].StereoDisparityFilterWidth = 0;
 	m_stereoPresets[2].StereoCutoutEnabled = false;
 	m_stereoPresets[2].StereoCutoutFactor = 0.75f;
 	m_stereoPresets[2].StereoCutoutOffset = 1.5f;
@@ -183,11 +183,11 @@ void ConfigManager::SetupStereoPresets()
 	m_stereoPresets[3].StereoUseBWInputAlpha = false;
 	m_stereoPresets[3].StereoUseHexagonGridMesh = false;
 	m_stereoPresets[3].StereoFillHoles = true;
-	m_stereoPresets[3].StereoDrawBackground = true;
+	m_stereoPresets[3].StereoDrawBackground = false;
 	m_stereoPresets[3].StereoFrameSkip = 0;
 	m_stereoPresets[3].StereoDownscaleFactor = 4;
 	m_stereoPresets[3].StereoUseDeferredDepthPass = true;
-	m_stereoPresets[3].StereoUseDisparityTemporalFiltering = true;
+	m_stereoPresets[3].StereoUseDisparityTemporalFiltering = false;
 
 	m_stereoPresets[3].StereoDisparityBothEyes = true;
 	m_stereoPresets[3].StereoDisparityFilterWidth = 2;
@@ -225,7 +225,7 @@ void ConfigManager::SetupStereoPresets()
 	m_stereoPresets[4].StereoUseBWInputAlpha = false;
 	m_stereoPresets[4].StereoUseHexagonGridMesh = false;
 	m_stereoPresets[4].StereoFillHoles = true;
-	m_stereoPresets[4].StereoDrawBackground = true;
+	m_stereoPresets[4].StereoDrawBackground = false;
 	m_stereoPresets[4].StereoFrameSkip = 0;
 	m_stereoPresets[4].StereoDownscaleFactor = 3;
 	m_stereoPresets[4].StereoUseDeferredDepthPass = true;
@@ -265,13 +265,13 @@ void ConfigManager::SetupStereoPresets()
 	m_stereoPresets[5].StereoRectificationFiltering = false;
 	m_stereoPresets[5].StereoUseColor = false;
 	m_stereoPresets[5].StereoUseBWInputAlpha = false;
-	m_stereoPresets[5].StereoUseHexagonGridMesh = false;
+	m_stereoPresets[5].StereoUseHexagonGridMesh = true;
 	m_stereoPresets[5].StereoFillHoles = true;
-	m_stereoPresets[5].StereoDrawBackground = true;
+	m_stereoPresets[5].StereoDrawBackground = false;
 	m_stereoPresets[5].StereoFrameSkip = 0;
 	m_stereoPresets[5].StereoDownscaleFactor = 2;
 	m_stereoPresets[5].StereoUseDeferredDepthPass = true;
-	m_stereoPresets[5].StereoUseDisparityTemporalFiltering = true;
+	m_stereoPresets[5].StereoUseDisparityTemporalFiltering = false;
 
 	m_stereoPresets[5].StereoDisparityBothEyes = true;
 	m_stereoPresets[5].StereoDisparityFilterWidth = 3;
@@ -292,7 +292,7 @@ void ConfigManager::SetupStereoPresets()
 	m_stereoPresets[5].StereoSGBM_SpeckleWindowSize = 80;
 	m_stereoPresets[5].StereoSGBM_SpeckleRange = 3;
 
-	m_stereoPresets[5].StereoFiltering = StereoFiltering_WLS_FBS;
+	m_stereoPresets[5].StereoFiltering = StereoFiltering_WLS;
 	m_stereoPresets[5].StereoWLS_Lambda = 8000.0f;
 	m_stereoPresets[5].StereoWLS_Sigma = 0.5f;
 	m_stereoPresets[5].StereoWLS_ConfidenceRadius = 0.5f;
