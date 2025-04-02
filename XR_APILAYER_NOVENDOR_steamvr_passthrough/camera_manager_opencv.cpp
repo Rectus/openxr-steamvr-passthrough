@@ -3,64 +3,13 @@
 #include <log.h>
 #include "layer.h"
 #include <stdlib.h>
+#include "mathutil.h"
 
 
 using namespace steamvr_passthrough;
 using namespace steamvr_passthrough::log;
 
 
-inline XrMatrix4x4f ToXRMatrix4x4(vr::HmdMatrix44_t& input)
-{
-    XrMatrix4x4f output =
-    {
-        input.m[0][0], input.m[1][0], input.m[2][0], input.m[3][0],
-        input.m[0][1], input.m[1][1], input.m[2][1], input.m[3][1],
-        input.m[0][2], input.m[1][2], input.m[2][2], input.m[3][2],
-        input.m[0][3], input.m[1][3], input.m[2][3], input.m[3][3]
-    };
-    return output;
-}
-
-inline XrMatrix4x4f ToXRMatrix4x4(vr::HmdMatrix34_t& input)
-{
-    XrMatrix4x4f output =
-    {
-        input.m[0][0], input.m[1][0], input.m[2][0], 0,
-        input.m[0][1], input.m[1][1], input.m[2][1], 0,
-        input.m[0][2], input.m[1][2], input.m[2][2], 0,
-        input.m[0][3], input.m[1][3], input.m[2][3], 1
-    };
-    return output;
-}
-
-inline XrMatrix4x4f ToXRMatrix4x4Inverted(vr::HmdMatrix44_t& input)
-{
-    XrMatrix4x4f temp =
-    {
-        input.m[0][0], input.m[1][0], input.m[2][0], input.m[3][0],
-        input.m[0][1], input.m[1][1], input.m[2][1], input.m[3][1],
-        input.m[0][2], input.m[1][2], input.m[2][2], input.m[3][2],
-        input.m[0][3], input.m[1][3], input.m[2][3], input.m[3][3]
-    };
-    XrMatrix4x4f output;
-    XrMatrix4x4f_Invert(&output, &temp);
-    return output;
-}
-
-
-inline XrMatrix4x4f ToXRMatrix4x4Inverted(vr::HmdMatrix34_t& input)
-{
-    XrMatrix4x4f temp =
-    {
-        input.m[0][0], input.m[1][0], input.m[2][0], 0,
-        input.m[0][1], input.m[1][1], input.m[2][1], 0,
-        input.m[0][2], input.m[1][2], input.m[2][2], 0,
-        input.m[0][3], input.m[1][3], input.m[2][3], 1
-    };
-    XrMatrix4x4f output;
-    XrMatrix4x4f_Invert(&output, &temp);
-    return output;
-}
 
 
 CameraManagerOpenCV::CameraManagerOpenCV(std::shared_ptr<IPassthroughRenderer> renderer, ERenderAPI renderAPI, ERenderAPI appRenderAPI, std::shared_ptr<ConfigManager> configManager, std::shared_ptr<OpenVRManager> openVRManager, bool bIsAugmented)

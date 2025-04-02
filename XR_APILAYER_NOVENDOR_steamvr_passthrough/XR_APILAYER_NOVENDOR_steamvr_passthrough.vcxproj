@@ -197,6 +197,7 @@ copy $(SolutionDir)\readme.md $(OutDir)
     <ClInclude Include="framework\dispatch.h" />
     <ClInclude Include="framework\log.h" />
     <ClInclude Include="framework\util.h" />
+    <ClInclude Include="mathutil.h" />
     <ClInclude Include="mesh.h" />
     <ClInclude Include="openvr_manager.h" />
     <ClInclude Include="passthrough_renderer.h" />

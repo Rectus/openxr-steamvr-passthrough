@@ -2,37 +2,12 @@
 #include "depth_reconstruction.h"
 
 #include <log.h>
+#include "mathutil.h"
 
 
 using namespace steamvr_passthrough;
 using namespace steamvr_passthrough::log;
 
-
-inline XrMatrix4x4f ToXRMatrix4x4(vr::HmdMatrix34_t& input)
-{
-    XrMatrix4x4f output =
-    {
-        input.m[0][0], input.m[1][0], input.m[2][0], 0,
-        input.m[0][1], input.m[1][1], input.m[2][1], 0,
-        input.m[0][2], input.m[1][2], input.m[2][2], 0,
-        input.m[0][3], input.m[1][3], input.m[2][3], 1
-    };
-    return output;
-}
-
-XrMatrix4x4f CVMatToXrMatrix(cv::Mat& inMatrix)
-{
-    XrMatrix4x4f outMatrix;
-    XrMatrix4x4f_CreateIdentity(&outMatrix);
-    for (int y = 0; y < inMatrix.rows; y++)
-    {
-        for (int x = 0; x < inMatrix.cols; x++)
-        {
-            outMatrix.m[x + y * 4] = (float)inMatrix.at<double>(y, x);
-        }
-    }
-    return outMatrix;
-}
 
 
 

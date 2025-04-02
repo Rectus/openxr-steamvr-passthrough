@@ -7,6 +7,7 @@
 #include "lodepng.h"
 #include "resource.h"
 #include "camera_enumerator.h"
+#include "mathutil.h"
 
 #include "fonts/roboto_medium.cpp"
 #include "fonts/cousine_regular.cpp"
@@ -1651,6 +1652,8 @@ if (bIsActiveTab) { ImGui::PopStyleColor(1); bIsActiveTab = false; }
 						}
 						ImGui::Text("]");
 					}
+					EulerAngles angles = HMDMatRotationToEuler(props.CameraProps[i].CameraToHeadTransform);
+					ImGui::Text("Rotation(deg): %.2f %.2f %.2f", angles.X, angles.Y, angles.Z);
 					
 					ImGui::Spacing();
 
