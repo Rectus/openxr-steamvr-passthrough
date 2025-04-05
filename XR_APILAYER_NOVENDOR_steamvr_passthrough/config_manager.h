@@ -549,37 +549,37 @@ struct Config_Stereo
 	bool StereoUseBWInputAlpha= false;
 	bool StereoUseHexagonGridMesh = false;
 	bool StereoFillHoles = true;
-	bool StereoDrawBackground = true;
+	bool StereoDrawBackground = false;
 	bool StereoUseDeferredDepthPass = true;
 	int StereoFrameSkip = 0;
-	int StereoDownscaleFactor = 2;
+	int StereoDownscaleFactor = 3;
 	bool StereoUseDisparityTemporalFiltering = false;
 	float StereoDisparityTemporalFilteringStrength = 0.9f;
-	float StereoDisparityTemporalFilteringDistance = 1.0f;
+	float StereoDisparityTemporalFilteringDistance = 0.5f;
 
 	bool StereoDisparityBothEyes = true;
 	int StereoDisparityFilterWidth = 3;
 	bool StereoCutoutEnabled = false;
 	float StereoCutoutFactor = 0.75f;
 	float StereoCutoutOffset = 1.5f;
-	float StereoCutoutFilterWidth = 0.9f;
-	float StereoCutoutCombineFactor = 1.0f;
+	float StereoCutoutFilterWidth = 1.5f;
+	float StereoCutoutCombineFactor = 0.7f;
 
 	float StereoDepthFoldStrength = 2.0f;
 	float StereoDepthFoldMaxDistance = 3.0f;
 	float StereoDepthFoldFilterWidth = 1.5f;
 
-	int StereoBlockSize = 1;
+	int StereoBlockSize = 5;
 	int StereoMinDisparity = 0;
 	int StereoMaxDisparity = 96;
 	EStereoSGBM_Mode StereoSGBM_Mode = StereoMode_SGBM3Way;
-	int StereoSGBM_P1 = 200;
-	int StereoSGBM_P2 = 220;
-	int StereoSGBM_DispMaxDiff = 3;
+	int StereoSGBM_P1 = 40;
+	int StereoSGBM_P2 = 64;
+	int StereoSGBM_DispMaxDiff = 0;
 	int StereoSGBM_PreFilterCap = 4;
-	int StereoSGBM_UniquenessRatio = 4;
+	int StereoSGBM_UniquenessRatio = 1;
 	int StereoSGBM_SpeckleWindowSize = 80;
-	int StereoSGBM_SpeckleRange = 1;
+	int StereoSGBM_SpeckleRange = 3;
 
 	EStereoFiltering StereoFiltering = StereoFiltering_WLS;
 	float StereoWLS_Lambda = 8000.0f;
@@ -756,6 +756,14 @@ public:
 		return bPending;
 	}
 
+	void SetFrameTextureDumpPending() { m_bFrameTextureDumpPending = true; }
+	bool CheckFrameTextureDumpPending()
+	{
+		bool bPending = m_bFrameTextureDumpPending;
+		m_bFrameTextureDumpPending = false;
+		return bPending;
+	}
+
 	Config_Main& GetConfig_Main() { return m_configMain; }
 	Config_Camera& GetConfig_Camera() { return m_configCamera; }
 	Config_Core& GetConfig_Core() { return m_configCore; }
@@ -776,6 +784,7 @@ private:
 	bool m_bConfigUpdated = false;
 	bool m_bRendererResetPending = false;
 	bool m_bCameraParamChangesPending = false;
+	bool m_bFrameTextureDumpPending = false;
 
 	Config_Main m_configMain;
 	Config_Camera m_configCamera;

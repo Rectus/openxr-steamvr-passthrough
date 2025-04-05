@@ -639,6 +639,11 @@ void CameraManagerOpenVR::ServeFrames()
             }
         }
 
+        if (m_configManager->CheckFrameTextureDumpPending())
+        {
+            DumpCameraFrameTexture(m_underConstructionFrame->frameBuffer, m_cameraTextureWidth, m_cameraTextureHeight, "OpenVR");
+        }
+
         bHasFrame = true;
         lastFrameSequence = m_underConstructionFrame->header.nFrameSequence;
 

@@ -398,6 +398,11 @@ void CameraManagerOpenCV::ServeFrames()
         int from_to[] = { 0,2, 1,1, 2,0, -1,3 };
         cv::mixChannels(&frameBuffer, 1, &paddedBuffer, 1, from_to, frameBuffer.channels());
 
+        if (m_configManager->CheckFrameTextureDumpPending())
+        {
+            DumpCameraFrameTexture(m_underConstructionFrame->frameBuffer, m_cameraTextureWidth, m_cameraTextureHeight, "OpenCV");
+        }
+
         m_underConstructionFrame->bHasFrameBuffer = true;
 
         bHasFrame = true;

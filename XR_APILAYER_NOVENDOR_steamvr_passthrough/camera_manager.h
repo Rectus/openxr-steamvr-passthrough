@@ -8,7 +8,11 @@
 #include "openvr_manager.h"
 #include "mesh.h"
 #include <opencv2/videoio.hpp>
+#include "lodepng.h"
+#include <log.h>
 
+using namespace steamvr_passthrough;
+using namespace steamvr_passthrough::log;
 
 enum ETrackedCameraFrameType
 {
@@ -50,6 +54,24 @@ public:
 	virtual float GetFrameRetrievalPerfTime() = 0;
 	virtual bool GetCameraFrame(std::shared_ptr<CameraFrame>& frame) = 0;
 	virtual void CalculateFrameProjection(std::shared_ptr<CameraFrame>& frame, std::shared_ptr<DepthFrame> depthFrame, const XrCompositionLayerProjection& layer, float timeToPhotons, const XrReferenceSpaceCreateInfo& refSpaceInfo, UVDistortionParameters& distortionParams) = 0;
+
+	const void DumpCameraFrameTexture(const std::shared_ptr<std::vector<uint8_t>> frameBuffer, const uint32_t width, const uint32_t height, const std::string cameraProvider)
+	{
+		const auto time = std::chrono::current_zone()->to_local(std::chrono::system_clock::now());
+
+		const std::string fileName = (std::filesystem::path(getenv("LOCALAPPDATA")) / std::format("{} Camera Frame {:%Y-%m-%d %H-%M-%S}.png", cameraProvider, time)).string();
+
+		uint32_t error = lodepng::encode(fileName, frameBuffer->data(), width, height);
+
+		if (error)
+		{
+			ErrorLog("Failed to write texture to file %s: %s", fileName.data(), lodepng_error_text(error));
+		}
+		else
+		{
+			Log("Dumped camera frame to file: %s", fileName.data());
+		}
+	}
 };
 
 class CameraManagerOpenVR : public ICameraManager

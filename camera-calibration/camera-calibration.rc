@@ -19,6 +19,7 @@
 
 #if !defined(AFX_RESOURCE_DLL) || defined(AFX_TARG_ENU)
 LANGUAGE LANG_ENGLISH, SUBLANG_ENGLISH_US
+#pragma code_page(1252)
 
 /////////////////////////////////////////////////////////////////////////////
 //
@@ -66,6 +67,7 @@ END
 
 #if !defined(AFX_RESOURCE_DLL) || defined(AFX_TARG_SVE)
 LANGUAGE LANG_SWEDISH, SUBLANG_SWEDISH
+#pragma code_page(1252)
 
 /////////////////////////////////////////////////////////////////////////////
 //
@@ -73,8 +75,8 @@ LANGUAGE LANG_SWEDISH, SUBLANG_SWEDISH
 //
 
 VS_VERSION_INFO VERSIONINFO
- FILEVERSION 0,3,2,0
- PRODUCTVERSION 0,3,2,0
+ FILEVERSION 0,3,3,0
+ PRODUCTVERSION 0,3,3,0
  FILEFLAGSMASK 0x3fL
 #ifdef _DEBUG
  FILEFLAGS 0x1L
@@ -91,12 +93,12 @@ BEGIN
         BEGIN
             VALUE "CompanyName", "N/A"
             VALUE "FileDescription", "Passthrough Camera Calibration Utility"
-            VALUE "FileVersion", "0.3.2.0"
+            VALUE "FileVersion", "0.3.3.0"
             VALUE "InternalName", "camera-calibration.exe"
-            VALUE "LegalCopyright", "Copyright (C) Rectus 2024"
+            VALUE "LegalCopyright", "Copyright (C) Rectus 2025"
             VALUE "OriginalFilename", "camera-calibration.exe"
             VALUE "ProductName", "OpenXR SteamVR Passthrough API Layer"
-            VALUE "ProductVersion", "0.3.2"
+            VALUE "ProductVersion", "0.3.3"
         END
     END
     BLOCK "VarFileInfo"

@@ -658,31 +658,37 @@ if (bIsActiveTab) { ImGui::PopStyleColor(1); bIsActiveTab = false; }
 			if (ImGui::RadioButton("Very Low", mainConfig.StereoPreset == StereoPreset_VeryLow))
 			{
 				mainConfig.StereoPreset = StereoPreset_VeryLow;
+				m_configManager->SetRendererResetPending();
 			}
 
 			if (ImGui::RadioButton("Low", mainConfig.StereoPreset == StereoPreset_Low))
 			{
 				mainConfig.StereoPreset = StereoPreset_Low;
+				m_configManager->SetRendererResetPending();
 			}
 
 			if (ImGui::RadioButton("Medium", mainConfig.StereoPreset == StereoPreset_Medium))
 			{
 				mainConfig.StereoPreset = StereoPreset_Medium;
+				m_configManager->SetRendererResetPending();
 			}
 
 			if (ImGui::RadioButton("High", mainConfig.StereoPreset == StereoPreset_High))
 			{
 				mainConfig.StereoPreset = StereoPreset_High;
+				m_configManager->SetRendererResetPending();
 			}
 
 			if (ImGui::RadioButton("Very High", mainConfig.StereoPreset == StereoPreset_VeryHigh))
 			{
 				mainConfig.StereoPreset = StereoPreset_VeryHigh;
+				m_configManager->SetRendererResetPending();
 			}
 
 			if (ImGui::RadioButton("Custom", mainConfig.StereoPreset == StereoPreset_Custom))
 			{
 				mainConfig.StereoPreset = StereoPreset_Custom;
+				m_configManager->SetRendererResetPending();
 			}
 			ImGui::EndGroup();
 
@@ -898,7 +904,7 @@ if (bIsActiveTab) { ImGui::PopStyleColor(1); bIsActiveTab = false; }
 
 		if (mainConfig.StereoPreset == StereoPreset_Custom)
 		{
-			stereoConfig = stereoCustomConfig;
+			m_configManager->GetConfig_Stereo() = stereoCustomConfig;
 		}
 
 		ImGui::EndChild();
@@ -1470,6 +1476,14 @@ if (bIsActiveTab) { ImGui::PopStyleColor(1); bIsActiveTab = false; }
 			ImGui::Text("Stereo reconstruction duration: %.2fms", m_displayValues.stereoReconstructionTimeMS);
 			ImGui::Text("Camera frame retrieval duration: %.2fms", m_displayValues.frameRetrievalTimeMS);
 			ImGui::PopFont();
+
+			IMGUI_BIG_SPACING;
+
+			if (ImGui::Button("Dump Camera Frame to File"))
+			{
+				m_configManager->SetFrameTextureDumpPending();
+			}
+
 			ImGui::EndGroup();		
 		}
 
