@@ -310,7 +310,7 @@ protected:
 	DX11TemporaryRenderTarget& GetTemporaryRenderTarget(const uint32_t swapchainIndex, const uint32_t eyeIndex);
 	void GenerateMesh();
 	void GenerateDepthMesh(uint32_t width, uint32_t height);
-	void SetupTemporalUAV(const uint32_t viewIndex, const uint32_t swapchainIndex);
+	void SetupTemporalUAV(const uint32_t viewIndex, const uint32_t swapchainIndex, const uint32_t width, const uint32_t height);
 	void UpdateRenderModels(CameraFrame* frame);
 
 	void RenderHoleFillCS(DX11FrameData& frameData, std::shared_ptr<DepthFrame> depthFrame);

@@ -954,12 +954,7 @@ void PassthroughRendererDX11::InitRenderTarget(const ERenderEye eye, void* rende
 		return;
 	}
 
-	if (m_configManager->GetConfig_Main().EnableTemporalFiltering)
-	{
-		SetupTemporalUAV(viewIndex, 0);
-		SetupTemporalUAV(viewIndex, 1);
-	}
-	else if (m_cameraFilter[viewIndex][0].SRV != nullptr)
+	if (!m_configManager->GetConfig_Main().EnableTemporalFiltering && m_cameraFilter[viewIndex][0].SRV != nullptr)
 	{
 		// Free the UAV resources so that they will be recreated with the correct size in case it changed while temporal filtering was turned off.
 		m_cameraFilter[viewIndex][0].SRV.Reset();
@@ -1066,16 +1061,13 @@ bool PassthroughRendererDX11::CheckInitFrameData(const uint32_t imageIndex)
 
 
 
-void PassthroughRendererDX11::SetupTemporalUAV(const uint32_t viewIndex, const uint32_t frameIndex)
+void PassthroughRendererDX11::SetupTemporalUAV(const uint32_t viewIndex, const uint32_t frameIndex, const uint32_t width, const uint32_t height)
 {
-	D3D11_TEXTURE2D_DESC rtDesc;
-	((ID3D11Texture2D*)m_viewData[viewIndex][0].renderTarget.Texture.Get())->GetDesc(&rtDesc);
-
 	D3D11_TEXTURE2D_DESC uavTextureDesc = {};
 	uavTextureDesc.MipLevels = 1;
 	uavTextureDesc.Format = DXGI_FORMAT_R16G16B16A16_UNORM;
-	uavTextureDesc.Width = rtDesc.Width;
-	uavTextureDesc.Height = rtDesc.Height;
+	uavTextureDesc.Width = width;
+	uavTextureDesc.Height = height;
 	uavTextureDesc.ArraySize = 1;
 	uavTextureDesc.SampleDesc.Count = 1;
 	uavTextureDesc.SampleDesc.Quality = 0;
@@ -1350,10 +1342,14 @@ void PassthroughRendererDX11::RenderPassthroughFrame(const XrCompositionLayerPro
 	{
 		if (m_cameraFilter[0][0].Texture == nullptr) 
 		{ 
-			SetupTemporalUAV(0, 0);
-			SetupTemporalUAV(0, 1);
-			SetupTemporalUAV(1, 0);
-			SetupTemporalUAV(1, 1);
+			// The history filter texture needs to be tha same size as the rendered area.
+			XrExtent2Di leftSize = layer->views[0].subImage.imageRect.extent;
+			XrExtent2Di rightSize = layer->views[1].subImage.imageRect.extent;
+
+			SetupTemporalUAV(0, 0, leftSize.width, leftSize.height);
+			SetupTemporalUAV(0, 1, leftSize.width, leftSize.height);
+			SetupTemporalUAV(1, 0, rightSize.width, rightSize.height);
+			SetupTemporalUAV(1, 1, rightSize.width, rightSize.height);
 		}
 	}
 
