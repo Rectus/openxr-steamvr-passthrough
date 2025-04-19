@@ -97,18 +97,30 @@ VS_OUTPUT main(float3 inPosition : POSITION, uint vertexID : SV_VertexID)
     float crossDepth = depth;
     float activeDepth = depth;
     
+    float2 offset;
+    
     if(g_bBlendDepthMaps)
     {
         crossDepth = g_crossDepthMap.SampleLevel(g_samplerState, inPosition.xy, 0);
   
         bool selectMainCamera = cameraBlendValidity.x > 0 || cameraBlendValidity.y <= 0;   
         activeDepth = selectMainCamera ? depth : crossDepth;
+        
+        // Move background vertices underneath foreground vertices to prevent interpolation at discontinuities.
+        offset = selectMainCamera 
+            ? sobel_discontinuity_direction(g_depthMap, depth, inPosition.xy) * saturate(1.0 - projectionConfidence.x) 
+            : sobel_discontinuity_direction(g_crossDepthMap, crossDepth, inPosition.xy) * saturate(1.0 - projectionConfidence.y);
+      
+    }
+    else
+    {
+        // Move background vertices underneath foreground vertices to prevent interpolation at discontinuities.
+        offset = sobel_discontinuity_direction(g_depthMap, depth, inPosition.xy) * saturate(1.0 - projectionConfidence.x);
     }
     
     float4 clipSpacePos = float4((inPosition.xy * float2(2.0, -2.0) + float2(-1, 1)), activeDepth, 1.0);   
     
-    // Move background vertices underneath foreground vertices to prevent interpolation at discontinuities.
-    clipSpacePos.xy += max(sobel_discontinuity_direction(g_depthMap, depth, inPosition.xy) * projectionConfidence.x, sobel_discontinuity_direction(g_crossDepthMap, crossDepth, inPosition.xy) * projectionConfidence.y);
+    clipSpacePos.xy += offset;
     
     float4 worldProjectionPos = mul(g_HMDProjectionToWorld, clipSpacePos);
     
