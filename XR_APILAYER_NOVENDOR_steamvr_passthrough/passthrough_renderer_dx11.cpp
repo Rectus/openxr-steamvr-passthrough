@@ -2248,11 +2248,13 @@ void PassthroughRendererDX11::RenderDepthPrepassView(const ERenderEye eye, const
 	//float clearColor[4] = { 0,0,0,0 };
 	//m_renderContext->ClearRenderTargetView(viewData.passthroughCameraValidity.RTV.Get(), clearColor);
 
+	m_renderContext->ClearDepthStencilView(viewData.passthroughDepthStencil[0].DSV.Get(), D3D11_CLEAR_DEPTH, 1.0f, 0);
+
 	m_renderContext->OMSetRenderTargets(1, viewData.passthroughCameraValidity.RTV.GetAddressOf(), viewData.passthroughDepthStencil[0].DSV.Get());
 
 	float blendFactor[4] = { 1,0,1,0 };
 	m_renderContext->OMSetBlendState(m_blendStateWriteFactored.Get(), blendFactor, UINT_MAX);
-	m_renderContext->OMSetDepthStencilState(m_depthStencilStateAlwaysWrite.Get(), 1);
+	m_renderContext->OMSetDepthStencilState(m_depthStencilStateLessWrite.Get(), 1);
 
 	ID3D11ShaderResourceView* oldPSSRVs[2];
 	m_renderContext->PSGetShaderResources(0, 2, oldPSSRVs);
@@ -2324,6 +2326,8 @@ void PassthroughRendererDX11::RenderDepthPrepassView(const ERenderEye eye, const
 			};
 			m_renderContext->PSSetShaderResources(0, 2, psSRVs);
 		}
+
+		m_renderContext->ClearDepthStencilView(viewData.passthroughDepthStencil[1].DSV.Get(), D3D11_CLEAR_DEPTH, 1.0f, 0);
 
 		m_renderContext->OMSetRenderTargets(1, viewData.passthroughCameraValidity.RTV.GetAddressOf(), viewData.passthroughDepthStencil[1].DSV.Get());
 
