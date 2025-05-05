@@ -38,8 +38,7 @@ VS_OUTPUT main(float3 inPosition : POSITION, uint vertexID : SV_VertexID)
     float2 disparityUVs = inPosition.xy * (g_disparityUVBounds.zw - g_disparityUVBounds.xy) + g_disparityUVBounds.xy;
     uint3 uvPos = uint3(floor(disparityUVs * g_disparityTextureSize), 0);
     
-    // Load unfiltered value so that invalid values are not filtered into the texture.
-    float2 dispConf = g_disparityTexture.Load(uvPos);
+    float2 dispConf = g_disparityTexture.SampleLevel(g_samplerState, disparityUVs, 0);
     
 	// Disparity at the max projection distance
     float minDisparity = max(g_minDisparity, g_disparityToDepth[2][3] /
@@ -56,6 +55,8 @@ VS_OUTPUT main(float3 inPosition : POSITION, uint vertexID : SV_VertexID)
     output.projectionConfidence = confidence;
     output.cameraBlendConfidence = confidence;
     
+    float2 doffset = 0;
+    
     if (dispConf.x > g_maxDisparity || dispConf.x < g_minDisparity)
     {
         disparity = defaultDisparity;
@@ -66,12 +67,13 @@ VS_OUTPUT main(float3 inPosition : POSITION, uint vertexID : SV_VertexID)
     else if (uvPos.x < maxFilterWidth || uvPos.x >= g_disparityTextureSize.x - maxFilterWidth || 
              uvPos.y < maxFilterWidth || uvPos.y >= g_disparityTextureSize.y - maxFilterWidth)
     {
-        disparity = defaultDisparity;
-        output.projectionConfidence = -100;
+        //disparity = defaultDisparity;
+        //output.projectionConfidence = -100;
+        output.projectionConfidence = 0;
     }
     else
     {        
-        // Sample neighboring pixels using clamped Sobel filter, and mask out any areas with discontinuities.
+        // Sample neighboring pixels using a modified clamped Sobel filter, and mask out any areas with discontinuities.
         if (g_bFindDiscontinuities)
         {                      
             float2 fac = g_cutoutFilterWidth / g_disparityTextureSize;
@@ -85,20 +87,43 @@ VS_OUTPUT main(float3 inPosition : POSITION, uint vertexID : SV_VertexID)
             float dispDL = g_disparityTexture.SampleLevel(g_samplerState, disparityUVs + float2(-1, 1) * fac, 0).x;
             float dispUR = g_disparityTexture.SampleLevel(g_samplerState, disparityUVs + float2(1, -1) * fac, 0).x;
             float dispDR = g_disparityTexture.SampleLevel(g_samplerState, disparityUVs + float2(1, 1) * fac, 0).x;
-
-            float filterX = (g_disparityUVBounds.x < 0.5) ? 
-                max(0, dispUL + dispL * 2 + dispDL - dispUR - dispR * 2 - dispDR) :
-                min(0, dispUL + dispL * 2 + dispDL - dispUR - dispR * 2 - dispDR);
             
-            float filterY = dispUL + dispU * 2 + dispUR - dispDL - dispD * 2 - dispDR;
+            // Clamp the max disparity tested to the sampled pixel disparity in order to not filter foreground pixels.
+            float filterX = min(disparity, dispUL) + min(disparity, dispL) * 2 + min(disparity, dispDL) - min(disparity, dispUR) - min(disparity, dispR) * 2 - min(disparity, dispDR);
+            
+            float filterY = min(disparity, dispUL) + min(disparity, dispU) * 2 + min(disparity, dispUR) - min(disparity, dispDL) - min(disparity, dispD) * 2 - min(disparity, dispDR);
             
             float filter = sqrt(pow(filterX, 2) + pow(filterY, 2));
+            
+            // Filter only the occluded side for camera selection. Assumes left and right cameras.
+            float filterCamX = (g_disparityUVBounds.x < 0.5) ? 
+                max(0, min(disparity, dispUL) + min(disparity, dispL) * 2 + min(disparity, dispDL) - dispUR - dispR * 2 - dispDR) :
+                min(0, dispUL + dispL * 2 + dispDL - min(disparity, dispUR) - min(disparity, dispR) * 2 - min(disparity, dispDR));
+            
+            //float horizontalFactor = saturate(dot(normalize(float2(filterX, filterY)), float2((g_disparityUVBounds.x < 0.5) ? 1 : -1, 0)));
+            
+            float filterCam = sqrt(pow(filterCamX, 2) + pow(filterY, 2));// * horizontalFactor;
+            //float filterCam = abs(filterCamX);
 
             // Output optimistic values for camera composition to only filter occlusions
-            output.cameraBlendConfidence = 1 + g_cutoutOffset - 100 * g_cutoutFactor * filter;
+            output.cameraBlendConfidence = (1 + g_cutoutOffset + confidence - 100.0 * g_cutoutFactor * filterCam);
+            // TODO: variable sharpness
             
             // Output pessimistic values for depth temporal filter to force invalidation on movement
-            output.projectionConfidence = min(confidence, 1 + g_cutoutOffset - 100 * g_cutoutFactor * filter);
+            output.projectionConfidence = min(confidence, 1 + g_cutoutOffset - 100.0 * g_cutoutFactor * filter);
+            
+            //float dfilterX = dispUL + dispL * 2 + dispDL - dispUR - dispR * 2 - dispDR; 
+            //float dfilterY = dispUL + dispU * 2 + dispUR - dispDL - dispD * 2 - dispDR;
+    
+            //float minDisp = min(disparity, min(dispU, min(dispD, min(dispL, min(dispR, min(dispUL, min(dispDL, min(dispUR, dispDR))))))));
+            //float maxDisp = max(disparity, max(dispU, max(dispD, max(dispL, max(dispR, max(dispUL, max(dispDL, max(dispUR, dispDR))))))));
+    
+            //float foldFactor = clamp((length(float2(dfilterX, dfilterY)) * (maxDisp - disparity) - g_depthFoldMaxDistance * 0.01) * g_depthFoldStrength * 500, 0, 1);
+            //disparity = lerp(disparity, minDisp, foldFactor);// * saturate(1.0 - output.projectionConfidence));
+            //doffset = float2(foldFactor * 200, foldFactor * 200) * float2(-dfilterX, dfilterY) / (float2)g_disparityTextureSize;
+            //doffset = max(float2(0, 0), float2(abs(filterX), abs(filterY)) * g_depthFoldStrength - g_depthFoldMaxDistance * 0.01) * float2(-sign(filterX), sign(filterY));
+            //inPosition.xy += doffset;
+            //output.projectionConfidence = doffset;
         }
         
         // Filter any uncertain areas with a gaussian blur.
@@ -142,6 +167,8 @@ VS_OUTPUT main(float3 inPosition : POSITION, uint vertexID : SV_VertexID)
     }
     
     output.position = mul(g_worldToHMDProjection, worldSpacePoint);
+    //output.position.xy += doffset;//clamp(doffset, -float2(1, 1) / g_disparityTextureSize, float2(1, 1) / g_disparityTextureSize);
+    //output.position.xy += doffset;
     output.screenPos = output.position;  
     output.screenPos.z *= output.screenPos.w; //Linearize depth
 	

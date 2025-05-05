@@ -8,7 +8,8 @@
 float4 main(VS_OUTPUT input) : SV_Target
 {
 	float outProjectionConfidence = input.projectionConfidence.x;
-	float outBlendValidity = input.cameraBlendConfidence.x;
+	// Remap values to half to allow negative ones for history differentiation.
+	float outBlendValidity = saturate(input.cameraBlendConfidence.x) * 0.5 + 0.5;
 	
 	
 	// Written channels are selected with the pipeline.

@@ -11,7 +11,9 @@ Texture2D<float4> g_prevCameraValidation : register(t1);
 float4 main(VS_OUTPUT input, out float outDepth : SV_Depth ) : SV_Target
 {
 	float outProjectionConfidence = input.projectionConfidence.x;
-	float outBlendValidity = input.cameraBlendConfidence.x;
+	
+	// Remap values to half to allow negative ones for history differentiation.
+	float outBlendValidity = saturate(input.cameraBlendConfidence.x) * 0.5 + 0.5;
 	
 	outDepth = input.position.z;
 	
@@ -32,8 +34,9 @@ float4 main(VS_OUTPUT input, out float outDepth : SV_Depth ) : SV_Target
 		if(prevProjectionConfidence >= input.projectionConfidence.x && abs(depthDiff) < g_depthTemporalFilterDistance)// && prevDepth > input.position.z)
         {
 			outDepth = lerp(outDepth, prevDepth, min(g_depthTemporalFilterFactor, 0.9999));
-			outProjectionConfidence = lerp(outProjectionConfidence, prevProjectionConfidence, g_depthTemporalFilterFactor);;
-			outBlendValidity = min(input.cameraBlendConfidence.x, g_doCutout ? prevValid4.w : prevValid4.z);
+			outProjectionConfidence = lerp(outProjectionConfidence, prevProjectionConfidence, g_depthTemporalFilterFactor);
+			// Negative value to diffrentiate using depth from history buffer.
+			//outBlendValidity = 0.5 - 0.5 * saturate(min(input.cameraBlendConfidence.x, g_doCutout ? prevValid4.w : prevValid4.z));
         }
     }
 

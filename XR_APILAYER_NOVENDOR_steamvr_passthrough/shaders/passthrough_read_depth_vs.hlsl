@@ -49,29 +49,31 @@ float bicubic_b_spline_4tap(in Texture2D<float> tex, in SamplerState linearSampl
 }
 
 
-// Returns a vector toward a depth discontinuity if the sampled pixel is on the deep side.
-float2 sobel_discontinuity_direction(in Texture2D<float> tex, in float depth, in float2 uvs)
+float sobel_discontinuity_correction(in Texture2D<float> tex, in float depth, in float2 uvs, in float confidence)
 {
     uint texW, texH;
     tex.GetDimensions(texW, texH);
     float2 invTexSize = 1 / float2(texW, texH);
     
-    float2 fac = g_depthFoldFilterWidth * invTexSize;
+    float2 fac = g_depthFoldFilterWidth * 5 * invTexSize;
     
-    float dispU = min(tex.SampleLevel(g_samplerState, uvs + float2(0, -1) * fac, 0), depth);
-    float dispD = min(tex.SampleLevel(g_samplerState, uvs + float2(0, 1) * fac, 0), depth);
-    float dispL = min(tex.SampleLevel(g_samplerState, uvs + float2(-1, 0) * fac, 0), depth);
-    float dispR = min(tex.SampleLevel(g_samplerState, uvs + float2(1, 0) * fac, 0), depth);
+    float dispU = tex.SampleLevel(g_samplerState, uvs + float2(0, -1) * fac, 0);
+    float dispD = tex.SampleLevel(g_samplerState, uvs + float2(0, 1) * fac, 0);
+    float dispL = tex.SampleLevel(g_samplerState, uvs + float2(-1, 0) * fac, 0);
+    float dispR = tex.SampleLevel(g_samplerState, uvs + float2(1, 0) * fac, 0);
             
-    float dispUL = min(tex.SampleLevel(g_samplerState, uvs + float2(-1, -1) * fac, 0), depth);
-    float dispDL = min(tex.SampleLevel(g_samplerState, uvs + float2(-1, 1) * fac, 0), depth);
-    float dispUR = min(tex.SampleLevel(g_samplerState, uvs + float2(1, -1) * fac, 0), depth);
-    float dispDR = min(tex.SampleLevel(g_samplerState, uvs + float2(1, 1) * fac, 0), depth);
+    float dispUL = tex.SampleLevel(g_samplerState, uvs + float2(-1, -1) * fac, 0);
+    float dispDL = tex.SampleLevel(g_samplerState, uvs + float2(-1, 1) * fac, 0);
+    float dispUR = tex.SampleLevel(g_samplerState, uvs + float2(1, -1) * fac, 0);
+    float dispDR = tex.SampleLevel(g_samplerState, uvs + float2(1, 1) * fac, 0);
     
     float filterX = dispUL + dispL * 2 + dispDL - dispUR - dispR * 2 - dispDR; 
     float filterY = dispUL + dispU * 2 + dispUR - dispDL - dispD * 2 - dispDR;
     
-    return clamp(float2(filterX, -filterY) * g_depthFoldStrength * 10, -g_depthFoldMaxDistance, g_depthFoldMaxDistance) * invTexSize;
+    float minDepth = min(depth, min(dispU, min(dispD, min(dispL, min(dispR, min(dispUL, min(dispDL, min(dispUR, dispDR))))))));
+    float maxDepth = max(depth, max(dispU, max(dispD, max(dispL, max(dispR, max(dispUL, max(dispDL, max(dispUR, dispDR))))))));
+    
+    return lerp(depth, maxDepth, clamp((length(float2(filterX, filterY)) * (depth - minDepth) - g_depthFoldMaxDistance * 0.01) * g_depthFoldStrength * 500, 0, 1) * saturate(1.0 - confidence));
 }
 
 
@@ -92,35 +94,47 @@ VS_OUTPUT main(float3 inPosition : POSITION, uint vertexID : SV_VertexID)
     //cameraValidation = bicubic_b_spline_4tap(g_cameraInvalidation, g_samplerState, inPosition.xy);
     
     float2 projectionConfidence = cameraValidation.xy;
-    float2 cameraBlendValidity = cameraValidation.zw;
+    // Uncompress [0:1] to [-1:1]
+    float2 cameraBlendValidity = cameraValidation.zw * 2.0 - 1.0;
     
     float crossDepth = depth;
     float activeDepth = depth;
-    
-    float2 offset;
     
     if(g_bBlendDepthMaps)
     {
         crossDepth = g_crossDepthMap.SampleLevel(g_samplerState, inPosition.xy, 0);
   
-        bool selectMainCamera = cameraBlendValidity.x > 0 || cameraBlendValidity.y <= 0;   
-        activeDepth = selectMainCamera ? depth : crossDepth;
+        // Select camera with priority order: Main non-history > Main history > Cross non-history > Cross history > Main no confidence.
+        bool selectMainCamera = cameraBlendValidity.x > 0 || abs(cameraBlendValidity.y) < 0.025;// || (cameraBlendValidity.x < 0 && cameraBlendValidity.y < 0);
+        //bool selectMainCamera = abs(cameraBlendValidity.x) > abs(cameraBlendValidity.y);
+        // TODO: improve temporal blending
         
-        // Move background vertices underneath foreground vertices to prevent interpolation at discontinuities.
-        offset = selectMainCamera 
-            ? sobel_discontinuity_direction(g_depthMap, depth, inPosition.xy) * saturate(1.0 - projectionConfidence.x) 
-            : sobel_discontinuity_direction(g_crossDepthMap, crossDepth, inPosition.xy) * saturate(1.0 - projectionConfidence.y);
-      
+        bool blendDepth = abs(cameraBlendValidity.x) > 0.025 && abs(cameraBlendValidity.y) > 0.025;
+        //activeDepth = selectMainCamera ? depth : crossDepth;
+        activeDepth = blendDepth ? 
+            lerp(crossDepth, depth, saturate(abs(cameraBlendValidity.x) + 1 - abs(cameraBlendValidity.y))) : 
+            (selectMainCamera ? depth : crossDepth);
+        
+        cameraBlendValidity = abs(cameraBlendValidity);
+        
+        if((selectMainCamera ? projectionConfidence.x : projectionConfidence.y) < 1.0)
+        {
+            // Move depth back to prevent interpolation at discontinuities.
+            //activeDepth = selectMainCamera
+            //? sobel_discontinuity_correction(g_depthMap, activeDepth, inPosition.xy, projectionConfidence.x)
+            //: sobel_discontinuity_correction(g_crossDepthMap, activeDepth, inPosition.xy, projectionConfidence.y);
+        }
     }
     else
     {
-        // Move background vertices underneath foreground vertices to prevent interpolation at discontinuities.
-        offset = sobel_discontinuity_direction(g_depthMap, depth, inPosition.xy) * saturate(1.0 - projectionConfidence.x);
+        if(projectionConfidence.x < 1.0)
+        {
+            // Move depth back to prevent interpolation at discontinuities.
+            //activeDepth = sobel_discontinuity_correction(g_depthMap, depth, inPosition.xy, projectionConfidence.x);
+        }
     }
     
     float4 clipSpacePos = float4((inPosition.xy * float2(2.0, -2.0) + float2(-1, 1)), activeDepth, 1.0);   
-    
-    clipSpacePos.xy += offset;
     
     float4 worldProjectionPos = mul(g_HMDProjectionToWorld, clipSpacePos);
     
@@ -136,7 +150,7 @@ VS_OUTPUT main(float3 inPosition : POSITION, uint vertexID : SV_VertexID)
     output.screenPos.z *= output.screenPos.w; //Linearize depth
     
     output.projectionConfidence = projectionConfidence;
-    output.cameraBlendConfidence = cameraBlendValidity;
+    output.cameraBlendConfidence = abs(cameraBlendValidity);
     
     output.cameraReprojectedPos = cameraClipSpacePos;
     output.crossCameraReprojectedPos = cameraCrossClipSpacePos;
