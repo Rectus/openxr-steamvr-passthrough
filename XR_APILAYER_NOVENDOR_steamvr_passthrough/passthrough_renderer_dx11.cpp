@@ -1428,6 +1428,7 @@ void PassthroughRendererDX11::RenderPassthroughFrame(const XrCompositionLayerPro
 		vsBuffer.bFindDiscontinuities = stereoConf.StereoCutoutEnabled || (stereoConf.StereoUseDeferredDepthPass && stereoConf.StereoUseDisparityTemporalFiltering);
 		vsBuffer.bUseDisparityTemporalFilter = stereoConf.StereoUseDisparityTemporalFiltering && m_bIsVSUAVSupported;
 		vsBuffer.bBlendDepthMaps = stereoConf.StereoCutoutEnabled;
+		vsBuffer.bUseBicubicFiltering = stereoConf.StereoBicubicFiltering;
 		vsBuffer.disparityTemporalFilterStrength = stereoConf.StereoDisparityTemporalFilteringStrength;
 		vsBuffer.disparityTemporalFilterDistance = stereoConf.StereoDisparityTemporalFilteringDistance;
 		vsBuffer.depthFoldStrength = stereoConf.StereoDepthFoldStrength;
@@ -1721,6 +1722,7 @@ void PassthroughRendererDX11::RenderPassthroughView(const ERenderEye eye, const 
 	vsViewBuffer.projectionOriginWorld = (eye == LEFT_EYE) ? frame->projectionOriginWorldLeft : frame->projectionOriginWorldRight;
 	vsViewBuffer.projectionDistance = mainConf.ProjectionDistanceFar;
 	vsViewBuffer.floorHeightOffset = mainConf.FloorHeightOffset;
+	vsViewBuffer.cameraBlendWeight = 1.0;
 	vsViewBuffer.cameraViewIndex = viewIndex;
 	vsViewBuffer.bWriteDisparityFilter = bUseDisparityTemporalFiltering && depthFrame->bIsFirstRender;
 
@@ -2047,6 +2049,7 @@ void PassthroughRendererDX11::RenderMaskedPrepassView(const ERenderEye eye, cons
 	vsViewBuffer.projectionOriginWorld = (eye == LEFT_EYE) ? frame->projectionOriginWorldLeft : frame->projectionOriginWorldRight;
 	vsViewBuffer.projectionDistance = mainConf.ProjectionDistanceFar;
 	vsViewBuffer.floorHeightOffset = mainConf.FloorHeightOffset;
+	vsViewBuffer.cameraBlendWeight = 1.0;
 	vsViewBuffer.cameraViewIndex = viewIndex;
 
 	m_renderContext->UpdateSubresource(viewData.vsViewConstantBuffer.Get(), 0, nullptr, &vsViewBuffer, 0, 0);
@@ -2289,6 +2292,7 @@ void PassthroughRendererDX11::RenderDepthPrepassView(const ERenderEye eye, const
 	vsViewBuffer.projectionDistance = mainConf.ProjectionDistanceFar;
 	vsViewBuffer.floorHeightOffset = mainConf.FloorHeightOffset;
 	vsViewBuffer.cameraViewIndex = viewIndex;
+	vsViewBuffer.cameraBlendWeight = 1.0;
 	vsViewBuffer.disparityUVBounds = GetFrameUVBounds(eye, StereoHorizontalLayout);
 
 	m_renderContext->UpdateSubresource(viewData.vsViewConstantBuffer.Get(), 0, nullptr, &vsViewBuffer, 0, 0);
@@ -2310,6 +2314,7 @@ void PassthroughRendererDX11::RenderDepthPrepassView(const ERenderEye eye, const
 	{
 		vsViewBuffer.cameraViewIndex = (eye != LEFT_EYE) ? 0 : 1;
 		vsViewBuffer.disparityUVBounds = GetFrameUVBounds((eye == LEFT_EYE) ? RIGHT_EYE : LEFT_EYE, StereoHorizontalLayout);
+		vsViewBuffer.cameraBlendWeight = stereoConf.StereoCutoutSecondaryCameraWeight;
 
 		m_renderContext->UpdateSubresource(viewData.vsViewConstantBuffer.Get(), 0, nullptr, &vsViewBuffer, 0, 0);
 

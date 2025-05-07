@@ -95,6 +95,7 @@ struct alignas(16) VSPassConstantBuffer
 	uint32_t bFindDiscontinuities;
 	uint32_t bUseDisparityTemporalFilter;
 	uint32_t bBlendDepthMaps;
+	uint32_t bUseBicubicFiltering;
 	float disparityTemporalFilterStrength;
 	float disparityTemporalFilterDistance;
 	float depthFoldStrength;
@@ -112,6 +113,7 @@ struct alignas(16) VSViewConstantBuffer
 	XrVector3f projectionOriginWorld;
 	float projectionDistance;
 	float floorHeightOffset;
+	float cameraBlendWeight;
 	uint32_t cameraViewIndex;
 	uint32_t bWriteDisparityFilter;
 };

@@ -100,14 +100,10 @@ VS_OUTPUT main(float3 inPosition : POSITION, uint vertexID : SV_VertexID)
                 max(0, min(disparity, dispUL) + min(disparity, dispL) * 2 + min(disparity, dispDL) - dispUR - dispR * 2 - dispDR) :
                 min(0, dispUL + dispL * 2 + dispDL - min(disparity, dispUR) - min(disparity, dispR) * 2 - min(disparity, dispDR));
             
-            //float horizontalFactor = saturate(dot(normalize(float2(filterX, filterY)), float2((g_disparityUVBounds.x < 0.5) ? 1 : -1, 0)));
-            
             float filterCam = sqrt(pow(filterCamX, 2) + pow(filterY, 2));// * horizontalFactor;
-            //float filterCam = abs(filterCamX);
 
             // Output optimistic values for camera composition to only filter occlusions
-            output.cameraBlendConfidence = (1 + g_cutoutOffset + confidence - 100.0 * g_cutoutFactor * filterCam);
-            // TODO: variable sharpness
+            output.cameraBlendConfidence = (1 + g_cutoutOffset + confidence - 100.0 * g_cutoutFactor * filterCam) * g_cameraBlendWeight;
             
             // Output pessimistic values for depth temporal filter to force invalidation on movement
             output.projectionConfidence = min(confidence, 1 + g_cutoutOffset - 100.0 * g_cutoutFactor * filter);

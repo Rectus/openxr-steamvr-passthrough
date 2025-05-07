@@ -269,8 +269,6 @@ float4 main(VS_OUTPUT input) : SV_TARGET
     float distanceFactor = abs(camTexCoords.x - camPixel.x - 0.5) + abs(camTexCoords.y - camPixel.y - 0.5);
     float crossDistanceFactor = abs(crossCamTexCoords.x - crossCamPixel.x - 0.5) + abs(crossCamTexCoords.y - crossCamPixel.y - 0.5);
     
-    float cameraBlend = 1 - saturate(input.cameraBlendConfidence.x + 1.0 - input.cameraBlendConfidence.y);
-    
     float pixelDistanceBlend = distanceFactor + (1 - crossDistanceFactor);
     //float blendfactor = 1 - abs(input.cameraBlend * 2 - 1);
     
@@ -279,7 +277,7 @@ float4 main(VS_OUTPUT input) : SV_TARGET
     float combineFactor = g_cutoutCombineFactor * depthFactor * input.projectionConfidence.x * input.projectionConfidence.y;
     
     // Blend together both cameras based on which ones are valid and have the closest pixels.
-    float finalCameraBlendFactor = lerp(cameraBlend, pixelDistanceBlend, combineFactor);
+    float finalCameraBlendFactor = lerp(input.cameraBlendConfidence.x, pixelDistanceBlend, combineFactor);
     
     rgbColor = lerp(rgbColor, lerp(crossRGBColor, crossRGBColorClamped, combineFactor), finalCameraBlendFactor);
     minColor = lerp(minColor, lerp(crossMinColor, minColor, combineFactor), finalCameraBlendFactor);

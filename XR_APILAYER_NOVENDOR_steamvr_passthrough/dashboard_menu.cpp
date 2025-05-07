@@ -778,6 +778,9 @@ if (bIsActiveTab) { ImGui::PopStyleColor(1); bIsActiveTab = false; }
 				ImGui::Checkbox("Draw Background", &stereoCustomConfig.StereoDrawBackground);
 				TextDescription("Extra pass to render a cylinder mesh behind the stereo mesh.");
 
+				ImGui::Checkbox("Bicubic Filtering", &stereoCustomConfig.StereoBicubicFiltering);
+				TextDescription("Use bicubic filtering instead of bilinear for reading depth and validity maps.");
+
 				IMGUI_BIG_SPACING;
 				ImGui::PushItemWidth(ImGui::GetContentRegionAvail().x * 0.45f);
 				BeginSoftDisabled(!stereoCustomConfig.StereoCutoutEnabled);
@@ -785,6 +788,7 @@ if (bIsActiveTab) { ImGui::PopStyleColor(1); bIsActiveTab = false; }
 				ScrollableSlider("Composition Cutout Offset", &stereoCustomConfig.StereoCutoutOffset, 0.0f, 2.0f, "%.2f", 0.01f);
 				ScrollableSlider("Composition Cutout Filter Distance", &stereoCustomConfig.StereoCutoutFilterWidth, 0.1f, 2.0f, "%.1f", 0.1f);
 				ScrollableSlider("Composition Combine Factor", &stereoCustomConfig.StereoCutoutCombineFactor, 0.0f, 1.0f, "%.1f", 0.1f);
+				ScrollableSlider("Composition Cutout Secondary Camera Weight", &stereoCustomConfig.StereoCutoutSecondaryCameraWeight, 0.0f, 1.0f, "%.1f", 0.1f);
 				TextDescription("Settings for Composite Both Cameras for Each Eye.");
 				EndSoftDisabled(!stereoCustomConfig.StereoCutoutEnabled);
 

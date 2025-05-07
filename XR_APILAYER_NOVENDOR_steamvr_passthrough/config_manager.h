@@ -558,12 +558,14 @@ struct Config_Stereo
 	float StereoDisparityTemporalFilteringDistance = 0.5f;
 
 	bool StereoDisparityBothEyes = true;
-	int StereoDisparityFilterWidth = 3;
+	bool StereoBicubicFiltering = false;
+	int StereoDisparityFilterWidth = 0;
 	bool StereoCutoutEnabled = false;
-	float StereoCutoutFactor = 0.75f;
-	float StereoCutoutOffset = 1.5f;
+	float StereoCutoutFactor = 3.0f;
+	float StereoCutoutOffset = 1.0f;
 	float StereoCutoutFilterWidth = 1.5f;
-	float StereoCutoutCombineFactor = 0.7f;
+	float StereoCutoutCombineFactor = 1.0f;
+	float StereoCutoutSecondaryCameraWeight = 0.5f;
 
 	float StereoDepthFoldStrength = 2.0f;
 	float StereoDepthFoldMaxDistance = 3.0f;
@@ -608,12 +610,14 @@ struct Config_Stereo
 		StereoDisparityTemporalFilteringDistance = (float)ini.GetDoubleValue(section, "StereoDisparityTemporalFilteringDistance", StereoDisparityTemporalFilteringDistance);
 
 		StereoDisparityBothEyes = ini.GetBoolValue(section, "StereoDisparityBothEyes", StereoDisparityBothEyes);
+		StereoBicubicFiltering = ini.GetBoolValue(section, "StereoBicubicFiltering", StereoBicubicFiltering);
 		StereoCutoutEnabled = ini.GetBoolValue(section, "StereoCutoutEnabled", StereoCutoutEnabled);
 		StereoCutoutFactor = (float)ini.GetDoubleValue(section, "StereoCutoutFactor", StereoCutoutFactor);
 		StereoCutoutOffset = (float)ini.GetDoubleValue(section, "StereoCutoutOffset", StereoCutoutOffset);
 		StereoDisparityFilterWidth = (int)ini.GetLongValue(section, "StereoDisparityFilterWidth", StereoDisparityFilterWidth);
 		StereoCutoutFilterWidth = (float)ini.GetDoubleValue(section, "StereoCutoutFilterWidth", StereoCutoutFilterWidth);
 		StereoCutoutCombineFactor = (float)ini.GetDoubleValue(section, "StereoCutoutCombineFactor", StereoCutoutCombineFactor);
+		StereoCutoutSecondaryCameraWeight = (float)ini.GetDoubleValue(section, "StereoCutoutSecondaryCameraWeight", StereoCutoutSecondaryCameraWeight);
 
 		StereoDepthFoldStrength = (float)ini.GetDoubleValue(section, "StereoDepthFoldStrength", StereoDepthFoldStrength);
 		StereoDepthFoldMaxDistance = (float)ini.GetDoubleValue(section, "StereoDepthFoldMaxDistance", StereoDepthFoldMaxDistance);
@@ -659,12 +663,14 @@ struct Config_Stereo
 		ini.SetDoubleValue(section, "StereoDisparityTemporalFilteringDistance", StereoDisparityTemporalFilteringDistance);
 
 		ini.SetBoolValue(section, "StereoDisparityBothEyes", StereoDisparityBothEyes);
+		ini.SetBoolValue(section, "StereoBicubicFiltering", StereoBicubicFiltering);
 		ini.SetBoolValue(section, "StereoCutoutEnabled", StereoCutoutEnabled);
 		ini.SetDoubleValue(section, "StereoCutoutFactor", StereoCutoutFactor);
 		ini.SetDoubleValue(section, "StereoCutoutOffset", StereoCutoutOffset);
 		ini.SetLongValue(section, "StereoDisparityFilterWidth", StereoDisparityFilterWidth);
 		ini.SetDoubleValue(section, "StereoCutoutFilterWidth", StereoCutoutFilterWidth);
 		ini.SetDoubleValue(section, "StereoCutoutCombineFactor", StereoCutoutCombineFactor);
+		ini.SetDoubleValue(section, "StereoCutoutSecondaryCameraWeight", StereoCutoutSecondaryCameraWeight);
 
 		ini.SetDoubleValue(section, "StereoDepthFoldStrength", StereoDepthFoldStrength);
 		ini.SetDoubleValue(section, "StereoDepthFoldMaxDistance", StereoDepthFoldMaxDistance);

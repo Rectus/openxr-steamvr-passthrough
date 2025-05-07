@@ -137,10 +137,9 @@ float4 main(VS_OUTPUT input) : SV_TARGET
     float depthFactor =  saturate(1 - (abs(input.cameraDepth.x - input.cameraDepth.y) * 1000));
     
     float combineFactor = g_cutoutCombineFactor * depthFactor * input.projectionConfidence.x * input.projectionConfidence.y;
-    
-    float cameraBlend = 1 - saturate(input.cameraBlendConfidence.x + 1.0 - input.cameraBlendConfidence.y);
-    
-    float finalFactor = lerp(cameraBlend, pixelDistanceBlend, combineFactor);
+
+   
+    float finalFactor = lerp(input.cameraBlendConfidence.x, pixelDistanceBlend, combineFactor);
     
     // Blend together both cameras based on which ones are valid and have the closest pixels.
     rgbColor = lerp(rgbColor, lerp(crossRGBColor, crossRGBColorClamped, combineFactor), finalFactor);

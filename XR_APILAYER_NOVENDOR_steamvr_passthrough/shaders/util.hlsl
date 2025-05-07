@@ -2,6 +2,43 @@
 
 static const float PI = 3.1415926535897932384626433f;
 
+
+inline float Remap(float value, float inMin, float inMax, float outMin, float outMax)
+{
+    return outMin + (value - inMin) * (outMax - outMin) / (inMax - inMin);
+}
+
+inline float2 Remap(float2 value, float2 inMin, float2 inMax, float2 outMin, float2 outMax)
+{
+    return outMin + (value - inMin) * (outMax - outMin) / (inMax - inMin);
+}
+
+inline float3 Remap(float3 value, float3 inMin, float3 inMax, float3 outMin, float3 outMax)
+{
+    return outMin + (value - inMin) * (outMax - outMin) / (inMax - inMin);
+}
+
+inline float4 Remap(float4 value, float4 inMin, float4 inMax, float4 outMin, float4 outMax)
+{
+    return outMin + (value - inMin) * (outMax - outMin) / (inMax - inMin);
+}
+
+inline float2 Remap(float2 value, float inMin, float inMax, float outMin, float outMax)
+{
+    return outMin + (value - inMin) * (outMax - outMin) / (inMax - inMin);
+}
+
+inline float3 Remap(float3 value, float inMin, float inMax, float outMin, float outMax)
+{
+    return outMin + (value - inMin) * (outMax - outMin) / (inMax - inMin);
+}
+
+inline float4 Remap(float4 value, float inMin, float inMax, float outMin, float outMax)
+{
+    return outMin + (value - inMin) * (outMax - outMin) / (inMax - inMin);
+}
+
+
 #define RGBtoXYZMat float3x3( \
     0.4124564, 0.3575761, 0.1804375,\
     0.2126729, 0.7151522, 0.0721750,\

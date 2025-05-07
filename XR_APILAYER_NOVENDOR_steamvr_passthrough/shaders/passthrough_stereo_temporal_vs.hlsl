@@ -258,7 +258,7 @@ VS_OUTPUT main(float3 inPosition : POSITION, uint vertexID : SV_VertexID)
             float filter = sqrt(pow(filterX, 2) + pow(filterY, 2));
 
             // Output optimistic values for camera composition to only filter occlusions
-            output.cameraBlendConfidence = 1 + g_cutoutOffset - 100 * g_cutoutFactor * filter;
+            output.cameraBlendConfidence = (1 + g_cutoutOffset - 100 * g_cutoutFactor * filter) * g_cameraBlendWeight;
             
             // Output pessimistic values for temporal filter to force invalidation on movement
             output.projectionConfidence = min(confidence, 1 + g_cutoutOffset - 100 * g_cutoutFactor * filter);

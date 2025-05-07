@@ -10,6 +10,7 @@ cbuffer vsViewConstantBuffer : register(b0)
     float3 g_projectionOriginWorld;
     float g_projectionDistance;
     float g_floorHeightOffset;
+    float g_cameraBlendWeight;
     int g_cameraViewIndex;
     bool g_bWriteDisparityFilter;
 };
@@ -40,6 +41,7 @@ cbuffer vsPassConstantBuffer : register(b1)
     bool g_bFindDiscontinuities;
     bool g_bUseDisparityTemporalFilter;
     bool g_bBlendDepthMaps;
+    bool g_bUseBicubicFiltering;
     float g_disparityTemporalFilterStrength;
     float g_disparityTemporalFilterDistance;
     float g_depthFoldStrength;
