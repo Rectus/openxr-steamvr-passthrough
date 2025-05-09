@@ -100,7 +100,7 @@ VS_OUTPUT main(float3 inPosition : POSITION, uint vertexID : SV_VertexID)
                 max(0, min(disparity, dispUL) + min(disparity, dispL) * 2 + min(disparity, dispDL) - dispUR - dispR * 2 - dispDR) :
                 min(0, dispUL + dispL * 2 + dispDL - min(disparity, dispUR) - min(disparity, dispR) * 2 - min(disparity, dispDR));
             
-            float filterCam = sqrt(pow(filterCamX, 2) + pow(filterY, 2));// * horizontalFactor;
+            float filterCam = sqrt(pow(filterCamX, 2) + pow(filterY, 2));
 
             // Output optimistic values for camera composition to only filter occlusions
             output.cameraBlendConfidence = (1 + g_cutoutOffset + confidence - 100.0 * g_cutoutFactor * filterCam) * g_cameraBlendWeight;
@@ -108,18 +108,19 @@ VS_OUTPUT main(float3 inPosition : POSITION, uint vertexID : SV_VertexID)
             // Output pessimistic values for depth temporal filter to force invalidation on movement
             output.projectionConfidence = min(confidence, 1 + g_cutoutOffset - 100.0 * g_cutoutFactor * filter);
             
-            //float dfilterX = dispUL + dispL * 2 + dispDL - dispUR - dispR * 2 - dispDR; 
+            //float dfilterX = dispUL + dispL * 2 + dispDL - dispUR - dispR * 2 - dispDR;
             //float dfilterY = dispUL + dispU * 2 + dispUR - dispDL - dispD * 2 - dispDR;
     
             //float minDisp = min(disparity, min(dispU, min(dispD, min(dispL, min(dispR, min(dispUL, min(dispDL, min(dispUR, dispDR))))))));
             //float maxDisp = max(disparity, max(dispU, max(dispD, max(dispL, max(dispR, max(dispUL, max(dispDL, max(dispUR, dispDR))))))));
     
-            //float foldFactor = clamp((length(float2(dfilterX, dfilterY)) * (maxDisp - disparity) - g_depthFoldMaxDistance * 0.01) * g_depthFoldStrength * 500, 0, 1);
-            //disparity = lerp(disparity, minDisp, foldFactor);// * saturate(1.0 - output.projectionConfidence));
-            //doffset = float2(foldFactor * 200, foldFactor * 200) * float2(-dfilterX, dfilterY) / (float2)g_disparityTextureSize;
+            //float foldFactor = (length(float2(filterX, filterY))) * g_depthFoldStrength * 500;
+            ////disparity = lerp(disparity, minDisp, foldFactor); // * saturate(1.0 - output.projectionConfidence));
+            //doffset = clamp(float2(-dfilterX * foldFactor * 2000, -dfilterY * foldFactor * 2000), -g_depthFoldMaxDistance * 5, g_depthFoldMaxDistance * 5) / (float2) g_disparityTextureSize;
             //doffset = max(float2(0, 0), float2(abs(filterX), abs(filterY)) * g_depthFoldStrength - g_depthFoldMaxDistance * 0.01) * float2(-sign(filterX), sign(filterY));
+            //doffset = output.cameraBlendConfidence < 0.5 ? float2(0,0) : doffset;
             //inPosition.xy += doffset;
-            //output.projectionConfidence = doffset;
+            //output.projectionConfidence = abs(doffset) * 100;
         }
         
         // Filter any uncertain areas with a gaussian blur.
