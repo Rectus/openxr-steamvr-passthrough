@@ -556,6 +556,7 @@ struct Config_Stereo
 	bool StereoUseDisparityTemporalFiltering = false;
 	float StereoDisparityTemporalFilteringStrength = 0.9f;
 	float StereoDisparityTemporalFilteringDistance = 0.5f;
+	int StereoDepthMapScale = 2;
 
 	bool StereoDisparityBothEyes = true;
 	bool StereoBicubicFiltering = false;
@@ -608,6 +609,7 @@ struct Config_Stereo
 		StereoUseDisparityTemporalFiltering = ini.GetBoolValue(section, "StereoUseDisparityTemporalFiltering", StereoUseDisparityTemporalFiltering);
 		StereoDisparityTemporalFilteringStrength = (float)ini.GetDoubleValue(section, "StereoDisparityTemporalFilteringStrength", StereoDisparityTemporalFilteringStrength);
 		StereoDisparityTemporalFilteringDistance = (float)ini.GetDoubleValue(section, "StereoDisparityTemporalFilteringDistance", StereoDisparityTemporalFilteringDistance);
+		StereoDepthMapScale = ini.GetLongValue(section, "StereoDepthMapScale", StereoDepthMapScale);
 
 		StereoDisparityBothEyes = ini.GetBoolValue(section, "StereoDisparityBothEyes", StereoDisparityBothEyes);
 		StereoBicubicFiltering = ini.GetBoolValue(section, "StereoBicubicFiltering", StereoBicubicFiltering);
@@ -661,6 +663,7 @@ struct Config_Stereo
 		ini.SetBoolValue(section, "StereoUseDisparityTemporalFiltering", StereoUseDisparityTemporalFiltering);
 		ini.SetDoubleValue(section, "StereoDisparityTemporalFilteringStrength", StereoDisparityTemporalFilteringStrength);
 		ini.SetDoubleValue(section, "StereoDisparityTemporalFilteringDistance", StereoDisparityTemporalFilteringDistance);
+		ini.SetLongValue(section, "StereoDepthMapScale", StereoDepthMapScale);
 
 		ini.SetBoolValue(section, "StereoDisparityBothEyes", StereoDisparityBothEyes);
 		ini.SetBoolValue(section, "StereoBicubicFiltering", StereoBicubicFiltering);

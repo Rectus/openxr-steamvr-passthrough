@@ -197,6 +197,8 @@ struct DX11DepthStencilTexture
 	ComPtr<ID3D11Texture2D> Texture;
 	ComPtr<ID3D11DepthStencilView> DSV;
 	ComPtr<ID3D11ShaderResourceView> SRV;
+	uint32_t Width;
+	uint32_t Height;
 };
 
 struct DX11SRVTexture

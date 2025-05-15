@@ -294,7 +294,6 @@ float4 main(VS_OUTPUT input) : SV_TARGET
      
     float2 prevTexCoords = prevScreenUvs * outputTextureSize.xy;
     uint2 prevPixel = floor(prevTexCoords);
-    uint2 prevPixel2 = round(prevTexCoords);
     
     float4 filtered;
     

@@ -39,6 +39,35 @@ inline float4 Remap(float4 value, float inMin, float inMax, float outMin, float 
 }
 
 
+inline float LoadTextureNearestClamped(in Texture2D<float> tex, in float2 uv)
+{
+    uint texW, texH;
+    tex.GetDimensions(texW, texH);
+    return tex.Load(int3(floor(saturate(uv) * float2(texW, texH)), 0));
+}
+
+inline float2 LoadTextureNearestClamped(in Texture2D<float2> tex, in float2 uv)
+{
+    uint texW, texH;
+    tex.GetDimensions(texW, texH);
+    return tex.Load(int3(floor(saturate(uv) * float2(texW, texH)), 0));
+}
+
+inline float3 LoadTextureNearestClamped(in Texture2D<float3> tex, in float2 uv)
+{
+    uint texW, texH;
+    tex.GetDimensions(texW, texH);
+    return tex.Load(int3(floor(saturate(uv) * float2(texW, texH)), 0));
+}
+
+inline float4 LoadTextureNearestClamped(in Texture2D<float4> tex, in float2 uv)
+{
+    uint texW, texH;
+    tex.GetDimensions(texW, texH);
+    return tex.Load(int3(floor(saturate(uv) * float2(texW, texH)), 0));
+}
+
+
 #define RGBtoXYZMat float3x3( \
     0.4124564, 0.3575761, 0.1804375,\
     0.2126729, 0.7151522, 0.0721750,\

@@ -781,6 +781,10 @@ if (bIsActiveTab) { ImGui::PopStyleColor(1); bIsActiveTab = false; }
 				ImGui::Checkbox("Bicubic Filtering", &stereoCustomConfig.StereoBicubicFiltering);
 				TextDescription("Use bicubic filtering instead of bilinear for reading depth and validity maps.");
 
+				ImGui::SetNextItemWidth(ImGui::GetContentRegionAvail().x * 0.45f);
+				ScrollableSliderInt("Depth Map Scale", &stereoCustomConfig.StereoDepthMapScale, 1, 4, "%d", 1);
+				TextDescriptionSpaced("Scale of generated depth maps rleative to the proecessed disparity maps.");
+
 				IMGUI_BIG_SPACING;
 				ImGui::PushItemWidth(ImGui::GetContentRegionAvail().x * 0.45f);
 				BeginSoftDisabled(!stereoCustomConfig.StereoCutoutEnabled);

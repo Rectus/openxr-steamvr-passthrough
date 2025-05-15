@@ -15,6 +15,47 @@ float gaussian(float2 value)
 }
 
 
+// B-spline as in http://vec3.ca/bicubic-filtering-in-fewer-taps/
+float2 bicubic_b_spline_4tap(in Texture2D<float2> tex, in SamplerState linearSampler, in float2 uv)
+{
+    uint texW, texH;
+    tex.GetDimensions(texW, texH);
+    float2 texSize = float2(texW, texH);
+    
+    float2 samplePos = uv * texSize;
+    float2 texPos1 = floor(samplePos - 0.5f) + 0.5f;
+
+    float2 f = samplePos - texPos1;
+    float2 f2 = f * f;
+    float2 f3 = f2 * f;
+    
+    float2 w0 = f2 - 0.5 * (f3 + f);
+    float2 w1 = 1.5 * f3 - 2.5 * f2 + 1.0;
+    float2 w3 = 0.5 * (f3 - f2);
+    float2 w2 = 1.0 - w0 - w1 - w3;
+ 
+    float2 w12 = w1 + w2;
+    float2 offset12 = w2 / (w1 + w2);
+    
+    float2 s0 = w0 + w1;
+    float2 s1 = w2 + w3;
+ 
+    float2 f0 = w1 / (w0 + w1);
+    float2 f1 = w3 / (w2 + w3);
+ 
+    float2 t0 = (texPos1 - 1 + f0) / texSize;
+    float2 t1 = (texPos1 + 1 + f1) / texSize;
+
+    float2 result = 0;
+    result += tex.SampleLevel(linearSampler, float2(t0.x, t0.y), 0) * s0.x * s0.y;
+    result += tex.SampleLevel(linearSampler, float2(t1.x, t0.y), 0) * s1.x * s0.y;
+    result += tex.SampleLevel(linearSampler, float2(t0.x, t1.y), 0) * s0.x * s1.y;
+    result += tex.SampleLevel(linearSampler, float2(t1.x, t1.y), 0) * s1.x * s1.y;
+
+    return result;
+}
+
+
 float4 DisparityToWorldCoords(float disparity, float2 clipCoords)
 {
     float2 texturePos = clipCoords * g_disparityTextureSize * float2(0.5, 1) * g_disparityDownscaleFactor;
@@ -38,7 +79,20 @@ VS_OUTPUT main(float3 inPosition : POSITION, uint vertexID : SV_VertexID)
     float2 disparityUVs = inPosition.xy * (g_disparityUVBounds.zw - g_disparityUVBounds.xy) + g_disparityUVBounds.xy;
     uint3 uvPos = uint3(floor(disparityUVs * g_disparityTextureSize), 0);
     
-    float2 dispConf = g_disparityTexture.SampleLevel(g_samplerState, disparityUVs, 0);
+    float2 dispConf;
+    
+    [branch]
+    if (g_bUseBicubicFiltering)
+    {
+        //dispConf = bicubic_b_spline_4tap(g_disparityTexture, g_samplerState, disparityUVs);
+        dispConf = g_disparityTexture.SampleLevel(g_samplerState, disparityUVs, 0);
+    }
+    else
+    {
+        dispConf = LoadTextureNearestClamped(g_disparityTexture, disparityUVs);
+        //dispConf = g_disparityTexture.Load(uvPos);
+        //dispConf = g_disparityTexture.SampleLevel(g_samplerState, disparityUVs, 0);
+    }
     
 	// Disparity at the max projection distance
     float minDisparity = max(g_minDisparity, g_disparityToDepth[2][3] /
@@ -108,17 +162,29 @@ VS_OUTPUT main(float3 inPosition : POSITION, uint vertexID : SV_VertexID)
             // Output pessimistic values for depth temporal filter to force invalidation on movement
             output.projectionConfidence = min(confidence, 1 + g_cutoutOffset - 100.0 * g_cutoutFactor * filter);
             
-            //float dfilterX = dispUL + dispL * 2 + dispDL - dispUR - dispR * 2 - dispDR;
-            //float dfilterY = dispUL + dispU * 2 + dispUR - dispDL - dispD * 2 - dispDR;
+            float dfilterX = dispUL + dispL * 2 + dispDL - dispUR - dispR * 2 - dispDR;
+            float dfilterY = dispUL + dispU * 2 + dispUR - dispDL - dispD * 2 - dispDR;
     
-            //float minDisp = min(disparity, min(dispU, min(dispD, min(dispL, min(dispR, min(dispUL, min(dispDL, min(dispUR, dispDR))))))));
-            //float maxDisp = max(disparity, max(dispU, max(dispD, max(dispL, max(dispR, max(dispUL, max(dispDL, max(dispUR, dispDR))))))));
-    
-            //float foldFactor = (length(float2(filterX, filterY))) * g_depthFoldStrength * 500;
-            ////disparity = lerp(disparity, minDisp, foldFactor); // * saturate(1.0 - output.projectionConfidence));
-            //doffset = clamp(float2(-dfilterX * foldFactor * 2000, -dfilterY * foldFactor * 2000), -g_depthFoldMaxDistance * 5, g_depthFoldMaxDistance * 5) / (float2) g_disparityTextureSize;
-            //doffset = max(float2(0, 0), float2(abs(filterX), abs(filterY)) * g_depthFoldStrength - g_depthFoldMaxDistance * 0.01) * float2(-sign(filterX), sign(filterY));
-            //doffset = output.cameraBlendConfidence < 0.5 ? float2(0,0) : doffset;
+            float minDisp = min(disparity, min(dispU, min(dispD, min(dispL, min(dispR, min(dispUL, min(dispDL, min(dispUR, dispDR))))))));
+            float maxDisp = max(disparity, max(dispU, max(dispD, max(dispL, max(dispR, max(dispUL, max(dispDL, max(dispUR, dispDR))))))));
+
+
+            if ((maxDisp - minDisp) / (g_maxDisparity - minDisparity) > g_depthFoldMaxDistance * 0.01)
+            {
+                float contourFactor = saturate(g_depthFoldStrength * 4 * length(float2(dfilterX, dfilterY)));
+                
+                bool inForeground = ((disparity - minDisp) > (maxDisp - disparity));
+
+                float2 maxOffset = 1.0 / g_disparityTextureSize;
+                
+                float2 offset = clamp((inForeground ? float2(-dfilterX, dfilterY) : float2(dfilterX, -dfilterY)) * maxOffset * g_depthFoldStrength * 2, -maxOffset, maxOffset);// + float2(-dfilterX, dfilterY) * (maxDisp - disparity) / (maxDisp - minDisp) * g_depthFoldFilterWidth * 5.0 * maxOffset;
+
+                doffset += lerp(float2(0, 0), offset, contourFactor);
+                //output.projectionConfidence = lerp(float2(0, 0), offset * g_disparityTextureSize, contourFactor);
+                //output.projectionConfidence = float2(contourFactor, length(lerp(float2(0, 0), offset * g_disparityTextureSize, contourFactor)));
+            }
+            
+            //doffset = output.cameraBlendConfidence < 0.5 ? float2(0, 0) : doffset;
             //inPosition.xy += doffset;
             //output.projectionConfidence = abs(doffset) * 100;
         }
@@ -165,7 +231,7 @@ VS_OUTPUT main(float3 inPosition : POSITION, uint vertexID : SV_VertexID)
     
     output.position = mul(g_worldToHMDProjection, worldSpacePoint);
     //output.position.xy += doffset;//clamp(doffset, -float2(1, 1) / g_disparityTextureSize, float2(1, 1) / g_disparityTextureSize);
-    //output.position.xy += doffset;
+    output.position.xy += doffset;
     output.screenPos = output.position;  
     output.screenPos.z *= output.screenPos.w; //Linearize depth
 	
