@@ -1779,10 +1779,10 @@ if (bIsActiveTab) { ImGui::PopStyleColor(1); bIsActiveTab = false; }
 
 	ImGui::Render();
 
-	ID3D11RenderTargetView* rtv = m_d3d11RTV.Get();
+	ID3D11RenderTargetView* rtv = m_d3d11RTV[m_frameIndex].Get();
 	m_d3d11DeviceContext->OMSetRenderTargets(1, &rtv, NULL);
 	const float clearColor[4] = { 0, 0, 0, 1 };
-	m_d3d11DeviceContext->ClearRenderTargetView(m_d3d11RTV.Get(), clearColor);
+	m_d3d11DeviceContext->ClearRenderTargetView(m_d3d11RTV[m_frameIndex].Get(), clearColor);
 	ImGui_ImplDX11_RenderDrawData(ImGui::GetDrawData());
 	m_d3d11DeviceContext->Flush();
 
@@ -1791,7 +1791,7 @@ if (bIsActiveTab) { ImGui::PopStyleColor(1); bIsActiveTab = false; }
 	texture.eType = vr::TextureType_DXGISharedHandle;
 
 	ComPtr<IDXGIResource> DXGIResource;
-	m_d3d11Texture->QueryInterface(IID_PPV_ARGS(&DXGIResource));
+	m_d3d11Texture[m_frameIndex]->QueryInterface(IID_PPV_ARGS(&DXGIResource));
 	DXGIResource->GetSharedHandle(&texture.handle);
 
 	vr::EVROverlayError error = m_openVRManager->GetVROverlay()->SetOverlayTexture(m_overlayHandle, &texture);
@@ -1800,6 +1800,7 @@ if (bIsActiveTab) { ImGui::PopStyleColor(1); bIsActiveTab = false; }
 		ErrorLog("SteamVR had an error on updating overlay (%d)\n", error);
 	}
 
+	m_frameIndex = (m_frameIndex + 1) % 2;
 
 	if (!m_bIsKeyboardOpen && io.WantTextInput)
 	{
@@ -2083,11 +2084,13 @@ void DashboardMenu::SetupDX11()
 	textureDesc.CPUAccessFlags = 0;
 	textureDesc.MiscFlags = D3D11_RESOURCE_MISC_SHARED;
 
-	m_d3d11Device->CreateTexture2D(&textureDesc, nullptr, &m_d3d11Texture);
-
 	D3D11_RENDER_TARGET_VIEW_DESC renderTargetViewDesc{};
 	renderTargetViewDesc.Format = textureDesc.Format;
 	renderTargetViewDesc.ViewDimension = D3D11_RTV_DIMENSION_TEXTURE2D;
 
-	m_d3d11Device->CreateRenderTargetView(m_d3d11Texture.Get(), &renderTargetViewDesc, &m_d3d11RTV);
+	for (int i = 0; i < 2; i++)
+	{
+		m_d3d11Device->CreateTexture2D(&textureDesc, nullptr, &m_d3d11Texture[i]);
+		m_d3d11Device->CreateRenderTargetView(m_d3d11Texture[i].Get(), &renderTargetViewDesc, &m_d3d11RTV[i]);
+	}
 }
