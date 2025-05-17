@@ -168,7 +168,6 @@ VS_OUTPUT main(float3 inPosition : POSITION, uint vertexID : SV_VertexID)
     float2 disparityUVs = inPosition.xy * (g_disparityUVBounds.zw - g_disparityUVBounds.xy) + g_disparityUVBounds.xy;
     uint3 uvPos = uint3(floor(disparityUVs * g_disparityTextureSize), 0);
     
-    // Load unfiltered value so that invalid values are not filtered into the texture.
     //float2 dispConf = g_disparityTexture.Load(uvPos);
 
     float2 dispConf = g_disparityTexture.SampleLevel(g_samplerState, disparityUVs, 0); 
@@ -212,6 +211,7 @@ VS_OUTPUT main(float3 inPosition : POSITION, uint vertexID : SV_VertexID)
     output.projectionConfidence = confidence;
     output.cameraBlendConfidence = confidence;
 
+    float2 disparityOffset = 0.0;
     
     float defaultDisparity = g_disparityToDepth[2][3] /
     (min(2.0, g_projectionDistance) * 2048.0 * g_disparityDownscaleFactor * g_disparityToDepth[3][2]);  
@@ -231,10 +231,10 @@ VS_OUTPUT main(float3 inPosition : POSITION, uint vertexID : SV_VertexID)
         disparity = defaultDisparity;
         output.projectionConfidence = -100;
     }
-    else if (confidence < 0.5)
+    else
     {
-        
-        // Sample neighboring pixels using clamped Sobel filter, and mask out any areas with discontinuities.
+        // Sample neighboring pixels using a modified clamped Sobel filter, and mask out any areas with discontinuities.
+        [branch]
         if (g_bFindDiscontinuities)
         {                      
             float2 fac = g_cutoutFilterWidth / g_disparityTextureSize;
@@ -249,23 +249,50 @@ VS_OUTPUT main(float3 inPosition : POSITION, uint vertexID : SV_VertexID)
             float dispUR = g_disparityTexture.SampleLevel(g_samplerState, disparityUVs + float2(1, -1) * fac, 0).x;
             float dispDR = g_disparityTexture.SampleLevel(g_samplerState, disparityUVs + float2(1, 1) * fac, 0).x;
             
-            float filterX = (g_disparityUVBounds.x < 0.5) ? 
-                max(0, dispUL + dispL * 2 + dispDL - dispUR - dispR * 2 - dispDR) :
-                min(0, dispUL + dispL * 2 + dispDL - dispUR - dispR * 2 - dispDR);
+            // Clamp the max disparity tested to the sampled pixel disparity in order to not filter foreground pixels.
+            float filterX = min(disparity, dispUL) + min(disparity, dispL) * 2 + min(disparity, dispDL) - min(disparity, dispUR) - min(disparity, dispR) * 2 - min(disparity, dispDR);
             
-            float filterY = dispUL + dispU * 2 + dispUR - dispDL - dispD * 2 - dispDR;
+            float filterY = min(disparity, dispUL) + min(disparity, dispU) * 2 + min(disparity, dispUR) - min(disparity, dispDL) - min(disparity, dispD) * 2 - min(disparity, dispDR);
             
             float filter = sqrt(pow(filterX, 2) + pow(filterY, 2));
+            
+            // Filter only the occluded side for camera selection. Assumes left and right cameras.
+            float filterCamX = (g_disparityUVBounds.x < 0.5) ? 
+                max(0, min(disparity, dispUL) + min(disparity, dispL) * 2 + min(disparity, dispDL) - dispUR - dispR * 2 - dispDR) :
+                min(0, dispUL + dispL * 2 + dispDL - min(disparity, dispUR) - min(disparity, dispR) * 2 - min(disparity, dispDR));
+            
+            float filterCam = sqrt(pow(filterCamX, 2) + pow(filterY, 2));
 
             // Output optimistic values for camera composition to only filter occlusions
-            output.cameraBlendConfidence = (1 + g_cutoutOffset - 100 * g_cutoutFactor * filter) * g_cameraBlendWeight;
+            output.cameraBlendConfidence = (1 + g_cutoutOffset + confidence - 100.0 * g_cutoutFactor * filterCam) * g_cameraBlendWeight;
             
-            // Output pessimistic values for temporal filter to force invalidation on movement
-            output.projectionConfidence = min(confidence, 1 + g_cutoutOffset - 100 * g_cutoutFactor * filter);
+            // Output pessimistic values for depth temporal filter to force invalidation on movement
+            output.projectionConfidence = min(confidence, 1 + g_cutoutOffset - 100.0 * g_cutoutFactor * filter);
+            
+            float dfilterX = dispUL + dispL * 2 + dispDL - dispUR - dispR * 2 - dispDR;
+            float dfilterY = dispUL + dispU * 2 + dispUR - dispDL - dispD * 2 - dispDR;
+    
+            float minDisp = min(disparity, min(dispU, min(dispD, min(dispL, min(dispR, min(dispUL, min(dispDL, min(dispUR, dispDR))))))));
+            float maxDisp = max(disparity, max(dispU, max(dispD, max(dispL, max(dispR, max(dispUL, max(dispDL, max(dispUR, dispDR))))))));
+
+
+            if ((maxDisp - minDisp) > g_depthContourTreshold * (g_maxDisparity - minDisparity) * 0.01)
+            {
+                float contourFactor = saturate(g_depthContourStrength * 4 * length(float2(dfilterX, dfilterY)));
+                
+                bool inForeground = ((disparity - minDisp) > (maxDisp - disparity));
+
+                float2 maxOffset = 1.0 / g_disparityTextureSize;
+                
+                float2 offset = clamp((inForeground ? float2(-dfilterX, dfilterY) : float2(dfilterX, -dfilterY)) * maxOffset * g_depthContourStrength * 2, -maxOffset, maxOffset);
+
+                disparityOffset = lerp(float2(0, 0), offset, contourFactor);
+            }
         }
         
         // Filter any uncertain areas with a gaussian blur.
-        if (g_disparityFilterWidth > 0)
+        [branch]
+        if (g_disparityFilterWidth > 0 && confidence < 0.5)
         {
             float totalWeight = 0;
             float outDisp = 0;
@@ -277,7 +304,6 @@ VS_OUTPUT main(float3 inPosition : POSITION, uint vertexID : SV_VertexID)
                 {
                     float2 offset = float2(x, y) / (float) g_disparityTextureSize;
                     float sampleDisp = g_disparityTexture.SampleLevel(g_samplerState, disparityUVs + offset, 0).x;
-                    //float sampleDisp = g_disparityTexture.Load(uvPos + uint3(x, y, 0)).x;
                     float weight = gaussian(float2(x, y));
                     totalWeight += weight;
                     outDisp += clamp(sampleDisp, minDisparity, g_maxDisparity) * weight;
@@ -286,8 +312,7 @@ VS_OUTPUT main(float3 inPosition : POSITION, uint vertexID : SV_VertexID)
 
             disparity = outDisp / totalWeight;
         }
-    }
-    
+    }   
     
     
     float4 worldSpacePoint = DisparityToWorldCoords(disparity, inPosition.xy);
@@ -325,6 +350,8 @@ VS_OUTPUT main(float3 inPosition : POSITION, uint vertexID : SV_VertexID)
     }
     
     output.position = mul(g_worldToHMDProjection, worldSpacePoint);
+    output.position.xy += disparityOffset;
+    
     output.screenPos = output.position;
     output.screenPos.z *= output.screenPos.w; //Linearize depth
 	
@@ -344,6 +371,9 @@ VS_OUTPUT main(float3 inPosition : POSITION, uint vertexID : SV_VertexID)
 #ifdef VULKAN
 	output.position.y *= -1.0;
 #endif
+    
+    output.crossCameraReprojectedPos = 0;
+    output.cameraDepth = 0;
 
 	return output;
 }

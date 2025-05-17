@@ -28,5 +28,9 @@ VS_OUTPUT main(float3 inPosition : POSITION, uint vertexID : SV_VertexID)
 
     output.prevCameraFrameVelocity = clipSpacePos.xyz / clipSpacePos.w - prevOutCoords.xyz / prevOutCoords.w;
 
+    output.cameraBlendConfidence = 1.0;
+    output.crossCameraReprojectedPos = 0;
+    output.cameraDepth = 0;
+
     return output;
 }

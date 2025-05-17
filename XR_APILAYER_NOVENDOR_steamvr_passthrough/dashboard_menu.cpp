@@ -743,7 +743,7 @@ if (bIsActiveTab) { ImGui::PopStyleColor(1); bIsActiveTab = false; }
 			ImGui::Checkbox("Composite Both Cameras for Each Eye", &stereoCustomConfig.StereoCutoutEnabled);
 			TextDescriptionSpaced("Detects areas occluded to the main camera and renders them with the other camera where possible.");
 
-			ImGui::Checkbox("Deferred Depth Pass", &stereoCustomConfig.StereoUseDeferredDepthPass);
+			ImGui::Checkbox("Separate Depth Pass", &stereoCustomConfig.StereoUseSeparateDepthPass);
 			TextDescriptionSpaced("Enables a separate render pass generating passthrough depth maps for features that benefit from it, such as Composite Both Cameras for Each Eye.");
 
 			IMGUI_BIG_SPACING;
@@ -778,12 +778,11 @@ if (bIsActiveTab) { ImGui::PopStyleColor(1); bIsActiveTab = false; }
 				ImGui::Checkbox("Draw Background", &stereoCustomConfig.StereoDrawBackground);
 				TextDescription("Extra pass to render a cylinder mesh behind the stereo mesh.");
 
-				ImGui::Checkbox("Bicubic Filtering", &stereoCustomConfig.StereoBicubicFiltering);
-				TextDescription("Use bicubic filtering instead of bilinear for reading depth and validity maps.");
-
+				BeginSoftDisabled(!stereoCustomConfig.StereoUseSeparateDepthPass);
 				ImGui::SetNextItemWidth(ImGui::GetContentRegionAvail().x * 0.45f);
 				ScrollableSliderInt("Depth Map Scale", &stereoCustomConfig.StereoDepthMapScale, 1, 4, "%d", 1);
-				TextDescriptionSpaced("Scale of generated depth maps rleative to the proecessed disparity maps.");
+				TextDescriptionSpaced("Scale of generated depth maps releative to the proecessed disparity maps.");
+				EndSoftDisabled(!stereoCustomConfig.StereoUseSeparateDepthPass);
 
 				IMGUI_BIG_SPACING;
 				ImGui::PushItemWidth(ImGui::GetContentRegionAvail().x * 0.45f);
@@ -792,17 +791,17 @@ if (bIsActiveTab) { ImGui::PopStyleColor(1); bIsActiveTab = false; }
 				ScrollableSlider("Composition Cutout Offset", &stereoCustomConfig.StereoCutoutOffset, 0.0f, 2.0f, "%.2f", 0.01f);
 				ScrollableSlider("Composition Cutout Filter Distance", &stereoCustomConfig.StereoCutoutFilterWidth, 0.1f, 2.0f, "%.1f", 0.1f);
 				ScrollableSlider("Composition Combine Factor", &stereoCustomConfig.StereoCutoutCombineFactor, 0.0f, 1.0f, "%.1f", 0.1f);
+				TextDescription("Merges pixels from both cameras where both have good confidence.");
 				ScrollableSlider("Composition Cutout Secondary Camera Weight", &stereoCustomConfig.StereoCutoutSecondaryCameraWeight, 0.0f, 1.0f, "%.1f", 0.1f);
 				TextDescription("Settings for Composite Both Cameras for Each Eye.");
 				EndSoftDisabled(!stereoCustomConfig.StereoCutoutEnabled);
 
 				IMGUI_BIG_SPACING;
-				BeginSoftDisabled(!stereoCustomConfig.StereoUseDeferredDepthPass);
-				ScrollableSlider("Depth Fold Strength", &stereoCustomConfig.StereoDepthFoldStrength, 0.0f, 5.0f, "%.1f", 0.1f);
-				ScrollableSlider("Depth Fold Max Distance", &stereoCustomConfig.StereoDepthFoldMaxDistance, 0.0f, 5.0f, "%.1f", 0.1f);
-				ScrollableSlider("Depth Fold Filter Distance", &stereoCustomConfig.StereoDepthFoldFilterWidth, 0.0f, 3.0f, "%.1f", 0.1f);
-				TextDescription("Settings for Deferred Depth Pass. Depth Fold moves background vertices beind foreground vertices at discontinuities, \nto minimize visible gradient surfaces where none exist.");
-				EndSoftDisabled(!stereoCustomConfig.StereoUseDeferredDepthPass);
+				
+				ScrollableSlider("Depth Fold Strength", &stereoCustomConfig.StereoDepthContourStrength, 0.0f, 5.0f, "%.1f", 0.1f);
+				TextDescription("Adjusts depth mesh vertices to smooth out contours in areas with large depth discontinuities.\nThis helps with depth aliasing.");
+				ScrollableSlider("Depth Fold Theshold", &stereoCustomConfig.StereoDepthContourThreshold, 0.0f, 2.0f, "%.1f", 0.1f);
+				TextDescription("Minimum depth difference treshold for applying contour adjustment.");
 
 				ImGui::PopItemWidth();
 				ImGui::TreePop();

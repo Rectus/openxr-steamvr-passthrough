@@ -102,19 +102,22 @@ void ConfigManager::SetupStereoPresets()
 	m_stereoPresets[1].StereoDrawBackground = false;
 	m_stereoPresets[1].StereoFrameSkip = 0;
 	m_stereoPresets[1].StereoDownscaleFactor = 5;
-	m_stereoPresets[1].StereoUseDeferredDepthPass = false;
+	m_stereoPresets[1].StereoUseSeparateDepthPass = false;
 	m_stereoPresets[1].StereoUseDisparityTemporalFiltering = false;
 	m_stereoPresets[1].StereoDisparityTemporalFilteringStrength = 0.9f;
 	m_stereoPresets[1].StereoDisparityTemporalFilteringDistance = 0.5f;
 
 	m_stereoPresets[1].StereoDisparityBothEyes = false;
 	m_stereoPresets[1].StereoDisparityFilterWidth = 0;
+	m_stereoPresets[1].StereoDepthMapScale = 1;
 	m_stereoPresets[1].StereoCutoutEnabled = false;
-	m_stereoPresets[1].StereoCutoutFactor = 0.75f;
-	m_stereoPresets[1].StereoCutoutOffset = 1.5f;
-	m_stereoPresets[1].StereoCutoutFilterWidth = 0.9f;
+	m_stereoPresets[1].StereoCutoutFactor = 3.0f;
+	m_stereoPresets[1].StereoCutoutOffset = 1.0f;
+	m_stereoPresets[1].StereoCutoutFilterWidth = 1.5f;
+	m_stereoPresets[1].StereoCutoutCombineFactor = 0.0f;
+	m_stereoPresets[1].StereoCutoutSecondaryCameraWeight = 0.5f;
 
-	m_stereoPresets[1].StereoBlockSize = 9;
+	m_stereoPresets[1].StereoBlockSize = 7;
 	m_stereoPresets[1].StereoMinDisparity = 0;
 	m_stereoPresets[1].StereoMaxDisparity = 96;
 	m_stereoPresets[1].StereoSGBM_Mode = StereoMode_SGBM3Way;
@@ -146,24 +149,27 @@ void ConfigManager::SetupStereoPresets()
 	m_stereoPresets[2].StereoDrawBackground = false;
 	m_stereoPresets[2].StereoFrameSkip = 0;
 	m_stereoPresets[2].StereoDownscaleFactor = 4;
-	m_stereoPresets[2].StereoUseDeferredDepthPass = true;
+	m_stereoPresets[2].StereoUseSeparateDepthPass = true;
 	m_stereoPresets[2].StereoUseDisparityTemporalFiltering = false;
 	m_stereoPresets[2].StereoDisparityTemporalFilteringStrength = 0.9f;
 	m_stereoPresets[2].StereoDisparityTemporalFilteringDistance = 0.5f;
 
 	m_stereoPresets[2].StereoDisparityBothEyes = false;
 	m_stereoPresets[2].StereoDisparityFilterWidth = 1;
+	m_stereoPresets[2].StereoDepthMapScale = 1;
 	m_stereoPresets[2].StereoCutoutEnabled = false;
-	m_stereoPresets[2].StereoCutoutFactor = 0.75f;
-	m_stereoPresets[2].StereoCutoutOffset = 1.5f;
-	m_stereoPresets[2].StereoCutoutFilterWidth = 0.9f;
+	m_stereoPresets[2].StereoCutoutFactor = 3.0f;
+	m_stereoPresets[2].StereoCutoutOffset = 1.0f;
+	m_stereoPresets[2].StereoCutoutFilterWidth = 1.5f;
+	m_stereoPresets[2].StereoCutoutCombineFactor = 1.0f;
+	m_stereoPresets[2].StereoCutoutSecondaryCameraWeight = 0.5f;
 
-	m_stereoPresets[2].StereoBlockSize = 7;
+	m_stereoPresets[2].StereoBlockSize = 5;
 	m_stereoPresets[2].StereoMinDisparity = 0;
 	m_stereoPresets[2].StereoMaxDisparity = 96;
 	m_stereoPresets[2].StereoSGBM_Mode = StereoMode_SGBM3Way;
-	m_stereoPresets[2].StereoSGBM_P1 = 200;
-	m_stereoPresets[2].StereoSGBM_P2 = 220;
+	m_stereoPresets[2].StereoSGBM_P1 = 40;
+	m_stereoPresets[2].StereoSGBM_P2 = 64;
 	m_stereoPresets[2].StereoSGBM_DispMaxDiff = 3;
 	m_stereoPresets[2].StereoSGBM_PreFilterCap = 4;
 	m_stereoPresets[2].StereoSGBM_UniquenessRatio = 4;
@@ -189,20 +195,23 @@ void ConfigManager::SetupStereoPresets()
 	m_stereoPresets[3].StereoFillHoles = true;
 	m_stereoPresets[3].StereoDrawBackground = false;
 	m_stereoPresets[3].StereoFrameSkip = 0;
-	m_stereoPresets[3].StereoDownscaleFactor = 4;
-	m_stereoPresets[3].StereoUseDeferredDepthPass = true;
-	m_stereoPresets[3].StereoUseDisparityTemporalFiltering = false;
+	m_stereoPresets[3].StereoDownscaleFactor = 3;
+	m_stereoPresets[3].StereoUseSeparateDepthPass = true;
+	m_stereoPresets[3].StereoUseDisparityTemporalFiltering = true;
 	m_stereoPresets[3].StereoDisparityTemporalFilteringStrength = 0.9f;
 	m_stereoPresets[3].StereoDisparityTemporalFilteringDistance = 0.5f;
 
 	m_stereoPresets[3].StereoDisparityBothEyes = true;
 	m_stereoPresets[3].StereoDisparityFilterWidth = 2;
+	m_stereoPresets[3].StereoDepthMapScale = 1;
 	m_stereoPresets[3].StereoCutoutEnabled = false;
-	m_stereoPresets[3].StereoCutoutFactor = 0.75f;
-	m_stereoPresets[3].StereoCutoutOffset = 1.5f;
-	m_stereoPresets[3].StereoCutoutFilterWidth = 0.9f;
+	m_stereoPresets[3].StereoCutoutFactor = 3.0f;
+	m_stereoPresets[3].StereoCutoutOffset = 1.0f;
+	m_stereoPresets[3].StereoCutoutFilterWidth = 1.5f;
+	m_stereoPresets[3].StereoCutoutCombineFactor = 0.0f;
+	m_stereoPresets[3].StereoCutoutSecondaryCameraWeight = 0.5f;
 
-	m_stereoPresets[3].StereoBlockSize = 5;
+	m_stereoPresets[3].StereoBlockSize = 3;
 	m_stereoPresets[3].StereoMinDisparity = 0;
 	m_stereoPresets[3].StereoMaxDisparity = 96;
 	m_stereoPresets[3].StereoSGBM_Mode = StereoMode_SGBM3Way;
@@ -234,17 +243,20 @@ void ConfigManager::SetupStereoPresets()
 	m_stereoPresets[4].StereoDrawBackground = false;
 	m_stereoPresets[4].StereoFrameSkip = 0;
 	m_stereoPresets[4].StereoDownscaleFactor = 3;
-	m_stereoPresets[4].StereoUseDeferredDepthPass = true;
+	m_stereoPresets[4].StereoUseSeparateDepthPass = true;
 	m_stereoPresets[4].StereoUseDisparityTemporalFiltering = true;
 	m_stereoPresets[4].StereoDisparityTemporalFilteringStrength = 0.9f;
 	m_stereoPresets[4].StereoDisparityTemporalFilteringDistance = 0.5f;
 
 	m_stereoPresets[4].StereoDisparityBothEyes = true;
 	m_stereoPresets[4].StereoDisparityFilterWidth = 3;
-	m_stereoPresets[4].StereoCutoutEnabled = false;
-	m_stereoPresets[4].StereoCutoutFactor = 0.75f;
-	m_stereoPresets[4].StereoCutoutOffset = 1.5f;
-	m_stereoPresets[4].StereoCutoutFilterWidth = 0.9f;
+	m_stereoPresets[4].StereoDepthMapScale = 1;
+	m_stereoPresets[4].StereoCutoutEnabled = true;
+	m_stereoPresets[4].StereoCutoutFactor = 3.0f;
+	m_stereoPresets[4].StereoCutoutOffset = 1.0f;
+	m_stereoPresets[4].StereoCutoutFilterWidth = 1.5f;
+	m_stereoPresets[4].StereoCutoutCombineFactor = 1.0f;
+	m_stereoPresets[4].StereoCutoutSecondaryCameraWeight = 0.5f;
 
 	m_stereoPresets[4].StereoBlockSize = 5;
 	m_stereoPresets[4].StereoMinDisparity = 0;
@@ -278,17 +290,20 @@ void ConfigManager::SetupStereoPresets()
 	m_stereoPresets[5].StereoDrawBackground = false;
 	m_stereoPresets[5].StereoFrameSkip = 0;
 	m_stereoPresets[5].StereoDownscaleFactor = 2;
-	m_stereoPresets[5].StereoUseDeferredDepthPass = true;
+	m_stereoPresets[5].StereoUseSeparateDepthPass = true;
 	m_stereoPresets[5].StereoUseDisparityTemporalFiltering = true;
 	m_stereoPresets[5].StereoDisparityTemporalFilteringStrength = 0.9f;
 	m_stereoPresets[5].StereoDisparityTemporalFilteringDistance = 0.5f;
 
 	m_stereoPresets[5].StereoDisparityBothEyes = true;
 	m_stereoPresets[5].StereoDisparityFilterWidth = 4;
-	m_stereoPresets[5].StereoCutoutEnabled = false;
-	m_stereoPresets[5].StereoCutoutFactor = 1.0f;
-	m_stereoPresets[5].StereoCutoutOffset = 1.5f;
-	m_stereoPresets[5].StereoCutoutFilterWidth = 0.9f;
+	m_stereoPresets[5].StereoDepthMapScale = 2;
+	m_stereoPresets[5].StereoCutoutEnabled = true;
+	m_stereoPresets[5].StereoCutoutFactor = 3.0f;
+	m_stereoPresets[5].StereoCutoutOffset = 1.0f;
+	m_stereoPresets[5].StereoCutoutFilterWidth = 1.5f;
+	m_stereoPresets[5].StereoCutoutCombineFactor = 1.0f;
+	m_stereoPresets[5].StereoCutoutSecondaryCameraWeight = 0.5f;
 
 	m_stereoPresets[5].StereoBlockSize = 3;
 	m_stereoPresets[5].StereoMinDisparity = 0;
@@ -305,7 +320,7 @@ void ConfigManager::SetupStereoPresets()
 	m_stereoPresets[5].StereoFiltering = StereoFiltering_WLS;
 	m_stereoPresets[5].StereoWLS_Lambda = 8000.0f;
 	m_stereoPresets[5].StereoWLS_Sigma = 0.5f;
-	m_stereoPresets[5].StereoWLS_ConfidenceRadius = 0.5f;
+	m_stereoPresets[5].StereoWLS_ConfidenceRadius = 0.3f;
 	m_stereoPresets[5].StereoFBS_Spatial = 6.0f;
 	m_stereoPresets[5].StereoFBS_Luma = 8.0f;
 	m_stereoPresets[5].StereoFBS_Chroma = 8.0f;

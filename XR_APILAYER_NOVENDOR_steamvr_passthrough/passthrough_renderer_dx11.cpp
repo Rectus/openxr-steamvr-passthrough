@@ -1356,7 +1356,7 @@ void PassthroughRendererDX11::RenderPassthroughFrame(const XrCompositionLayerPro
 		}
 	}
 
-	bool bUseDepthPass = mainConf.ProjectionMode == Projection_StereoReconstruction && stereoConf.StereoUseDeferredDepthPass;
+	bool bUseDepthPass = mainConf.ProjectionMode == Projection_StereoReconstruction && stereoConf.StereoUseSeparateDepthPass;
 
 	if (mainConf.ProjectionMode == Projection_StereoReconstruction)
 	{
@@ -1450,20 +1450,18 @@ void PassthroughRendererDX11::RenderPassthroughFrame(const XrCompositionLayerPro
 		vsBuffer.cutoutFilterWidth = stereoConf.StereoCutoutFilterWidth;
 		vsBuffer.disparityFilterWidth = stereoConf.StereoDisparityFilterWidth;
 		vsBuffer.bProjectBorders = !stereoConf.StereoReconstructionFreeze;
-		vsBuffer.bFindDiscontinuities = stereoConf.StereoCutoutEnabled || (stereoConf.StereoUseDeferredDepthPass && stereoConf.StereoUseDisparityTemporalFiltering);
+		vsBuffer.bFindDiscontinuities = stereoConf.StereoCutoutEnabled || (stereoConf.StereoUseSeparateDepthPass && stereoConf.StereoUseDisparityTemporalFiltering);
 		vsBuffer.bUseDisparityTemporalFilter = stereoConf.StereoUseDisparityTemporalFiltering && m_bIsVSUAVSupported;
 		vsBuffer.bBlendDepthMaps = stereoConf.StereoCutoutEnabled;
-		vsBuffer.bUseBicubicFiltering = stereoConf.StereoBicubicFiltering;
 		vsBuffer.disparityTemporalFilterStrength = stereoConf.StereoDisparityTemporalFilteringStrength;
 		vsBuffer.disparityTemporalFilterDistance = stereoConf.StereoDisparityTemporalFilteringDistance;
-		vsBuffer.depthFoldStrength = stereoConf.StereoDepthFoldStrength;
-		vsBuffer.depthFoldFilterWidth = stereoConf.StereoDepthFoldFilterWidth;
-		vsBuffer.depthFoldMaxDistance = stereoConf.StereoDepthFoldMaxDistance;
+		vsBuffer.depthContourStrength = stereoConf.StereoDepthContourStrength;
+		vsBuffer.depthContourTreshhold = stereoConf.StereoDepthContourThreshold;
 	}
 
 	m_renderContext->UpdateSubresource(frameData.vsPassConstantBuffer.Get(), 0, nullptr, &vsBuffer, 0, 0);
 
-	ID3D11ShaderResourceView* psSRVs[2];
+	ID3D11ShaderResourceView* psSRVs[2] = {0};
 	psSRVs[1] = m_uvDistortionMap.SRV.Get();
 	bool bGotDebugTexture = false;
 
@@ -1655,9 +1653,6 @@ void PassthroughRendererDX11::RenderHoleFillCS(DX11FrameData& frameData, std::sh
 	csBuffer.bHoleFillLastPass = false;
 	csBuffer.minDisparity = depthFrame->minDisparity;
 	csBuffer.maxDisparity = depthFrame->maxDisparity;
-	/*csBuffer.minDisparity = depthFrame->disparityToDepth.m[11] /
-		(mainConf.ProjectionDistanceFar * 2048.0f * depthFrame->disparityDownscaleFactor * depthFrame->disparityToDepth.m[14]);
-	csBuffer.maxDisparity = stereoConf.StereoMaxDisparity / 2048.0f;*/
 
 	m_renderContext->UpdateSubresource(frameData.csConstantBuffer.Get(), 0, nullptr, &csBuffer, 0, 0);
 
@@ -1703,7 +1698,7 @@ void PassthroughRendererDX11::RenderPassthroughView(const ERenderEye eye, const 
 	bool bCompositeDepth = renderParams.bEnableDepthBlending && depthStencil != nullptr;
 	bool bWriteDepth = depthConfig.DepthWriteOutput && depthConfig.DepthReadFromApplication;
 
-	bool bUseDepthPass = mainConf.ProjectionMode == Projection_StereoReconstruction && stereoConf.StereoUseDeferredDepthPass;
+	bool bUseDepthPass = mainConf.ProjectionMode == Projection_StereoReconstruction && stereoConf.StereoUseSeparateDepthPass;
 
 	bool bUseDisparityTemporalFiltering = stereoConf.StereoUseDisparityTemporalFiltering && m_bIsVSUAVSupported;
 
@@ -1901,7 +1896,7 @@ void PassthroughRendererDX11::RenderPassthroughView(const ERenderEye eye, const 
 
 		for (DX11RenderModel model : m_renderModels)
 		{
-			VSMeshConstantBuffer vsMeshBuffer;
+			VSMeshConstantBuffer vsMeshBuffer = {0};
 			vsMeshBuffer.meshToWorldTransform = model.meshToWorldTransform;
 			m_renderContext->UpdateSubresource(m_vsMeshConstantBuffer[model.deviceId].Get(), 0, nullptr, &vsMeshBuffer, 0, 0);
 			vsBuffers[2] = m_vsMeshConstantBuffer[model.deviceId].Get();
@@ -2057,7 +2052,7 @@ void PassthroughRendererDX11::RenderMaskedPrepassView(const ERenderEye eye, cons
 	bool bCompositeDepth = renderParams.bEnableDepthBlending && depthStencil != nullptr;
 	bool bWriteDepth = depthConfig.DepthWriteOutput && depthConfig.DepthReadFromApplication;
 
-	bool bUseDepthPass = mainConf.ProjectionMode == Projection_StereoReconstruction && stereoConf.StereoUseDeferredDepthPass;
+	bool bUseDepthPass = mainConf.ProjectionMode == Projection_StereoReconstruction && stereoConf.StereoUseSeparateDepthPass;
 
 	XrRect2Di rect = layer->views[viewIndex].subImage.imageRect;
 

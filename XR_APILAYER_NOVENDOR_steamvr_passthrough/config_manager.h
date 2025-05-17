@@ -550,16 +550,15 @@ struct Config_Stereo
 	bool StereoUseHexagonGridMesh = false;
 	bool StereoFillHoles = true;
 	bool StereoDrawBackground = false;
-	bool StereoUseDeferredDepthPass = true;
+	bool StereoUseSeparateDepthPass = true;
 	int StereoFrameSkip = 0;
 	int StereoDownscaleFactor = 3;
 	bool StereoUseDisparityTemporalFiltering = false;
 	float StereoDisparityTemporalFilteringStrength = 0.9f;
 	float StereoDisparityTemporalFilteringDistance = 0.5f;
-	int StereoDepthMapScale = 2;
+	int StereoDepthMapScale = 1;
 
 	bool StereoDisparityBothEyes = true;
-	bool StereoBicubicFiltering = false;
 	int StereoDisparityFilterWidth = 0;
 	bool StereoCutoutEnabled = false;
 	float StereoCutoutFactor = 3.0f;
@@ -568,9 +567,8 @@ struct Config_Stereo
 	float StereoCutoutCombineFactor = 1.0f;
 	float StereoCutoutSecondaryCameraWeight = 0.5f;
 
-	float StereoDepthFoldStrength = 2.0f;
-	float StereoDepthFoldMaxDistance = 3.0f;
-	float StereoDepthFoldFilterWidth = 1.5f;
+	float StereoDepthContourStrength = 2.0f;
+	float StereoDepthContourThreshold = 3.0f;
 
 	int StereoBlockSize = 5;
 	int StereoMinDisparity = 0;
@@ -603,7 +601,7 @@ struct Config_Stereo
 		StereoUseHexagonGridMesh = ini.GetBoolValue(section, "StereoUseHexagonGridMesh", StereoUseHexagonGridMesh);
 		StereoFillHoles = ini.GetBoolValue(section, "StereoFillHoles", StereoFillHoles);
 		StereoDrawBackground = ini.GetBoolValue(section, "StereoDrawBackground", StereoDrawBackground);
-		StereoUseDeferredDepthPass = ini.GetBoolValue(section, "StereoUseDeferredDepthPass", StereoUseDeferredDepthPass);
+		StereoUseSeparateDepthPass = ini.GetBoolValue(section, "StereoUseSeparateDepthPass", StereoUseSeparateDepthPass);
 		StereoFrameSkip = ini.GetLongValue(section, "StereoFrameSkip", StereoFrameSkip);
 		StereoDownscaleFactor = ini.GetLongValue(section, "StereoDownscaleFactor", StereoDownscaleFactor);
 		StereoUseDisparityTemporalFiltering = ini.GetBoolValue(section, "StereoUseDisparityTemporalFiltering", StereoUseDisparityTemporalFiltering);
@@ -612,7 +610,6 @@ struct Config_Stereo
 		StereoDepthMapScale = ini.GetLongValue(section, "StereoDepthMapScale", StereoDepthMapScale);
 
 		StereoDisparityBothEyes = ini.GetBoolValue(section, "StereoDisparityBothEyes", StereoDisparityBothEyes);
-		StereoBicubicFiltering = ini.GetBoolValue(section, "StereoBicubicFiltering", StereoBicubicFiltering);
 		StereoCutoutEnabled = ini.GetBoolValue(section, "StereoCutoutEnabled", StereoCutoutEnabled);
 		StereoCutoutFactor = (float)ini.GetDoubleValue(section, "StereoCutoutFactor", StereoCutoutFactor);
 		StereoCutoutOffset = (float)ini.GetDoubleValue(section, "StereoCutoutOffset", StereoCutoutOffset);
@@ -621,9 +618,8 @@ struct Config_Stereo
 		StereoCutoutCombineFactor = (float)ini.GetDoubleValue(section, "StereoCutoutCombineFactor", StereoCutoutCombineFactor);
 		StereoCutoutSecondaryCameraWeight = (float)ini.GetDoubleValue(section, "StereoCutoutSecondaryCameraWeight", StereoCutoutSecondaryCameraWeight);
 
-		StereoDepthFoldStrength = (float)ini.GetDoubleValue(section, "StereoDepthFoldStrength", StereoDepthFoldStrength);
-		StereoDepthFoldMaxDistance = (float)ini.GetDoubleValue(section, "StereoDepthFoldMaxDistance", StereoDepthFoldMaxDistance);
-		StereoDepthFoldFilterWidth = (float)ini.GetDoubleValue(section, "StereoDepthFoldFilterWidth", StereoDepthFoldFilterWidth);
+		StereoDepthContourStrength = (float)ini.GetDoubleValue(section, "StereoDepthContourStrength", StereoDepthContourStrength);
+		StereoDepthContourThreshold = (float)ini.GetDoubleValue(section, "StereoDepthContourThreshold", StereoDepthContourThreshold);
 
 		StereoBlockSize = ini.GetLongValue(section, "StereoBlockSize", StereoBlockSize);
 		StereoMinDisparity = ini.GetLongValue(section, "StereoMinDisparity", StereoMinDisparity);
@@ -657,7 +653,7 @@ struct Config_Stereo
 		ini.SetBoolValue(section, "StereoUseHexagonGridMesh", StereoUseHexagonGridMesh);
 		ini.SetBoolValue(section, "StereoFillHoles", StereoFillHoles);
 		ini.SetBoolValue(section, "StereoDrawBackground", StereoDrawBackground);
-		ini.SetBoolValue(section, "StereoUseDeferredDepthPass", StereoUseDeferredDepthPass);
+		ini.SetBoolValue(section, "StereoUseSeparateDepthPass", StereoUseSeparateDepthPass);
 		ini.SetLongValue(section, "StereoFrameSkip", StereoFrameSkip);
 		ini.SetLongValue(section, "StereoDownscaleFactor", StereoDownscaleFactor);
 		ini.SetBoolValue(section, "StereoUseDisparityTemporalFiltering", StereoUseDisparityTemporalFiltering);
@@ -666,7 +662,6 @@ struct Config_Stereo
 		ini.SetLongValue(section, "StereoDepthMapScale", StereoDepthMapScale);
 
 		ini.SetBoolValue(section, "StereoDisparityBothEyes", StereoDisparityBothEyes);
-		ini.SetBoolValue(section, "StereoBicubicFiltering", StereoBicubicFiltering);
 		ini.SetBoolValue(section, "StereoCutoutEnabled", StereoCutoutEnabled);
 		ini.SetDoubleValue(section, "StereoCutoutFactor", StereoCutoutFactor);
 		ini.SetDoubleValue(section, "StereoCutoutOffset", StereoCutoutOffset);
@@ -675,9 +670,8 @@ struct Config_Stereo
 		ini.SetDoubleValue(section, "StereoCutoutCombineFactor", StereoCutoutCombineFactor);
 		ini.SetDoubleValue(section, "StereoCutoutSecondaryCameraWeight", StereoCutoutSecondaryCameraWeight);
 
-		ini.SetDoubleValue(section, "StereoDepthFoldStrength", StereoDepthFoldStrength);
-		ini.SetDoubleValue(section, "StereoDepthFoldMaxDistance", StereoDepthFoldMaxDistance);
-		ini.SetDoubleValue(section, "StereoDepthFoldFilterWidth", StereoDepthFoldFilterWidth);
+		ini.SetDoubleValue(section, "StereoDepthContourStrength", StereoDepthContourStrength);
+		ini.SetDoubleValue(section, "StereoDepthContourThreshold", StereoDepthContourThreshold);
 
 		ini.SetLongValue(section, "StereoBlockSize", StereoBlockSize);
 		ini.SetLongValue(section, "StereoMinDisparity", StereoMinDisparity);
