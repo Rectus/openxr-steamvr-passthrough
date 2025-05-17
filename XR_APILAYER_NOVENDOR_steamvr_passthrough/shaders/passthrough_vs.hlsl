@@ -35,5 +35,8 @@ VS_OUTPUT main(float3 inPosition : POSITION, uint vertexID : SV_VertexID)
 	output.position.y *= -1.0;
 #endif
 
+    output.crossCameraReprojectedPos = 0;
+    output.cameraDepth = 0;
+
 	return output;
 }

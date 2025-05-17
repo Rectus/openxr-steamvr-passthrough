@@ -94,8 +94,9 @@ private:
 
 	ComPtr<ID3D11Device> m_d3d11Device;
 	ComPtr<ID3D11DeviceContext> m_d3d11DeviceContext;
-	ComPtr<ID3D11Texture2D> m_d3d11Texture;
-	ComPtr<ID3D11RenderTargetView> m_d3d11RTV;
+	ComPtr<ID3D11Texture2D> m_d3d11Texture[2];
+	ComPtr<ID3D11RenderTargetView> m_d3d11RTV[2];
+	int m_frameIndex = 0;
 
 	bool m_bMenuIsVisible;
 	MenuDisplayValues m_displayValues;

@@ -738,6 +738,9 @@ void PassthroughRendererDX11::SetupPassthroughDepthStencil(uint32_t viewIndex, u
 
 		for (int i = 0; i < 2; i++)
 		{
+			viewData.passthroughDepthStencil[i].Width = width;
+			viewData.passthroughDepthStencil[i].Height = height;
+
 			if (FAILED(m_d3dDevice->CreateTexture2D(&textureDesc, nullptr, &viewData.passthroughDepthStencil[i].Texture)))
 			{
 				ErrorLog("Passthrough Depth Stencil CreateTexture2D error!\n");
@@ -1353,18 +1356,19 @@ void PassthroughRendererDX11::RenderPassthroughFrame(const XrCompositionLayerPro
 		}
 	}
 
-	bool bUseDepthPass = mainConf.ProjectionMode == Projection_StereoReconstruction && stereoConf.StereoUseDeferredDepthPass;
+	bool bUseDepthPass = mainConf.ProjectionMode == Projection_StereoReconstruction && stereoConf.StereoUseSeparateDepthPass;
 
 	if (mainConf.ProjectionMode == Projection_StereoReconstruction)
 	{
-		bool bdisparityMapUpdated = depthFrame->bIsFirstRender;
+		bool bDisparityMapUpdated = depthFrame->bIsFirstRender;
 
-		if (depthFrame->disparityTextureSize[0] != m_disparityMapWidth || m_bUseHexagonGridMesh != stereoConf.StereoUseHexagonGridMesh || (stereoConf.StereoUseDisparityTemporalFiltering && m_bIsVSUAVSupported && frameData.disparityFilter.Texture == nullptr))
+		bool bDisparityMapReset = false;
+
+		if (depthFrame->disparityTextureSize[0] != m_disparityMapWidth || (stereoConf.StereoUseDisparityTemporalFiltering && m_bIsVSUAVSupported && frameData.disparityFilter.Texture == nullptr))
 		{
 			m_disparityMapWidth = depthFrame->disparityTextureSize[0];
-			m_bUseHexagonGridMesh = stereoConf.StereoUseHexagonGridMesh;
+
 			SetupDisparityMap(depthFrame->disparityTextureSize[0], depthFrame->disparityTextureSize[1]);
-			GenerateDepthMesh(depthFrame->disparityTextureSize[0] / 2, depthFrame->disparityTextureSize[1]);
 
 			for (int i = 0; i < m_viewData[0].size(); i++)
 			{
@@ -1373,9 +1377,10 @@ void PassthroughRendererDX11::RenderPassthroughFrame(const XrCompositionLayerPro
 				m_viewData[1][i].passthroughDepthStencil[0].Texture = nullptr;
 				m_viewData[0][i].passthroughDepthStencil[1].Texture = nullptr;
 			}
-			bdisparityMapUpdated = true;
+			bDisparityMapUpdated = true;
+			bDisparityMapReset = true;
 		}
-		if (bdisparityMapUpdated)
+		if (bDisparityMapUpdated)
 		{
 			UploadTexture(m_deviceContext, m_disparityMapUploadTexture, (uint8_t*)depthFrame->disparityMap->data(), depthFrame->disparityTextureSize[1], depthFrame->disparityTextureSize[0] * sizeof(uint16_t) * 2);
 			m_prevDepthUpdatedFrameIndex = m_depthUpdatedFrameIndex;
@@ -1387,15 +1392,35 @@ void PassthroughRendererDX11::RenderPassthroughFrame(const XrCompositionLayerPro
 			m_deviceContext->CopyResource(frameData.disparityMap.Texture.Get(), prevFrameData.disparityMap.Texture.Get());
 		}
 
-		if (stereoConf.StereoFillHoles && bdisparityMapUpdated)
+		if (stereoConf.StereoFillHoles && bDisparityMapUpdated)
 		{
 			RenderHoleFillCS(frameData, depthFrame);
 		}
 
+		bool bDepthMapsReset = false;
+
 		if (bUseDepthPass)
 		{
-			if (viewDataLeft.passthroughDepthStencil[0].Texture == nullptr) { SetupPassthroughDepthStencil(0, leftSwapchainIndex, depthFrame->disparityTextureSize[0] / 2, depthFrame->disparityTextureSize[1]); }
-			if (viewDataRight.passthroughDepthStencil[0].Texture == nullptr) { SetupPassthroughDepthStencil(1, rightSwapchainIndex, depthFrame->disparityTextureSize[0] / 2, depthFrame->disparityTextureSize[1]); }
+			if(viewDataLeft.passthroughDepthStencil[0].Texture == nullptr || 
+				viewDataRight.passthroughDepthStencil[0].Texture == nullptr ||
+				(viewDataLeft.passthroughDepthStencil[0].Width != depthFrame->disparityTextureSize[0] * stereoConf.StereoDepthMapScale / 2) ||
+				(viewDataLeft.passthroughDepthStencil[0].Height != depthFrame->disparityTextureSize[1] * stereoConf.StereoDepthMapScale))
+			{
+				uint32_t width = depthFrame->disparityTextureSize[0] * stereoConf.StereoDepthMapScale / 2;
+				uint32_t height = depthFrame->disparityTextureSize[1] * stereoConf.StereoDepthMapScale;
+
+				SetupPassthroughDepthStencil(0, leftSwapchainIndex, width, height);
+				SetupPassthroughDepthStencil(1, rightSwapchainIndex, width, height);
+
+				bDepthMapsReset = true;
+			}
+		}
+
+		if (m_bUseHexagonGridMesh != stereoConf.StereoUseHexagonGridMesh || bDisparityMapReset || bDepthMapsReset)
+		{
+			m_bUseHexagonGridMesh = stereoConf.StereoUseHexagonGridMesh;
+
+			GenerateDepthMesh(depthFrame->disparityTextureSize[0] * stereoConf.StereoDepthMapScale / 2, depthFrame->disparityTextureSize[1] * stereoConf.StereoDepthMapScale);
 		}
 	}
 
@@ -1425,19 +1450,18 @@ void PassthroughRendererDX11::RenderPassthroughFrame(const XrCompositionLayerPro
 		vsBuffer.cutoutFilterWidth = stereoConf.StereoCutoutFilterWidth;
 		vsBuffer.disparityFilterWidth = stereoConf.StereoDisparityFilterWidth;
 		vsBuffer.bProjectBorders = !stereoConf.StereoReconstructionFreeze;
-		vsBuffer.bFindDiscontinuities = stereoConf.StereoCutoutEnabled || (stereoConf.StereoUseDeferredDepthPass && stereoConf.StereoUseDisparityTemporalFiltering);
+		vsBuffer.bFindDiscontinuities = stereoConf.StereoCutoutEnabled || (stereoConf.StereoUseSeparateDepthPass && stereoConf.StereoUseDisparityTemporalFiltering);
 		vsBuffer.bUseDisparityTemporalFilter = stereoConf.StereoUseDisparityTemporalFiltering && m_bIsVSUAVSupported;
 		vsBuffer.bBlendDepthMaps = stereoConf.StereoCutoutEnabled;
 		vsBuffer.disparityTemporalFilterStrength = stereoConf.StereoDisparityTemporalFilteringStrength;
 		vsBuffer.disparityTemporalFilterDistance = stereoConf.StereoDisparityTemporalFilteringDistance;
-		vsBuffer.depthFoldStrength = stereoConf.StereoDepthFoldStrength;
-		vsBuffer.depthFoldFilterWidth = stereoConf.StereoDepthFoldFilterWidth;
-		vsBuffer.depthFoldMaxDistance = stereoConf.StereoDepthFoldMaxDistance;
+		vsBuffer.depthContourStrength = stereoConf.StereoDepthContourStrength;
+		vsBuffer.depthContourTreshhold = stereoConf.StereoDepthContourThreshold;
 	}
 
 	m_renderContext->UpdateSubresource(frameData.vsPassConstantBuffer.Get(), 0, nullptr, &vsBuffer, 0, 0);
 
-	ID3D11ShaderResourceView* psSRVs[2];
+	ID3D11ShaderResourceView* psSRVs[2] = {0};
 	psSRVs[1] = m_uvDistortionMap.SRV.Get();
 	bool bGotDebugTexture = false;
 
@@ -1629,9 +1653,6 @@ void PassthroughRendererDX11::RenderHoleFillCS(DX11FrameData& frameData, std::sh
 	csBuffer.bHoleFillLastPass = false;
 	csBuffer.minDisparity = depthFrame->minDisparity;
 	csBuffer.maxDisparity = depthFrame->maxDisparity;
-	/*csBuffer.minDisparity = depthFrame->disparityToDepth.m[11] /
-		(mainConf.ProjectionDistanceFar * 2048.0f * depthFrame->disparityDownscaleFactor * depthFrame->disparityToDepth.m[14]);
-	csBuffer.maxDisparity = stereoConf.StereoMaxDisparity / 2048.0f;*/
 
 	m_renderContext->UpdateSubresource(frameData.csConstantBuffer.Get(), 0, nullptr, &csBuffer, 0, 0);
 
@@ -1677,7 +1698,7 @@ void PassthroughRendererDX11::RenderPassthroughView(const ERenderEye eye, const 
 	bool bCompositeDepth = renderParams.bEnableDepthBlending && depthStencil != nullptr;
 	bool bWriteDepth = depthConfig.DepthWriteOutput && depthConfig.DepthReadFromApplication;
 
-	bool bUseDepthPass = mainConf.ProjectionMode == Projection_StereoReconstruction && stereoConf.StereoUseDeferredDepthPass;
+	bool bUseDepthPass = mainConf.ProjectionMode == Projection_StereoReconstruction && stereoConf.StereoUseSeparateDepthPass;
 
 	bool bUseDisparityTemporalFiltering = stereoConf.StereoUseDisparityTemporalFiltering && m_bIsVSUAVSupported;
 
@@ -1721,6 +1742,7 @@ void PassthroughRendererDX11::RenderPassthroughView(const ERenderEye eye, const 
 	vsViewBuffer.projectionOriginWorld = (eye == LEFT_EYE) ? frame->projectionOriginWorldLeft : frame->projectionOriginWorldRight;
 	vsViewBuffer.projectionDistance = mainConf.ProjectionDistanceFar;
 	vsViewBuffer.floorHeightOffset = mainConf.FloorHeightOffset;
+	vsViewBuffer.cameraBlendWeight = 1.0;
 	vsViewBuffer.cameraViewIndex = viewIndex;
 	vsViewBuffer.bWriteDisparityFilter = bUseDisparityTemporalFiltering && depthFrame->bIsFirstRender;
 
@@ -1874,7 +1896,7 @@ void PassthroughRendererDX11::RenderPassthroughView(const ERenderEye eye, const 
 
 		for (DX11RenderModel model : m_renderModels)
 		{
-			VSMeshConstantBuffer vsMeshBuffer;
+			VSMeshConstantBuffer vsMeshBuffer = {0};
 			vsMeshBuffer.meshToWorldTransform = model.meshToWorldTransform;
 			m_renderContext->UpdateSubresource(m_vsMeshConstantBuffer[model.deviceId].Get(), 0, nullptr, &vsMeshBuffer, 0, 0);
 			vsBuffers[2] = m_vsMeshConstantBuffer[model.deviceId].Get();
@@ -2030,7 +2052,7 @@ void PassthroughRendererDX11::RenderMaskedPrepassView(const ERenderEye eye, cons
 	bool bCompositeDepth = renderParams.bEnableDepthBlending && depthStencil != nullptr;
 	bool bWriteDepth = depthConfig.DepthWriteOutput && depthConfig.DepthReadFromApplication;
 
-	bool bUseDepthPass = mainConf.ProjectionMode == Projection_StereoReconstruction && stereoConf.StereoUseDeferredDepthPass;
+	bool bUseDepthPass = mainConf.ProjectionMode == Projection_StereoReconstruction && stereoConf.StereoUseSeparateDepthPass;
 
 	XrRect2Di rect = layer->views[viewIndex].subImage.imageRect;
 
@@ -2047,6 +2069,7 @@ void PassthroughRendererDX11::RenderMaskedPrepassView(const ERenderEye eye, cons
 	vsViewBuffer.projectionOriginWorld = (eye == LEFT_EYE) ? frame->projectionOriginWorldLeft : frame->projectionOriginWorldRight;
 	vsViewBuffer.projectionDistance = mainConf.ProjectionDistanceFar;
 	vsViewBuffer.floorHeightOffset = mainConf.FloorHeightOffset;
+	vsViewBuffer.cameraBlendWeight = 1.0;
 	vsViewBuffer.cameraViewIndex = viewIndex;
 
 	m_renderContext->UpdateSubresource(viewData.vsViewConstantBuffer.Get(), 0, nullptr, &vsViewBuffer, 0, 0);
@@ -2226,8 +2249,8 @@ void PassthroughRendererDX11::RenderDepthPrepassView(const ERenderEye eye, const
 	Config_Main& mainConf = m_configManager->GetConfig_Main();
 	Config_Stereo& stereoConf = m_configManager->GetConfig_Stereo();
 
-	D3D11_VIEWPORT viewport = { 0.0f, 0.0f, (float)(depthFrame->disparityTextureSize[0] / 2), (float)depthFrame->disparityTextureSize[1], 0.0f, 1.0f };
-	D3D11_RECT scissor = { 0, 0, (long)depthFrame->disparityTextureSize[0] / 2, (long)depthFrame->disparityTextureSize[1] };
+	D3D11_VIEWPORT viewport = { 0.0f, 0.0f, (float)viewData.passthroughDepthStencil[0].Width, (float)viewData.passthroughDepthStencil[0].Height, 0.0f, 1.0f};
+	D3D11_RECT scissor = { 0, 0, (long)viewData.passthroughDepthStencil[0].Width, (long)viewData.passthroughDepthStencil[0].Height };
 	m_renderContext->RSSetViewports(1, &viewport);
 	m_renderContext->RSSetScissorRects(1, &scissor);
 
@@ -2289,6 +2312,7 @@ void PassthroughRendererDX11::RenderDepthPrepassView(const ERenderEye eye, const
 	vsViewBuffer.projectionDistance = mainConf.ProjectionDistanceFar;
 	vsViewBuffer.floorHeightOffset = mainConf.FloorHeightOffset;
 	vsViewBuffer.cameraViewIndex = viewIndex;
+	vsViewBuffer.cameraBlendWeight = 1.0;
 	vsViewBuffer.disparityUVBounds = GetFrameUVBounds(eye, StereoHorizontalLayout);
 
 	m_renderContext->UpdateSubresource(viewData.vsViewConstantBuffer.Get(), 0, nullptr, &vsViewBuffer, 0, 0);
@@ -2310,6 +2334,7 @@ void PassthroughRendererDX11::RenderDepthPrepassView(const ERenderEye eye, const
 	{
 		vsViewBuffer.cameraViewIndex = (eye != LEFT_EYE) ? 0 : 1;
 		vsViewBuffer.disparityUVBounds = GetFrameUVBounds((eye == LEFT_EYE) ? RIGHT_EYE : LEFT_EYE, StereoHorizontalLayout);
+		vsViewBuffer.cameraBlendWeight = stereoConf.StereoCutoutSecondaryCameraWeight;
 
 		m_renderContext->UpdateSubresource(viewData.vsViewConstantBuffer.Get(), 0, nullptr, &vsViewBuffer, 0, 0);
 

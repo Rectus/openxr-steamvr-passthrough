@@ -743,7 +743,7 @@ if (bIsActiveTab) { ImGui::PopStyleColor(1); bIsActiveTab = false; }
 			ImGui::Checkbox("Composite Both Cameras for Each Eye", &stereoCustomConfig.StereoCutoutEnabled);
 			TextDescriptionSpaced("Detects areas occluded to the main camera and renders them with the other camera where possible.");
 
-			ImGui::Checkbox("Deferred Depth Pass", &stereoCustomConfig.StereoUseDeferredDepthPass);
+			ImGui::Checkbox("Separate Depth Pass", &stereoCustomConfig.StereoUseSeparateDepthPass);
 			TextDescriptionSpaced("Enables a separate render pass generating passthrough depth maps for features that benefit from it, such as Composite Both Cameras for Each Eye.");
 
 			IMGUI_BIG_SPACING;
@@ -778,6 +778,12 @@ if (bIsActiveTab) { ImGui::PopStyleColor(1); bIsActiveTab = false; }
 				ImGui::Checkbox("Draw Background", &stereoCustomConfig.StereoDrawBackground);
 				TextDescription("Extra pass to render a cylinder mesh behind the stereo mesh.");
 
+				BeginSoftDisabled(!stereoCustomConfig.StereoUseSeparateDepthPass);
+				ImGui::SetNextItemWidth(ImGui::GetContentRegionAvail().x * 0.45f);
+				ScrollableSliderInt("Depth Map Scale", &stereoCustomConfig.StereoDepthMapScale, 1, 4, "%d", 1);
+				TextDescriptionSpaced("Scale of generated depth maps releative to the proecessed disparity maps.");
+				EndSoftDisabled(!stereoCustomConfig.StereoUseSeparateDepthPass);
+
 				IMGUI_BIG_SPACING;
 				ImGui::PushItemWidth(ImGui::GetContentRegionAvail().x * 0.45f);
 				BeginSoftDisabled(!stereoCustomConfig.StereoCutoutEnabled);
@@ -785,16 +791,17 @@ if (bIsActiveTab) { ImGui::PopStyleColor(1); bIsActiveTab = false; }
 				ScrollableSlider("Composition Cutout Offset", &stereoCustomConfig.StereoCutoutOffset, 0.0f, 2.0f, "%.2f", 0.01f);
 				ScrollableSlider("Composition Cutout Filter Distance", &stereoCustomConfig.StereoCutoutFilterWidth, 0.1f, 2.0f, "%.1f", 0.1f);
 				ScrollableSlider("Composition Combine Factor", &stereoCustomConfig.StereoCutoutCombineFactor, 0.0f, 1.0f, "%.1f", 0.1f);
+				TextDescription("Merges pixels from both cameras where both have good confidence.");
+				ScrollableSlider("Composition Cutout Secondary Camera Weight", &stereoCustomConfig.StereoCutoutSecondaryCameraWeight, 0.0f, 1.0f, "%.1f", 0.1f);
 				TextDescription("Settings for Composite Both Cameras for Each Eye.");
 				EndSoftDisabled(!stereoCustomConfig.StereoCutoutEnabled);
 
 				IMGUI_BIG_SPACING;
-				BeginSoftDisabled(!stereoCustomConfig.StereoUseDeferredDepthPass);
-				ScrollableSlider("Depth Fold Strength", &stereoCustomConfig.StereoDepthFoldStrength, 0.0f, 5.0f, "%.1f", 0.1f);
-				ScrollableSlider("Depth Fold Max Distance", &stereoCustomConfig.StereoDepthFoldMaxDistance, 0.0f, 5.0f, "%.1f", 0.1f);
-				ScrollableSlider("Depth Fold Filter Distance", &stereoCustomConfig.StereoDepthFoldFilterWidth, 0.0f, 3.0f, "%.1f", 0.1f);
-				TextDescription("Settings for Deferred Depth Pass. Depth Fold moves background vertices beind foreground vertices at discontinuities, \nto minimize visible gradient surfaces where none exist.");
-				EndSoftDisabled(!stereoCustomConfig.StereoUseDeferredDepthPass);
+				
+				ScrollableSlider("Depth Fold Strength", &stereoCustomConfig.StereoDepthContourStrength, 0.0f, 5.0f, "%.1f", 0.1f);
+				TextDescription("Adjusts depth mesh vertices to smooth out contours in areas with large depth discontinuities.\nThis helps with depth aliasing.");
+				ScrollableSlider("Depth Fold Theshold", &stereoCustomConfig.StereoDepthContourThreshold, 0.0f, 2.0f, "%.1f", 0.1f);
+				TextDescription("Minimum depth difference treshold for applying contour adjustment.");
 
 				ImGui::PopItemWidth();
 				ImGui::TreePop();
@@ -1771,10 +1778,10 @@ if (bIsActiveTab) { ImGui::PopStyleColor(1); bIsActiveTab = false; }
 
 	ImGui::Render();
 
-	ID3D11RenderTargetView* rtv = m_d3d11RTV.Get();
+	ID3D11RenderTargetView* rtv = m_d3d11RTV[m_frameIndex].Get();
 	m_d3d11DeviceContext->OMSetRenderTargets(1, &rtv, NULL);
 	const float clearColor[4] = { 0, 0, 0, 1 };
-	m_d3d11DeviceContext->ClearRenderTargetView(m_d3d11RTV.Get(), clearColor);
+	m_d3d11DeviceContext->ClearRenderTargetView(m_d3d11RTV[m_frameIndex].Get(), clearColor);
 	ImGui_ImplDX11_RenderDrawData(ImGui::GetDrawData());
 	m_d3d11DeviceContext->Flush();
 
@@ -1783,7 +1790,7 @@ if (bIsActiveTab) { ImGui::PopStyleColor(1); bIsActiveTab = false; }
 	texture.eType = vr::TextureType_DXGISharedHandle;
 
 	ComPtr<IDXGIResource> DXGIResource;
-	m_d3d11Texture->QueryInterface(IID_PPV_ARGS(&DXGIResource));
+	m_d3d11Texture[m_frameIndex]->QueryInterface(IID_PPV_ARGS(&DXGIResource));
 	DXGIResource->GetSharedHandle(&texture.handle);
 
 	vr::EVROverlayError error = m_openVRManager->GetVROverlay()->SetOverlayTexture(m_overlayHandle, &texture);
@@ -1792,6 +1799,7 @@ if (bIsActiveTab) { ImGui::PopStyleColor(1); bIsActiveTab = false; }
 		ErrorLog("SteamVR had an error on updating overlay (%d)\n", error);
 	}
 
+	m_frameIndex = (m_frameIndex + 1) % 2;
 
 	if (!m_bIsKeyboardOpen && io.WantTextInput)
 	{
@@ -2075,11 +2083,13 @@ void DashboardMenu::SetupDX11()
 	textureDesc.CPUAccessFlags = 0;
 	textureDesc.MiscFlags = D3D11_RESOURCE_MISC_SHARED;
 
-	m_d3d11Device->CreateTexture2D(&textureDesc, nullptr, &m_d3d11Texture);
-
 	D3D11_RENDER_TARGET_VIEW_DESC renderTargetViewDesc{};
 	renderTargetViewDesc.Format = textureDesc.Format;
 	renderTargetViewDesc.ViewDimension = D3D11_RTV_DIMENSION_TEXTURE2D;
 
-	m_d3d11Device->CreateRenderTargetView(m_d3d11Texture.Get(), &renderTargetViewDesc, &m_d3d11RTV);
+	for (int i = 0; i < 2; i++)
+	{
+		m_d3d11Device->CreateTexture2D(&textureDesc, nullptr, &m_d3d11Texture[i]);
+		m_d3d11Device->CreateRenderTargetView(m_d3d11Texture[i].Get(), &renderTargetViewDesc, &m_d3d11RTV[i]);
+	}
 }

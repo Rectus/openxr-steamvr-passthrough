@@ -2,6 +2,7 @@
 
 #include "common_ps.hlsl"
 #include "vs_outputs.hlsl"
+#include "util.hlsl"
 
 
 SamplerState g_samplerState : register(s0);
@@ -11,6 +12,7 @@ Texture2D<float4> g_prevCameraValidation : register(t1);
 float4 main(VS_OUTPUT input, out float outDepth : SV_Depth ) : SV_Target
 {
 	float outProjectionConfidence = input.projectionConfidence.x;
+	
 	float outBlendValidity = input.cameraBlendConfidence.x;
 	
 	outDepth = input.position.z;
@@ -26,14 +28,17 @@ float4 main(VS_OUTPUT input, out float outDepth : SV_Depth ) : SV_Target
 		float4 prevValid4 = g_prevCameraValidation.SampleLevel(g_samplerState, prevScreenUvs, 0);
 		
 		float prevProjectionConfidence = g_doCutout ? prevValid4.y : prevValid4.x;
+		float prevBlendConfidence = g_doCutout ? prevValid4.w : prevValid4.z;
 		
 		float depthDiff = (prevDepth - input.position.z) / (g_depthRange.y - g_depthRange.x);
 		
-		if(prevProjectionConfidence >= input.projectionConfidence.x && abs(depthDiff) < g_depthTemporalFilterDistance)// && prevDepth > input.position.z)
+		if(prevProjectionConfidence >= input.projectionConfidence.x && abs(depthDiff) < g_depthTemporalFilterDistance)
         {
-			outDepth = lerp(outDepth, prevDepth, min(g_depthTemporalFilterFactor, 0.9999));
-			outProjectionConfidence = lerp(outProjectionConfidence, prevProjectionConfidence, g_depthTemporalFilterFactor);;
-			outBlendValidity = min(input.cameraBlendConfidence.x, g_doCutout ? prevValid4.w : prevValid4.z);
+			float lerpFactor = min(g_depthTemporalFilterFactor, 0.9999);
+			outDepth = lerp(outDepth, prevDepth, lerpFactor);
+			outProjectionConfidence = lerp(outProjectionConfidence, prevProjectionConfidence, lerpFactor);
+			// Negative value to diffrentiate using depth from history buffer.
+			outBlendValidity = lerp(input.cameraBlendConfidence.x, prevBlendConfidence, lerpFactor);
         }
     }
 

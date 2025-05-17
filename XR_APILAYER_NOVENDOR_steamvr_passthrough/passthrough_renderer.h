@@ -97,9 +97,8 @@ struct alignas(16) VSPassConstantBuffer
 	uint32_t bBlendDepthMaps;
 	float disparityTemporalFilterStrength;
 	float disparityTemporalFilterDistance;
-	float depthFoldStrength;
-	float depthFoldMaxDistance;
-	float depthFoldFilterWidth;
+	float depthContourStrength;
+	float depthContourTreshhold;
 };
 
 struct alignas(16) VSViewConstantBuffer
@@ -112,6 +111,7 @@ struct alignas(16) VSViewConstantBuffer
 	XrVector3f projectionOriginWorld;
 	float projectionDistance;
 	float floorHeightOffset;
+	float cameraBlendWeight;
 	uint32_t cameraViewIndex;
 	uint32_t bWriteDisparityFilter;
 };
@@ -195,6 +195,8 @@ struct DX11DepthStencilTexture
 	ComPtr<ID3D11Texture2D> Texture;
 	ComPtr<ID3D11DepthStencilView> DSV;
 	ComPtr<ID3D11ShaderResourceView> SRV;
+	uint32_t Width{};
+	uint32_t Height{};
 };
 
 struct DX11SRVTexture

@@ -5,6 +5,10 @@
 
 #define BORDER_SIZE 3
 
+
+#define clamp(val, min, max) ((val < min ? min : (val > max ? max : val)))
+
+
 // Generate a cylinder with radius and height 1.
 void MeshCreateCylinder(Mesh<VertexFormatBasic>& mesh, int numBoundaryVertices)
 {
@@ -41,43 +45,48 @@ void MeshCreateCylinder(Mesh<VertexFormatBasic>& mesh, int numBoundaryVertices)
 }
 
 
+// Grid with vertices at the center of pixels, with extra clamped vertices at the edges.
 void MeshCreateGrid(Mesh<VertexFormatBasic>& mesh, int width, int height)
 {
+	int numVertsX = width + 2;
+	int numVertsY = height + 2;
+
 	mesh.vertices.resize(0);
-	mesh.vertices.reserve((width + 1) * (height + 1));
+	mesh.vertices.reserve(numVertsX * numVertsY);
 	mesh.triangles.resize(0);
-	mesh.triangles.reserve(width * height * 2);
+	mesh.triangles.reserve(numVertsX * numVertsY * 2);
 
 	float stepX = 1.0f / (float)width;
 	float stepY = 1.0f / (float)height;
 
 	uint32_t index = 0;
 
-	for (int y = 0; y < height; y++)
+	for (int y = 0; y < numVertsY; y++)
 	{
-		for (int x = 0; x < width; x++)
+		for (int x = 0; x < numVertsX; x++)
 		{
+			float xPos = clamp((x - 0.5f) * stepX, 0.0f, 1.0f);
+			float yPos = clamp((y - 0.5f) * stepY, 0.0f, 1.0f);
+
 			// Mark border vertices
-			float z = 0.0f;
+			float zPos = 0.0f;
 				
-			if (x < BORDER_SIZE || x >= (width - BORDER_SIZE) || y < BORDER_SIZE || y >= (height - BORDER_SIZE))
+			if (x < BORDER_SIZE || x >= (numVertsX - BORDER_SIZE) || y < BORDER_SIZE || y >= (numVertsY - BORDER_SIZE))
 			{
 				float size = (float)BORDER_SIZE;
 
 				float low = fmaxf((size - x) / size, (size - y) / size);
-				float high = -fmin(0.0f, fminf((width - size - x - 1) / size, (height - size - y - 1) / size));
+				float high = -fmin(0.0f, fminf((numVertsX - size - x - 1) / size, (numVertsY - size - y - 1) / size));
 
-				z = fmaxf(low, high);
+				zPos = fmaxf(low, high);
 			}
 
-			//float z = (x < BORDER_SIZE || x >= (width - BORDER_SIZE) || y < BORDER_SIZE || y >= (height - BORDER_SIZE)) ? 1.0f : 0.0f;
+			mesh.vertices.emplace_back(xPos, yPos, zPos);
 
-			mesh.vertices.emplace_back(x * stepX, y * stepY, z);
-
-			if (x < width - 1 && y < height -1 )
+			if (x < numVertsX - 1 && y < numVertsY - 1)
 			{
-				mesh.triangles.emplace_back(index, index + 1, index + width + 1);
-				mesh.triangles.emplace_back(index, index + width + 1, index + width);
+				mesh.triangles.emplace_back(index, index + 1, index + numVertsX + 1);
+				mesh.triangles.emplace_back(index, index + numVertsX + 1, index + numVertsX);
 			}
 
 			index++;

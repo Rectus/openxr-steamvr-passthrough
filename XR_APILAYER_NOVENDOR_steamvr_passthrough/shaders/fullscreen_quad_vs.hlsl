@@ -19,5 +19,12 @@ VS_OUTPUT main(float3 inPosition : POSITION, uint vertexID : SV_VertexID)
 	output.position.y *= -1.0;
 #endif
     
+    output.cameraBlendConfidence = 1.0;
+    output.crossCameraReprojectedPos = 0;
+    output.prevHMDFrameScreenPos = 0;
+    output.prevCameraFrameScreenPos = 0;
+    output.prevCameraFrameVelocity = 0;
+    output.cameraDepth = 0;
+    
     return output;
 }
