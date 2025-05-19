@@ -13,10 +13,16 @@
 
 cbuffer psViewConstantBuffer : REGISTER_PSVIEW
 {
+    float4x4 g_worldToHMDProjection;
+    float4x4 g_HMDProjectionToWorld;
+    float4x4 g_prevHMDFrame_WorldToHMDProjection;
+    float4x4 g_prevCameraFrame_WorldToHMDProjection;
+    
     float4 g_uvBounds;
     float4 g_crossUVBounds;
     float4 g_uvPrepassBounds;
     uint g_arrayIndex;
+    int g_cameraViewIndex;
     bool g_doCutout;
     bool g_bPremultiplyAlpha;
 };
@@ -24,6 +30,11 @@ cbuffer psViewConstantBuffer : REGISTER_PSVIEW
 
 cbuffer psPassConstantBuffer : REGISTER_PSPASS
 {
+    float4x4 g_worldToCameraFrameProjectionLeft;
+	float4x4 g_worldToCameraFrameProjectionRight;
+	float4x4 g_worldToPrevCameraFrameProjectionLeft;
+	float4x4 g_worldToPrevCameraFrameProjectionRight;
+    
     float2 g_depthRange;
     float2 g_depthCutoffRange;
     float g_opacity;

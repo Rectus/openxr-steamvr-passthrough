@@ -123,6 +123,11 @@ struct alignas(16) VSMeshConstantBuffer
 
 struct alignas(16) PSPassConstantBuffer
 {
+	XrMatrix4x4f worldToCameraFrameProjectionLeft;
+	XrMatrix4x4f worldToCameraFrameProjectionRight;
+	XrMatrix4x4f worldToPrevCameraFrameProjectionLeft;
+	XrMatrix4x4f worldToPrevCameraFrameProjectionRight;
+
 	XrVector2f depthRange;
 	XrVector2f depthCutoffRange;
 	float opacity;
@@ -147,10 +152,16 @@ struct alignas(16) PSPassConstantBuffer
 
 struct alignas(16) PSViewConstantBuffer
 {
+	XrMatrix4x4f worldToHMDProjection;
+	XrMatrix4x4f HMDProjectionToWorld;
+	XrMatrix4x4f prevHMDFrame_WorldToHMDProjection;
+	XrMatrix4x4f prevCameraFrame_WorldToHMDProjection;
+
 	XrVector4f frameUVBounds;
 	XrVector4f crossUVBounds;
 	XrVector4f prepassUVBounds;
 	uint32_t rtArrayIndex;
+	int32_t cameraViewIndex;
 	uint32_t bDoCutout;
 	uint32_t bPremultiplyAlpha;
 };
@@ -370,6 +381,7 @@ protected:
 	ComPtr<ID3D11PixelShader> m_depthWriteTemporalPS;
 	ComPtr<ID3D11PixelShader> m_stereoCompositePS;
 	ComPtr<ID3D11PixelShader> m_stereoCompositeTemporalPS;
+	ComPtr<ID3D11PixelShader> m_fullscreenPassthroughPS;
 
 	
 	ComPtr<ID3D11Buffer> m_vsMeshConstantBuffer[vr::k_unMaxTrackedDeviceCount];
