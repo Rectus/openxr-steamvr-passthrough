@@ -9,6 +9,7 @@ Texture2D<float4> g_cameraFrameTexture : register(t0);
 Texture2D<float2> g_fisheyeCorrectionTexture : register(t1);
 Texture2D<float4> g_cameraValidation : register(t2);
 Texture2D<float> g_depthMap : register(t3);
+Texture2D<float> g_crossDepthMap : register(t4);
 
 struct PS_Output
 {
@@ -94,9 +95,16 @@ PS_Output main(VS_OUTPUT input)
     float depth = g_depthMap.Sample(g_samplerState, screenUvs);
     float4 cameraValidation = g_cameraValidation.Sample(g_samplerState, screenUvs);
     
-    float projectionConfidence = cameraValidation.x;
+    float2 projectionConfidence = cameraValidation.xy;
+    //float2 cameraBlendValidity = cameraValidation.zw;
     
     float alpha = 1.0;
+	
+    //if (g_doCutout)
+    //{
+    //    clip(input.cameraBlendConfidence.x);
+    //    alpha = saturate(input.cameraBlendConfidence.x);
+    //}
     
     if (g_bUseDepthCutoffRange)
     {
@@ -106,7 +114,7 @@ PS_Output main(VS_OUTPUT input)
     
     bool bIsDiscontinuityFiltered = false;
     
-    //if (projectionConfidence < 0.5)
+    //if (projectionConfidence.x < 0.5)
     {
         depth = sobel_discontinuity_adjust(g_depthMap, depth, screenUvs, bIsDiscontinuityFiltered);
     }
@@ -116,6 +124,7 @@ PS_Output main(VS_OUTPUT input)
     float4 worldProjectionPos = mul(g_HMDProjectionToWorld, clipSpacePos);
     
     float4 cameraClipSpacePos = mul((g_cameraViewIndex == 0) ? g_worldToCameraFrameProjectionLeft : g_worldToCameraFrameProjectionRight, worldProjectionPos);
+    //float4 cameraCrossClipSpacePos = mul((g_cameraViewIndex == 0) ? g_worldToCameraFrameProjectionRight : g_worldToCameraFrameProjectionLeft, worldProjectionPos);
     
 
 	// Convert from homogenous clip space coordinates to 0-1.
@@ -177,17 +186,20 @@ PS_Output main(VS_OUTPUT input)
     }
     if (g_debugOverlay == 1) // Confidence
     {
-        if (projectionConfidence < 0.0)
+        if (projectionConfidence.x < 0.0 && projectionConfidence.y < 0.0)
         {
             rgbColor.r += 0.5;
         }
-        else if (projectionConfidence > 0.0)
-        {
-            rgbColor.g += projectionConfidence * 0.25;
-        }
         else
         {
-            rgbColor.b += 0.25;
+            if (projectionConfidence.x > 0.0)
+            {
+                rgbColor.g += projectionConfidence.x * 0.25;
+            }
+            if (projectionConfidence.y > 0.0)
+            {
+                rgbColor.b += projectionConfidence.y * 0.25;
+            }
         }
     }
     else if (g_debugOverlay == 2) // Camera selection
@@ -196,6 +208,11 @@ PS_Output main(VS_OUTPUT input)
         {
             rgbColor.b += 1.0;
         }
+        
+        //if (!g_doCutout)
+        //{
+        //    rgbColor.g += 1.0;
+        //}
     }
     
     PS_Output output;

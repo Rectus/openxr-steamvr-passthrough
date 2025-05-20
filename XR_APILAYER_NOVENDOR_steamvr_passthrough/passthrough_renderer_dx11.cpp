@@ -24,6 +24,8 @@
 #include "shaders\passthrough_temporal_ps.h"
 #include "shaders\alpha_copy_masked_ps.h"
 #include "shaders\fullscreen_passthrough_ps.h"
+#include "shaders\fullscreen_passthrough_composite_ps.h"
+#include "shaders\fullscreen_passthrough_composite_temporal_ps.h"
 
 #include "shaders\fill_holes_cs.h"
 
@@ -212,6 +214,20 @@ bool PassthroughRendererDX11::InitRenderer()
 		return false;
 	}
 	SET_DXGI_DEBUGNAME(m_fullscreenPassthroughPS);
+
+	if (FAILED(m_d3dDevice->CreatePixelShader(g_FullscreenPassthroughCompositePS, sizeof(g_FullscreenPassthroughCompositePS), nullptr, &m_fullscreenPassthroughCompositePS)))
+	{
+		ErrorLog("g_FullscreenPassthroughCompositePS creation failure!\n");
+		return false;
+	}
+	SET_DXGI_DEBUGNAME(m_fullscreenPassthroughCompositePS);
+
+	if (FAILED(m_d3dDevice->CreatePixelShader(g_FullscreenPassthroughCompositeTemporalPS, sizeof(g_FullscreenPassthroughCompositeTemporalPS), nullptr, &m_fullscreenPassthroughCompositeTemporalPS)))
+	{
+		ErrorLog("g_FullscreenPassthroughCompositeTemporalPS creation failure!\n");
+		return false;
+	}
+	SET_DXGI_DEBUGNAME(m_fullscreenPassthroughCompositeTemporalPS);
 
 
 	D3D11_BUFFER_DESC bufferDesc = {};
@@ -1985,7 +2001,15 @@ void PassthroughRendererDX11::RenderPassthroughView(const ERenderEye eye, const 
 		m_renderContext->VSSetShader(m_vertexShader.Get(), nullptr, 0);
 	}
 	
-	if (bUseDepthPass)
+	if (bUseDepthPass && stereoConf.StereoCutoutEnabled && mainConf.EnableTemporalFiltering)
+	{
+		m_renderContext->PSSetShader(m_fullscreenPassthroughCompositeTemporalPS.Get(), nullptr, 0);
+	}
+	else if (bUseDepthPass && stereoConf.StereoCutoutEnabled)
+	{
+		m_renderContext->PSSetShader(m_fullscreenPassthroughCompositePS.Get(), nullptr, 0);
+	}
+	else if (bUseDepthPass)
 	{
 		m_renderContext->PSSetShader(m_fullscreenPassthroughPS.Get(), nullptr, 0);
 	}

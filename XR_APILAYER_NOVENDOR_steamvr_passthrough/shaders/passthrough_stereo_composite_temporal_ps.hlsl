@@ -365,17 +365,20 @@ float4 main(VS_OUTPUT input) : SV_TARGET
     }
     if (g_debugOverlay == 1) // Confidence
     {
-        if (input.projectionConfidence.x < 0.0)
+        if (input.projectionConfidence.x < 0.0 && input.projectionConfidence.y < 0.0)
         {
             rgbColor.r += 0.5;
         }
-        else if (input.projectionConfidence.x > 0.0)
-        {
-            rgbColor.g += input.projectionConfidence.x * 0.25;
-        }
         else
         {
-            rgbColor.b += 0.25;
+            if (input.projectionConfidence.x > 0.0)
+            {
+                rgbColor.g += input.projectionConfidence.x * 0.25;
+            }
+            if (input.projectionConfidence.y > 0.0)
+            {
+                rgbColor.b += input.projectionConfidence.y * 0.25;
+            }
         }
     }
     else if (g_debugOverlay == 2) // Camera selection

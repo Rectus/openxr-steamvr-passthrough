@@ -382,6 +382,8 @@ protected:
 	ComPtr<ID3D11PixelShader> m_stereoCompositePS;
 	ComPtr<ID3D11PixelShader> m_stereoCompositeTemporalPS;
 	ComPtr<ID3D11PixelShader> m_fullscreenPassthroughPS;
+	ComPtr<ID3D11PixelShader> m_fullscreenPassthroughCompositePS;
+	ComPtr<ID3D11PixelShader> m_fullscreenPassthroughCompositeTemporalPS;
 
 	
 	ComPtr<ID3D11Buffer> m_vsMeshConstantBuffer[vr::k_unMaxTrackedDeviceCount];
