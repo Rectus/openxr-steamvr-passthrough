@@ -4,19 +4,10 @@
 #include "util.hlsl"
 
 
-#ifdef VULKAN
-
-SamplerState g_samplerState : register(s5);
-Texture2D g_cameraFrameTexture : register(t5);
-Texture2D<float2> g_fisheyeCorrectionTexture : register(t6);
-
-#else
-
 SamplerState g_samplerState : register(s0);
 Texture2D<float4> g_cameraFrameTexture : register(t0);
 Texture2D<float2> g_fisheyeCorrectionTexture : register(t1);
 
-#endif
 
 
 [earlydepthstencil]

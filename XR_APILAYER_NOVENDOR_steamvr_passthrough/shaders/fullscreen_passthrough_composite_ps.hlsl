@@ -133,7 +133,7 @@ PS_Output main(VS_OUTPUT input)
     float4 worldProjectionPos = mul(g_HMDProjectionToWorld, clipSpacePos);
     float4 cameraClipSpacePos = mul((g_cameraViewIndex == 0) ? g_worldToCameraFrameProjectionLeft : g_worldToCameraFrameProjectionRight, worldProjectionPos);
     
-    float4 crossClipSpacePos = float4(input.screenPos.xy, depth, 1.0);
+    float4 crossClipSpacePos = float4(input.screenPos.xy, crossDepth, 1.0);
     float4 crossWorldProjectionPos = mul(g_HMDProjectionToWorld, crossClipSpacePos);   
     float4 cameraCrossClipSpacePos = mul((g_cameraViewIndex == 0) ? g_worldToCameraFrameProjectionRight : g_worldToCameraFrameProjectionLeft, crossWorldProjectionPos);
     
@@ -286,6 +286,10 @@ PS_Output main(VS_OUTPUT input)
     else if (g_debugOverlay == 3)
     {
         if (bIsDiscontinuityFiltered)
+        {
+            rgbColor.g += 1.0;
+        }
+        if (bIsCrossDiscontinuityFiltered)
         {
             rgbColor.b += 1.0;
         }

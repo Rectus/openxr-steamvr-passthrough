@@ -1809,7 +1809,7 @@ void PassthroughRendererDX11::RenderPassthroughView(const ERenderEye eye, const 
 
 	if (mainConf.ProjectionMode == Projection_StereoReconstruction)
 	{
-		if (bUseDepthPass && bUseDisparityTemporalFiltering)
+		/*if (bUseDepthPass && bUseDisparityTemporalFiltering)
 		{
 			int prevSwapchain = (eye == LEFT_EYE) ? m_prevSwapchainLeft : m_prevSwapchainRight;
 			ID3D11ShaderResourceView* vsSRVs[6] = { 
@@ -1822,7 +1822,7 @@ void PassthroughRendererDX11::RenderPassthroughView(const ERenderEye eye, const 
 			};
 			m_renderContext->VSSetShaderResources(0, 6, vsSRVs);
 		}
-		else if (bUseDepthPass)
+		else */if (bUseDepthPass)
 		{
 			ID3D11ShaderResourceView* vsSRVs[3] = { 
 				viewData.passthroughDepthStencil[0].SRV.Get(), 
@@ -1916,7 +1916,7 @@ void PassthroughRendererDX11::RenderPassthroughView(const ERenderEye eye, const 
 		m_renderContext->OMSetBlendState(m_blendStateDestAlpha.Get(), nullptr, UINT_MAX);
 	}
 
-	if (mainConf.EnableTemporalFiltering)
+	if (mainConf.EnableTemporalFiltering) //TODO
 	{
 		ID3D11ShaderResourceView* psSRVs[3];
 		m_renderContext->PSGetShaderResources(0, 2, psSRVs);
@@ -2024,19 +2024,28 @@ void PassthroughRendererDX11::RenderPassthroughView(const ERenderEye eye, const 
 
 	if (bUseDepthPass)
 	{
-		if (stereoConf.StereoCutoutEnabled)//mainConf.EnableTemporalFiltering)
+		if (stereoConf.StereoCutoutEnabled && mainConf.EnableTemporalFiltering)
 		{
-			//int prevSwapchain = (eye == LEFT_EYE) ? m_prevSwapchainLeft : m_prevSwapchainRight;
+			int prevSwapchain = (eye == LEFT_EYE) ? m_prevSwapchainLeft : m_prevSwapchainRight;
 
+			ID3D11ShaderResourceView* psSRVs[6];
+			m_renderContext->PSGetShaderResources(0, 2, psSRVs);
+
+			psSRVs[2] = viewData.passthroughCameraValidity.SRV.Get();
+			psSRVs[3] = viewData.passthroughDepthStencil[0].SRV.Get();
+			psSRVs[4] = viewData.passthroughDepthStencil[1].SRV.Get();
+			psSRVs[5] = m_cameraFilter[viewIndex][m_currentCameraFilterIndex == 0 ? 1 : 0].SRV.Get();
+
+			m_renderContext->PSSetShaderResources(0, 6, psSRVs);
+		}
+		else if (stereoConf.StereoCutoutEnabled)
+		{
 			ID3D11ShaderResourceView* psSRVs[5];
 			m_renderContext->PSGetShaderResources(0, 2, psSRVs);
 
 			psSRVs[2] = viewData.passthroughCameraValidity.SRV.Get();
 			psSRVs[3] = viewData.passthroughDepthStencil[0].SRV.Get();
 			psSRVs[4] = viewData.passthroughDepthStencil[1].SRV.Get();
-			//psSRVs[5] = m_viewData[viewIndex][prevSwapchain].passthroughCameraValidity.SRV.Get();
-			//psSRVs[6] = m_viewData[viewIndex][prevSwapchain].passthroughDepthStencil[0].SRV.Get();
-			//psSRVs[7] = m_viewData[viewIndex][prevSwapchain].passthroughDepthStencil[1].SRV.Get();
 
 			m_renderContext->PSSetShaderResources(0, 5, psSRVs);
 		}
