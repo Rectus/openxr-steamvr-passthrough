@@ -24,6 +24,7 @@
 #include "shaders\passthrough_temporal_ps.h"
 #include "shaders\alpha_copy_masked_ps.h"
 #include "shaders\fullscreen_passthrough_ps.h"
+#include "shaders\fullscreen_passthrough_temporal_ps.h"
 #include "shaders\fullscreen_passthrough_composite_ps.h"
 #include "shaders\fullscreen_passthrough_composite_temporal_ps.h"
 
@@ -215,6 +216,13 @@ bool PassthroughRendererDX11::InitRenderer()
 	}
 	SET_DXGI_DEBUGNAME(m_fullscreenPassthroughPS);
 
+	if (FAILED(m_d3dDevice->CreatePixelShader(g_FullscreenPassthroughTemporalPS, sizeof(g_FullscreenPassthroughTemporalPS), nullptr, &m_fullscreenPassthroughTemporalPS)))
+	{
+		ErrorLog("g_FullscreenPassthroughTemporalPS creation failure!\n");
+		return false;
+	}
+	SET_DXGI_DEBUGNAME(m_fullscreenPassthroughTemporalPS);
+
 	if (FAILED(m_d3dDevice->CreatePixelShader(g_FullscreenPassthroughCompositePS, sizeof(g_FullscreenPassthroughCompositePS), nullptr, &m_fullscreenPassthroughCompositePS)))
 	{
 		ErrorLog("g_FullscreenPassthroughCompositePS creation failure!\n");
@@ -347,6 +355,13 @@ bool PassthroughRendererDX11::InitRenderer()
 
 	blendState.RenderTarget[0].DestBlend = D3D11_BLEND_ONE;
 
+	if (FAILED(m_d3dDevice->CreateBlendState(&blendState, m_blendStateDestAlphaPremultiplied.GetAddressOf())))
+	{
+		ErrorLog("CreateBlendState failure!\n");
+		return false;
+	}
+	SET_DXGI_DEBUGNAME(m_blendStateDestAlphaPremultiplied);
+
 	blendState.RenderTarget[0].BlendOp = D3D11_BLEND_OP_ADD;
 	blendState.RenderTarget[0].SrcBlend = D3D11_BLEND_SRC_ALPHA;
 	blendState.RenderTarget[0].DestBlend = D3D11_BLEND_INV_SRC_ALPHA;
@@ -355,12 +370,12 @@ bool PassthroughRendererDX11::InitRenderer()
 	blendState.RenderTarget[0].SrcBlendAlpha = D3D11_BLEND_ONE;
 	blendState.RenderTarget[0].DestBlendAlpha = D3D11_BLEND_ONE;
 
-	if (FAILED(m_d3dDevice->CreateBlendState(&blendState, m_blendStateDestAlphaPremultiplied.GetAddressOf())))
+	if (FAILED(m_d3dDevice->CreateBlendState(&blendState, m_blendStateSrcAlpha.GetAddressOf())))
 	{
 		ErrorLog("CreateBlendState failure!\n");
 		return false;
 	}
-	SET_DXGI_DEBUGNAME(m_blendStateDestAlphaPremultiplied);
+	SET_DXGI_DEBUGNAME(m_blendStateSrcAlpha);
 
 	blendState.RenderTarget[0].RenderTargetWriteMask = D3D11_COLOR_WRITE_ENABLE_ALPHA;
 	blendState.RenderTarget[0].SrcBlend = D3D11_BLEND_ZERO;
@@ -369,12 +384,12 @@ bool PassthroughRendererDX11::InitRenderer()
 	blendState.RenderTarget[0].SrcBlendAlpha = D3D11_BLEND_ONE;
 	blendState.RenderTarget[0].DestBlendAlpha = D3D11_BLEND_ZERO;
 
-	if (FAILED(m_d3dDevice->CreateBlendState(&blendState, m_blendStateSrcAlpha.GetAddressOf())))
+	if (FAILED(m_d3dDevice->CreateBlendState(&blendState, m_blendStateWriteAlpha.GetAddressOf())))
 	{
 		ErrorLog("CreateBlendState failure!\n");
 		return false;
 	}
-	SET_DXGI_DEBUGNAME(m_blendStateSrcAlpha);
+	SET_DXGI_DEBUGNAME(m_blendStateWriteAlpha);
 
 	blendState.RenderTarget[0].RenderTargetWriteMask = D3D11_COLOR_WRITE_ENABLE_ALPHA;
 	blendState.RenderTarget[0].SrcBlend = D3D11_BLEND_ZERO;
@@ -1906,8 +1921,11 @@ void PassthroughRendererDX11::RenderPassthroughView(const ERenderEye eye, const 
 	}
 
 
-
-	if ((blendMode == AlphaBlendPremultiplied && (!bCompositeDepth || bUseDepthPass)) || blendMode == Additive)
+	if (bCompositeDepth && bUseDepthPass)
+	{
+		m_renderContext->OMSetBlendState(m_blendStateSrcAlpha.Get(), nullptr, UINT_MAX);
+	}
+	else if ((blendMode == AlphaBlendPremultiplied && (!bCompositeDepth || bUseDepthPass)) || blendMode == Additive)
 	{
 		m_renderContext->OMSetBlendState(m_blendStateDestAlphaPremultiplied.Get(), nullptr, UINT_MAX);
 	}
@@ -2001,17 +2019,52 @@ void PassthroughRendererDX11::RenderPassthroughView(const ERenderEye eye, const 
 		m_renderContext->VSSetShader(m_vertexShader.Get(), nullptr, 0);
 	}
 	
-	if (bUseDepthPass && stereoConf.StereoCutoutEnabled && mainConf.EnableTemporalFiltering)
+
+	if (bUseDepthPass)
 	{
-		m_renderContext->PSSetShader(m_fullscreenPassthroughCompositeTemporalPS.Get(), nullptr, 0);
-	}
-	else if (bUseDepthPass && stereoConf.StereoCutoutEnabled)
-	{
-		m_renderContext->PSSetShader(m_fullscreenPassthroughCompositePS.Get(), nullptr, 0);
-	}
-	else if (bUseDepthPass)
-	{
-		m_renderContext->PSSetShader(m_fullscreenPassthroughPS.Get(), nullptr, 0);
+		ID3D11ShaderResourceView* psSRVs[6];
+		m_renderContext->PSGetShaderResources(0, 2, psSRVs);
+
+		if (stereoConf.StereoCutoutEnabled && mainConf.EnableTemporalFiltering)
+		{
+			psSRVs[2] = viewData.passthroughCameraValidity.SRV.Get();
+			psSRVs[3] = viewData.passthroughDepthStencil[0].SRV.Get();
+			psSRVs[4] = viewData.passthroughDepthStencil[1].SRV.Get();
+			psSRVs[5] = m_cameraFilter[viewIndex][m_currentCameraFilterIndex == 0 ? 1 : 0].SRV.Get();
+
+			m_renderContext->PSSetShaderResources(0, 6, psSRVs);
+
+			m_renderContext->PSSetShader(m_fullscreenPassthroughCompositeTemporalPS.Get(), nullptr, 0);
+		}
+		else if (stereoConf.StereoCutoutEnabled)
+		{
+			psSRVs[2] = viewData.passthroughCameraValidity.SRV.Get();
+			psSRVs[3] = viewData.passthroughDepthStencil[0].SRV.Get();
+			psSRVs[4] = viewData.passthroughDepthStencil[1].SRV.Get();
+
+			m_renderContext->PSSetShaderResources(0, 5, psSRVs);
+
+			m_renderContext->PSSetShader(m_fullscreenPassthroughCompositePS.Get(), nullptr, 0);
+		}
+		else if (mainConf.EnableTemporalFiltering)
+		{
+			psSRVs[2] = viewData.passthroughCameraValidity.SRV.Get();
+			psSRVs[3] = viewData.passthroughDepthStencil[0].SRV.Get();
+			psSRVs[4] = m_cameraFilter[viewIndex][m_currentCameraFilterIndex == 0 ? 1 : 0].SRV.Get();
+
+			m_renderContext->PSSetShaderResources(0, 5, psSRVs);
+
+			m_renderContext->PSSetShader(m_fullscreenPassthroughTemporalPS.Get(), nullptr, 0);
+		}
+		else
+		{
+			psSRVs[2] = viewData.passthroughCameraValidity.SRV.Get();
+			psSRVs[3] = viewData.passthroughDepthStencil[0].SRV.Get();
+
+			m_renderContext->PSSetShaderResources(0, 4, psSRVs);
+
+			m_renderContext->PSSetShader(m_fullscreenPassthroughPS.Get(), nullptr, 0);
+		}
 	}
 	/*if (bUseDepthPass && stereoConf.StereoCutoutEnabled && mainConf.EnableTemporalFiltering)
 	{
@@ -2021,45 +2074,6 @@ void PassthroughRendererDX11::RenderPassthroughView(const ERenderEye eye, const 
 	{
 		m_renderContext->PSSetShader(m_stereoCompositePS.Get(), nullptr, 0);
 	}*/
-
-	if (bUseDepthPass)
-	{
-		if (stereoConf.StereoCutoutEnabled && mainConf.EnableTemporalFiltering)
-		{
-			int prevSwapchain = (eye == LEFT_EYE) ? m_prevSwapchainLeft : m_prevSwapchainRight;
-
-			ID3D11ShaderResourceView* psSRVs[6];
-			m_renderContext->PSGetShaderResources(0, 2, psSRVs);
-
-			psSRVs[2] = viewData.passthroughCameraValidity.SRV.Get();
-			psSRVs[3] = viewData.passthroughDepthStencil[0].SRV.Get();
-			psSRVs[4] = viewData.passthroughDepthStencil[1].SRV.Get();
-			psSRVs[5] = m_cameraFilter[viewIndex][m_currentCameraFilterIndex == 0 ? 1 : 0].SRV.Get();
-
-			m_renderContext->PSSetShaderResources(0, 6, psSRVs);
-		}
-		else if (stereoConf.StereoCutoutEnabled)
-		{
-			ID3D11ShaderResourceView* psSRVs[5];
-			m_renderContext->PSGetShaderResources(0, 2, psSRVs);
-
-			psSRVs[2] = viewData.passthroughCameraValidity.SRV.Get();
-			psSRVs[3] = viewData.passthroughDepthStencil[0].SRV.Get();
-			psSRVs[4] = viewData.passthroughDepthStencil[1].SRV.Get();
-
-			m_renderContext->PSSetShaderResources(0, 5, psSRVs);
-		}
-		else
-		{
-			ID3D11ShaderResourceView* psSRVs[4];
-			m_renderContext->PSGetShaderResources(0, 2, psSRVs);
-
-			psSRVs[2] = viewData.passthroughCameraValidity.SRV.Get();
-			psSRVs[3] = viewData.passthroughDepthStencil[0].SRV.Get();
-
-			m_renderContext->PSSetShaderResources(0, 4, psSRVs);
-		}
-	}
 	
 
 	m_renderContext->DrawIndexed(numIndices, 0, 0);
@@ -2333,7 +2347,7 @@ void PassthroughRendererDX11::RenderMaskedPrepassView(const ERenderEye eye, cons
 	m_renderContext->UpdateSubresource(viewData.psViewConstantBuffer.Get(), 0, nullptr, &psViewBuffer, 0, 0);
 
 	m_renderContext->OMSetRenderTargets(1, &rendertarget, depthStencil);
-	m_renderContext->OMSetBlendState(m_blendStateSrcAlpha.Get(), nullptr, UINT_MAX);
+	m_renderContext->OMSetBlendState(m_blendStateWriteAlpha.Get(), nullptr, UINT_MAX);
 	m_renderContext->OMSetDepthStencilState(GET_DEPTH_STENCIL_STATE(false, frame->bHasReversedDepth, false), 1);
 
 	m_renderContext->IASetPrimitiveTopology(D3D11_PRIMITIVE_TOPOLOGY_TRIANGLESTRIP);

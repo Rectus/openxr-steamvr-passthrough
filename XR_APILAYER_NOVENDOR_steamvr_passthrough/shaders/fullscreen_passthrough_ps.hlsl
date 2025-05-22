@@ -96,8 +96,6 @@ PS_Output main(VS_OUTPUT input)
     
     float projectionConfidence = cameraValidation.x;
     
-    float alpha = 1.0;
-    
     if (g_bUseDepthCutoffRange)
     {
         clip(depth - g_depthCutoffRange.x);
@@ -106,10 +104,7 @@ PS_Output main(VS_OUTPUT input)
     
     bool bIsDiscontinuityFiltered = false;
     
-    //if (projectionConfidence < 0.5)
-    {
-        depth = sobel_discontinuity_adjust(g_depthMap, depth, screenUvs, bIsDiscontinuityFiltered);
-    }
+    depth = sobel_discontinuity_adjust(g_depthMap, depth, screenUvs, bIsDiscontinuityFiltered);
     
     float4 clipSpacePos = float4(input.screenPos.xy, depth, 1.0);
     
@@ -190,7 +185,7 @@ PS_Output main(VS_OUTPUT input)
             rgbColor.b += 0.25;
         }
     }
-    else if (g_debugOverlay == 2) // Camera selection
+    else if (g_debugOverlay == 5) // Discontinuity filtering
     {
         if (bIsDiscontinuityFiltered)
         {
@@ -200,9 +195,9 @@ PS_Output main(VS_OUTPUT input)
     
     PS_Output output;
     
-    rgbColor = g_bPremultiplyAlpha ? rgbColor * g_opacity * alpha : rgbColor;
+    rgbColor = g_bPremultiplyAlpha ? rgbColor * g_opacity : rgbColor;
 	
-    output.color = float4(rgbColor, g_opacity * alpha);
+    output.color = float4(rgbColor, g_opacity);
     output.depth = depth;
     
     return output;

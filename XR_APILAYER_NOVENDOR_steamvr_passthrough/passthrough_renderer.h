@@ -382,6 +382,7 @@ protected:
 	ComPtr<ID3D11PixelShader> m_stereoCompositePS;
 	ComPtr<ID3D11PixelShader> m_stereoCompositeTemporalPS;
 	ComPtr<ID3D11PixelShader> m_fullscreenPassthroughPS;
+	ComPtr<ID3D11PixelShader> m_fullscreenPassthroughTemporalPS;
 	ComPtr<ID3D11PixelShader> m_fullscreenPassthroughCompositePS;
 	ComPtr<ID3D11PixelShader> m_fullscreenPassthroughCompositeTemporalPS;
 
@@ -397,6 +398,7 @@ protected:
 	ComPtr<ID3D11BlendState> m_blendStateDestAlpha;
 	ComPtr<ID3D11BlendState> m_blendStateDestAlphaPremultiplied;
 	ComPtr<ID3D11BlendState> m_blendStateSrcAlpha;
+	ComPtr<ID3D11BlendState> m_blendStateWriteAlpha;
 	ComPtr<ID3D11BlendState> m_blendStatePrepassInverseAppAlpha;
 	ComPtr<ID3D11BlendState> m_blendStatePrepassUseAppAlpha;
 	ComPtr<ID3D11BlendState> m_blendStatePrepassIgnoreAppAlpha;

@@ -245,6 +245,9 @@
     <FxCompile Include="shaders\fullscreen_passthrough_composite_temporal_ps.hlsl">
       <Filter>Shaders</Filter>
     </FxCompile>
+    <FxCompile Include="shaders\fullscreen_passthrough_temporal_ps.hlsl">
+      <Filter>Shaders</Filter>
+    </FxCompile>
   </ItemGroup>
   <ItemGroup>
     <CopyFileToFolders Include="..\external\openvr\bin\win64\openvr_api.pdb">
