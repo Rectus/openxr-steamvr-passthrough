@@ -186,6 +186,9 @@
     <None Include="shaders\vs_outputs.hlsl">
       <Filter>Shaders</Filter>
     </None>
+    <None Include="shaders\fullscreen_util.hlsl">
+      <Filter>Shaders</Filter>
+    </None>
   </ItemGroup>
   <ItemGroup>
     <FxCompile Include="shaders\alpha_prepass_masked_ps.hlsl">

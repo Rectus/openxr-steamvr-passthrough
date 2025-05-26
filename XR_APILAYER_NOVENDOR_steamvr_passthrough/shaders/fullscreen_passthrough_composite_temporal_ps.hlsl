@@ -2,6 +2,7 @@
 #include "common_ps.hlsl"
 #include "vs_outputs.hlsl"
 #include "util.hlsl"
+#include "fullscreen_util.hlsl"
 
 
 SamplerState g_samplerState : register(s0);
@@ -21,75 +22,6 @@ struct PS_Output
 };
 
 
-
-static const int GAUSSIAN_FILTER_WIDTH = 2;
-
-float gaussian(float2 value)
-{
-    return exp(-0.5 * dot(value /= ((float)GAUSSIAN_FILTER_WIDTH * 2.0 * 0.25), value)) / 
-        (2.0 * PI * pow((float)GAUSSIAN_FILTER_WIDTH * 2.0 * 0.25, 2));
-}
-
-
-float sobel_discontinuity_adjust(in Texture2D<float> tex, in float depth, in float2 uvs, out bool bWasFiltered)
-{
-    bWasFiltered = false;
-    float outDepth = depth;
-    
-    uint texW, texH;
-    tex.GetDimensions(texW, texH);
-    float2 invTexSize = 1.0 / float2(texW, texH);
-    
-    float2 texturePos = saturate(uvs) * float2(texW, texH);
-    uint2 pixelPos = floor(texturePos);
-    
-    float dispU = tex.Load(int3(pixelPos + uint2(0, -1), 0));
-    float dispD = tex.Load(int3(pixelPos + uint2(0, 1), 0));
-    float dispL = tex.Load(int3(pixelPos + uint2(-1, 0), 0));
-    float dispR = tex.Load(int3(pixelPos + uint2(1, 0), 0));
-            
-    float dispUL = tex.Load(int3(pixelPos + uint2(-1, -1), 0));
-    float dispDL = tex.Load(int3(pixelPos + uint2(-1, 1), 0));
-    float dispUR = tex.Load(int3(pixelPos + uint2(1, -1), 0));
-    float dispDR = tex.Load(int3(pixelPos + uint2(1, 1), 0));
-    
-    float filterX = dispUL + dispL * 2 + dispDL - dispUR - dispR * 2 - dispDR; 
-    float filterY = dispUL + dispU * 2 + dispUR - dispDL - dispD * 2 - dispDR;
-    
-    float minDepth = min(depth, min(dispU, min(dispD, min(dispL, min(dispR, min(dispUL, min(dispDL, min(dispUR, dispDR))))))));
-    float maxDepth = max(depth, max(dispU, max(dispD, max(dispL, max(dispR, max(dispUL, max(dispDL, max(dispUR, dispDR))))))));
-    
-    float magnitude = length(float2(filterX, filterY));
-
-    if(magnitude > 0.15)
-    {
-        float totalWeight = 0;
-        float accDepth = 0;
-        
-        // Filter with an output pixel-centered gaussian blur to get a smooth contour over the low res depth map pixels.
-        [unroll]
-        for (int x = -GAUSSIAN_FILTER_WIDTH; x <= GAUSSIAN_FILTER_WIDTH; x++)
-        {
-            [unroll]
-            for (int y = -GAUSSIAN_FILTER_WIDTH; y <= GAUSSIAN_FILTER_WIDTH; y++)
-            {
-                float weight = gaussian(float2(x, y));
-                totalWeight += weight;
-                accDepth += tex.SampleLevel(g_samplerState, uvs + float2(x, y) * invTexSize, 0) * weight;
-            }
-        }
-
-        float adjustedDepth = accDepth / totalWeight;
-        
-        bool inForeground = ((maxDepth - adjustedDepth) > (adjustedDepth - minDepth));
-
-        float offsetFactor = saturate(10.0 * magnitude);
-        
-        bWasFiltered = true;
-        outDepth = lerp(depth, inForeground ? minDepth : maxDepth, offsetFactor);
-    }
-    return outDepth;
-}
 
 
 PS_Output main(VS_OUTPUT input)
@@ -120,15 +52,15 @@ PS_Output main(VS_OUTPUT input)
     bool bIsCrossDiscontinuityFiltered = false;
     
     [branch]
-    if (cameraBlend < 1.0)
+    if (cameraBlend < 1.0 && g_depthContourStrength > 0)
     {
-        depth = sobel_discontinuity_adjust(g_depthMap, depth, screenUvs, bIsDiscontinuityFiltered);
+        depth = sobel_discontinuity_adjust(g_depthMap, g_samplerState, depth, screenUvs, bIsDiscontinuityFiltered);
     }
     
     [branch]
-    if (cameraBlend > 0.0)
+    if (cameraBlend > 0.0 && g_depthContourStrength > 0)
     {
-        crossDepth = sobel_discontinuity_adjust(g_crossDepthMap, crossDepth, screenUvs, bIsCrossDiscontinuityFiltered);
+        crossDepth = sobel_discontinuity_adjust(g_crossDepthMap, g_samplerState, crossDepth, screenUvs, bIsCrossDiscontinuityFiltered);
     }
     
     float4 clipSpacePos = float4(input.screenPos.xy, depth, 1.0);  

@@ -1,4 +1,8 @@
 
+#ifndef _COMMON_PS_INCLUDED
+#define _COMMON_PS_INCLUDED
+
+
 
 #ifdef VULKAN
 #define REGISTER_PSVIEW register(b2)
@@ -25,6 +29,7 @@ cbuffer psViewConstantBuffer : REGISTER_PSVIEW
     int g_cameraViewIndex;
     bool g_doCutout;
     bool g_bPremultiplyAlpha;
+    bool g_bUseFullscreenQuad;
 };
 
 
@@ -48,6 +53,9 @@ cbuffer psPassConstantBuffer : REGISTER_PSPASS
     float g_cutoutCombineFactor;
     float g_depthTemporalFilterFactor;
 	float g_depthTemporalFilterDistance;
+    float g_depthContourStrength;
+	float g_depthContourTreshold;
+	int g_depthContourFilterWidth;
     uint g_debugOverlay;
     bool g_bDoColorAdjustment;
     bool g_bDebugDepth;
@@ -69,3 +77,4 @@ cbuffer psMaskedConstantBuffer : REGISTER_PSMASKED
 };
 
 
+#endif //_COMMON_PS_INCLUDED

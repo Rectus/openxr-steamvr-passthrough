@@ -98,7 +98,7 @@ struct alignas(16) VSPassConstantBuffer
 	float disparityTemporalFilterStrength;
 	float disparityTemporalFilterDistance;
 	float depthContourStrength;
-	float depthContourTreshhold;
+	float depthContourTreshold;
 };
 
 struct alignas(16) VSViewConstantBuffer
@@ -141,6 +141,9 @@ struct alignas(16) PSPassConstantBuffer
 	float cutoutCombineFactor;
 	float depthTemporalFilterFactor;
 	float depthTemporalFilterDistance;
+	float depthContourStrength;
+	float depthContourTreshold;
+	int32_t depthContourFilterWidth;
 	uint32_t debugOverlay;
 	uint32_t bDoColorAdjustment;
 	uint32_t bDebugDepth;
@@ -164,6 +167,7 @@ struct alignas(16) PSViewConstantBuffer
 	int32_t cameraViewIndex;
 	uint32_t bDoCutout;
 	uint32_t bPremultiplyAlpha;
+	uint32_t bUseFullscreenQuad;
 };
 
 struct alignas(16) PSMaskedConstantBuffer
@@ -399,6 +403,7 @@ protected:
 	ComPtr<ID3D11BlendState> m_blendStateDestAlphaPremultiplied;
 	ComPtr<ID3D11BlendState> m_blendStateSrcAlpha;
 	ComPtr<ID3D11BlendState> m_blendStateWriteAlpha;
+	ComPtr<ID3D11BlendState> m_blendStateWriteMinAlpha;
 	ComPtr<ID3D11BlendState> m_blendStatePrepassInverseAppAlpha;
 	ComPtr<ID3D11BlendState> m_blendStatePrepassUseAppAlpha;
 	ComPtr<ID3D11BlendState> m_blendStatePrepassIgnoreAppAlpha;

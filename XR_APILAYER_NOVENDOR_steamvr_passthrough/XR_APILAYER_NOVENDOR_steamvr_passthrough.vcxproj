@@ -375,6 +375,9 @@ copy $(SolutionDir)\readme.md $(OutDir)
       <HeaderFileOutput Condition="'$(Configuration)|$(Platform)'=='Debug|x64'">shaders\fullscreen_quad_vs.h</HeaderFileOutput>
       <VariableName Condition="'$(Configuration)|$(Platform)'=='Debug|x64'">g_FullscreenQuadShaderVS</VariableName>
     </FxCompile>
+    <None Include="shaders\fullscreen_util.hlsl">
+      <FileType>Document</FileType>
+    </None>
     <FxCompile Include="shaders\mesh_rigid_vs.hlsl">
       <ShaderType Condition="'$(Configuration)|$(Platform)'=='Release|x64'">Vertex</ShaderType>
       <HeaderFileOutput Condition="'$(Configuration)|$(Platform)'=='Release|x64'">shaders\mesh_rigid_vs.h</HeaderFileOutput>

@@ -769,6 +769,11 @@ if (bIsActiveTab) { ImGui::PopStyleColor(1); bIsActiveTab = false; }
 			if (ImGui::TreeNode("Projection"))
 			{
 				ImGui::Spacing();
+				BeginSoftDisabled(!stereoCustomConfig.StereoUseSeparateDepthPass);
+				ImGui::Checkbox("Use Fullscreen Draw Pass", &stereoCustomConfig.StereoUseFullscreenPass);
+				TextDescription("Use a more effective main pass that does everything in the pixel shader.");
+				EndSoftDisabled(!stereoCustomConfig.StereoUseSeparateDepthPass);
+
 				ImGui::Checkbox("Use Hexagon Grid Mesh", &stereoCustomConfig.StereoUseHexagonGridMesh);
 				TextDescription("Mesh with smoother corners for less artifacting. May introduce warping.");
 
@@ -798,10 +803,23 @@ if (bIsActiveTab) { ImGui::PopStyleColor(1); bIsActiveTab = false; }
 
 				IMGUI_BIG_SPACING;
 				
+				BeginSoftDisabled(!stereoCustomConfig.StereoUseSeparateDepthPass || stereoCustomConfig.StereoUseFullscreenPass);
 				ScrollableSlider("Depth Fold Strength", &stereoCustomConfig.StereoDepthContourStrength, 0.0f, 5.0f, "%.1f", 0.1f);
 				TextDescription("Adjusts depth mesh vertices to smooth out contours in areas with large depth discontinuities.\nThis helps with depth aliasing.");
 				ScrollableSlider("Depth Fold Theshold", &stereoCustomConfig.StereoDepthContourThreshold, 0.0f, 2.0f, "%.1f", 0.1f);
 				TextDescription("Minimum depth difference treshold for applying contour adjustment.");
+				EndSoftDisabled(!stereoCustomConfig.StereoUseSeparateDepthPass || stereoCustomConfig.StereoUseFullscreenPass);
+
+				IMGUI_BIG_SPACING;
+
+				BeginSoftDisabled(!stereoCustomConfig.StereoUseSeparateDepthPass || !stereoCustomConfig.StereoUseFullscreenPass);
+				ScrollableSlider("Fullscreen Contour Filter Strength", &stereoCustomConfig.StereoDepthFullscreenContourStrength, 0.0f, 2.0f, "%.2f", 0.01f);
+				TextDescription("");
+				ScrollableSlider("Fullscreen Contour Filter Theshold", &stereoCustomConfig.StereoDepthFullscreenContourThreshold, 0.0f, 1.0f, "%.2f", 0.01f);
+				TextDescription("");
+				ScrollableSliderInt("Fullscreen Contour Filter Width", &stereoCustomConfig.StereoDepthFullscreenContourFilterWidth, 0, 5, "%d", 1);
+				TextDescription("");
+				EndSoftDisabled(!stereoCustomConfig.StereoUseSeparateDepthPass || !stereoCustomConfig.StereoUseFullscreenPass);
 
 				ImGui::PopItemWidth();
 				ImGui::TreePop();
@@ -1007,6 +1025,7 @@ if (bIsActiveTab) { ImGui::PopStyleColor(1); bIsActiveTab = false; }
 			ScrollableSlider("Luma Range", &coreConfig.CoreForceMaskedFractionLuma, 0.0f, 1.0f, "%.2f", 0.01f);
 			ScrollableSlider("Smoothing", &coreConfig.CoreForceMaskedSmoothing, 0.01f, 0.2f, "%.3f", 0.005f);
 			ImGui::Checkbox("Invert mask", &coreConfig.CoreForceMaskedInvertMask);
+			ImGui::Checkbox("Combine With Application Alpha", &coreConfig.CoreForceMaskedUseAppAlpha);
 
 			ImGui::BeginGroup();
 			ImGui::Text("Chroma Key Source");
@@ -1392,6 +1411,10 @@ if (bIsActiveTab) { ImGui::PopStyleColor(1); bIsActiveTab = false; }
 			if (ImGui::RadioButton("Temporal Clipping", mainConfig.DebugOverlay == DebugOverlay_TemporalClipping))
 			{
 				mainConfig.DebugOverlay = DebugOverlay_TemporalClipping;
+			}
+			if (ImGui::RadioButton("Disparity Filtering", mainConfig.DebugOverlay == DebugOverlay_DiscontinuityFiltering))
+			{
+				mainConfig.DebugOverlay = DebugOverlay_DiscontinuityFiltering;
 			}
 			ImGui::EndGroup();
 

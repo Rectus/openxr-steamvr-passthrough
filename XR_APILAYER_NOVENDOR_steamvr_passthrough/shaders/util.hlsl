@@ -1,4 +1,6 @@
 
+#ifndef _UTIL_INCLUDED
+#define _UTIL_INCLUDED
 
 static const float PI = 3.1415926535897932384626433f;
 
@@ -353,8 +355,46 @@ float2 catmull_rom_9tap(in Texture2D<float2> tex, in SamplerState linearSampler,
 }
 
 
+
 // B-spline as in http://vec3.ca/bicubic-filtering-in-fewer-taps/
-float4 bicubic_b_spline_4tap(in Texture2D<half4> tex, in SamplerState linearSampler, in float2 uv, in float2 texSize)
+float bicubic_b_spline_4tap(in Texture2D<float> tex, in SamplerState bilinearSampler, in float2 uv, in float2 texSize)
+{
+    float2 samplePos = uv * texSize;
+    float2 texPos1 = floor(samplePos - 0.5f) + 0.5f;
+
+    float2 f = samplePos - texPos1;
+    float2 f2 = f * f;
+    float2 f3 = f2 * f;
+    
+    float2 w0 = f2 - 0.5 * (f3 + f);
+    float2 w1 = 1.5 * f3 - 2.5 * f2 + 1.0;
+    float2 w3 = 0.5 * (f3 - f2);
+    float2 w2 = 1.0 - w0 - w1 - w3;
+ 
+    float2 w12 = w1 + w2;
+    float2 offset12 = w2 / (w1 + w2);
+    
+    float2 s0 = w0 + w1;
+    float2 s1 = w2 + w3;
+ 
+    float2 f0 = w1 / (w0 + w1);
+    float2 f1 = w3 / (w2 + w3);
+ 
+    float2 t0 = (texPos1 - 1 + f0) / texSize;
+    float2 t1 = (texPos1 + 1 + f1) / texSize;
+
+    float result = 0;
+    result += tex.SampleLevel(bilinearSampler, float2(t0.x, t0.y), 0) * s0.x * s0.y;
+    result += tex.SampleLevel(bilinearSampler, float2(t1.x, t0.y), 0) * s1.x * s0.y;
+    result += tex.SampleLevel(bilinearSampler, float2(t0.x, t1.y), 0) * s0.x * s1.y;
+    result += tex.SampleLevel(bilinearSampler, float2(t1.x, t1.y), 0) * s1.x * s1.y;
+
+    return result;
+}
+
+
+// B-spline as in http://vec3.ca/bicubic-filtering-in-fewer-taps/
+float4 bicubic_b_spline_4tap(in Texture2D<half4> tex, in SamplerState bilinearSampler, in float2 uv, in float2 texSize)
 {
     float2 samplePos = uv * texSize;
     float2 texPos1 = floor(samplePos - 0.5f) + 0.5f;
@@ -381,10 +421,12 @@ float4 bicubic_b_spline_4tap(in Texture2D<half4> tex, in SamplerState linearSamp
     float2 t1 = (texPos1 + 1 + f1) / texSize;
 
     float4 result = 0;
-    result += tex.SampleLevel(linearSampler, float2(t0.x, t0.y), 0) * s0.x * s0.y;
-    result += tex.SampleLevel(linearSampler, float2(t1.x, t0.y), 0) * s1.x * s0.y;
-    result += tex.SampleLevel(linearSampler, float2(t0.x, t1.y), 0) * s0.x * s1.y;
-    result += tex.SampleLevel(linearSampler, float2(t1.x, t1.y), 0) * s1.x * s1.y;
+    result += tex.SampleLevel(bilinearSampler, float2(t0.x, t0.y), 0) * s0.x * s0.y;
+    result += tex.SampleLevel(bilinearSampler, float2(t1.x, t0.y), 0) * s1.x * s0.y;
+    result += tex.SampleLevel(bilinearSampler, float2(t0.x, t1.y), 0) * s0.x * s1.y;
+    result += tex.SampleLevel(bilinearSampler, float2(t1.x, t1.y), 0) * s1.x * s1.y;
 
     return result;
 }
+
+#endif //_UTIL_INCLUDED

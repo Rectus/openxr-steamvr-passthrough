@@ -39,7 +39,8 @@ enum ESelectedDebugOverlay
 	DebugOverlay_ProjectionConfidence,
 	DebugOverlay_CameraSelction,
 	DebugOverlay_TemporalBlending,
-	DebugOverlay_TemporalClipping
+	DebugOverlay_TemporalClipping,
+	DebugOverlay_DiscontinuityFiltering
 };
 
 enum EDebugTextureFormat
@@ -461,6 +462,7 @@ struct Config_Core
 	float CoreForceMaskedKeyColor[3] = { 0 ,0 ,0 };
 	bool CoreForceMaskedUseCameraImage = false;
 	bool CoreForceMaskedInvertMask = false;
+	bool CoreForceMaskedUseAppAlpha = true;
 
 	void ParseConfig(CSimpleIniA& ini, const char* section)
 	{
@@ -481,6 +483,7 @@ struct Config_Core
 
 		CoreForceMaskedUseCameraImage = ini.GetBoolValue(section, "CoreForceMaskedUseCameraImage", CoreForceMaskedUseCameraImage);
 		CoreForceMaskedInvertMask = ini.GetBoolValue(section, "CoreForceMaskedInvertMask", CoreForceMaskedInvertMask);
+		CoreForceMaskedUseAppAlpha = ini.GetBoolValue(section, "CoreForceMaskedUseAppAlpha", CoreForceMaskedUseAppAlpha);
 	}
 
 	void UpdateConfig(CSimpleIniA& ini, const char* section)
@@ -502,6 +505,7 @@ struct Config_Core
 
 		ini.SetBoolValue(section, "CoreForceMaskedUseCameraImage", CoreForceMaskedUseCameraImage);
 		ini.SetBoolValue(section, "CoreForceMaskedInvertMask", CoreForceMaskedInvertMask);
+		ini.SetBoolValue(section, "CoreForceMaskedUseAppAlpha", CoreForceMaskedUseAppAlpha);
 	}
 };
 
@@ -551,6 +555,7 @@ struct Config_Stereo
 	bool StereoFillHoles = true;
 	bool StereoDrawBackground = false;
 	bool StereoUseSeparateDepthPass = true;
+	bool StereoUseFullscreenPass = true;
 	int StereoFrameSkip = 0;
 	int StereoDownscaleFactor = 3;
 	bool StereoUseDisparityTemporalFiltering = false;
@@ -569,6 +574,10 @@ struct Config_Stereo
 
 	float StereoDepthContourStrength = 2.0f;
 	float StereoDepthContourThreshold = 3.0f;
+
+	float StereoDepthFullscreenContourStrength = 1.0f;
+	float StereoDepthFullscreenContourThreshold = 0.15f;
+	int StereoDepthFullscreenContourFilterWidth = 2;
 
 	int StereoBlockSize = 5;
 	int StereoMinDisparity = 0;
@@ -602,6 +611,7 @@ struct Config_Stereo
 		StereoFillHoles = ini.GetBoolValue(section, "StereoFillHoles", StereoFillHoles);
 		StereoDrawBackground = ini.GetBoolValue(section, "StereoDrawBackground", StereoDrawBackground);
 		StereoUseSeparateDepthPass = ini.GetBoolValue(section, "StereoUseSeparateDepthPass", StereoUseSeparateDepthPass);
+		StereoUseFullscreenPass = ini.GetBoolValue(section, "StereoUseFullscreenPass", StereoUseFullscreenPass);
 		StereoFrameSkip = ini.GetLongValue(section, "StereoFrameSkip", StereoFrameSkip);
 		StereoDownscaleFactor = ini.GetLongValue(section, "StereoDownscaleFactor", StereoDownscaleFactor);
 		StereoUseDisparityTemporalFiltering = ini.GetBoolValue(section, "StereoUseDisparityTemporalFiltering", StereoUseDisparityTemporalFiltering);
@@ -620,6 +630,10 @@ struct Config_Stereo
 
 		StereoDepthContourStrength = (float)ini.GetDoubleValue(section, "StereoDepthContourStrength", StereoDepthContourStrength);
 		StereoDepthContourThreshold = (float)ini.GetDoubleValue(section, "StereoDepthContourThreshold", StereoDepthContourThreshold);
+
+		StereoDepthFullscreenContourStrength = (float)ini.GetDoubleValue(section, "StereoDepthFullscreenContourStrength", StereoDepthFullscreenContourStrength);
+		StereoDepthFullscreenContourThreshold = (float)ini.GetDoubleValue(section, "StereoDepthFullscreenContourThreshold", StereoDepthFullscreenContourThreshold);
+		StereoDepthFullscreenContourFilterWidth = ini.GetLongValue(section, "StereoDepthFullscreenContourFilterWidth", StereoDepthFullscreenContourFilterWidth);
 
 		StereoBlockSize = ini.GetLongValue(section, "StereoBlockSize", StereoBlockSize);
 		StereoMinDisparity = ini.GetLongValue(section, "StereoMinDisparity", StereoMinDisparity);
@@ -654,6 +668,7 @@ struct Config_Stereo
 		ini.SetBoolValue(section, "StereoFillHoles", StereoFillHoles);
 		ini.SetBoolValue(section, "StereoDrawBackground", StereoDrawBackground);
 		ini.SetBoolValue(section, "StereoUseSeparateDepthPass", StereoUseSeparateDepthPass);
+		ini.SetBoolValue(section, "StereoUseFullscreenPass", StereoUseFullscreenPass);
 		ini.SetLongValue(section, "StereoFrameSkip", StereoFrameSkip);
 		ini.SetLongValue(section, "StereoDownscaleFactor", StereoDownscaleFactor);
 		ini.SetBoolValue(section, "StereoUseDisparityTemporalFiltering", StereoUseDisparityTemporalFiltering);
@@ -672,6 +687,10 @@ struct Config_Stereo
 
 		ini.SetDoubleValue(section, "StereoDepthContourStrength", StereoDepthContourStrength);
 		ini.SetDoubleValue(section, "StereoDepthContourThreshold", StereoDepthContourThreshold);
+
+		ini.SetDoubleValue(section, "StereoDepthFullscreenContourStrength", StereoDepthFullscreenContourStrength);
+		ini.SetDoubleValue(section, "StereoDepthFullscreenContourThreshold", StereoDepthFullscreenContourThreshold);
+		ini.SetLongValue(section, "StereoDepthFullscreenContourFilterWidth", StereoDepthFullscreenContourFilterWidth);
 
 		ini.SetLongValue(section, "StereoBlockSize", StereoBlockSize);
 		ini.SetLongValue(section, "StereoMinDisparity", StereoMinDisparity);
