@@ -1,4 +1,7 @@
 
+#ifndef _VS_OUTPUTS_INCLUDED
+#define _VS_OUTPUTS_INCLUDED
+
 struct VS_OUTPUT
 {
 	float4 position : SV_POSITION;
@@ -12,3 +15,5 @@ struct VS_OUTPUT
     float3 prevCameraFrameVelocity : TEXCOORD7;
     float2 cameraDepth : TEXCOORD8;
 };
+
+#endif //_VS_OUTPUTS_INCLUDED

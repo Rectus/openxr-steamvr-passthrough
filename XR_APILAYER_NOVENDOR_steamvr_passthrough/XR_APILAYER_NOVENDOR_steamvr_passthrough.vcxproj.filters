@@ -186,6 +186,9 @@
     <None Include="shaders\vs_outputs.hlsl">
       <Filter>Shaders</Filter>
     </None>
+    <None Include="shaders\fullscreen_util.hlsl">
+      <Filter>Shaders</Filter>
+    </None>
   </ItemGroup>
   <ItemGroup>
     <FxCompile Include="shaders\alpha_prepass_masked_ps.hlsl">
@@ -234,6 +237,21 @@
       <Filter>Shaders</Filter>
     </FxCompile>
     <FxCompile Include="shaders\depth_write_temporal_ps.hlsl">
+      <Filter>Shaders</Filter>
+    </FxCompile>
+    <FxCompile Include="shaders\fullscreen_passthrough_ps.hlsl">
+      <Filter>Shaders</Filter>
+    </FxCompile>
+    <FxCompile Include="shaders\fullscreen_passthrough_composite_ps.hlsl">
+      <Filter>Shaders</Filter>
+    </FxCompile>
+    <FxCompile Include="shaders\fullscreen_passthrough_composite_temporal_ps.hlsl">
+      <Filter>Shaders</Filter>
+    </FxCompile>
+    <FxCompile Include="shaders\fullscreen_passthrough_temporal_ps.hlsl">
+      <Filter>Shaders</Filter>
+    </FxCompile>
+    <FxCompile Include="shaders\alpha_prepass_masked_fullscreen_ps.hlsl">
       <Filter>Shaders</Filter>
     </FxCompile>
   </ItemGroup>

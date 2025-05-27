@@ -1,4 +1,6 @@
 
+#ifndef _COMMON_VS_INCLUDED
+#define _COMMON_VS_INCLUDED
 
 cbuffer vsViewConstantBuffer : register(b0)
 {
@@ -46,3 +48,5 @@ cbuffer vsPassConstantBuffer : register(b1)
     float g_depthContourStrength;
 	float g_depthContourTreshold;
 };
+
+#endif //_COMMON_VS_INCLUDED

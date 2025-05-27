@@ -2,39 +2,80 @@
 #include "common_ps.hlsl"
 #include "vs_outputs.hlsl"
 #include "util.hlsl"
+#include "fullscreen_util.hlsl"
 
 
 SamplerState g_samplerState : register(s0);
 Texture2D<float4> g_cameraFrameTexture : register(t0);
 Texture2D<float2> g_fisheyeCorrectionTexture : register(t1);
+Texture2D<float4> g_cameraValidation : register(t2);
+Texture2D<float> g_depthMap : register(t3);
+Texture2D<float> g_crossDepthMap : register(t4);
 
-
-
-[earlydepthstencil]
-float4 main(VS_OUTPUT input) : SV_TARGET
+struct PS_Output
 {
-    float alpha = 1.0;
-	
-    if (g_doCutout)
+    float4 color : SV_Target;
+    float depth : SV_Depth;
+};
+
+
+
+
+PS_Output main(VS_OUTPUT input)
+{
+    float2 screenUvs = Remap(input.screenPos.xy, float2(-1.0, -1.0), float2(1.0, 1.0), float2(0.0, 1.0), float2(1.0, 0.0));
+    
+    float depth = g_depthMap.Sample(g_samplerState, screenUvs);
+    float crossDepth = g_crossDepthMap.Sample(g_samplerState, screenUvs);
+    float4 cameraValidation = g_cameraValidation.Sample(g_samplerState, screenUvs);
+    
+    float2 projectionConfidence = cameraValidation.xy;
+    float2 cameraBlendValidity = cameraValidation.zw;
+
+    bool selectMainCamera = cameraBlendValidity.x >= cameraBlendValidity.y;      
+    bool blendCameras = cameraBlendValidity.x > 0.1 && cameraBlendValidity.y > 0.1;
+        
+    float cameraBlend = blendCameras ? (1 - saturate(cameraBlendValidity.x + 1 - cameraBlendValidity.y)) : (selectMainCamera ? 0.0 : 1.0);
+    
+
+    bool bIsDiscontinuityFiltered = false;
+    bool bIsCrossDiscontinuityFiltered = false;
+    
+    [branch]
+    if (cameraBlend < 1.0 && g_depthContourStrength > 0)
     {
-        clip(input.cameraBlendConfidence.x);
-        alpha = saturate(input.projectionConfidence.x);
+        depth = sobel_discontinuity_adjust(g_depthMap, g_samplerState, depth, screenUvs, bIsDiscontinuityFiltered);
     }
+    
+    [branch]
+    if (cameraBlend > 0.0 && g_depthContourStrength > 0)
+    {
+        crossDepth = sobel_discontinuity_adjust(g_crossDepthMap, g_samplerState, crossDepth, screenUvs, bIsCrossDiscontinuityFiltered);
+    }
+    
+    float4 clipSpacePos = float4(input.screenPos.xy, depth, 1.0);  
+    float4 worldProjectionPos = mul(g_HMDProjectionToWorld, clipSpacePos);
+    float4 cameraClipSpacePos = mul((g_cameraViewIndex == 0) ? g_worldToCameraFrameProjectionLeft : g_worldToCameraFrameProjectionRight, worldProjectionPos);
+    
+    float4 crossClipSpacePos = float4(input.screenPos.xy, crossDepth, 1.0);
+    float4 crossWorldProjectionPos = mul(g_HMDProjectionToWorld, crossClipSpacePos);   
+    float4 cameraCrossClipSpacePos = mul((g_cameraViewIndex == 0) ? g_worldToCameraFrameProjectionRight : g_worldToCameraFrameProjectionLeft, crossWorldProjectionPos);
     
     if (g_bUseDepthCutoffRange)
     {
-        float depth = (input.screenPos.z / input.screenPos.w);// * (g_depthRange.y - g_depthRange.x) + g_depthRange.x;
-        clip(depth - g_depthCutoffRange.x);
-        clip(g_depthCutoffRange.y - depth);
-    }
+        float4 worldHMDEyePos = mul(g_HMDProjectionToWorld, float4(0, 0, 0, 1));
+        float depthMeters = distance(lerp(worldProjectionPos.xyz / worldProjectionPos.w, crossWorldProjectionPos.xyz / crossWorldProjectionPos.w, cameraBlend), worldHMDEyePos.xyz / worldHMDEyePos.w);
+        clip(depthMeters - g_depthCutoffRange.x);
+        clip(g_depthCutoffRange.y - depthMeters);
+    }  
 
 	// Convert from homogenous clip space coordinates to 0-1.
-	float2 outUvs = (input.cameraReprojectedPos.xy / input.cameraReprojectedPos.w) * float2(0.5, 0.5) + float2(0.5, 0.5);
-    float2 crossUvs = (input.crossCameraReprojectedPos.xy / input.crossCameraReprojectedPos.w) * float2(0.5, 0.5) + float2(0.5, 0.5);
+	float2 outUvs = Remap(cameraClipSpacePos.xy / cameraClipSpacePos.w, -1.0, 1.0, 0.0, 1.0);
+    float2 crossUvs = Remap(cameraCrossClipSpacePos.xy / cameraCrossClipSpacePos.w, -1.0, 1.0, 0.0, 1.0);
 
     if (g_bClampCameraFrame)
     {
-        clip(input.cameraReprojectedPos.z);
+        clip(cameraClipSpacePos.z);
         clip(outUvs);
         clip(1 - outUvs);
     }
@@ -44,13 +85,13 @@ float4 main(VS_OUTPUT input) : SV_TARGET
     if (g_bUseFisheyeCorrection)
     {
         // Remap and clamp to frame UV bounds.
-        outUvs = outUvs * (g_uvBounds.zw - g_uvBounds.xy) + g_uvBounds.xy;
+        outUvs = Remap(outUvs, 0.0, 1.0, g_uvBounds.xy, g_uvBounds.zw);
         outUvs = clamp(outUvs, g_uvBounds.xy, g_uvBounds.zw);
         
         correction = g_fisheyeCorrectionTexture.Sample(g_samplerState, outUvs);
         outUvs += correction;
         
-        crossUvs = crossUvs * (g_crossUVBounds.zw - g_crossUVBounds.xy) + g_crossUVBounds.xy;
+        crossUvs = Remap(crossUvs, 0.0, 1.0, g_crossUVBounds.xy, g_crossUVBounds.zw);
         crossUvs = clamp(crossUvs, g_crossUVBounds.xy, g_crossUVBounds.zw);
         
         correction = g_fisheyeCorrectionTexture.Sample(g_samplerState, crossUvs);
@@ -58,13 +99,11 @@ float4 main(VS_OUTPUT input) : SV_TARGET
     }
     else
     {
-        outUvs.y = 1 - outUvs.y;
-        
         // Remap and clamp to frame UV bounds.
-        outUvs = outUvs * (g_uvBounds.zw - g_uvBounds.xy) + g_uvBounds.xy;
+        outUvs = Remap(outUvs, float2(0.0, 1.0), float2(1.0, 0.0), g_uvBounds.xy, g_uvBounds.zw);
         outUvs = clamp(outUvs, g_uvBounds.xy, g_uvBounds.zw);
         
-        crossUvs = crossUvs * (g_crossUVBounds.zw - g_crossUVBounds.xy) + g_crossUVBounds.xy;
+        crossUvs = Remap(crossUvs, float2(0.0, 1.0), float2(1.0, 0.0), g_crossUVBounds.xy, g_crossUVBounds.zw);
         crossUvs = clamp(crossUvs, g_crossUVBounds.xy, g_crossUVBounds.zw);
     }
       
@@ -125,15 +164,17 @@ float4 main(VS_OUTPUT input) : SV_TARGET
     
     float pixelDistanceBlend = distanceFactor + (1 - crossDistanceFactor);
     
-    float depthFactor =  saturate(1 - (abs(input.cameraDepth.x - input.cameraDepth.y) * 1000));
+    float depthFactor = saturate(1 - (abs(depth - crossDepth) * 1000));
     
-    float combineFactor = g_cutoutCombineFactor * depthFactor * input.projectionConfidence.x * input.projectionConfidence.y;
+    float combineFactor = g_cutoutCombineFactor * depthFactor * projectionConfidence.x * projectionConfidence.y;
 
    
-    float finalFactor = lerp(input.cameraBlendConfidence.x, pixelDistanceBlend, combineFactor);
+    float finalFactor = lerp(cameraBlend, pixelDistanceBlend, combineFactor);
     
     // Blend together both cameras based on which ones are valid and have the closest pixels.
     rgbColor = lerp(rgbColor, lerp(crossRGBColor, crossRGBColorClamped, combineFactor), finalFactor);
+
+    float finalDepth = lerp(depth, crossDepth, finalFactor);
     
 	if (g_bDoColorAdjustment)
 	{
@@ -148,24 +189,24 @@ float4 main(VS_OUTPUT input) : SV_TARGET
 
     if (g_bDebugDepth)
     {
-        float depth = saturate((input.screenPos.z / input.screenPos.w) / (g_depthRange.y - g_depthRange.x) - g_depthRange.x);
-        rgbColor = float3(depth, depth, depth);
+        float debugDepth = pow(abs(finalDepth), g_depthRange.y * 5.0);
+        rgbColor = float3(debugDepth, debugDepth, debugDepth);
     }
     if (g_debugOverlay == 1) // Confidence
     {
-        if (input.projectionConfidence.x < 0.0 && input.projectionConfidence.y < 0.0)
+        if (projectionConfidence.x < 0.0 && projectionConfidence.y < 0.0)
         {
             rgbColor.r += 0.5;
         }
         else
         {
-            if (input.projectionConfidence.x > 0.0)
+            if (projectionConfidence.x > 0.0)
             {
-                rgbColor.g += input.projectionConfidence.x * 0.25;
+                rgbColor.g += projectionConfidence.x * 0.25;
             }
-            if (input.projectionConfidence.y > 0.0)
+            if (projectionConfidence.y > 0.0)
             {
-                rgbColor.b += input.projectionConfidence.y * 0.25;
+                rgbColor.b += projectionConfidence.y * 0.25;
             }
         }
     }
@@ -173,9 +214,24 @@ float4 main(VS_OUTPUT input) : SV_TARGET
     {
         rgbColor.g += finalFactor;
     }
-
+    else if (g_debugOverlay == 5) // Discontinuity filtering
+    {
+        if (bIsDiscontinuityFiltered)
+        {
+            rgbColor.g += 1.0;
+        }
+        if (bIsCrossDiscontinuityFiltered)
+        {
+            rgbColor.b += 1.0;
+        }
+    }
     
-    rgbColor = g_bPremultiplyAlpha ? rgbColor * g_opacity * alpha : rgbColor;
+    PS_Output output;
+    
+    rgbColor = g_bPremultiplyAlpha ? rgbColor * g_opacity : rgbColor;
 	
-    return float4(rgbColor, g_opacity * alpha);
+    output.color = float4(rgbColor, g_opacity);
+    output.depth = finalDepth;
+    
+    return output;
 }

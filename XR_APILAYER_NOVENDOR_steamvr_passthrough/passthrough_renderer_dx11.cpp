@@ -16,6 +16,7 @@
 
 #include "shaders\alpha_prepass_ps.h"
 #include "shaders\alpha_prepass_masked_ps.h"
+#include "shaders\alpha_prepass_masked_fullscreen_ps.h"
 #include "shaders\depth_write_ps.h"
 #include "shaders\depth_write_temporal_ps.h"
 #include "shaders\passthrough_ps.h"
@@ -23,6 +24,10 @@
 #include "shaders\passthrough_stereo_composite_temporal_ps.h"
 #include "shaders\passthrough_temporal_ps.h"
 #include "shaders\alpha_copy_masked_ps.h"
+#include "shaders\fullscreen_passthrough_ps.h"
+#include "shaders\fullscreen_passthrough_temporal_ps.h"
+#include "shaders\fullscreen_passthrough_composite_ps.h"
+#include "shaders\fullscreen_passthrough_composite_temporal_ps.h"
 
 #include "shaders\fill_holes_cs.h"
 
@@ -90,92 +95,99 @@ bool PassthroughRendererDX11::InitRenderer()
 	m_d3dDevice->GetImmediateContext(&m_deviceContext);
 
 
-	if (FAILED(m_d3dDevice->CreateComputeShader(g_FillHolesShaderCS, sizeof(g_FillHolesShaderCS), nullptr, &m_fillHolesComputeShader)))
+	if (FAILED(m_d3dDevice->CreateComputeShader(g_FillHolesCS, sizeof(g_FillHolesCS), nullptr, &m_fillHolesCS)))
 	{
-		ErrorLog("g_FillHolesShaderCS creation failure!\n");
+		ErrorLog("g_FillHolesCS creation failure!\n");
 		return false;
 	}
-	SET_DXGI_DEBUGNAME(m_fillHolesComputeShader);
+	SET_DXGI_DEBUGNAME(m_fillHolesCS);
 
-	if (FAILED(m_d3dDevice->CreateVertexShader(g_FullscreenQuadShaderVS, sizeof(g_FullscreenQuadShaderVS), nullptr, &m_fullscreenQuadShader)))
+	if (FAILED(m_d3dDevice->CreateVertexShader(g_FullscreenQuadVS, sizeof(g_FullscreenQuadVS), nullptr, &m_fullscreenQuadVS)))
 	{
-		ErrorLog("g_FullscreenQuadShaderVS creation failure!\n");
+		ErrorLog("g_FullscreenQuadVS creation failure!\n");
 		return false;
 	}
-	SET_DXGI_DEBUGNAME(m_fullscreenQuadShader);
+	SET_DXGI_DEBUGNAME(m_fullscreenQuadVS);
 
-	if (FAILED(m_d3dDevice->CreateVertexShader(g_MeshRigidShaderVS, sizeof(g_MeshRigidShaderVS), nullptr, &m_meshRigidVertexShader)))
+	if (FAILED(m_d3dDevice->CreateVertexShader(g_MeshRigidVS, sizeof(g_MeshRigidVS), nullptr, &m_meshRigidVS)))
 	{
-		ErrorLog("g_MeshRigidShaderVS creation failure!\n");
+		ErrorLog("g_MeshRigidVS creation failure!\n");
 		return false;
 	}
-	SET_DXGI_DEBUGNAME(m_meshRigidVertexShader);
+	SET_DXGI_DEBUGNAME(m_meshRigidVS);
 
-	if (FAILED(m_d3dDevice->CreateVertexShader(g_PassthroughShaderVS, sizeof(g_PassthroughShaderVS), nullptr, &m_vertexShader)))
+	if (FAILED(m_d3dDevice->CreateVertexShader(g_PassthroughVS, sizeof(g_PassthroughVS), nullptr, &m_passthroughVS)))
 	{
-		ErrorLog("g_PassthroughShaderVS creation failure!\n");
+		ErrorLog("g_PassthroughVS creation failure!\n");
 		return false;
 	}
-	SET_DXGI_DEBUGNAME(m_vertexShader);
+	SET_DXGI_DEBUGNAME(m_passthroughVS);
 
-	if (FAILED(m_d3dDevice->CreateVertexShader(g_PassthroughStereoShaderVS, sizeof(g_PassthroughStereoShaderVS), nullptr, &m_stereoVertexShader)))
+	if (FAILED(m_d3dDevice->CreateVertexShader(g_PassthroughStereoVS, sizeof(g_PassthroughStereoVS), nullptr, &m_passthroughStereoVS)))
 	{
-		ErrorLog("g_PassthroughStereoShaderVS creation failure!\n");
+		ErrorLog("g_PassthroughStereoVS creation failure!\n");
 		return false;
 	}
-	SET_DXGI_DEBUGNAME(m_stereoVertexShader);
+	SET_DXGI_DEBUGNAME(m_passthroughStereoVS);
 
-	if (FAILED(m_d3dDevice->CreateVertexShader(g_PassthroughStereoTemporalShaderVS, sizeof(g_PassthroughStereoTemporalShaderVS), nullptr, &m_stereoTemporalVertexShader)))
+	if (FAILED(m_d3dDevice->CreateVertexShader(g_PassthroughStereoTemporalVS, sizeof(g_PassthroughStereoTemporalVS), nullptr, &m_passthroughStereoTemporalVS)))
 	{
-		ErrorLog("g_PassthroughStereoTemporalShaderVS creation failure, temporal disparity filter disabled.\n");
+		ErrorLog("g_PassthroughStereoTemporalVS creation failure, temporal disparity filter disabled.\n");
 		m_bIsVSUAVSupported = false;
 	}
 	else
 	{
-		SET_DXGI_DEBUGNAME(m_stereoTemporalVertexShader);
+		SET_DXGI_DEBUGNAME(m_passthroughStereoTemporalVS);
 	}
 
-	if (FAILED(m_d3dDevice->CreateVertexShader(g_PassthroughReadDepthShaderVS, sizeof(g_PassthroughReadDepthShaderVS), nullptr, &m_passthroughReadDepthVS)))
+	if (FAILED(m_d3dDevice->CreateVertexShader(g_PassthroughReadDepthVS, sizeof(g_PassthroughReadDepthVS), nullptr, &m_passthroughReadDepthVS)))
 	{
-		ErrorLog("g_PassthroughReadDepthShaderVS creation failure!\n");
+		ErrorLog("g_PassthroughReadDepthVS creation failure!\n");
 		return false;
 	}
 	SET_DXGI_DEBUGNAME(m_passthroughReadDepthVS);
 
-	if (FAILED(m_d3dDevice->CreatePixelShader(g_PassthroughShaderPS, sizeof(g_PassthroughShaderPS), nullptr, &m_pixelShader)))
+	if (FAILED(m_d3dDevice->CreatePixelShader(g_PassthroughPS, sizeof(g_PassthroughPS), nullptr, &m_passthroughPS)))
 	{
-		ErrorLog("g_PassthroughShaderPS creation failure!\n");
+		ErrorLog("g_PassthroughPS creation failure!\n");
 		return false;
 	}
-	SET_DXGI_DEBUGNAME(m_pixelShader);
+	SET_DXGI_DEBUGNAME(m_passthroughPS);
 
-	if (FAILED(m_d3dDevice->CreatePixelShader(g_PassthroughTemporalShaderPS, sizeof(g_PassthroughTemporalShaderPS), nullptr, &m_pixelShaderTemporal)))
+	if (FAILED(m_d3dDevice->CreatePixelShader(g_PassthroughTemporalPS, sizeof(g_PassthroughTemporalPS), nullptr, &m_passthroughTemporalPS)))
 	{
-		ErrorLog("g_PassthroughTemporalShaderPS creation failure.\n");
+		ErrorLog("g_PassthroughTemporalPS creation failure.\n");
 		return false;
 	}
-	SET_DXGI_DEBUGNAME(m_pixelShaderTemporal);
+	SET_DXGI_DEBUGNAME(m_passthroughTemporalPS);
 
-	if (FAILED(m_d3dDevice->CreatePixelShader(g_AlphaPrepassShaderPS, sizeof(g_AlphaPrepassShaderPS), nullptr, &m_prepassShader)))
+	if (FAILED(m_d3dDevice->CreatePixelShader(g_AlphaPrepassPS, sizeof(g_AlphaPrepassPS), nullptr, &m_alphaPrepassPS)))
 	{
-		ErrorLog("g_AlphaPrepassShaderPS creation failure!\n");
+		ErrorLog("g_AlphaPrepassPS creation failure!\n");
 		return false;
 	}
-	SET_DXGI_DEBUGNAME(m_prepassShader);
+	SET_DXGI_DEBUGNAME(m_alphaPrepassPS);
 
-	if (FAILED(m_d3dDevice->CreatePixelShader(g_AlphaPrepassMaskedShaderPS, sizeof(g_AlphaPrepassMaskedShaderPS), nullptr, &m_maskedPrepassShader)))
+	if (FAILED(m_d3dDevice->CreatePixelShader(g_AlphaPrepassMaskedPS, sizeof(g_AlphaPrepassMaskedPS), nullptr, &m_maskedAlphaPrepassPS)))
 	{
-		ErrorLog("g_AlphaPrepassMaskedShaderPS creation failure!\n");
+		ErrorLog("g_AlphaPrepassMaskedPS creation failure!\n");
 		return false;
 	}
-	SET_DXGI_DEBUGNAME(m_maskedPrepassShader);
+	SET_DXGI_DEBUGNAME(m_maskedAlphaPrepassPS);
 
-	if (FAILED(m_d3dDevice->CreatePixelShader(g_AlphaCopyMaskedShaderPS, sizeof(g_AlphaCopyMaskedShaderPS), nullptr, &m_maskedAlphaCopyShader)))
+	if (FAILED(m_d3dDevice->CreatePixelShader(g_AlphaPrepassMaskedFullscreenPS, sizeof(g_AlphaPrepassMaskedFullscreenPS), nullptr, &m_maskedAlphaPrepassFullscreenPS)))
 	{
-		ErrorLog("g_AlphaCopyMaskedShaderPS creation failure!\n");
+		ErrorLog("g_AlphaPrepassMaskedFullscreenPS creation failure!\n");
 		return false;
 	}
-	SET_DXGI_DEBUGNAME(m_maskedAlphaCopyShader);
+	SET_DXGI_DEBUGNAME(m_maskedAlphaPrepassFullscreenPS);
+
+	if (FAILED(m_d3dDevice->CreatePixelShader(g_AlphaCopyMaskedPS, sizeof(g_AlphaCopyMaskedPS), nullptr, &m_maskedAlphaCopyPS)))
+	{
+		ErrorLog("g_AlphaCopyMaskedPS creation failure!\n");
+		return false;
+	}
+	SET_DXGI_DEBUGNAME(m_maskedAlphaCopyPS);
 
 	if (FAILED(m_d3dDevice->CreatePixelShader(g_depthWritePS, sizeof(g_depthWritePS), nullptr, &m_depthWritePS)))
 	{
@@ -204,6 +216,34 @@ bool PassthroughRendererDX11::InitRenderer()
 		return false;
 	}
 	SET_DXGI_DEBUGNAME(m_stereoCompositeTemporalPS);
+
+	if (FAILED(m_d3dDevice->CreatePixelShader(g_FullscreenPassthroughPS, sizeof(g_FullscreenPassthroughPS), nullptr, &m_fullscreenPassthroughPS)))
+	{
+		ErrorLog("g_FullscreenPassthroughPS creation failure!\n");
+		return false;
+	}
+	SET_DXGI_DEBUGNAME(m_fullscreenPassthroughPS);
+
+	if (FAILED(m_d3dDevice->CreatePixelShader(g_FullscreenPassthroughTemporalPS, sizeof(g_FullscreenPassthroughTemporalPS), nullptr, &m_fullscreenPassthroughTemporalPS)))
+	{
+		ErrorLog("g_FullscreenPassthroughTemporalPS creation failure!\n");
+		return false;
+	}
+	SET_DXGI_DEBUGNAME(m_fullscreenPassthroughTemporalPS);
+
+	if (FAILED(m_d3dDevice->CreatePixelShader(g_FullscreenPassthroughCompositePS, sizeof(g_FullscreenPassthroughCompositePS), nullptr, &m_fullscreenPassthroughCompositePS)))
+	{
+		ErrorLog("g_FullscreenPassthroughCompositePS creation failure!\n");
+		return false;
+	}
+	SET_DXGI_DEBUGNAME(m_fullscreenPassthroughCompositePS);
+
+	if (FAILED(m_d3dDevice->CreatePixelShader(g_FullscreenPassthroughCompositeTemporalPS, sizeof(g_FullscreenPassthroughCompositeTemporalPS), nullptr, &m_fullscreenPassthroughCompositeTemporalPS)))
+	{
+		ErrorLog("g_FullscreenPassthroughCompositeTemporalPS creation failure!\n");
+		return false;
+	}
+	SET_DXGI_DEBUGNAME(m_fullscreenPassthroughCompositeTemporalPS);
 
 
 	D3D11_BUFFER_DESC bufferDesc = {};
@@ -330,12 +370,13 @@ bool PassthroughRendererDX11::InitRenderer()
 	}
 	SET_DXGI_DEBUGNAME(m_blendStateDestAlphaPremultiplied);
 
-	blendState.RenderTarget[0].RenderTargetWriteMask = D3D11_COLOR_WRITE_ENABLE_ALPHA;
-	blendState.RenderTarget[0].SrcBlend = D3D11_BLEND_ZERO;
-	blendState.RenderTarget[0].DestBlend = D3D11_BLEND_ONE;
+	blendState.RenderTarget[0].BlendOp = D3D11_BLEND_OP_ADD;
+	blendState.RenderTarget[0].SrcBlend = D3D11_BLEND_SRC_ALPHA;
+	blendState.RenderTarget[0].DestBlend = D3D11_BLEND_INV_SRC_ALPHA;
+
 	blendState.RenderTarget[0].BlendOpAlpha = D3D11_BLEND_OP_ADD;
 	blendState.RenderTarget[0].SrcBlendAlpha = D3D11_BLEND_ONE;
-	blendState.RenderTarget[0].DestBlendAlpha = D3D11_BLEND_ZERO;
+	blendState.RenderTarget[0].DestBlendAlpha = D3D11_BLEND_ONE;
 
 	if (FAILED(m_d3dDevice->CreateBlendState(&blendState, m_blendStateSrcAlpha.GetAddressOf())))
 	{
@@ -343,6 +384,34 @@ bool PassthroughRendererDX11::InitRenderer()
 		return false;
 	}
 	SET_DXGI_DEBUGNAME(m_blendStateSrcAlpha);
+
+	blendState.RenderTarget[0].RenderTargetWriteMask = D3D11_COLOR_WRITE_ENABLE_ALPHA;
+	blendState.RenderTarget[0].SrcBlend = D3D11_BLEND_ZERO;
+	blendState.RenderTarget[0].DestBlend = D3D11_BLEND_ONE;
+	blendState.RenderTarget[0].BlendOpAlpha = D3D11_BLEND_OP_ADD;
+	blendState.RenderTarget[0].SrcBlendAlpha = D3D11_BLEND_ONE;
+	blendState.RenderTarget[0].DestBlendAlpha = D3D11_BLEND_ZERO;
+
+	if (FAILED(m_d3dDevice->CreateBlendState(&blendState, m_blendStateWriteAlpha.GetAddressOf())))
+	{
+		ErrorLog("CreateBlendState failure!\n");
+		return false;
+	}
+	SET_DXGI_DEBUGNAME(m_blendStateWriteAlpha);
+
+	blendState.RenderTarget[0].RenderTargetWriteMask = D3D11_COLOR_WRITE_ENABLE_ALPHA;
+	blendState.RenderTarget[0].SrcBlend = D3D11_BLEND_ZERO;
+	blendState.RenderTarget[0].DestBlend = D3D11_BLEND_ONE;
+	blendState.RenderTarget[0].BlendOpAlpha = D3D11_BLEND_OP_MIN;
+	blendState.RenderTarget[0].SrcBlendAlpha = D3D11_BLEND_ONE;
+	blendState.RenderTarget[0].DestBlendAlpha = D3D11_BLEND_ONE;
+
+	if (FAILED(m_d3dDevice->CreateBlendState(&blendState, m_blendStateWriteMinAlpha.GetAddressOf())))
+	{
+		ErrorLog("CreateBlendState failure!\n");
+		return false;
+	}
+	SET_DXGI_DEBUGNAME(m_blendStateWriteMinAlpha);
 
 	blendState.RenderTarget[0].RenderTargetWriteMask = D3D11_COLOR_WRITE_ENABLE_ALPHA;
 	blendState.RenderTarget[0].SrcBlend = D3D11_BLEND_ZERO;
@@ -445,7 +514,7 @@ bool PassthroughRendererDX11::InitRenderer()
 	vertexDesc.InputSlotClass = D3D11_INPUT_PER_VERTEX_DATA;
 	vertexDesc.InstanceDataStepRate = 0;
 
-	if (FAILED(m_d3dDevice->CreateInputLayout(&vertexDesc, 1, g_PassthroughShaderVS, sizeof(g_PassthroughShaderVS), &m_inputLayout)))
+	if (FAILED(m_d3dDevice->CreateInputLayout(&vertexDesc, 1, g_PassthroughVS, sizeof(g_PassthroughVS), &m_inputLayout)))
 	{
 		ErrorLog("CreateInputLayout failure!\n");
 		return false;
@@ -1450,13 +1519,13 @@ void PassthroughRendererDX11::RenderPassthroughFrame(const XrCompositionLayerPro
 		vsBuffer.cutoutFilterWidth = stereoConf.StereoCutoutFilterWidth;
 		vsBuffer.disparityFilterWidth = stereoConf.StereoDisparityFilterWidth;
 		vsBuffer.bProjectBorders = !stereoConf.StereoReconstructionFreeze;
-		vsBuffer.bFindDiscontinuities = stereoConf.StereoCutoutEnabled || (stereoConf.StereoUseSeparateDepthPass && stereoConf.StereoUseDisparityTemporalFiltering);
+		vsBuffer.bFindDiscontinuities = stereoConf.StereoCutoutEnabled || stereoConf.StereoUseSeparateDepthPass;
 		vsBuffer.bUseDisparityTemporalFilter = stereoConf.StereoUseDisparityTemporalFiltering && m_bIsVSUAVSupported;
 		vsBuffer.bBlendDepthMaps = stereoConf.StereoCutoutEnabled;
 		vsBuffer.disparityTemporalFilterStrength = stereoConf.StereoDisparityTemporalFilteringStrength;
 		vsBuffer.disparityTemporalFilterDistance = stereoConf.StereoDisparityTemporalFilteringDistance;
 		vsBuffer.depthContourStrength = stereoConf.StereoDepthContourStrength;
-		vsBuffer.depthContourTreshhold = stereoConf.StereoDepthContourThreshold;
+		vsBuffer.depthContourTreshold = stereoConf.StereoDepthContourThreshold;
 	}
 
 	m_renderContext->UpdateSubresource(frameData.vsPassConstantBuffer.Get(), 0, nullptr, &vsBuffer, 0, 0);
@@ -1545,11 +1614,11 @@ void PassthroughRendererDX11::RenderPassthroughFrame(const XrCompositionLayerPro
 		
 		if (stereoConf.StereoUseDisparityTemporalFiltering && m_bIsVSUAVSupported)
 		{
-			m_renderContext->VSSetShader(m_stereoTemporalVertexShader.Get(), nullptr, 0);
+			m_renderContext->VSSetShader(m_passthroughStereoTemporalVS.Get(), nullptr, 0);
 		}
 		else
 		{
-			m_renderContext->VSSetShader(m_stereoVertexShader.Get(), nullptr, 0);
+			m_renderContext->VSSetShader(m_passthroughStereoVS.Get(), nullptr, 0);
 		}
 	}
 	else
@@ -1558,10 +1627,15 @@ void PassthroughRendererDX11::RenderPassthroughFrame(const XrCompositionLayerPro
 		m_renderContext->IASetVertexBuffers(0, 1, m_cylinderMeshVertexBuffer.GetAddressOf(), strides, offsets);
 		m_renderContext->IASetIndexBuffer(m_cylinderMeshIndexBuffer.Get(), DXGI_FORMAT_R32_UINT, 0);
 		m_renderContext->IASetPrimitiveTopology(D3D11_PRIMITIVE_TOPOLOGY_TRIANGLELIST);
-		m_renderContext->VSSetShader(m_vertexShader.Get(), nullptr, 0);	
+		m_renderContext->VSSetShader(m_passthroughVS.Get(), nullptr, 0);	
 	}
 
 	PSPassConstantBuffer psBuffer = {};
+	psBuffer.worldToCameraFrameProjectionLeft = frame->worldToCameraProjectionLeft;
+	psBuffer.worldToCameraFrameProjectionRight = frame->worldToCameraProjectionRight;
+	psBuffer.worldToPrevCameraFrameProjectionLeft = frame->prevWorldToCameraProjectionLeft;
+	psBuffer.worldToPrevCameraFrameProjectionRight = frame->prevWorldToCameraProjectionRight;
+
 	psBuffer.depthRange = XrVector2f(NEAR_PROJECTION_DISTANCE, mainConf.ProjectionDistanceFar);
 	psBuffer.depthCutoffRange = XrVector2f(renderParams.DepthRangeMin, renderParams.DepthRangeMax);
 	psBuffer.opacity = mainConf.PassthroughOpacity;
@@ -1582,6 +1656,10 @@ void PassthroughRendererDX11::RenderPassthroughFrame(const XrCompositionLayerPro
 	psBuffer.bIsFirstRenderOfCameraFrame = frame->bIsFirstRender;
 	psBuffer.bUseDepthCutoffRange = renderParams.bEnableDepthRange;
 	psBuffer.bClampCameraFrame = m_configManager->GetConfig_Camera().ClampCameraFrame;
+	psBuffer.depthContourStrength = stereoConf.StereoDepthFullscreenContourStrength;
+	psBuffer.depthContourTreshold = stereoConf.StereoDepthFullscreenContourThreshold;
+	psBuffer.depthContourFilterWidth = stereoConf.StereoDepthFullscreenContourFilterWidth;
+	psBuffer.bIsCutoutEnabled = stereoConf.StereoCutoutEnabled;
 
 	m_renderContext->UpdateSubresource(frameData.psPassConstantBuffer.Get(), 0, nullptr, &psBuffer, 0, 0);
 
@@ -1601,6 +1679,16 @@ void PassthroughRendererDX11::RenderPassthroughFrame(const XrCompositionLayerPro
 		m_renderContext->UpdateSubresource(frameData.psMaskedConstantBuffer.Get(), 0, nullptr, &maskedBuffer, 0, 0);
 	}
 
+	bool bRenderBackground = stereoConf.StereoDrawBackground && mainConf.ProjectionMode == Projection_StereoReconstruction && !stereoConf.StereoReconstructionFreeze && !renderParams.bEnableDepthRange && !m_configManager->GetConfig_Camera().ClampCameraFrame;
+
+	//bool bCompositeDepth = renderParams.bEnableDepthBlending && depthStencil != nullptr;
+
+	bool bRenderAlphaPrepass = blendMode != Masked &&
+		((blendMode != AlphaBlendPremultiplied && blendMode != AlphaBlendUnpremultiplied) ||
+			mainConf.PassthroughOpacity < 1.0f ||
+			renderParams.bEnableDepthBlending && !bUseDepthPass);
+
+
 	// Render left eye
 	if (bUseDepthPass)
 	{
@@ -1612,7 +1700,24 @@ void PassthroughRendererDX11::RenderPassthroughFrame(const XrCompositionLayerPro
 		RenderMaskedPrepassView(LEFT_EYE, leftSwapchainIndex, leftDepthSwapchainIndex, layer, frame, depthFrame, numIndices, renderParams);
 	}
 
+	RenderSetupView(LEFT_EYE, leftSwapchainIndex, leftDepthSwapchainIndex, layer, frame, depthFrame, blendMode, renderParams);
+
+	if (bRenderAlphaPrepass)
+	{
+		RenderAlphaPrepassView(LEFT_EYE, leftSwapchainIndex, leftDepthSwapchainIndex, layer, frame, depthFrame, blendMode, numIndices, renderParams);
+	}
+
+	if (mainConf.ProjectToRenderModels)
+	{
+		RenderViewModelsForView(LEFT_EYE, leftSwapchainIndex, leftDepthSwapchainIndex, layer, frame, depthFrame, blendMode, numIndices, renderParams);
+	}
+
 	RenderPassthroughView(LEFT_EYE, leftSwapchainIndex, leftDepthSwapchainIndex, layer, frame, depthFrame, blendMode, numIndices, renderParams);
+
+	if (bRenderBackground)
+	{
+		RenderBackgroundForView(LEFT_EYE, leftSwapchainIndex, leftDepthSwapchainIndex, layer, frame, depthFrame, blendMode, numIndices, renderParams);
+	}
 
 
 	// Render right eye
@@ -1626,7 +1731,24 @@ void PassthroughRendererDX11::RenderPassthroughFrame(const XrCompositionLayerPro
 		RenderMaskedPrepassView(RIGHT_EYE, rightSwapchainIndex, rightDepthSwapchainIndex, layer, frame, depthFrame, numIndices, renderParams);
 	}
 
+	RenderSetupView(RIGHT_EYE, rightSwapchainIndex, rightDepthSwapchainIndex, layer, frame, depthFrame, blendMode, renderParams);
+
+	if (bRenderAlphaPrepass)
+	{
+		RenderAlphaPrepassView(RIGHT_EYE, rightSwapchainIndex, rightDepthSwapchainIndex, layer, frame, depthFrame, blendMode, numIndices, renderParams);
+	}
+
+	if (mainConf.ProjectToRenderModels)
+	{
+		RenderViewModelsForView(RIGHT_EYE, rightSwapchainIndex, rightDepthSwapchainIndex, layer, frame, depthFrame, blendMode, numIndices, renderParams);
+	}
+
 	RenderPassthroughView(RIGHT_EYE, rightSwapchainIndex, rightDepthSwapchainIndex, layer, frame, depthFrame, blendMode, numIndices, renderParams);
+
+	if (bRenderBackground)
+	{
+		RenderBackgroundForView(RIGHT_EYE, rightSwapchainIndex, rightDepthSwapchainIndex, layer, frame, depthFrame, blendMode, numIndices, renderParams);
+	}
 
 
 	RenderFrameFinish();
@@ -1636,13 +1758,17 @@ void PassthroughRendererDX11::RenderPassthroughFrame(const XrCompositionLayerPro
 }
 
 
+
+
+
+// Compute shader that fills up holes in the disparity map.
 void PassthroughRendererDX11::RenderHoleFillCS(DX11FrameData& frameData, std::shared_ptr<DepthFrame> depthFrame)
 {
 	Config_Main& mainConf = m_configManager->GetConfig_Main();
 	Config_Stereo& stereoConf = m_configManager->GetConfig_Stereo();
 
 	m_renderContext->CSSetUnorderedAccessViews(0, 1, frameData.disparityMap.UAV.GetAddressOf(), nullptr);
-	m_renderContext->CSSetShader(m_fillHolesComputeShader.Get(), nullptr, 0);
+	m_renderContext->CSSetShader(m_fillHolesCS.Get(), nullptr, 0);
 	m_renderContext->CSSetConstantBuffers(0, 1, frameData.csConstantBuffer.GetAddressOf());
 
 	D3D11_TEXTURE2D_DESC dispDesc;
@@ -1671,12 +1797,12 @@ void PassthroughRendererDX11::RenderHoleFillCS(DX11FrameData& frameData, std::sh
 }
 
 
-void PassthroughRendererDX11::RenderPassthroughView(const ERenderEye eye, const int32_t swapchainIndex, const int32_t depthSwapchainIndex, const XrCompositionLayerProjection* layer, CameraFrame* frame, std::shared_ptr<DepthFrame> depthFrame, EPassthroughBlendMode blendMode, UINT numIndices, FrameRenderParameters& renderParams)
+
+void PassthroughRendererDX11::RenderSetupView(const ERenderEye eye, const int32_t swapchainIndex, int32_t depthSwapchainIndex, const XrCompositionLayerProjection* layer, CameraFrame* frame, std::shared_ptr<DepthFrame> depthFrame, EPassthroughBlendMode blendMode, FrameRenderParameters& renderParams)
 {
 	if (swapchainIndex < 0) { return; }
 
 	DX11FrameData& frameData = m_frameData[m_frameIndex];
-	DX11FrameData& prevFrameData = m_frameData[m_prevFrameIndex];
 	int viewIndex = (eye == LEFT_EYE) ? 0 : 1;
 
 	DX11ViewData& viewData = m_viewData[viewIndex][swapchainIndex];
@@ -1686,43 +1812,18 @@ void PassthroughRendererDX11::RenderPassthroughView(const ERenderEye eye, const 
 
 	Config_Main& mainConf = m_configManager->GetConfig_Main();
 	Config_Stereo& stereoConf = m_configManager->GetConfig_Stereo();
-
-	ID3D11DepthStencilView* depthStencil = nullptr;
-
-	if (m_viewDepthData[viewIndex].size() > depthSwapchainIndex)
-	{
-		depthStencil = m_viewDepthData[viewIndex][depthSwapchainIndex].depthStencilView.Get();
-	}
+	Config_Core& coreConfig = m_configManager->GetConfig_Core();
 
 	Config_Depth& depthConfig = m_configManager->GetConfig_Depth();
-	bool bCompositeDepth = renderParams.bEnableDepthBlending && depthStencil != nullptr;
+	bool bCompositeDepth = renderParams.bEnableDepthBlending && 
+		m_viewDepthData[viewIndex][depthSwapchainIndex].depthStencilView.Get() != nullptr;
+
 	bool bWriteDepth = depthConfig.DepthWriteOutput && depthConfig.DepthReadFromApplication;
 
 	bool bUseDepthPass = mainConf.ProjectionMode == Projection_StereoReconstruction && stereoConf.StereoUseSeparateDepthPass;
+	bool bUseFullscreenPass = bUseDepthPass && stereoConf.StereoUseFullscreenPass;
 
 	bool bUseDisparityTemporalFiltering = stereoConf.StereoUseDisparityTemporalFiltering && m_bIsVSUAVSupported;
-
-	if (!bUseDepthPass && bUseDisparityTemporalFiltering && mainConf.EnableTemporalFiltering)
-	{
-		ID3D11UnorderedAccessView* UAVs[2] = { m_cameraFilter[viewIndex][m_currentCameraFilterIndex].UAV.Get(), frameData.disparityFilter.UAV.Get()};
-		m_renderContext->OMSetRenderTargetsAndUnorderedAccessViews(1, &rendertarget, depthStencil, 1, 2, UAVs, nullptr);
-	}
-	else if (!bUseDepthPass && bUseDisparityTemporalFiltering)
-	{
-		ID3D11UnorderedAccessView* UAVs[1] = { frameData.disparityFilter.UAV.Get() };
-		m_renderContext->OMSetRenderTargetsAndUnorderedAccessViews(1, &rendertarget, depthStencil, 2, 1, UAVs, nullptr);
-	}
-	else if (mainConf.EnableTemporalFiltering)
-	{
-		ID3D11UnorderedAccessView* UAVs[1] = { m_cameraFilter[viewIndex][m_currentCameraFilterIndex].UAV.Get() };
-		m_renderContext->OMSetRenderTargetsAndUnorderedAccessViews(1, &rendertarget, depthStencil, 1, 1, UAVs, nullptr);
-	}
-	else
-	{
-		m_renderContext->OMSetRenderTargets(1, &rendertarget, depthStencil);
-	}
-	
-
 
 	XrRect2Di rect = layer->views[viewIndex].subImage.imageRect;
 
@@ -1733,6 +1834,7 @@ void PassthroughRendererDX11::RenderPassthroughView(const ERenderEye eye, const 
 	m_renderContext->RSSetScissorRects(1, &scissor);
 
 	VSViewConstantBuffer vsViewBuffer = {};
+
 	vsViewBuffer.worldToHMDProjection = (eye == LEFT_EYE) ? frame->worldToHMDProjectionLeft : frame->worldToHMDProjectionRight;
 	XrMatrix4x4f_Invert(&vsViewBuffer.HMDProjectionToWorld, &vsViewBuffer.worldToHMDProjection);
 	vsViewBuffer.prevHMDFrame_WorldToHMDProjection = (eye == LEFT_EYE) ? frame->prevHMDFrame_WorldToHMDProjectionLeft : frame->prevHMDFrame_WorldToHMDProjectionRight;
@@ -1744,499 +1846,39 @@ void PassthroughRendererDX11::RenderPassthroughView(const ERenderEye eye, const 
 	vsViewBuffer.floorHeightOffset = mainConf.FloorHeightOffset;
 	vsViewBuffer.cameraBlendWeight = 1.0;
 	vsViewBuffer.cameraViewIndex = viewIndex;
-	vsViewBuffer.bWriteDisparityFilter = bUseDisparityTemporalFiltering && depthFrame->bIsFirstRender;
-
-	
-	m_renderContext->UpdateSubresource(viewData.vsViewConstantBuffer.Get(), 0, nullptr, &vsViewBuffer, 0, 0);
-	
-	ID3D11Buffer* vsBuffers[3] = { viewData.vsViewConstantBuffer.Get(), frameData.vsPassConstantBuffer.Get(), nullptr };
-	m_renderContext->VSSetConstantBuffers(0, 2, vsBuffers);
-	
-	PSViewConstantBuffer psViewBuffer = {};
-	psViewBuffer.frameUVBounds = GetFrameUVBounds(eye, frame->frameLayout);
-	psViewBuffer.crossUVBounds = GetFrameUVBounds((eye == LEFT_EYE ? RIGHT_EYE : LEFT_EYE), frame->frameLayout);
-	psViewBuffer.rtArrayIndex = layer->views[viewIndex].subImage.imageArrayIndex;
-	psViewBuffer.bDoCutout = stereoConf.StereoCutoutEnabled && !bUseDepthPass;
-	psViewBuffer.bPremultiplyAlpha = (blendMode == AlphaBlendPremultiplied) && !bCompositeDepth;
-
-	m_renderContext->UpdateSubresource(viewData.psViewConstantBuffer.Get(), 0, nullptr, &psViewBuffer, 0, 0);
-
-	ID3D11Buffer* psBuffers[2] = { frameData.psPassConstantBuffer.Get(), viewData.psViewConstantBuffer.Get() };
-	m_renderContext->PSSetConstantBuffers(0, 2, psBuffers);
-
-	if (mainConf.ProjectionMode == Projection_StereoReconstruction)
-	{
-		if (bUseDepthPass && bUseDisparityTemporalFiltering)
-		{
-			int prevSwapchain = (eye == LEFT_EYE) ? m_prevSwapchainLeft : m_prevSwapchainRight;
-			ID3D11ShaderResourceView* vsSRVs[6] = { 
-				viewData.passthroughDepthStencil[0].SRV.Get(), 
-				viewData.passthroughDepthStencil[1].SRV.Get(), 
-				viewData.passthroughCameraValidity.SRV.Get() , 
-				m_viewData[viewIndex][prevSwapchain].passthroughDepthStencil[0].SRV.Get(), 
-				m_viewData[viewIndex][prevSwapchain].passthroughDepthStencil[1].SRV.Get(),
-				m_viewData[viewIndex][prevSwapchain].passthroughCameraValidity.SRV.Get()
-			};
-			m_renderContext->VSSetShaderResources(0, 6, vsSRVs);
-		}
-		else if (bUseDepthPass)
-		{
-			ID3D11ShaderResourceView* vsSRVs[3] = { 
-				viewData.passthroughDepthStencil[0].SRV.Get(), 
-				viewData.passthroughDepthStencil[1].SRV.Get(), 
-				viewData.passthroughCameraValidity.SRV.Get()
-			};
-			m_renderContext->VSSetShaderResources(0, 3, vsSRVs);
-		}
-		else if (bUseDisparityTemporalFiltering)
-		{
-			ID3D11ShaderResourceView* vsSRVs[2] = { 
-				m_frameData[m_depthUpdatedFrameIndex].disparityMap.SRV.Get(), 
-				m_frameData[m_prevDepthUpdatedFrameIndex].disparityFilter.SRV.Get() 
-			};
-			m_renderContext->VSSetShaderResources(0, 2, vsSRVs);
-		}
-		else
-		{
-			ID3D11ShaderResourceView* vsSRVs[1] = { m_frameData[m_depthUpdatedFrameIndex].disparityMap.SRV.Get()};
-			m_renderContext->VSSetShaderResources(0, 1, vsSRVs);
-		}
-	}
-
-
-	// Extra draw if we need to preadjust the alpha.
-	if (blendMode != Masked && ((blendMode != AlphaBlendPremultiplied && blendMode != AlphaBlendUnpremultiplied) || mainConf.PassthroughOpacity < 1.0f || bCompositeDepth))
-	{
-		if (mainConf.ProjectionMode == Projection_StereoReconstruction)
-		{
-			if (bUseDepthPass)
-			{
-				m_renderContext->VSSetShader(m_passthroughReadDepthVS.Get(), nullptr, 0);
-			}
-			else if (bUseDisparityTemporalFiltering)
-			{
-				m_renderContext->VSSetShader(m_stereoTemporalVertexShader.Get(), nullptr, 0);
-			}
-			else
-			{
-				m_renderContext->VSSetShader(m_stereoVertexShader.Get(), nullptr, 0);
-			}
-		}
-		else
-		{
-			m_renderContext->VSSetShader(m_vertexShader.Get(), nullptr, 0);
-		}
-
-		m_renderContext->PSSetShader(m_prepassShader.Get(), nullptr, 0);
-
-		if (bCompositeDepth && blendMode != Additive)
-		{
-			m_renderContext->OMSetBlendState(m_blendStatePrepassInverseAppAlpha.Get(), nullptr, UINT_MAX);
-		}
-		else if (blendMode == AlphaBlendPremultiplied || blendMode == AlphaBlendUnpremultiplied)
-		{
-			m_renderContext->OMSetBlendState(m_blendStatePrepassUseAppAlpha.Get(), nullptr, UINT_MAX);
-		}
-		else
-		{
-			m_renderContext->OMSetBlendState(m_blendStatePrepassIgnoreAppAlpha.Get(), nullptr, UINT_MAX);
-		}
-
-		m_renderContext->OMSetDepthStencilState(GET_DEPTH_STENCIL_STATE(bCompositeDepth, frame->bHasReversedDepth, bWriteDepth), 1);
-
-		m_renderContext->DrawIndexed(numIndices, 0, 0);
-
-		bWriteDepth = false;
-
-		if (vsViewBuffer.bWriteDisparityFilter)
-		{
-			vsViewBuffer.bWriteDisparityFilter = false;
-			m_renderContext->UpdateSubresource(viewData.vsViewConstantBuffer.Get(), 0, nullptr, &vsViewBuffer, 0, 0);
-		}
-	}
-	else if(bUseDisparityTemporalFiltering && depthFrame->bIsFirstRender)
-	{
-		vsViewBuffer.bWriteDisparityFilter = true;
-		m_renderContext->UpdateSubresource(viewData.vsViewConstantBuffer.Get(), 0, nullptr, &vsViewBuffer, 0, 0);
-	}
-
-
-
-	if ((blendMode == AlphaBlendPremultiplied && !bCompositeDepth) || blendMode == Additive)
-	{
-		m_renderContext->OMSetBlendState(m_blendStateDestAlphaPremultiplied.Get(), nullptr, UINT_MAX);
-	}
-	else
-	{
-		m_renderContext->OMSetBlendState(m_blendStateDestAlpha.Get(), nullptr, UINT_MAX);
-	}
-
-	if (mainConf.EnableTemporalFiltering)
-	{
-		ID3D11ShaderResourceView* psSRVs[3];
-		m_renderContext->PSGetShaderResources(0, 2, psSRVs);
-
-		int prevSwapchain = (eye == LEFT_EYE) ? m_prevSwapchainLeft : m_prevSwapchainRight;
-		psSRVs[2] = m_cameraFilter[viewIndex][m_currentCameraFilterIndex == 0 ? 1 : 0].SRV.Get();
-		m_renderContext->PSSetShaderResources(0, 3, psSRVs);
-	}
-
-	m_renderContext->OMSetDepthStencilState(GET_DEPTH_STENCIL_STATE(bCompositeDepth, frame->bHasReversedDepth, bWriteDepth), 1);
-
-	m_renderContext->PSSetShader(mainConf.EnableTemporalFiltering ? m_pixelShaderTemporal.Get() : m_pixelShader.Get(), nullptr, 0);
-
-
-	// Project passthrough onto tracked devices
-	if (mainConf.ProjectToRenderModels)
-	{
-		m_renderContext->UpdateSubresource(viewData.vsViewConstantBuffer.Get(), 0, nullptr, &vsViewBuffer, 0, 0);
-		m_renderContext->UpdateSubresource(viewData.psViewConstantBuffer.Get(), 0, nullptr, &psViewBuffer, 0, 0);
-
-		m_renderContext->VSSetShader(m_meshRigidVertexShader.Get(), nullptr, 0);
-
-		for (DX11RenderModel model : m_renderModels)
-		{
-			VSMeshConstantBuffer vsMeshBuffer = {0};
-			vsMeshBuffer.meshToWorldTransform = model.meshToWorldTransform;
-			m_renderContext->UpdateSubresource(m_vsMeshConstantBuffer[model.deviceId].Get(), 0, nullptr, &vsMeshBuffer, 0, 0);
-			vsBuffers[2] = m_vsMeshConstantBuffer[model.deviceId].Get();
-			m_renderContext->VSSetConstantBuffers(0, 3, vsBuffers);
-
-			const UINT strides[] = { sizeof(float) * 3 };
-			const UINT offsets[] = { 0 };
-			m_renderContext->IASetVertexBuffers(0, 1, model.vertexBuffer.GetAddressOf(), strides, offsets);
-			m_renderContext->IASetIndexBuffer(model.indexBuffer.Get(), DXGI_FORMAT_R32_UINT, 0);
-
-			m_renderContext->DrawIndexed(model.numIndices, 0, 0);
-		}
-
-		m_renderContext->VSSetConstantBuffers(0, 2, vsBuffers);
-	}
-
-
-	// Main pass
-
-	const UINT strides[] = { sizeof(float) * 3 };
-	const UINT offsets[] = { 0 };
-
-	if (mainConf.ProjectionMode == Projection_StereoReconstruction)
-	{	
-		numIndices = (UINT)m_gridMesh.triangles.size() * 3;
-		m_renderContext->IASetVertexBuffers(0, 1, m_gridMeshVertexBuffer.GetAddressOf(), strides, offsets);
-		m_renderContext->IASetIndexBuffer(m_gridMeshIndexBuffer.Get(), DXGI_FORMAT_R32_UINT, 0);
-
-		if (bUseDepthPass)
-		{
-			m_renderContext->VSSetShader(m_passthroughReadDepthVS.Get(), nullptr, 0);
-		}
-		else if (bUseDisparityTemporalFiltering)
-		{
-			m_renderContext->VSSetShader(m_stereoTemporalVertexShader.Get(), nullptr, 0);
-		}
-		else
-		{
-			m_renderContext->VSSetShader(m_stereoVertexShader.Get(), nullptr, 0);
-		}
-	}
-	else
-	{
-		numIndices = (UINT)m_cylinderMesh.triangles.size() * 3;
-		m_renderContext->IASetVertexBuffers(0, 1, m_cylinderMeshVertexBuffer.GetAddressOf(), strides, offsets);
-		m_renderContext->IASetIndexBuffer(m_cylinderMeshIndexBuffer.Get(), DXGI_FORMAT_R32_UINT, 0);
-		m_renderContext->VSSetShader(m_vertexShader.Get(), nullptr, 0);
-	}
-
-	if (bUseDepthPass && stereoConf.StereoCutoutEnabled && mainConf.EnableTemporalFiltering)
-	{
-		m_renderContext->PSSetShader(m_stereoCompositeTemporalPS.Get(), nullptr, 0);
-	}
-	else if (bUseDepthPass && stereoConf.StereoCutoutEnabled)
-	{
-		m_renderContext->PSSetShader(m_stereoCompositePS.Get(), nullptr, 0);
-	}
-	
-	m_renderContext->DrawIndexed(numIndices, 0, 0);
-
-
-
-	// Draw the other stereo camera on occluded areas. 
-	if (mainConf.ProjectionMode == Projection_StereoReconstruction && stereoConf.StereoCutoutEnabled && !bUseDepthPass)
-	{
-		float secondaryWidthFactor = 0.6f;
-		int scissorStart = (eye == LEFT_EYE) ? (int)(rect.extent.width * (1.0f - secondaryWidthFactor)) : 0;
-		int scissorEnd = (eye == LEFT_EYE) ? rect.extent.width : (int)(rect.extent.width * secondaryWidthFactor);
-		D3D11_RECT crossScissor = { rect.offset.x + scissorStart, rect.offset.y, rect.offset.x + scissorEnd, rect.offset.y + rect.extent.height };
-		m_renderContext->RSSetScissorRects(1, &crossScissor);
-
-		VSViewConstantBuffer vsCrossBuffer = vsViewBuffer;
-		vsCrossBuffer.disparityUVBounds = GetFrameUVBounds(eye == LEFT_EYE ? RIGHT_EYE : LEFT_EYE, StereoHorizontalLayout);
-		vsCrossBuffer.cameraViewIndex = (eye != LEFT_EYE) ?  0 : 1;
-		vsCrossBuffer.bWriteDisparityFilter = false;
-		m_renderContext->UpdateSubresource(viewData.vsViewConstantBuffer.Get(), 0, nullptr, &vsCrossBuffer, 0, 0);
-
-		PSViewConstantBuffer psCrossBuffer = psViewBuffer;
-		psCrossBuffer.frameUVBounds = GetFrameUVBounds(eye == LEFT_EYE ? RIGHT_EYE : LEFT_EYE, frame->frameLayout);
-		psCrossBuffer.bDoCutout = false;
-		psCrossBuffer.bPremultiplyAlpha = false;
-		m_renderContext->UpdateSubresource(viewData.psViewConstantBuffer.Get(), 0, nullptr, &psCrossBuffer, 0, 0);
-
-		m_renderContext->OMSetDepthStencilState(GET_DEPTH_STENCIL_STATE(bCompositeDepth, frame->bHasReversedDepth, false), 1);
-		m_renderContext->PSSetShader(m_pixelShader.Get(), nullptr, 0);
-
-		m_renderContext->DrawIndexed(numIndices, 0, 0);
-	}
-
-
-	// Draw cylinder mesh to fill out any holes
-	if(stereoConf.StereoDrawBackground && mainConf.ProjectionMode == Projection_StereoReconstruction && !stereoConf.StereoReconstructionFreeze && !renderParams.bEnableDepthRange && !m_configManager->GetConfig_Camera().ClampCameraFrame)
-	{
-		m_renderContext->RSSetScissorRects(1, &scissor);
-
-		m_renderContext->UpdateSubresource(viewData.vsViewConstantBuffer.Get(), 0, nullptr, &vsViewBuffer, 0, 0);
-		m_renderContext->UpdateSubresource(viewData.psViewConstantBuffer.Get(), 0, nullptr, &psViewBuffer, 0, 0);
-
-		const UINT strides[] = { sizeof(float) * 3 };
-		const UINT offsets[] = { 0 };
-		m_renderContext->IASetVertexBuffers(0, 1, m_cylinderMeshVertexBuffer.GetAddressOf(), strides, offsets);
-		m_renderContext->IASetIndexBuffer(m_cylinderMeshIndexBuffer.Get(), DXGI_FORMAT_R32_UINT, 0);
-		m_renderContext->VSSetShader(m_vertexShader.Get(), nullptr, 0);
-		m_renderContext->RSSetState(frame->bIsRenderingMirrored ? m_rasterizerStateDepthBiasMirrored.Get() : m_rasterizerStateDepthBias.Get());
-
-		m_renderContext->OMSetBlendState(m_blendStateDestAlpha.Get(), nullptr, UINT_MAX);
-
-		m_renderContext->OMSetDepthStencilState(GET_DEPTH_STENCIL_STATE(bCompositeDepth, frame->bHasReversedDepth, depthConfig.DepthWriteOutput && depthConfig.DepthReadFromApplication), 1);
-
-		m_renderContext->PSSetShader(m_pixelShader.Get(), nullptr, 0);
-
-		m_renderContext->DrawIndexed((UINT)m_cylinderMesh.triangles.size() * 3, 0, 0);
-
-
-		m_renderContext->IASetVertexBuffers(0, 1, m_gridMeshVertexBuffer.GetAddressOf(), strides, offsets);
-		m_renderContext->IASetIndexBuffer(m_gridMeshIndexBuffer.Get(), DXGI_FORMAT_R32_UINT, 0);
-		if (bUseDisparityTemporalFiltering)
-		{
-			m_renderContext->VSSetShader(m_stereoTemporalVertexShader.Get(), nullptr, 0);
-		}
-		else
-		{
-			m_renderContext->VSSetShader(m_stereoVertexShader.Get(), nullptr, 0);
-		}
-		m_renderContext->RSSetState(frame->bIsRenderingMirrored ? m_rasterizerStateMirrored.Get() : m_rasterizerState.Get());
-	 }
-}
-
-
-void PassthroughRendererDX11::RenderMaskedPrepassView(const ERenderEye eye, const int32_t swapchainIndex, int32_t depthSwapchainIndex, const XrCompositionLayerProjection* layer, CameraFrame* frame, std::shared_ptr<DepthFrame> depthFrame, UINT numIndices, FrameRenderParameters& renderParams)
-{
-	if (swapchainIndex < 0) { return; }
-
-	DX11FrameData& frameData = m_frameData[m_frameIndex];
-	int viewIndex = (eye == LEFT_EYE) ? 0 : 1;
-
-	DX11ViewData& viewData = m_viewData[viewIndex][swapchainIndex];
-
-	ID3D11RenderTargetView* rendertarget = viewData.renderTarget.RTV.Get();
-	if (!rendertarget) { return; }
-
-	Config_Main& mainConf = m_configManager->GetConfig_Main();
-	Config_Stereo& stereoConf = m_configManager->GetConfig_Stereo();
-
-	ID3D11DepthStencilView* depthStencil = nullptr;
-
-	if (m_viewDepthData[viewIndex].size() > depthSwapchainIndex)
-	{
-		depthStencil = m_viewDepthData[viewIndex][depthSwapchainIndex].depthStencilView.Get();
-	}
-
-	Config_Depth& depthConfig = m_configManager->GetConfig_Depth();
-	bool bCompositeDepth = renderParams.bEnableDepthBlending && depthStencil != nullptr;
-	bool bWriteDepth = depthConfig.DepthWriteOutput && depthConfig.DepthReadFromApplication;
-
-	bool bUseDepthPass = mainConf.ProjectionMode == Projection_StereoReconstruction && stereoConf.StereoUseSeparateDepthPass;
-
-	XrRect2Di rect = layer->views[viewIndex].subImage.imageRect;
-
-	D3D11_VIEWPORT viewport = { (float)rect.offset.x, (float)rect.offset.y, (float)rect.extent.width, (float)rect.extent.height, 0.0f, 1.0f };
-	D3D11_RECT scissor = { rect.offset.x, rect.offset.y, rect.offset.x + rect.extent.width, rect.offset.y + rect.extent.height };
-
-	m_renderContext->RSSetViewports(1, &viewport);
-	m_renderContext->RSSetScissorRects(1, &scissor);
-
-	VSViewConstantBuffer vsViewBuffer = {};
-	vsViewBuffer.worldToHMDProjection = (eye == LEFT_EYE) ? frame->worldToHMDProjectionLeft : frame->worldToHMDProjectionRight;
-	XrMatrix4x4f_Invert(&vsViewBuffer.HMDProjectionToWorld, &vsViewBuffer.worldToHMDProjection);
-	vsViewBuffer.disparityUVBounds = GetFrameUVBounds(eye, StereoHorizontalLayout);
-	vsViewBuffer.projectionOriginWorld = (eye == LEFT_EYE) ? frame->projectionOriginWorldLeft : frame->projectionOriginWorldRight;
-	vsViewBuffer.projectionDistance = mainConf.ProjectionDistanceFar;
-	vsViewBuffer.floorHeightOffset = mainConf.FloorHeightOffset;
-	vsViewBuffer.cameraBlendWeight = 1.0;
-	vsViewBuffer.cameraViewIndex = viewIndex;
+	vsViewBuffer.bWriteDisparityFilter = false;
 
 	m_renderContext->UpdateSubresource(viewData.vsViewConstantBuffer.Get(), 0, nullptr, &vsViewBuffer, 0, 0);
 
 	ID3D11Buffer* vsBuffers[2] = { viewData.vsViewConstantBuffer.Get(), frameData.vsPassConstantBuffer.Get() };
 	m_renderContext->VSSetConstantBuffers(0, 2, vsBuffers);
 
-	bool bSingleStereoRenderTarget = false;
 
 	PSViewConstantBuffer psViewBuffer = {};
-	// Draw the correct half for single framebuffer views.
-	if (abs(layer->views[0].subImage.imageRect.offset.x - layer->views[1].subImage.imageRect.offset.x) > layer->views[0].subImage.imageRect.extent.width / 2)
-	{
-		bSingleStereoRenderTarget = true;
 
-		psViewBuffer.prepassUVBounds = { (eye == LEFT_EYE) ? 0.0f : 0.5f, 0.0f,
-			(eye == LEFT_EYE) ? 0.5f : 1.0f, 1.0f };
-	}
-	else
-	{
-		psViewBuffer.prepassUVBounds = { 0.0f, 0.0f, 1.0f, 1.0f };
-	}
+	psViewBuffer.worldToHMDProjection = vsViewBuffer.worldToHMDProjection;
+	psViewBuffer.HMDProjectionToWorld = vsViewBuffer.HMDProjectionToWorld;
+	psViewBuffer.prevHMDFrame_WorldToHMDProjection = vsViewBuffer.prevHMDFrame_WorldToHMDProjection;
+	psViewBuffer.prevCameraFrame_WorldToHMDProjection = vsViewBuffer.prevCameraFrame_WorldToHMDProjection;
+
+	psViewBuffer.prepassUVBounds = { 0.0f, 0.0f, 1.0f, 1.0f };
 	psViewBuffer.frameUVBounds = GetFrameUVBounds(eye, frame->frameLayout);
+	psViewBuffer.crossUVBounds = GetFrameUVBounds((eye == LEFT_EYE ? RIGHT_EYE : LEFT_EYE), frame->frameLayout);
 	psViewBuffer.rtArrayIndex = layer->views[viewIndex].subImage.imageArrayIndex;
-	psViewBuffer.bDoCutout = false;
-	psViewBuffer.bPremultiplyAlpha = false;
+	psViewBuffer.cameraViewIndex = viewIndex;
+	psViewBuffer.bDoCutout = stereoConf.StereoCutoutEnabled && !bUseDepthPass;
+	psViewBuffer.bPremultiplyAlpha = (blendMode == AlphaBlendPremultiplied) && !bCompositeDepth;
+	psViewBuffer.bUseFullscreenQuad = bUseFullscreenPass;
 
 	m_renderContext->UpdateSubresource(viewData.psViewConstantBuffer.Get(), 0, nullptr, &psViewBuffer, 0, 0);
-
-
-	DX11TemporaryRenderTarget& tempTarget = GetTemporaryRenderTarget(m_frameIndex, bSingleStereoRenderTarget ? 0 : viewIndex);
-
-	if (eye == LEFT_EYE || !bSingleStereoRenderTarget)
-	{
-		float clearColor[4] = { m_configManager->GetConfig_Core().CoreForceMaskedUseCameraImage ? 1.0f : 0, 0, 0, 0 };
-		m_renderContext->ClearRenderTargetView(tempTarget.RTV.Get(), clearColor);
-	}
-
-	m_renderContext->OMSetRenderTargets(1, tempTarget.RTV.GetAddressOf(), depthStencil);
-	m_renderContext->OMSetBlendState(nullptr, nullptr, UINT_MAX);
-	m_renderContext->OMSetDepthStencilState(GET_DEPTH_STENCIL_STATE(bCompositeDepth, m_configManager->GetConfig_Core().CoreForceMaskedUseCameraImage == frame->bHasReversedDepth, bWriteDepth), 1);
-
-	if (mainConf.ProjectionMode == Projection_StereoReconstruction)
-	{
-		if (bUseDepthPass)
-		{
-			ID3D11ShaderResourceView* vsSRVs[3] = { viewData.passthroughDepthStencil[0].SRV.Get(), viewData.passthroughDepthStencil[1].SRV.Get(), viewData.passthroughCameraValidity.SRV.Get()};
-			m_renderContext->VSSetShaderResources(0, 3, vsSRVs);
-		}
-		else if (stereoConf.StereoUseDisparityTemporalFiltering && m_bIsVSUAVSupported)
-		{
-			ID3D11ShaderResourceView* vsSRVs[2] = { m_frameData[m_depthUpdatedFrameIndex].disparityMap.SRV.Get(), m_frameData[m_prevDepthUpdatedFrameIndex].disparityFilter.SRV.Get() };
-			m_renderContext->VSSetShaderResources(0, 2, vsSRVs);
-		}
-		else
-		{
-			ID3D11ShaderResourceView* vsSRVs[2] = { m_frameData[m_depthUpdatedFrameIndex].disparityMap.SRV.Get() };
-			m_renderContext->VSSetShaderResources(0, 1, vsSRVs);
-		}
-	}
-
-	ID3D11ShaderResourceView* cameraFrameSRV;
-
-	if (mainConf.DebugTexture != DebugTexture_None)
-	{
-		cameraFrameSRV = m_debugTexture.SRV.Get();
-	}
-	else if (frame->frameTextureResource != nullptr)
-	{
-		cameraFrameSRV = (ID3D11ShaderResourceView*)frame->frameTextureResource;
-	}
-	else
-	{
-		cameraFrameSRV = frameData.cameraFrame.SRV.Get();
-	}
-
-	ID3D11ShaderResourceView* prepassSourceTexture;
-
-	if (m_configManager->GetConfig_Core().CoreForceMaskedUseCameraImage)
-	{
-		prepassSourceTexture = cameraFrameSRV;
-	}
-	else
-	{
-		prepassSourceTexture = viewData.renderTarget.SRV.Get();
-	}
-
-	if (mainConf.ProjectionMode == Projection_RoomView2D)
-	{
-		m_renderContext->PSSetShaderResources(0, 1, &prepassSourceTexture);
-	}
-	else
-	{
-		ID3D11ShaderResourceView* views[2] = { prepassSourceTexture, m_uvDistortionMap.SRV.Get() };
-		m_renderContext->PSSetShaderResources(0, 2, views);
-	}
 
 	ID3D11Buffer* psBuffers[3] = { frameData.psPassConstantBuffer.Get(), viewData.psViewConstantBuffer.Get(), frameData.psMaskedConstantBuffer.Get() };
 	m_renderContext->PSSetConstantBuffers(0, 3, psBuffers);
-
-	m_renderContext->PSSetShader(m_maskedPrepassShader.Get(), nullptr, 0);
-
-	// Draw with simple vertex shader if we don't need to sample camera
-	if (!bCompositeDepth && !m_configManager->GetConfig_Core().CoreForceMaskedUseCameraImage)
-	{
-		m_renderContext->IASetPrimitiveTopology(D3D11_PRIMITIVE_TOPOLOGY_TRIANGLESTRIP);
-		m_renderContext->VSSetShader(m_fullscreenQuadShader.Get(), nullptr, 0);
-		m_renderContext->Draw(3, 0);
-	}
-	else
-	{
-		if (bUseDepthPass)
-		{
-			m_renderContext->VSSetShader(m_passthroughReadDepthVS.Get(), nullptr, 0);
-		}
-		else if (mainConf.ProjectionMode == Projection_StereoReconstruction && stereoConf.StereoUseDisparityTemporalFiltering && m_bIsVSUAVSupported)
-		{
-			m_renderContext->VSSetShader(m_stereoTemporalVertexShader.Get(), nullptr, 0);
-		}
-		else if(mainConf.ProjectionMode == Projection_StereoReconstruction)
-		{
-			m_renderContext->VSSetShader(m_stereoVertexShader.Get(), nullptr, 0);
-		}
-		else
-		{
-			m_renderContext->VSSetShader(m_vertexShader.Get(), nullptr, 0);
-		}
-		m_renderContext->DrawIndexed(numIndices, 0, 0);
-	}
-
-	
-	// Clear rendertarget so we can swap the places of the RTV and SRV.
-	ID3D11RenderTargetView* nullRTV = nullptr;
-	m_renderContext->OMSetRenderTargets(1, &nullRTV, nullptr);
-
-	if (mainConf.ProjectionMode == Projection_RoomView2D)
-	{
-		ID3D11ShaderResourceView* views[3] = { cameraFrameSRV, nullptr, tempTarget.SRV.Get() };
-		m_renderContext->PSSetShaderResources(0, 3, views);
-	}
-	else
-	{
-		ID3D11ShaderResourceView* views[3] = { cameraFrameSRV, m_uvDistortionMap.SRV.Get(), tempTarget.SRV.Get() };
-		m_renderContext->PSSetShaderResources(0, 3, views);
-	}
-
-	ID3D11ShaderResourceView* views[3] = { cameraFrameSRV, nullptr, tempTarget.SRV.Get() };
-
-	
-	psViewBuffer.bDoCutout = false;
-	m_renderContext->UpdateSubresource(viewData.psViewConstantBuffer.Get(), 0, nullptr, &psViewBuffer, 0, 0);
-
-	m_renderContext->OMSetRenderTargets(1, &rendertarget, depthStencil);
-	m_renderContext->OMSetBlendState(m_blendStateSrcAlpha.Get(), nullptr, UINT_MAX);
-	m_renderContext->OMSetDepthStencilState(GET_DEPTH_STENCIL_STATE(false, frame->bHasReversedDepth, false), 1);
-
-	m_renderContext->IASetPrimitiveTopology(D3D11_PRIMITIVE_TOPOLOGY_TRIANGLESTRIP);
-	m_renderContext->VSSetShader(m_fullscreenQuadShader.Get(), nullptr, 0);
-	m_renderContext->PSSetShader(m_maskedAlphaCopyShader.Get(), nullptr, 0);
-
-	m_renderContext->Draw(3, 0);
-
-
-	m_renderContext->IASetPrimitiveTopology(D3D11_PRIMITIVE_TOPOLOGY_TRIANGLELIST);
 }
 
 
+
+// Reprojects one or two disparity maps into HMD projection space depth maps.
 void PassthroughRendererDX11::RenderDepthPrepassView(const ERenderEye eye, const int32_t swapchainIndex, int32_t depthSwapchainIndex, const XrCompositionLayerProjection* layer, CameraFrame* frame, std::shared_ptr<DepthFrame> depthFrame, UINT numIndices, FrameRenderParameters& renderParams)
 {
 	if (swapchainIndex < 0) { return; }
@@ -2249,7 +1891,7 @@ void PassthroughRendererDX11::RenderDepthPrepassView(const ERenderEye eye, const
 	Config_Main& mainConf = m_configManager->GetConfig_Main();
 	Config_Stereo& stereoConf = m_configManager->GetConfig_Stereo();
 
-	D3D11_VIEWPORT viewport = { 0.0f, 0.0f, (float)viewData.passthroughDepthStencil[0].Width, (float)viewData.passthroughDepthStencil[0].Height, 0.0f, 1.0f};
+	D3D11_VIEWPORT viewport = { 0.0f, 0.0f, (float)viewData.passthroughDepthStencil[0].Width, (float)viewData.passthroughDepthStencil[0].Height, 0.0f, 1.0f };
 	D3D11_RECT scissor = { 0, 0, (long)viewData.passthroughDepthStencil[0].Width, (long)viewData.passthroughDepthStencil[0].Height };
 	m_renderContext->RSSetViewports(1, &viewport);
 	m_renderContext->RSSetScissorRects(1, &scissor);
@@ -2265,11 +1907,9 @@ void PassthroughRendererDX11::RenderDepthPrepassView(const ERenderEye eye, const
 
 	m_renderContext->IASetVertexBuffers(0, 1, m_gridMeshVertexBuffer.GetAddressOf(), strides, offsets);
 	m_renderContext->IASetIndexBuffer(m_gridMeshIndexBuffer.Get(), DXGI_FORMAT_R32_UINT, 0);
+	m_renderContext->IASetPrimitiveTopology(D3D11_PRIMITIVE_TOPOLOGY_TRIANGLELIST);
 
-	m_renderContext->VSSetShader(m_stereoVertexShader.Get(), nullptr, 0);
-
-	//float clearColor[4] = { 0,0,0,0 };
-	//m_renderContext->ClearRenderTargetView(viewData.passthroughCameraValidity.RTV.Get(), clearColor);
+	m_renderContext->VSSetShader(m_passthroughStereoVS.Get(), nullptr, 0);
 
 	m_renderContext->ClearDepthStencilView(viewData.passthroughDepthStencil[0].DSV.Get(), D3D11_CLEAR_DEPTH, 1.0f, 0);
 
@@ -2285,7 +1925,7 @@ void PassthroughRendererDX11::RenderDepthPrepassView(const ERenderEye eye, const
 	ID3D11Buffer* psBuffers[2] = { frameData.psPassConstantBuffer.Get(), viewData.psViewConstantBuffer.Get() };
 	m_renderContext->PSSetConstantBuffers(0, 2, psBuffers);
 
-	if (stereoConf.StereoUseDisparityTemporalFiltering) 
+	if (stereoConf.StereoUseDisparityTemporalFiltering)
 	{
 		int prevSwapchain = (eye == LEFT_EYE) ? m_prevSwapchainLeft : m_prevSwapchainRight;
 		ID3D11ShaderResourceView* psSRVs[2] = {
@@ -2302,12 +1942,12 @@ void PassthroughRendererDX11::RenderDepthPrepassView(const ERenderEye eye, const
 	}
 
 	VSViewConstantBuffer vsViewBuffer = {};
-	
+
 	vsViewBuffer.worldToHMDProjection = (eye == LEFT_EYE) ? frame->worldToHMDProjectionLeft : frame->worldToHMDProjectionRight;
 	XrMatrix4x4f_Invert(&vsViewBuffer.HMDProjectionToWorld, &vsViewBuffer.worldToHMDProjection);
 	vsViewBuffer.prevHMDFrame_WorldToHMDProjection = (eye == LEFT_EYE) ? frame->prevHMDFrame_WorldToHMDProjectionLeft : frame->prevHMDFrame_WorldToHMDProjectionRight;
 	vsViewBuffer.prevCameraFrame_WorldToHMDProjection = (eye == LEFT_EYE) ? frame->prevCameraFrame_WorldToHMDProjectionLeft : frame->prevCameraFrame_WorldToHMDProjectionRight;
-	
+
 	vsViewBuffer.projectionOriginWorld = (eye == LEFT_EYE) ? frame->projectionOriginWorldLeft : frame->projectionOriginWorldRight;
 	vsViewBuffer.projectionDistance = mainConf.ProjectionDistanceFar;
 	vsViewBuffer.floorHeightOffset = mainConf.FloorHeightOffset;
@@ -2361,12 +2001,849 @@ void PassthroughRendererDX11::RenderDepthPrepassView(const ERenderEye eye, const
 		blendFactor[2] = 0;
 		blendFactor[3] = 1;
 		m_renderContext->OMSetBlendState(m_blendStateWriteFactored.Get(), blendFactor, UINT_MAX);
-		
+
 
 		m_renderContext->DrawIndexed(numIndices, 0, 0);
 	}
 
 	m_renderContext->PSSetShaderResources(0, 2, oldPSSRVs);
+}
+
+
+
+// Renders chroma key cutout into the rendertarget alpha channel.
+void PassthroughRendererDX11::RenderMaskedPrepassView(const ERenderEye eye, const int32_t swapchainIndex, int32_t depthSwapchainIndex, const XrCompositionLayerProjection* layer, CameraFrame* frame, std::shared_ptr<DepthFrame> depthFrame, UINT numIndices, FrameRenderParameters& renderParams)
+{
+	if (swapchainIndex < 0) { return; }
+
+	DX11FrameData& frameData = m_frameData[m_frameIndex];
+	int viewIndex = (eye == LEFT_EYE) ? 0 : 1;
+
+	DX11ViewData& viewData = m_viewData[viewIndex][swapchainIndex];
+
+	ID3D11RenderTargetView* rendertarget = viewData.renderTarget.RTV.Get();
+	if (!rendertarget) { return; }
+
+	Config_Main& mainConf = m_configManager->GetConfig_Main();
+	Config_Stereo& stereoConf = m_configManager->GetConfig_Stereo();
+	Config_Core& coreConfig = m_configManager->GetConfig_Core();
+
+	ID3D11DepthStencilView* depthStencil = nullptr;
+
+	if (m_viewDepthData[viewIndex].size() > depthSwapchainIndex)
+	{
+		depthStencil = m_viewDepthData[viewIndex][depthSwapchainIndex].depthStencilView.Get();
+	}
+
+	Config_Depth& depthConfig = m_configManager->GetConfig_Depth();
+	bool bCompositeDepth = renderParams.bEnableDepthBlending && depthStencil != nullptr;
+	bool bWriteDepth = depthConfig.DepthWriteOutput && depthConfig.DepthReadFromApplication;
+
+	bool bUseDepthPass = mainConf.ProjectionMode == Projection_StereoReconstruction && stereoConf.StereoUseSeparateDepthPass;
+	bool bUseFullscreenPass = bUseDepthPass && stereoConf.StereoUseFullscreenPass;
+
+	XrRect2Di rect = layer->views[viewIndex].subImage.imageRect;
+
+	D3D11_VIEWPORT viewport = { (float)rect.offset.x, (float)rect.offset.y, (float)rect.extent.width, (float)rect.extent.height, 0.0f, 1.0f };
+	D3D11_RECT scissor = { rect.offset.x, rect.offset.y, rect.offset.x + rect.extent.width, rect.offset.y + rect.extent.height };
+
+	m_renderContext->RSSetViewports(1, &viewport);
+	m_renderContext->RSSetScissorRects(1, &scissor);
+
+	VSViewConstantBuffer vsViewBuffer = {};
+	vsViewBuffer.worldToHMDProjection = (eye == LEFT_EYE) ? frame->worldToHMDProjectionLeft : frame->worldToHMDProjectionRight;
+	XrMatrix4x4f_Invert(&vsViewBuffer.HMDProjectionToWorld, &vsViewBuffer.worldToHMDProjection);
+	vsViewBuffer.disparityUVBounds = GetFrameUVBounds(eye, StereoHorizontalLayout);
+	vsViewBuffer.projectionOriginWorld = (eye == LEFT_EYE) ? frame->projectionOriginWorldLeft : frame->projectionOriginWorldRight;
+	vsViewBuffer.projectionDistance = mainConf.ProjectionDistanceFar;
+	vsViewBuffer.floorHeightOffset = mainConf.FloorHeightOffset;
+	vsViewBuffer.cameraBlendWeight = 1.0;
+	vsViewBuffer.cameraViewIndex = viewIndex;
+
+	m_renderContext->UpdateSubresource(viewData.vsViewConstantBuffer.Get(), 0, nullptr, &vsViewBuffer, 0, 0);
+
+	ID3D11Buffer* vsBuffers[2] = { viewData.vsViewConstantBuffer.Get(), frameData.vsPassConstantBuffer.Get() };
+	m_renderContext->VSSetConstantBuffers(0, 2, vsBuffers);
+
+	bool bSingleStereoRenderTarget = false;
+
+	PSViewConstantBuffer psViewBuffer = {};
+	// Draw the correct half for single framebuffer views.
+	if (abs(layer->views[0].subImage.imageRect.offset.x - layer->views[1].subImage.imageRect.offset.x) > layer->views[0].subImage.imageRect.extent.width / 2)
+	{
+		bSingleStereoRenderTarget = true;
+
+		psViewBuffer.prepassUVBounds = { (eye == LEFT_EYE) ? 0.0f : 0.5f, 0.0f,
+			(eye == LEFT_EYE) ? 0.5f : 1.0f, 1.0f };
+	}
+	else
+	{
+		psViewBuffer.prepassUVBounds = { 0.0f, 0.0f, 1.0f, 1.0f };
+	}
+	psViewBuffer.worldToHMDProjection = (eye == LEFT_EYE) ? frame->worldToHMDProjectionLeft : frame->worldToHMDProjectionRight;
+	XrMatrix4x4f_Invert(&psViewBuffer.HMDProjectionToWorld, &psViewBuffer.worldToHMDProjection);
+	psViewBuffer.frameUVBounds = GetFrameUVBounds(eye, frame->frameLayout);
+	psViewBuffer.crossUVBounds = GetFrameUVBounds((eye == LEFT_EYE ? RIGHT_EYE : LEFT_EYE), frame->frameLayout);
+	psViewBuffer.rtArrayIndex = layer->views[viewIndex].subImage.imageArrayIndex;
+	psViewBuffer.cameraViewIndex = viewIndex;
+	psViewBuffer.bDoCutout = bUseFullscreenPass && stereoConf.StereoCutoutEnabled;
+	psViewBuffer.bPremultiplyAlpha = false;
+	psViewBuffer.bUseFullscreenQuad = bUseFullscreenPass;
+
+	m_renderContext->UpdateSubresource(viewData.psViewConstantBuffer.Get(), 0, nullptr, &psViewBuffer, 0, 0);
+
+
+	DX11TemporaryRenderTarget& tempTarget = GetTemporaryRenderTarget(m_frameIndex, bSingleStereoRenderTarget ? 0 : viewIndex);
+
+	if (eye == LEFT_EYE || !bSingleStereoRenderTarget)
+	{
+		float clearColor[4] = { m_configManager->GetConfig_Core().CoreForceMaskedUseCameraImage ? 1.0f : 0, 0, 0, 0 };
+		m_renderContext->ClearRenderTargetView(tempTarget.RTV.Get(), clearColor);
+	}
+
+	m_renderContext->OMSetRenderTargets(1, tempTarget.RTV.GetAddressOf(), depthStencil);
+	m_renderContext->OMSetBlendState(nullptr, nullptr, UINT_MAX);
+	m_renderContext->OMSetDepthStencilState(GET_DEPTH_STENCIL_STATE(bCompositeDepth, m_configManager->GetConfig_Core().CoreForceMaskedUseCameraImage == frame->bHasReversedDepth, bWriteDepth), 1);
+
+	if (mainConf.ProjectionMode == Projection_StereoReconstruction && !bUseFullscreenPass)
+	{
+		if (bUseDepthPass) 
+		{
+			ID3D11ShaderResourceView* vsSRVs[3] = { viewData.passthroughDepthStencil[0].SRV.Get(), viewData.passthroughDepthStencil[1].SRV.Get(), viewData.passthroughCameraValidity.SRV.Get()};
+			m_renderContext->VSSetShaderResources(0, 3, vsSRVs);
+		}
+		else if (stereoConf.StereoUseDisparityTemporalFiltering && m_bIsVSUAVSupported)
+		{
+			ID3D11ShaderResourceView* vsSRVs[2] = { m_frameData[m_depthUpdatedFrameIndex].disparityMap.SRV.Get(), m_frameData[m_prevDepthUpdatedFrameIndex].disparityFilter.SRV.Get() };
+			m_renderContext->VSSetShaderResources(0, 2, vsSRVs);
+		}
+		else
+		{
+			ID3D11ShaderResourceView* vsSRVs[2] = { m_frameData[m_depthUpdatedFrameIndex].disparityMap.SRV.Get() };
+			m_renderContext->VSSetShaderResources(0, 1, vsSRVs);
+		}
+	}
+
+	ID3D11ShaderResourceView* cameraFrameSRV;
+
+	if (mainConf.DebugTexture != DebugTexture_None)
+	{
+		cameraFrameSRV = m_debugTexture.SRV.Get();
+	}
+	else if (frame->frameTextureResource != nullptr)
+	{
+		cameraFrameSRV = (ID3D11ShaderResourceView*)frame->frameTextureResource;
+	}
+	else
+	{
+		cameraFrameSRV = frameData.cameraFrame.SRV.Get();
+	}
+
+	ID3D11ShaderResourceView* prepassSourceTexture;
+
+	if (m_configManager->GetConfig_Core().CoreForceMaskedUseCameraImage)
+	{
+		prepassSourceTexture = cameraFrameSRV;
+	}
+	else
+	{
+		prepassSourceTexture = viewData.renderTarget.SRV.Get();
+	}
+
+	if (bUseFullscreenPass)
+	{
+		ID3D11ShaderResourceView* psSRVs[5];
+		m_renderContext->PSGetShaderResources(0, 2, psSRVs);
+
+		psSRVs[0] = prepassSourceTexture;
+		psSRVs[1] = m_uvDistortionMap.SRV.Get();
+		psSRVs[2] = viewData.passthroughCameraValidity.SRV.Get();
+		psSRVs[3] = viewData.passthroughDepthStencil[0].SRV.Get();
+
+		if (stereoConf.StereoCutoutEnabled)
+		{
+			psSRVs[4] = viewData.passthroughDepthStencil[1].SRV.Get();
+
+			m_renderContext->PSSetShaderResources(0, 5, psSRVs);
+		}
+		else
+		{
+			m_renderContext->PSSetShaderResources(0, 4, psSRVs);
+		}
+	}
+	else if (mainConf.ProjectionMode == Projection_RoomView2D)
+	{
+		m_renderContext->PSSetShaderResources(0, 1, &prepassSourceTexture);
+	}
+	else
+	{
+		ID3D11ShaderResourceView* views[2] = { prepassSourceTexture, m_uvDistortionMap.SRV.Get() };
+		m_renderContext->PSSetShaderResources(0, 2, views);
+	}
+
+	ID3D11Buffer* psBuffers[3] = { frameData.psPassConstantBuffer.Get(), viewData.psViewConstantBuffer.Get(), frameData.psMaskedConstantBuffer.Get() };
+	m_renderContext->PSSetConstantBuffers(0, 3, psBuffers);
+
+	m_renderContext->PSSetShader(bUseFullscreenPass ? m_maskedAlphaPrepassFullscreenPS.Get() : m_maskedAlphaPrepassPS.Get(), nullptr, 0);
+
+	// Draw with simple vertex shader if we don't need to sample camera
+	if (bUseFullscreenPass || (!bCompositeDepth && !m_configManager->GetConfig_Core().CoreForceMaskedUseCameraImage))
+	{
+		m_renderContext->IASetPrimitiveTopology(D3D11_PRIMITIVE_TOPOLOGY_TRIANGLESTRIP);
+		m_renderContext->VSSetShader(m_fullscreenQuadVS.Get(), nullptr, 0);
+		
+
+		m_renderContext->Draw(3, 0);
+
+	}
+	else
+	{
+		m_renderContext->IASetPrimitiveTopology(D3D11_PRIMITIVE_TOPOLOGY_TRIANGLELIST);
+
+		if (bUseDepthPass)
+		{
+			m_renderContext->VSSetShader(m_passthroughReadDepthVS.Get(), nullptr, 0);
+		}
+		else if (mainConf.ProjectionMode == Projection_StereoReconstruction && stereoConf.StereoUseDisparityTemporalFiltering && m_bIsVSUAVSupported)
+		{
+			m_renderContext->VSSetShader(m_passthroughStereoTemporalVS.Get(), nullptr, 0);
+		}
+		else if(mainConf.ProjectionMode == Projection_StereoReconstruction)
+		{
+			m_renderContext->VSSetShader(m_passthroughStereoVS.Get(), nullptr, 0);
+		}
+		else
+		{
+			m_renderContext->VSSetShader(m_passthroughVS.Get(), nullptr, 0);
+		}
+
+
+		m_renderContext->DrawIndexed(numIndices, 0, 0);
+
+	}
+
+	
+	// Clear rendertarget so we can swap the places of the RTV and SRV.
+	ID3D11RenderTargetView* nullRTV = nullptr;
+	m_renderContext->OMSetRenderTargets(1, &nullRTV, nullptr);
+
+	if (mainConf.ProjectionMode == Projection_RoomView2D)
+	{
+		ID3D11ShaderResourceView* views[3] = { cameraFrameSRV, nullptr, tempTarget.SRV.Get() };
+		m_renderContext->PSSetShaderResources(0, 3, views);
+	}
+	else
+	{
+		ID3D11ShaderResourceView* views[3] = { cameraFrameSRV, m_uvDistortionMap.SRV.Get(), tempTarget.SRV.Get() };
+		m_renderContext->PSSetShaderResources(0, 3, views);
+	}
+
+	ID3D11ShaderResourceView* views[3] = { cameraFrameSRV, nullptr, tempTarget.SRV.Get() };
+
+	psViewBuffer.bDoCutout = false;
+	m_renderContext->UpdateSubresource(viewData.psViewConstantBuffer.Get(), 0, nullptr, &psViewBuffer, 0, 0);
+
+	m_renderContext->OMSetRenderTargets(1, &rendertarget, depthStencil);
+	m_renderContext->OMSetBlendState(coreConfig.CoreForceMaskedUseAppAlpha ? m_blendStateWriteMinAlpha.Get() : m_blendStateWriteAlpha.Get(), nullptr, UINT_MAX);
+	m_renderContext->OMSetDepthStencilState(GET_DEPTH_STENCIL_STATE(false, frame->bHasReversedDepth, false), 1);
+
+	m_renderContext->IASetPrimitiveTopology(D3D11_PRIMITIVE_TOPOLOGY_TRIANGLESTRIP);
+	m_renderContext->VSSetShader(m_fullscreenQuadVS.Get(), nullptr, 0);
+	m_renderContext->PSSetShader(m_maskedAlphaCopyPS.Get(), nullptr, 0);
+
+
+	m_renderContext->Draw(3, 0);
+}
+
+
+
+
+// Renders an alpha cutout into the rendertarget.
+void PassthroughRendererDX11::RenderAlphaPrepassView(const ERenderEye eye, const int32_t swapchainIndex, const int32_t depthSwapchainIndex, const XrCompositionLayerProjection* layer, CameraFrame* frame, std::shared_ptr<DepthFrame> depthFrame, EPassthroughBlendMode blendMode, UINT numIndices, FrameRenderParameters& renderParams)
+{
+	if (swapchainIndex < 0) { return; }
+
+	DX11FrameData& frameData = m_frameData[m_frameIndex];
+	DX11FrameData& prevFrameData = m_frameData[m_prevFrameIndex];
+	int viewIndex = (eye == LEFT_EYE) ? 0 : 1;
+
+	DX11ViewData& viewData = m_viewData[viewIndex][swapchainIndex];
+
+	ID3D11RenderTargetView* rendertarget = viewData.renderTarget.RTV.Get();
+	if (!rendertarget) { return; }
+
+	Config_Main& mainConf = m_configManager->GetConfig_Main();
+	Config_Stereo& stereoConf = m_configManager->GetConfig_Stereo();
+
+	ID3D11DepthStencilView* depthStencil = nullptr;
+
+	if (m_viewDepthData[viewIndex].size() > depthSwapchainIndex)
+	{
+		depthStencil = m_viewDepthData[viewIndex][depthSwapchainIndex].depthStencilView.Get();
+	}
+
+	Config_Depth& depthConfig = m_configManager->GetConfig_Depth();
+	bool bCompositeDepth = renderParams.bEnableDepthBlending;
+	bool bWriteDepth = depthConfig.DepthWriteOutput && depthConfig.DepthReadFromApplication;
+
+	bool bUseDepthPass = mainConf.ProjectionMode == Projection_StereoReconstruction && stereoConf.StereoUseSeparateDepthPass;
+	bool bUseFullscreenPass = bUseDepthPass && stereoConf.StereoUseFullscreenPass;
+
+	bool bUseDisparityTemporalFiltering = stereoConf.StereoUseDisparityTemporalFiltering && m_bIsVSUAVSupported;
+
+	if (bCompositeDepth && depthStencil == nullptr) { return; }
+
+
+	if (!bUseDepthPass && bUseDisparityTemporalFiltering && mainConf.EnableTemporalFiltering)
+	{
+		ID3D11UnorderedAccessView* UAVs[2] = { m_cameraFilter[viewIndex][m_currentCameraFilterIndex].UAV.Get(), frameData.disparityFilter.UAV.Get() };
+		m_renderContext->OMSetRenderTargetsAndUnorderedAccessViews(1, &rendertarget, depthStencil, 1, 2, UAVs, nullptr);
+	}
+	else if (!bUseDepthPass && bUseDisparityTemporalFiltering)
+	{
+		ID3D11UnorderedAccessView* UAVs[1] = { frameData.disparityFilter.UAV.Get() };
+		m_renderContext->OMSetRenderTargetsAndUnorderedAccessViews(1, &rendertarget, depthStencil, 2, 1, UAVs, nullptr);
+	}
+	else if (mainConf.EnableTemporalFiltering)
+	{
+		ID3D11UnorderedAccessView* UAVs[1] = { m_cameraFilter[viewIndex][m_currentCameraFilterIndex].UAV.Get() };
+		m_renderContext->OMSetRenderTargetsAndUnorderedAccessViews(1, &rendertarget, depthStencil, 1, 1, UAVs, nullptr);
+	}
+	else
+	{
+		m_renderContext->OMSetRenderTargets(1, &rendertarget, depthStencil);
+	}
+
+
+	if (mainConf.ProjectionMode == Projection_StereoReconstruction)
+	{
+		if (bUseDepthPass && bUseDisparityTemporalFiltering)
+		{
+			int prevSwapchain = (eye == LEFT_EYE) ? m_prevSwapchainLeft : m_prevSwapchainRight;
+			ID3D11ShaderResourceView* vsSRVs[6] = {
+				viewData.passthroughDepthStencil[0].SRV.Get(),
+				viewData.passthroughDepthStencil[1].SRV.Get(),
+				viewData.passthroughCameraValidity.SRV.Get() ,
+				m_viewData[viewIndex][prevSwapchain].passthroughDepthStencil[0].SRV.Get(),
+				m_viewData[viewIndex][prevSwapchain].passthroughDepthStencil[1].SRV.Get(),
+				m_viewData[viewIndex][prevSwapchain].passthroughCameraValidity.SRV.Get()
+			};
+			m_renderContext->VSSetShaderResources(0, 6, vsSRVs);
+		}
+		else if (bUseDepthPass)
+		{
+			ID3D11ShaderResourceView* vsSRVs[3] = {
+				viewData.passthroughDepthStencil[0].SRV.Get(),
+				viewData.passthroughDepthStencil[1].SRV.Get(),
+				viewData.passthroughCameraValidity.SRV.Get()
+			};
+			m_renderContext->VSSetShaderResources(0, 3, vsSRVs);
+		}
+		else if (bUseDisparityTemporalFiltering)
+		{
+			ID3D11ShaderResourceView* vsSRVs[2] = {
+				m_frameData[m_depthUpdatedFrameIndex].disparityMap.SRV.Get(),
+				m_frameData[m_prevDepthUpdatedFrameIndex].disparityFilter.SRV.Get()
+			};
+			m_renderContext->VSSetShaderResources(0, 2, vsSRVs);
+		}
+		else
+		{
+			ID3D11ShaderResourceView* vsSRVs[1] = { m_frameData[m_depthUpdatedFrameIndex].disparityMap.SRV.Get() };
+			m_renderContext->VSSetShaderResources(0, 1, vsSRVs);
+		}
+	}
+
+	if (mainConf.ProjectionMode == Projection_StereoReconstruction)
+	{
+		if (bUseFullscreenPass)
+		{
+			m_renderContext->IASetPrimitiveTopology(D3D11_PRIMITIVE_TOPOLOGY_TRIANGLESTRIP);
+			m_renderContext->VSSetShader(m_fullscreenQuadVS.Get(), nullptr, 0);
+			numIndices = 3;
+		}
+		else if (bUseDepthPass)
+		{
+
+			m_renderContext->IASetPrimitiveTopology(D3D11_PRIMITIVE_TOPOLOGY_TRIANGLELIST);
+			m_renderContext->VSSetShader(m_passthroughReadDepthVS.Get(), nullptr, 0);
+		}
+		else if (bUseDisparityTemporalFiltering)
+		{
+
+			m_renderContext->IASetPrimitiveTopology(D3D11_PRIMITIVE_TOPOLOGY_TRIANGLELIST);
+			m_renderContext->VSSetShader(m_passthroughStereoTemporalVS.Get(), nullptr, 0);
+		}
+		else
+		{
+
+			m_renderContext->IASetPrimitiveTopology(D3D11_PRIMITIVE_TOPOLOGY_TRIANGLELIST);
+			m_renderContext->VSSetShader(m_passthroughStereoVS.Get(), nullptr, 0);
+		}
+	}
+	else
+	{
+
+		m_renderContext->IASetPrimitiveTopology(D3D11_PRIMITIVE_TOPOLOGY_TRIANGLELIST);
+		m_renderContext->VSSetShader(m_passthroughVS.Get(), nullptr, 0);
+	}
+
+	m_renderContext->PSSetShader(m_alphaPrepassPS.Get(), nullptr, 0);
+
+	if (bCompositeDepth && blendMode != Additive)
+	{
+		m_renderContext->OMSetBlendState(m_blendStatePrepassInverseAppAlpha.Get(), nullptr, UINT_MAX);
+	}
+	else if (blendMode == AlphaBlendPremultiplied || blendMode == AlphaBlendUnpremultiplied)
+	{
+		m_renderContext->OMSetBlendState(m_blendStatePrepassUseAppAlpha.Get(), nullptr, UINT_MAX);
+	}
+	else
+	{
+		m_renderContext->OMSetBlendState(m_blendStatePrepassIgnoreAppAlpha.Get(), nullptr, UINT_MAX);
+	}
+
+	bool bPrepassWriteDepth = !bUseFullscreenPass && bWriteDepth;
+
+	m_renderContext->OMSetDepthStencilState(GET_DEPTH_STENCIL_STATE(bCompositeDepth, frame->bHasReversedDepth, bPrepassWriteDepth), 1);
+
+
+	m_renderContext->DrawIndexed(numIndices, 0, 0);
+}
+
+
+
+
+// Renders all SteamVR rendermodels with passthough projected on them.
+void PassthroughRendererDX11::RenderViewModelsForView(const ERenderEye eye, const int32_t swapchainIndex, const int32_t depthSwapchainIndex, const XrCompositionLayerProjection* layer, CameraFrame* frame, std::shared_ptr<DepthFrame> depthFrame, EPassthroughBlendMode blendMode, UINT numIndices, FrameRenderParameters& renderParams)
+{
+	if (swapchainIndex < 0) { return; }
+
+	DX11FrameData& frameData = m_frameData[m_frameIndex];
+	DX11FrameData& prevFrameData = m_frameData[m_prevFrameIndex];
+	int viewIndex = (eye == LEFT_EYE) ? 0 : 1;
+
+	DX11ViewData& viewData = m_viewData[viewIndex][swapchainIndex];
+
+	ID3D11RenderTargetView* rendertarget = viewData.renderTarget.RTV.Get();
+	if (!rendertarget) { return; }
+
+	Config_Main& mainConf = m_configManager->GetConfig_Main();
+	Config_Stereo& stereoConf = m_configManager->GetConfig_Stereo();
+
+	ID3D11DepthStencilView* depthStencil = nullptr;
+
+	if (m_viewDepthData[viewIndex].size() > depthSwapchainIndex)
+	{
+		depthStencil = m_viewDepthData[viewIndex][depthSwapchainIndex].depthStencilView.Get();
+	}
+
+	Config_Depth& depthConfig = m_configManager->GetConfig_Depth();
+	bool bCompositeDepth = renderParams.bEnableDepthBlending && depthStencil != nullptr;
+	bool bWriteDepth = depthConfig.DepthWriteOutput && depthConfig.DepthReadFromApplication;
+
+	m_renderContext->OMSetRenderTargets(1, &rendertarget, depthStencil);
+
+	m_renderContext->OMSetDepthStencilState(GET_DEPTH_STENCIL_STATE(bCompositeDepth, frame->bHasReversedDepth, bWriteDepth), 1);
+
+	if (blendMode == AlphaBlendPremultiplied || blendMode == Additive)
+	{
+		m_renderContext->OMSetBlendState(m_blendStateDestAlphaPremultiplied.Get(), nullptr, UINT_MAX);
+	}
+	else
+	{
+		m_renderContext->OMSetBlendState(m_blendStateDestAlpha.Get(), nullptr, UINT_MAX);
+	}
+
+	m_renderContext->VSSetShader(m_meshRigidVS.Get(), nullptr, 0);
+
+	ID3D11Buffer* vsBuffers[3];
+	m_renderContext->VSGetConstantBuffers(0, 2, vsBuffers);
+
+	if (mainConf.EnableTemporalFiltering)
+	{
+		ID3D11ShaderResourceView* psSRVs[3];
+		m_renderContext->PSGetShaderResources(0, 2, psSRVs);
+
+		int prevSwapchain = (eye == LEFT_EYE) ? m_prevSwapchainLeft : m_prevSwapchainRight;
+		psSRVs[2] = m_cameraFilter[viewIndex][m_currentCameraFilterIndex == 0 ? 1 : 0].SRV.Get();
+		m_renderContext->PSSetShaderResources(0, 3, psSRVs);
+
+		m_renderContext->PSSetShader(m_passthroughTemporalPS.Get(), nullptr, 0);
+	}
+	else
+	{
+		m_renderContext->PSSetShader(m_passthroughPS.Get(), nullptr, 0);
+	}
+
+	for (DX11RenderModel model : m_renderModels)
+	{
+		VSMeshConstantBuffer vsMeshBuffer = { 0 };
+		vsMeshBuffer.meshToWorldTransform = model.meshToWorldTransform;
+		m_renderContext->UpdateSubresource(m_vsMeshConstantBuffer[model.deviceId].Get(), 0, nullptr, &vsMeshBuffer, 0, 0);
+		vsBuffers[2] = m_vsMeshConstantBuffer[model.deviceId].Get();
+		m_renderContext->VSSetConstantBuffers(0, 3, vsBuffers);
+
+		const UINT strides[] = { sizeof(float) * 3 };
+		const UINT offsets[] = { 0 };
+		m_renderContext->IASetVertexBuffers(0, 1, model.vertexBuffer.GetAddressOf(), strides, offsets);
+		m_renderContext->IASetIndexBuffer(model.indexBuffer.Get(), DXGI_FORMAT_R32_UINT, 0);
+		m_renderContext->IASetPrimitiveTopology(D3D11_PRIMITIVE_TOPOLOGY_TRIANGLELIST);
+
+
+		m_renderContext->DrawIndexed(model.numIndices, 0, 0);
+	}
+}
+
+
+
+
+// Renders the main passthrough view.
+void PassthroughRendererDX11::RenderPassthroughView(const ERenderEye eye, const int32_t swapchainIndex, const int32_t depthSwapchainIndex, const XrCompositionLayerProjection* layer, CameraFrame* frame, std::shared_ptr<DepthFrame> depthFrame, EPassthroughBlendMode blendMode, UINT numIndices, FrameRenderParameters& renderParams)
+{
+	if (swapchainIndex < 0) { return; }
+
+	DX11FrameData& frameData = m_frameData[m_frameIndex];
+	DX11FrameData& prevFrameData = m_frameData[m_prevFrameIndex];
+	int viewIndex = (eye == LEFT_EYE) ? 0 : 1;
+
+	DX11ViewData& viewData = m_viewData[viewIndex][swapchainIndex];
+
+	ID3D11RenderTargetView* rendertarget = viewData.renderTarget.RTV.Get();
+	if (!rendertarget) { return; }
+
+	Config_Main& mainConf = m_configManager->GetConfig_Main();
+	Config_Stereo& stereoConf = m_configManager->GetConfig_Stereo();
+
+	ID3D11DepthStencilView* depthStencil = nullptr;
+
+	if (m_viewDepthData[viewIndex].size() > depthSwapchainIndex)
+	{
+		depthStencil = m_viewDepthData[viewIndex][depthSwapchainIndex].depthStencilView.Get();
+	}
+
+	Config_Depth& depthConfig = m_configManager->GetConfig_Depth();
+	bool bCompositeDepth = renderParams.bEnableDepthBlending && depthStencil != nullptr;
+	bool bWriteDepth = depthConfig.DepthWriteOutput && depthConfig.DepthReadFromApplication;
+
+	bool bUseDepthPass = mainConf.ProjectionMode == Projection_StereoReconstruction && stereoConf.StereoUseSeparateDepthPass;
+	bool bUseFullscreenPass = bUseDepthPass && stereoConf.StereoUseFullscreenPass;
+
+	bool bUseDisparityTemporalFiltering = stereoConf.StereoUseDisparityTemporalFiltering && m_bIsVSUAVSupported;
+
+	if (!bUseDepthPass && bUseDisparityTemporalFiltering && mainConf.EnableTemporalFiltering)
+	{
+		ID3D11UnorderedAccessView* UAVs[2] = { m_cameraFilter[viewIndex][m_currentCameraFilterIndex].UAV.Get(), frameData.disparityFilter.UAV.Get() };
+		m_renderContext->OMSetRenderTargetsAndUnorderedAccessViews(1, &rendertarget, depthStencil, 1, 2, UAVs, nullptr);
+	}
+	else if (!bUseDepthPass && bUseDisparityTemporalFiltering)
+	{
+		ID3D11UnorderedAccessView* UAVs[1] = { frameData.disparityFilter.UAV.Get() };
+		m_renderContext->OMSetRenderTargetsAndUnorderedAccessViews(1, &rendertarget, depthStencil, 2, 1, UAVs, nullptr);
+	}
+	else if (mainConf.EnableTemporalFiltering)
+	{
+		ID3D11UnorderedAccessView* UAVs[1] = { m_cameraFilter[viewIndex][m_currentCameraFilterIndex].UAV.Get() };
+		m_renderContext->OMSetRenderTargetsAndUnorderedAccessViews(1, &rendertarget, depthStencil, 1, 1, UAVs, nullptr);
+	}
+	else
+	{
+		m_renderContext->OMSetRenderTargets(1, &rendertarget, depthStencil);
+	}
+
+
+	ID3D11Buffer* psBuffers[2] = { frameData.psPassConstantBuffer.Get(), viewData.psViewConstantBuffer.Get() };
+	m_renderContext->PSSetConstantBuffers(0, 2, psBuffers);
+
+
+	if (mainConf.ProjectionMode == Projection_StereoReconstruction && !bUseFullscreenPass)
+	{
+		if (bUseDepthPass && bUseDisparityTemporalFiltering)
+		{
+			int prevSwapchain = (eye == LEFT_EYE) ? m_prevSwapchainLeft : m_prevSwapchainRight;
+			ID3D11ShaderResourceView* vsSRVs[6] = {
+				viewData.passthroughDepthStencil[0].SRV.Get(),
+				viewData.passthroughDepthStencil[1].SRV.Get(),
+				viewData.passthroughCameraValidity.SRV.Get() ,
+				m_viewData[viewIndex][prevSwapchain].passthroughDepthStencil[0].SRV.Get(),
+				m_viewData[viewIndex][prevSwapchain].passthroughDepthStencil[1].SRV.Get(),
+				m_viewData[viewIndex][prevSwapchain].passthroughCameraValidity.SRV.Get()
+			};
+			m_renderContext->VSSetShaderResources(0, 6, vsSRVs);
+		}
+		else if (bUseDepthPass)
+		{
+			ID3D11ShaderResourceView* vsSRVs[3] = {
+				viewData.passthroughDepthStencil[0].SRV.Get(),
+				viewData.passthroughDepthStencil[1].SRV.Get(),
+				viewData.passthroughCameraValidity.SRV.Get()
+			};
+			m_renderContext->VSSetShaderResources(0, 3, vsSRVs);
+		}
+		else if (bUseDisparityTemporalFiltering)
+		{
+			ID3D11ShaderResourceView* vsSRVs[2] = {
+				m_frameData[m_depthUpdatedFrameIndex].disparityMap.SRV.Get(),
+				m_frameData[m_prevDepthUpdatedFrameIndex].disparityFilter.SRV.Get()
+			};
+			m_renderContext->VSSetShaderResources(0, 2, vsSRVs);
+		}
+		else
+		{
+			ID3D11ShaderResourceView* vsSRVs[1] = { m_frameData[m_depthUpdatedFrameIndex].disparityMap.SRV.Get() };
+			m_renderContext->VSSetShaderResources(0, 1, vsSRVs);
+		}
+	}
+
+
+	if (bUseDisparityTemporalFiltering && depthFrame->bIsFirstRender)
+	{
+		VSViewConstantBuffer vsViewBuffer = {};
+
+		vsViewBuffer.worldToHMDProjection = (eye == LEFT_EYE) ? frame->worldToHMDProjectionLeft : frame->worldToHMDProjectionRight;
+		XrMatrix4x4f_Invert(&vsViewBuffer.HMDProjectionToWorld, &vsViewBuffer.worldToHMDProjection);
+		vsViewBuffer.prevHMDFrame_WorldToHMDProjection = (eye == LEFT_EYE) ? frame->prevHMDFrame_WorldToHMDProjectionLeft : frame->prevHMDFrame_WorldToHMDProjectionRight;
+		vsViewBuffer.prevCameraFrame_WorldToHMDProjection = (eye == LEFT_EYE) ? frame->prevCameraFrame_WorldToHMDProjectionLeft : frame->prevCameraFrame_WorldToHMDProjectionRight;
+
+		vsViewBuffer.disparityUVBounds = GetFrameUVBounds(eye, StereoHorizontalLayout);
+		vsViewBuffer.projectionOriginWorld = (eye == LEFT_EYE) ? frame->projectionOriginWorldLeft : frame->projectionOriginWorldRight;
+		vsViewBuffer.projectionDistance = mainConf.ProjectionDistanceFar;
+		vsViewBuffer.floorHeightOffset = mainConf.FloorHeightOffset;
+		vsViewBuffer.cameraBlendWeight = 1.0;
+		vsViewBuffer.cameraViewIndex = viewIndex;
+
+		vsViewBuffer.bWriteDisparityFilter = true;
+
+		m_renderContext->UpdateSubresource(viewData.vsViewConstantBuffer.Get(), 0, nullptr, &vsViewBuffer, 0, 0);
+	}
+
+	if (bCompositeDepth && bUseDepthPass && blendMode != Additive)
+	{
+		m_renderContext->OMSetBlendState(m_blendStateSrcAlpha.Get(), nullptr, UINT_MAX);
+	}
+	else if ((blendMode == AlphaBlendPremultiplied && (!bCompositeDepth || bUseDepthPass)) || blendMode == Additive)
+	{
+		m_renderContext->OMSetBlendState(m_blendStateDestAlphaPremultiplied.Get(), nullptr, UINT_MAX);
+	}
+	else
+	{
+		m_renderContext->OMSetBlendState(m_blendStateDestAlpha.Get(), nullptr, UINT_MAX);
+	}
+
+	m_renderContext->OMSetDepthStencilState(GET_DEPTH_STENCIL_STATE(bCompositeDepth, frame->bHasReversedDepth, bWriteDepth), 1);
+
+	const UINT strides[] = { sizeof(float) * 3 };
+	const UINT offsets[] = { 0 };
+
+	if (bUseFullscreenPass)
+	{
+		m_renderContext->IASetPrimitiveTopology(D3D11_PRIMITIVE_TOPOLOGY_TRIANGLESTRIP);
+		m_renderContext->VSSetShader(m_fullscreenQuadVS.Get(), nullptr, 0);
+		numIndices = 3;
+
+		ID3D11ShaderResourceView* psSRVs[6];
+		m_renderContext->PSGetShaderResources(0, 2, psSRVs);
+
+		if (stereoConf.StereoCutoutEnabled && mainConf.EnableTemporalFiltering)
+		{
+			psSRVs[2] = viewData.passthroughCameraValidity.SRV.Get();
+			psSRVs[3] = viewData.passthroughDepthStencil[0].SRV.Get();
+			psSRVs[4] = viewData.passthroughDepthStencil[1].SRV.Get();
+			psSRVs[5] = m_cameraFilter[viewIndex][m_currentCameraFilterIndex == 0 ? 1 : 0].SRV.Get();
+
+			m_renderContext->PSSetShaderResources(0, 6, psSRVs);
+
+			m_renderContext->PSSetShader(m_fullscreenPassthroughCompositeTemporalPS.Get(), nullptr, 0);
+		}
+		else if (stereoConf.StereoCutoutEnabled)
+		{
+			psSRVs[2] = viewData.passthroughCameraValidity.SRV.Get();
+			psSRVs[3] = viewData.passthroughDepthStencil[0].SRV.Get();
+			psSRVs[4] = viewData.passthroughDepthStencil[1].SRV.Get();
+
+			m_renderContext->PSSetShaderResources(0, 5, psSRVs);
+
+			m_renderContext->PSSetShader(m_fullscreenPassthroughCompositePS.Get(), nullptr, 0);
+		}
+		else if (mainConf.EnableTemporalFiltering)
+		{
+			psSRVs[2] = viewData.passthroughCameraValidity.SRV.Get();
+			psSRVs[3] = viewData.passthroughDepthStencil[0].SRV.Get();
+			psSRVs[4] = m_cameraFilter[viewIndex][m_currentCameraFilterIndex == 0 ? 1 : 0].SRV.Get();
+
+			m_renderContext->PSSetShaderResources(0, 5, psSRVs);
+
+			m_renderContext->PSSetShader(m_fullscreenPassthroughTemporalPS.Get(), nullptr, 0);
+		}
+		else
+		{
+			psSRVs[2] = viewData.passthroughCameraValidity.SRV.Get();
+			psSRVs[3] = viewData.passthroughDepthStencil[0].SRV.Get();
+
+			m_renderContext->PSSetShaderResources(0, 4, psSRVs);
+
+			m_renderContext->PSSetShader(m_fullscreenPassthroughPS.Get(), nullptr, 0);
+		}
+	}
+	else if (mainConf.ProjectionMode == Projection_StereoReconstruction)
+	{
+
+		m_renderContext->IASetPrimitiveTopology(D3D11_PRIMITIVE_TOPOLOGY_TRIANGLELIST);
+		numIndices = (UINT)m_gridMesh.triangles.size() * 3;
+		m_renderContext->IASetVertexBuffers(0, 1, m_gridMeshVertexBuffer.GetAddressOf(), strides, offsets);
+		m_renderContext->IASetIndexBuffer(m_gridMeshIndexBuffer.Get(), DXGI_FORMAT_R32_UINT, 0);
+
+		if (bUseDepthPass)
+		{
+			m_renderContext->VSSetShader(m_passthroughReadDepthVS.Get(), nullptr, 0);
+
+			if (stereoConf.StereoCutoutEnabled && mainConf.EnableTemporalFiltering)
+			{
+				m_renderContext->PSSetShader(m_stereoCompositeTemporalPS.Get(), nullptr, 0);
+			}
+			else if (stereoConf.StereoCutoutEnabled)
+			{
+				m_renderContext->PSSetShader(m_stereoCompositePS.Get(), nullptr, 0);
+			}
+		}
+		else if (bUseDisparityTemporalFiltering)
+		{
+			m_renderContext->VSSetShader(m_passthroughStereoTemporalVS.Get(), nullptr, 0);
+
+			m_renderContext->PSSetShader(mainConf.EnableTemporalFiltering ? m_passthroughTemporalPS.Get() : m_passthroughPS.Get(), nullptr, 0);
+		}
+		else
+		{
+			m_renderContext->VSSetShader(m_passthroughStereoVS.Get(), nullptr, 0);
+
+			m_renderContext->PSSetShader(mainConf.EnableTemporalFiltering ? m_passthroughTemporalPS.Get() : m_passthroughPS.Get(), nullptr, 0);
+		}
+	}
+	else
+	{
+		numIndices = (UINT)m_cylinderMesh.triangles.size() * 3;
+		m_renderContext->IASetVertexBuffers(0, 1, m_cylinderMeshVertexBuffer.GetAddressOf(), strides, offsets);
+		m_renderContext->IASetIndexBuffer(m_cylinderMeshIndexBuffer.Get(), DXGI_FORMAT_R32_UINT, 0);
+		m_renderContext->VSSetShader(m_passthroughVS.Get(), nullptr, 0);
+
+		m_renderContext->PSSetShader(mainConf.EnableTemporalFiltering ? m_passthroughTemporalPS.Get() : m_passthroughPS.Get(), nullptr, 0);
+	}
+
+
+	m_renderContext->DrawIndexed(numIndices, 0, 0);
+
+
+
+	// Draw the other stereo camera on occluded areas when using direct rendering. 
+	if (mainConf.ProjectionMode == Projection_StereoReconstruction && stereoConf.StereoCutoutEnabled && !bUseDepthPass)
+	{
+		float secondaryWidthFactor = 0.6f;
+		XrRect2Di rect = layer->views[viewIndex].subImage.imageRect;
+		int scissorStart = (eye == LEFT_EYE) ? (int)(rect.extent.width * (1.0f - secondaryWidthFactor)) : 0;
+		int scissorEnd = (eye == LEFT_EYE) ? rect.extent.width : (int)(rect.extent.width * secondaryWidthFactor);
+		D3D11_RECT crossScissor = { rect.offset.x + scissorStart, rect.offset.y, rect.offset.x + scissorEnd, rect.offset.y + rect.extent.height };
+		m_renderContext->RSSetScissorRects(1, &crossScissor);
+
+		VSViewConstantBuffer vsCrossBuffer = {};
+		vsCrossBuffer.worldToHMDProjection = (eye == LEFT_EYE) ? frame->worldToHMDProjectionLeft : frame->worldToHMDProjectionRight;
+		XrMatrix4x4f_Invert(&vsCrossBuffer.HMDProjectionToWorld, &vsCrossBuffer.worldToHMDProjection);
+		vsCrossBuffer.prevHMDFrame_WorldToHMDProjection = (eye == LEFT_EYE) ? frame->prevHMDFrame_WorldToHMDProjectionLeft : frame->prevHMDFrame_WorldToHMDProjectionRight;
+		vsCrossBuffer.prevCameraFrame_WorldToHMDProjection = (eye == LEFT_EYE) ? frame->prevCameraFrame_WorldToHMDProjectionLeft : frame->prevCameraFrame_WorldToHMDProjectionRight;
+		vsCrossBuffer.projectionOriginWorld = (eye == LEFT_EYE) ? frame->projectionOriginWorldLeft : frame->projectionOriginWorldRight;
+		vsCrossBuffer.projectionDistance = mainConf.ProjectionDistanceFar;
+		vsCrossBuffer.floorHeightOffset = mainConf.FloorHeightOffset;
+		vsCrossBuffer.cameraBlendWeight = 1.0;
+
+		vsCrossBuffer.disparityUVBounds = GetFrameUVBounds(eye == LEFT_EYE ? RIGHT_EYE : LEFT_EYE, StereoHorizontalLayout);
+		vsCrossBuffer.cameraViewIndex = (eye != LEFT_EYE) ? 0 : 1;
+		vsCrossBuffer.bWriteDisparityFilter = false;
+		m_renderContext->UpdateSubresource(viewData.vsViewConstantBuffer.Get(), 0, nullptr, &vsCrossBuffer, 0, 0);
+
+		PSViewConstantBuffer psCrossBuffer = {};
+		psCrossBuffer.rtArrayIndex = layer->views[viewIndex].subImage.imageArrayIndex;
+		psCrossBuffer.cameraViewIndex = viewIndex;
+		psCrossBuffer.bUseFullscreenQuad = false;
+
+		psCrossBuffer.frameUVBounds = GetFrameUVBounds(eye == LEFT_EYE ? RIGHT_EYE : LEFT_EYE, frame->frameLayout);
+		psCrossBuffer.bDoCutout = false;
+		psCrossBuffer.bPremultiplyAlpha = false;
+		m_renderContext->UpdateSubresource(viewData.psViewConstantBuffer.Get(), 0, nullptr, &psCrossBuffer, 0, 0);
+
+		m_renderContext->OMSetDepthStencilState(GET_DEPTH_STENCIL_STATE(bCompositeDepth, frame->bHasReversedDepth, false), 1);
+		m_renderContext->PSSetShader(m_passthroughPS.Get(), nullptr, 0);
+
+
+		m_renderContext->DrawIndexed(numIndices, 0, 0);
+	}
+}
+
+
+
+
+// Renders a background cylinder behind any gaps.
+void PassthroughRendererDX11::RenderBackgroundForView(const ERenderEye eye, const int32_t swapchainIndex, const int32_t depthSwapchainIndex, const XrCompositionLayerProjection* layer, CameraFrame* frame, std::shared_ptr<DepthFrame> depthFrame, EPassthroughBlendMode blendMode, UINT numIndices, FrameRenderParameters& renderParams)
+{
+	if (swapchainIndex < 0) { return; }
+
+	DX11FrameData& frameData = m_frameData[m_frameIndex];
+	DX11FrameData& prevFrameData = m_frameData[m_prevFrameIndex];
+	int viewIndex = (eye == LEFT_EYE) ? 0 : 1;
+
+	DX11ViewData& viewData = m_viewData[viewIndex][swapchainIndex];
+
+	ID3D11RenderTargetView* rendertarget = viewData.renderTarget.RTV.Get();
+	if (!rendertarget) { return; }
+
+	Config_Main& mainConf = m_configManager->GetConfig_Main();
+	Config_Stereo& stereoConf = m_configManager->GetConfig_Stereo();
+
+	ID3D11DepthStencilView* depthStencil = nullptr;
+
+	if (m_viewDepthData[viewIndex].size() > depthSwapchainIndex)
+	{
+		depthStencil = m_viewDepthData[viewIndex][depthSwapchainIndex].depthStencilView.Get();
+	}
+
+	Config_Depth& depthConfig = m_configManager->GetConfig_Depth();
+	bool bCompositeDepth = renderParams.bEnableDepthBlending && depthStencil != nullptr;
+	bool bWriteDepth = depthConfig.DepthWriteOutput && depthConfig.DepthReadFromApplication;
+
+	bool bUseDepthPass = mainConf.ProjectionMode == Projection_StereoReconstruction && stereoConf.StereoUseSeparateDepthPass;
+
+	// Reset constant buffers if the main pass changed them.
+	if ((mainConf.ProjectionMode == Projection_StereoReconstruction && stereoConf.StereoCutoutEnabled && !bUseDepthPass) ||
+		(stereoConf.StereoUseDisparityTemporalFiltering && depthFrame->bIsFirstRender))
+	{
+		RenderSetupView(eye, swapchainIndex, depthSwapchainIndex, layer, frame, depthFrame, blendMode, renderParams);
+	}
+		
+	if (mainConf.EnableTemporalFiltering)
+	{
+		ID3D11UnorderedAccessView* UAVs[1] = { m_cameraFilter[viewIndex][m_currentCameraFilterIndex].UAV.Get() };
+		m_renderContext->OMSetRenderTargetsAndUnorderedAccessViews(1, &rendertarget, depthStencil, 1, 1, UAVs, nullptr);
+	}
+	else
+	{
+		m_renderContext->OMSetRenderTargets(1, &rendertarget, depthStencil);
+	}
+
+	m_renderContext->IASetPrimitiveTopology(D3D11_PRIMITIVE_TOPOLOGY_TRIANGLELIST);
+
+	const UINT strides[] = { sizeof(float) * 3 };
+	const UINT offsets[] = { 0 };
+	m_renderContext->IASetVertexBuffers(0, 1, m_cylinderMeshVertexBuffer.GetAddressOf(), strides, offsets);
+	m_renderContext->IASetIndexBuffer(m_cylinderMeshIndexBuffer.Get(), DXGI_FORMAT_R32_UINT, 0);
+	m_renderContext->VSSetShader(m_passthroughVS.Get(), nullptr, 0);
+	m_renderContext->RSSetState(frame->bIsRenderingMirrored ? m_rasterizerStateDepthBiasMirrored.Get() : m_rasterizerStateDepthBias.Get());
+
+	m_renderContext->OMSetBlendState(m_blendStateDestAlpha.Get(), nullptr, UINT_MAX);
+
+	m_renderContext->OMSetDepthStencilState(GET_DEPTH_STENCIL_STATE(bCompositeDepth, frame->bHasReversedDepth, depthConfig.DepthWriteOutput && depthConfig.DepthReadFromApplication), 1);
+
+	m_renderContext->PSSetShader(m_passthroughPS.Get(), nullptr, 0);
+
+
+	m_renderContext->DrawIndexed((UINT)m_cylinderMesh.triangles.size() * 3, 0, 0);
 }
 
 

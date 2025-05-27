@@ -3,7 +3,6 @@
 #include "vs_outputs.hlsl"
 
 
-//[earlydepthstencil]
 float4 main(VS_OUTPUT input) : SV_TARGET
 {
     clip(input.projectionConfidence.x);

@@ -23,15 +23,14 @@ Texture2D<float2> g_fisheyeCorrectionTexture : register(t1);
 float main(VS_OUTPUT input) : SV_TARGET
 {	
 	float4 color;
-	
+    
     bool bInvertOutput = g_bMaskedInvert;
 
 	if (g_bMaskedUseCamera)
 	{
-		float2 outUvs = input.cameraReprojectedPos.xy / input.cameraReprojectedPos.w;
-		outUvs = outUvs * float2(0.5, 0.5) + float2(0.5, 0.5);
-		outUvs = outUvs * (g_uvBounds.zw - g_uvBounds.xy) + g_uvBounds.xy;
-		outUvs = clamp(outUvs, g_uvBounds.xy, g_uvBounds.zw);
+        float2 outUvs = Remap(input.cameraReprojectedPos.xy / input.cameraReprojectedPos.w, -1.0, 1.0, g_uvBounds.xy, g_uvBounds.zw);
+
+        outUvs = clamp(outUvs, g_uvBounds.xy, g_uvBounds.zw);
 
         if (g_bUseFisheyeCorrection)
         {
@@ -48,8 +47,7 @@ float main(VS_OUTPUT input) : SV_TARGET
     }
 	else
 	{
-		float2 outUvs = input.screenPos.xy / input.screenPos.w;
-		outUvs = outUvs * float2(0.5, -0.5) + float2(0.5, 0.5);
+        float2 outUvs = Remap(input.screenPos.xy / input.screenPos.w, float2(-1.0, -1.0), float2(1.0, 1.0), float2(0.0, 1.0), float2(1.0, 0.0));
 
         color = g_texture.Sample(g_samplerState, 
 			float3((outUvs * (g_uvPrepassBounds.zw - g_uvPrepassBounds.xy) + g_uvPrepassBounds.xy), float(g_arrayIndex)));
@@ -62,15 +60,6 @@ float main(VS_OUTPUT input) : SV_TARGET
 
 	float distChroma = smoothstep(fracChromaSqr, fracChromaSqr + pow(g_maskedSmooth, 2), (distChromaSqr.x + distChromaSqr.y));
 	float distLuma = smoothstep(g_maskedFracLuma, g_maskedFracLuma + g_maskedSmooth, abs(difference.x));
-	
-    float outAlpha = bInvertOutput ? 1.0 - max(distChroma, distLuma) : max(distChroma, distLuma);
-	
-	// TODO: Make this an option so that applications that produce an alpha channel can be masked out in additon to the chroma key
-    //if (!g_bMaskedUseCamera)
-    //{
-    //    outAlpha *= color.a;
-    //}
-	
-    return outAlpha;
-
+    
+    return bInvertOutput ? 1.0 - max(distChroma, distLuma) : max(distChroma, distLuma);
 }
