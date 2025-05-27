@@ -34,13 +34,6 @@ PS_Output main(VS_OUTPUT input)
     
     float2 projectionConfidence = cameraValidation.xy;
     float2 cameraBlendValidity = cameraValidation.zw;
-    
-    if (g_bUseDepthCutoffRange)
-    {
-        clip(depth - g_depthCutoffRange.x);
-        clip(g_depthCutoffRange.y - depth);
-    }
-    
 
     bool selectMainCamera = cameraBlendValidity.x >= cameraBlendValidity.y;      
     bool blendCameras = cameraBlendValidity.x > 0.1 && cameraBlendValidity.y > 0.1;
@@ -73,6 +66,13 @@ PS_Output main(VS_OUTPUT input)
     float4 crossWorldProjectionPos = mul(g_HMDProjectionToWorld, crossClipSpacePos);   
     float4 cameraCrossClipSpacePos = mul((g_cameraViewIndex == 0) ? g_worldToCameraFrameProjectionRight : g_worldToCameraFrameProjectionLeft, crossWorldProjectionPos);
     
+    if (g_bUseDepthCutoffRange)
+    {
+        float4 worldHMDEyePos = mul(g_HMDProjectionToWorld, float4(0, 0, 0, 1));
+        float depthMeters = distance(lerp(worldProjectionPos.xyz / worldProjectionPos.w, crossWorldProjectionPos.xyz / crossWorldProjectionPos.w, cameraBlend), worldHMDEyePos.xyz / worldHMDEyePos.w);
+        clip(depthMeters - g_depthCutoffRange.x);
+        clip(g_depthCutoffRange.y - depthMeters);
+    }   
 
 	// Convert from homogenous clip space coordinates to 0-1.
 	float2 outUvs = Remap(cameraClipSpacePos.xy / cameraClipSpacePos.w, -1.0, 1.0, 0.0, 1.0);

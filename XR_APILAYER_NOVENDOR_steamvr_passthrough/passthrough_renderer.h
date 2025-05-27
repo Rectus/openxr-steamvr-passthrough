@@ -151,6 +151,7 @@ struct alignas(16) PSPassConstantBuffer
 	uint32_t bIsFirstRenderOfCameraFrame;
 	uint32_t bUseDepthCutoffRange;
 	uint32_t bClampCameraFrame;
+	uint32_t bIsCutoutEnabled;
 };
 
 struct alignas(16) PSViewConstantBuffer
@@ -331,9 +332,21 @@ protected:
 	void UpdateRenderModels(CameraFrame* frame);
 
 	void RenderHoleFillCS(DX11FrameData& frameData, std::shared_ptr<DepthFrame> depthFrame);
-	void RenderPassthroughView(const ERenderEye eye, const int32_t swapchainIndex, const int32_t depthSwapchainIndex, const XrCompositionLayerProjection* layer, CameraFrame* frame, std::shared_ptr<DepthFrame> depthFrame, EPassthroughBlendMode blendMode, UINT numIndices, FrameRenderParameters& renderParams);
-	void RenderMaskedPrepassView(const ERenderEye eye, const int32_t swapchainIndex, int32_t depthSwapchainIndex, const XrCompositionLayerProjection* layer, CameraFrame* frame, std::shared_ptr<DepthFrame> depthFrame, UINT numIndices, FrameRenderParameters& renderParams);
+
+	void RenderSetupView(const ERenderEye eye, const int32_t swapchainIndex, int32_t depthSwapchainIndex, const XrCompositionLayerProjection* layer, CameraFrame* frame, std::shared_ptr<DepthFrame> depthFrame, EPassthroughBlendMode blendMode, FrameRenderParameters& renderParams);
+
 	void RenderDepthPrepassView(const ERenderEye eye, const int32_t swapchainIndex, int32_t depthSwapchainIndex, const XrCompositionLayerProjection* layer, CameraFrame* frame, std::shared_ptr<DepthFrame> depthFrame, UINT numIndices, FrameRenderParameters& renderParams);
+
+	void RenderMaskedPrepassView(const ERenderEye eye, const int32_t swapchainIndex, int32_t depthSwapchainIndex, const XrCompositionLayerProjection* layer, CameraFrame* frame, std::shared_ptr<DepthFrame> depthFrame, UINT numIndices, FrameRenderParameters& renderParams);
+	
+	void RenderAlphaPrepassView(const ERenderEye eye, const int32_t swapchainIndex, const int32_t depthSwapchainIndex, const XrCompositionLayerProjection* layer, CameraFrame* frame, std::shared_ptr<DepthFrame> depthFrame, EPassthroughBlendMode blendMode, UINT numIndices, FrameRenderParameters& renderParams);
+
+	void RenderViewModelsForView(const ERenderEye eye, const int32_t swapchainIndex, const int32_t depthSwapchainIndex, const XrCompositionLayerProjection* layer, CameraFrame* frame, std::shared_ptr<DepthFrame> depthFrame, EPassthroughBlendMode blendMode, UINT numIndices, FrameRenderParameters& renderParams);
+
+	void RenderPassthroughView(const ERenderEye eye, const int32_t swapchainIndex, const int32_t depthSwapchainIndex, const XrCompositionLayerProjection* layer, CameraFrame* frame, std::shared_ptr<DepthFrame> depthFrame, EPassthroughBlendMode blendMode, UINT numIndices, FrameRenderParameters& renderParams);
+
+	void RenderBackgroundForView(const ERenderEye eye, const int32_t swapchainIndex, const int32_t depthSwapchainIndex, const XrCompositionLayerProjection* layer, CameraFrame* frame, std::shared_ptr<DepthFrame> depthFrame, EPassthroughBlendMode blendMode, UINT numIndices, FrameRenderParameters& renderParams);
+
 	void RenderFrameFinish();
 
 	std::shared_ptr<ConfigManager> m_configManager;
@@ -369,18 +382,19 @@ protected:
 	ComPtr<ID3D11DepthStencilState> m_depthStencilStateGreaterWrite;
 	ComPtr<ID3D11DepthStencilState> m_depthStencilStateAlwaysWrite;
 
-	ComPtr<ID3D11ComputeShader> m_fillHolesComputeShader;
-	ComPtr<ID3D11VertexShader> m_fullscreenQuadShader;
-	ComPtr<ID3D11VertexShader> m_vertexShader;
-	ComPtr<ID3D11VertexShader> m_meshRigidVertexShader;
-	ComPtr<ID3D11VertexShader> m_stereoVertexShader;
-	ComPtr<ID3D11VertexShader> m_stereoTemporalVertexShader;
+	ComPtr<ID3D11ComputeShader> m_fillHolesCS;
+	ComPtr<ID3D11VertexShader> m_fullscreenQuadVS;
+	ComPtr<ID3D11VertexShader> m_passthroughVS;
+	ComPtr<ID3D11VertexShader> m_meshRigidVS;
+	ComPtr<ID3D11VertexShader> m_passthroughStereoVS;
+	ComPtr<ID3D11VertexShader> m_passthroughStereoTemporalVS;
 	ComPtr<ID3D11VertexShader> m_passthroughReadDepthVS;
-	ComPtr<ID3D11PixelShader> m_pixelShader;
-	ComPtr<ID3D11PixelShader> m_pixelShaderTemporal;
-	ComPtr<ID3D11PixelShader> m_prepassShader;
-	ComPtr<ID3D11PixelShader> m_maskedPrepassShader;
-	ComPtr<ID3D11PixelShader> m_maskedAlphaCopyShader;
+	ComPtr<ID3D11PixelShader> m_passthroughPS;
+	ComPtr<ID3D11PixelShader> m_passthroughTemporalPS;
+	ComPtr<ID3D11PixelShader> m_alphaPrepassPS;
+	ComPtr<ID3D11PixelShader> m_maskedAlphaPrepassPS;
+	ComPtr<ID3D11PixelShader> m_maskedAlphaPrepassFullscreenPS;
+	ComPtr<ID3D11PixelShader> m_maskedAlphaCopyPS;
 	ComPtr<ID3D11PixelShader> m_depthWritePS;
 	ComPtr<ID3D11PixelShader> m_depthWriteTemporalPS;
 	ComPtr<ID3D11PixelShader> m_stereoCompositePS;
@@ -693,12 +707,12 @@ private:
 	VkCommandPool m_commandPool;
 	VkCommandBuffer m_commandBuffer[NUM_SWAPCHAINS];
 
-	VkShaderModule m_fullscreenQuadShader;
-	VkShaderModule m_vertexShader;
-	VkShaderModule m_pixelShader;
-	VkShaderModule m_prepassShader;
+	VkShaderModule m_fullscreenQuadVS;
+	VkShaderModule m_passthroughVS;
+	VkShaderModule m_passthroughPS;
+	VkShaderModule m_alphaPrepassPS;
 	VkShaderModule m_maskedPrepassShader;
-	VkShaderModule m_maskedAlphaCopyShader;
+	VkShaderModule m_maskedAlphaCopyPS;
 
 	VkRenderPass m_renderpass;
 	VkRenderPass m_renderpassMaskedPrepass;

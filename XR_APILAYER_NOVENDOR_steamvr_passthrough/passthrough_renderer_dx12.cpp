@@ -721,14 +721,14 @@ void PassthroughRendererDX12::SetupIntermediateRenderTarget(uint32_t index, uint
 
 bool PassthroughRendererDX12::InitPipeline(bool bFlipTriangles)
 {
-	D3D12_SHADER_BYTECODE fullscreenQuadShaderVS = { g_FullscreenQuadShaderVS, sizeof(g_FullscreenQuadShaderVS) };
-	D3D12_SHADER_BYTECODE passthroughShaderVS = { g_PassthroughShaderVS, sizeof(g_PassthroughShaderVS) };
-	D3D12_SHADER_BYTECODE passthroughStereoShaderVS = { g_PassthroughStereoShaderVS, sizeof(g_PassthroughStereoShaderVS) };
+	D3D12_SHADER_BYTECODE fullscreenQuadVS = { g_FullscreenQuadVS, sizeof(g_FullscreenQuadVS) };
+	D3D12_SHADER_BYTECODE passthroughVS = { g_PassthroughVS, sizeof(g_PassthroughVS) };
+	D3D12_SHADER_BYTECODE passthroughStereoVS = { g_PassthroughStereoVS, sizeof(g_PassthroughStereoVS) };
 
-	D3D12_SHADER_BYTECODE alphaPrepassShaderPS = { g_AlphaPrepassShaderPS, sizeof(g_AlphaPrepassShaderPS) };
-	D3D12_SHADER_BYTECODE alphaPrepassMaskedShaderPS = { g_AlphaPrepassMaskedShaderPS, sizeof(g_AlphaPrepassMaskedShaderPS) };
-	D3D12_SHADER_BYTECODE passthroughShaderPS = { g_PassthroughShaderPS, sizeof(g_PassthroughShaderPS) };
-	D3D12_SHADER_BYTECODE alphaCopyMaskedShaderPS = { g_AlphaCopyMaskedShaderPS, sizeof(g_AlphaCopyMaskedShaderPS) };
+	D3D12_SHADER_BYTECODE alphaPrepassPS = { g_AlphaPrepassPS, sizeof(g_AlphaPrepassPS) };
+	D3D12_SHADER_BYTECODE alphaPrepassMaskedPS = { g_AlphaPrepassMaskedPS, sizeof(g_AlphaPrepassMaskedPS) };
+	D3D12_SHADER_BYTECODE passthroughPS = { g_PassthroughPS, sizeof(g_PassthroughPS) };
+	D3D12_SHADER_BYTECODE alphaCopyMaskedPS = { g_AlphaCopyMaskedPS, sizeof(g_AlphaCopyMaskedPS) };
 
 
 	D3D12_BLEND_DESC blendStateDestAlpha = {};
@@ -821,11 +821,11 @@ bool PassthroughRendererDX12::InitPipeline(bool bFlipTriangles)
 	psoDesc.DSVFormat = m_depthStencilFormat;
 	psoDesc.SampleDesc.Count = 1;
 	psoDesc.SampleDesc.Quality = 0;
-	psoDesc.VS = m_bUsingStereo ? passthroughStereoShaderVS : passthroughShaderVS;
+	psoDesc.VS = m_bUsingStereo ? passthroughStereoVS : passthroughVS;
 
 
 	psoDesc.DepthStencilState = depthStencilMain;
-	psoDesc.PS = passthroughShaderPS;
+	psoDesc.PS = passthroughPS;
 
 	if((m_blendMode == AlphaBlendPremultiplied && !m_bUsingDepth) || m_blendMode == Additive)
 	{
@@ -853,7 +853,7 @@ bool PassthroughRendererDX12::InitPipeline(bool bFlipTriangles)
 
 
 	psoDesc.DepthStencilState = depthStencilPrepass;
-	psoDesc.PS = m_blendMode == Masked ? alphaPrepassMaskedShaderPS : alphaPrepassShaderPS;
+	psoDesc.PS = m_blendMode == Masked ? alphaPrepassMaskedPS : alphaPrepassPS;
 
 	if (m_blendMode == Masked)
 	{
@@ -878,7 +878,7 @@ bool PassthroughRendererDX12::InitPipeline(bool bFlipTriangles)
 		return false;
 	}
 
-	psoDesc.VS = fullscreenQuadShaderVS;
+	psoDesc.VS = fullscreenQuadVS;
 	if (FAILED(m_d3dDevice->CreateGraphicsPipelineState(&psoDesc, IID_PPV_ARGS(&m_psoMaskedPrepassFullscreen))))
 	{
 		ErrorLog("Error creating prepass PSO.\n");
@@ -887,8 +887,8 @@ bool PassthroughRendererDX12::InitPipeline(bool bFlipTriangles)
 
 	psoDesc.DepthStencilState = depthStencilDisabled;
 	psoDesc.BlendState = blendStateSrcAlpha;
-	psoDesc.VS = fullscreenQuadShaderVS;
-	psoDesc.PS = alphaCopyMaskedShaderPS;
+	psoDesc.VS = fullscreenQuadVS;
+	psoDesc.PS = alphaCopyMaskedPS;
 	if (FAILED(m_d3dDevice->CreateGraphicsPipelineState(&psoDesc, IID_PPV_ARGS(&m_psoMaskedAlphaCopy))))
 	{
 		ErrorLog("Error creating masked alpha copy PSO.\n");
@@ -899,8 +899,8 @@ bool PassthroughRendererDX12::InitPipeline(bool bFlipTriangles)
 	psoDesc.DepthStencilState = depthStencilPrepass;
 	psoDesc.BlendState = blendStateDestAlpha;
 	psoDesc.RasterizerState.DepthBias = 16;
-	psoDesc.VS = passthroughShaderVS;
-	psoDesc.PS = passthroughShaderPS;
+	psoDesc.VS = passthroughVS;
+	psoDesc.PS = passthroughPS;
 	if (FAILED(m_d3dDevice->CreateGraphicsPipelineState(&psoDesc, IID_PPV_ARGS(&m_psoHoleFillPass))))
 	{
 		ErrorLog("Error creating hole fill PSO.\n");

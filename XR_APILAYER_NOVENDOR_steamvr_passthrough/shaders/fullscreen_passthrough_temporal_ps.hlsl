@@ -31,12 +31,6 @@ PS_Output main(VS_OUTPUT input)
     float4 cameraValidation = g_cameraValidation.Sample(g_samplerState, screenUvs);
     
     float projectionConfidence = cameraValidation.x;
-    
-    if (g_bUseDepthCutoffRange)
-    {
-        clip(depth - g_depthCutoffRange.x);
-        clip(g_depthCutoffRange.y - depth);
-    }  
 
     bool bIsDiscontinuityFiltered = false;
     bool bIsCrossDiscontinuityFiltered = false;
@@ -56,12 +50,13 @@ PS_Output main(VS_OUTPUT input)
 	// Convert from homogenous clip space coordinates to 0-1.
 	float2 outUvs = Remap(cameraClipSpacePos.xy / cameraClipSpacePos.w, -1.0, 1.0, 0.0, 1.0);
 
-    if (g_bClampCameraFrame)
+    if (g_bUseDepthCutoffRange)
     {
-        clip(cameraClipSpacePos.z);
-        clip(outUvs);
-        clip(1 - outUvs);
-    }
+        float4 worldHMDEyePos = mul(g_HMDProjectionToWorld, float4(0, 0, 0, 1));
+        float depthMeters = distance(worldProjectionPos.xyz / worldProjectionPos.w, worldHMDEyePos.xyz / worldHMDEyePos.w);
+        clip(depthMeters - g_depthCutoffRange.x);
+        clip(g_depthCutoffRange.y - depthMeters);
+    } 
     
     float2 correction = 0;
     

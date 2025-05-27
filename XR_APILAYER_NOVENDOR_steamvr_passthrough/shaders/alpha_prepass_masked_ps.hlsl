@@ -15,9 +15,6 @@ Texture2D<float2> g_fisheyeCorrectionTexture : register(t8);
 SamplerState g_samplerState : register(s0);
 Texture2DArray g_texture : register(t0);
 Texture2D<float2> g_fisheyeCorrectionTexture : register(t1);
-Texture2D<float4> g_cameraValidation : register(t2);
-Texture2D<float> g_depthMap : register(t3);
-Texture2D<float> g_crossDepthMap : register(t4);
 
 #endif
 
@@ -26,59 +23,14 @@ Texture2D<float> g_crossDepthMap : register(t4);
 float main(VS_OUTPUT input) : SV_TARGET
 {	
 	float4 color;
-	
+    
     bool bInvertOutput = g_bMaskedInvert;
 
 	if (g_bMaskedUseCamera)
 	{
-		float2 outUvs;
-        
-#ifndef VULKAN
-		if(g_bUseFullscreenQuad) // Get camera coordinates directly
-        {
-			float2 screenUvs = Remap(input.screenPos.xy, float2(-1.0, -1.0), float2(1.0, 1.0), float2(0.0, 1.0), float2(1.0, 0.0));
-    
-			float depth = g_depthMap.Sample(g_samplerState, screenUvs);
-            bool selectMainCamera = true;
-            
-			if(g_doCutout)
-            {  
-                float4 cameraValidation = g_cameraValidation.Sample(g_samplerState, screenUvs);
-                float2 cameraBlendValidity = cameraValidation.zw;
-				
-				bool selectMainCamera = cameraBlendValidity.x >= cameraBlendValidity.y;
-                
-                if(!selectMainCamera)
-                {
-                    depth = g_crossDepthMap.Sample(g_samplerState, screenUvs);
-                }
+        float2 outUvs = Remap(input.cameraReprojectedPos.xy / input.cameraReprojectedPos.w, -1.0, 1.0, g_uvBounds.xy, g_uvBounds.zw);
 
-            }
-            
-            float4 clipSpacePos = float4(input.screenPos.xy, depth, 1.0);  
-            float4 worldProjectionPos = mul(g_HMDProjectionToWorld, clipSpacePos);
-            float4 cameraClipSpacePos = mul((g_cameraViewIndex == 0) == selectMainCamera ? g_worldToCameraFrameProjectionLeft : g_worldToCameraFrameProjectionRight, worldProjectionPos);
-            
-	        outUvs = Remap(cameraClipSpacePos.xy / cameraClipSpacePos.w, -1.0, 1.0, 0.0, 1.0);
-            
-            if(selectMainCamera)
-            {
-                outUvs = Remap(outUvs, 0.0, 1.0, g_uvBounds.xy, g_uvBounds.zw);
-                outUvs = clamp(outUvs, g_uvBounds.xy, g_uvBounds.zw);
-            }
-            else
-            {
-                outUvs = Remap(outUvs, 0.0, 1.0, g_crossUVBounds.xy, g_crossUVBounds.zw);
-                outUvs = clamp(outUvs, g_crossUVBounds.xy, g_crossUVBounds.zw);
-            }
-        }
-		else  // Get camera coordinates from vertex shader
-#endif
-        {
-            outUvs = Remap(input.cameraReprojectedPos.xy / input.cameraReprojectedPos.w, -1.0, 1.0, 0.0, 1.0);
-            outUvs = Remap(outUvs, 0.0, 1.0, g_uvBounds.xy, g_uvBounds.zw);
-            outUvs = clamp(outUvs, g_uvBounds.xy, g_uvBounds.zw);
-        }
+        outUvs = clamp(outUvs, g_uvBounds.xy, g_uvBounds.zw);
 
         if (g_bUseFisheyeCorrection)
         {
@@ -108,9 +60,6 @@ float main(VS_OUTPUT input) : SV_TARGET
 
 	float distChroma = smoothstep(fracChromaSqr, fracChromaSqr + pow(g_maskedSmooth, 2), (distChromaSqr.x + distChromaSqr.y));
 	float distLuma = smoothstep(g_maskedFracLuma, g_maskedFracLuma + g_maskedSmooth, abs(difference.x));
-	
-    float outAlpha = bInvertOutput ? 1.0 - max(distChroma, distLuma) : max(distChroma, distLuma);
-	
-    return outAlpha;
-
+    
+    return bInvertOutput ? 1.0 - max(distChroma, distLuma) : max(distChroma, distLuma);
 }

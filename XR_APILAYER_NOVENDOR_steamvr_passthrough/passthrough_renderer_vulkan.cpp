@@ -184,11 +184,11 @@ PassthroughRendererVulkan::PassthroughRendererVulkan(const XrGraphicsBindingVulk
 	, m_cylinderMeshIndexBuffer(nullptr)
 	, m_cylinderMeshIndexBufferMem(nullptr)
 	, m_descriptorLayout(nullptr)
-	, m_vertexShader(nullptr)
-	, m_pixelShader(nullptr)
-	, m_prepassShader(nullptr)
+	, m_passthroughVS(nullptr)
+	, m_passthroughPS(nullptr)
+	, m_alphaPrepassPS(nullptr)
 	, m_maskedPrepassShader(nullptr)
-	, m_maskedAlphaCopyShader(nullptr)
+	, m_maskedAlphaCopyPS(nullptr)
 	, m_renderpass(nullptr)
 	, m_pipelineLayout(nullptr)
 	, m_pipelineDefault(nullptr)
@@ -304,25 +304,25 @@ bool PassthroughRendererVulkan::InitRenderer()
 		m_deletionQueue.push_back([=]() { vkDestroyCommandPool(m_device, m_commandPool, nullptr); });
 	}
 
-	m_fullscreenQuadShader = CreateShaderModule(g_FullscreenQuadShaderVS, ARRAYSIZE(g_FullscreenQuadShaderVS) * sizeof(g_FullscreenQuadShaderVS[0]));
-	m_deletionQueue.push_back([=]() { vkDestroyShaderModule(m_device, m_fullscreenQuadShader, nullptr); });
+	m_fullscreenQuadVS = CreateShaderModule(g_FullscreenQuadVS, ARRAYSIZE(g_FullscreenQuadVS) * sizeof(g_FullscreenQuadVS[0]));
+	m_deletionQueue.push_back([=]() { vkDestroyShaderModule(m_device, m_fullscreenQuadVS, nullptr); });
 
-	m_vertexShader = CreateShaderModule(g_PassthroughShaderVS, ARRAYSIZE(g_PassthroughShaderVS) * sizeof(g_PassthroughShaderVS[0]));
-	m_deletionQueue.push_back([=]() { vkDestroyShaderModule(m_device, m_vertexShader, nullptr); });
+	m_passthroughVS = CreateShaderModule(g_PassthroughVS, ARRAYSIZE(g_PassthroughVS) * sizeof(g_PassthroughVS[0]));
+	m_deletionQueue.push_back([=]() { vkDestroyShaderModule(m_device, m_passthroughVS, nullptr); });
 
-	m_pixelShader = CreateShaderModule(g_PassthroughShaderPS, ARRAYSIZE(g_PassthroughShaderPS) * sizeof(g_PassthroughShaderPS[0]));
-	m_deletionQueue.push_back([=]() { vkDestroyShaderModule(m_device, m_pixelShader, nullptr); });
+	m_passthroughPS = CreateShaderModule(g_PassthroughPS, ARRAYSIZE(g_PassthroughPS) * sizeof(g_PassthroughPS[0]));
+	m_deletionQueue.push_back([=]() { vkDestroyShaderModule(m_device, m_passthroughPS, nullptr); });
 
-	m_prepassShader = CreateShaderModule(g_AlphaPrepassShaderPS, ARRAYSIZE(g_AlphaPrepassShaderPS) * sizeof(g_AlphaPrepassShaderPS[0]));
-	m_deletionQueue.push_back([=]() { vkDestroyShaderModule(m_device, m_prepassShader, nullptr); });
+	m_alphaPrepassPS = CreateShaderModule(g_AlphaPrepassPS, ARRAYSIZE(g_AlphaPrepassPS) * sizeof(g_AlphaPrepassPS[0]));
+	m_deletionQueue.push_back([=]() { vkDestroyShaderModule(m_device, m_alphaPrepassPS, nullptr); });
 
-	m_maskedPrepassShader = CreateShaderModule(g_AlphaPrepassMaskedShaderPS, ARRAYSIZE(g_AlphaPrepassMaskedShaderPS) * sizeof(g_AlphaPrepassMaskedShaderPS[0]));
+	m_maskedPrepassShader = CreateShaderModule(g_AlphaPrepassMaskedPS, ARRAYSIZE(g_AlphaPrepassMaskedPS) * sizeof(g_AlphaPrepassMaskedPS[0]));
 	m_deletionQueue.push_back([=]() { vkDestroyShaderModule(m_device, m_maskedPrepassShader, nullptr); });
 
-	m_maskedAlphaCopyShader = CreateShaderModule(g_AlphaCopyMaskedShaderPS, ARRAYSIZE(g_AlphaCopyMaskedShaderPS) * sizeof(g_AlphaCopyMaskedShaderPS[0]));
-	m_deletionQueue.push_back([=]() { vkDestroyShaderModule(m_device, m_maskedAlphaCopyShader, nullptr); });
+	m_maskedAlphaCopyPS = CreateShaderModule(g_AlphaCopyMaskedPS, ARRAYSIZE(g_AlphaCopyMaskedPS) * sizeof(g_AlphaCopyMaskedPS[0]));
+	m_deletionQueue.push_back([=]() { vkDestroyShaderModule(m_device, m_maskedAlphaCopyPS, nullptr); });
 
-	if (!m_fullscreenQuadShader || !m_vertexShader || !m_pixelShader || !m_prepassShader || !m_maskedPrepassShader || !m_maskedAlphaCopyShader)
+	if (!m_fullscreenQuadVS || !m_passthroughVS || !m_passthroughPS || !m_alphaPrepassPS || !m_maskedPrepassShader || !m_maskedAlphaCopyPS)
 	{
 		ErrorLog("Shader module creation failure!\n");
 		return false;
@@ -737,22 +737,22 @@ bool PassthroughRendererVulkan::SetupPipeline(VkFormat format)
 	ms.rasterizationSamples = VK_SAMPLE_COUNT_1_BIT;
 
 	VkPipelineShaderStageCreateInfo shaderInfoFullscreenVS{ VK_STRUCTURE_TYPE_PIPELINE_SHADER_STAGE_CREATE_INFO };
-	shaderInfoFullscreenVS.module = m_fullscreenQuadShader;
+	shaderInfoFullscreenVS.module = m_fullscreenQuadVS;
 	shaderInfoFullscreenVS.stage = VK_SHADER_STAGE_VERTEX_BIT;
 	shaderInfoFullscreenVS.pName = "main";
 
 	VkPipelineShaderStageCreateInfo shaderInfoPassthroughVS{ VK_STRUCTURE_TYPE_PIPELINE_SHADER_STAGE_CREATE_INFO };
-	shaderInfoPassthroughVS.module = m_vertexShader;
+	shaderInfoPassthroughVS.module = m_passthroughVS;
 	shaderInfoPassthroughVS.stage = VK_SHADER_STAGE_VERTEX_BIT;
 	shaderInfoPassthroughVS.pName = "main";
 
 	VkPipelineShaderStageCreateInfo shaderInfoPassthroughFS{ VK_STRUCTURE_TYPE_PIPELINE_SHADER_STAGE_CREATE_INFO };
-	shaderInfoPassthroughFS.module = m_pixelShader;
+	shaderInfoPassthroughFS.module = m_passthroughPS;
 	shaderInfoPassthroughFS.stage = VK_SHADER_STAGE_FRAGMENT_BIT;
 	shaderInfoPassthroughFS.pName = "main";
 
 	VkPipelineShaderStageCreateInfo shaderInfoPrepassFS{ VK_STRUCTURE_TYPE_PIPELINE_SHADER_STAGE_CREATE_INFO };
-	shaderInfoPrepassFS.module = m_prepassShader;
+	shaderInfoPrepassFS.module = m_alphaPrepassPS;
 	shaderInfoPrepassFS.stage = VK_SHADER_STAGE_FRAGMENT_BIT;
 	shaderInfoPrepassFS.pName = "main";
 
@@ -762,7 +762,7 @@ bool PassthroughRendererVulkan::SetupPipeline(VkFormat format)
 	shaderInfoMaskedPrepassFS.pName = "main";
 
 	VkPipelineShaderStageCreateInfo shaderInfoMaskedPassthroughFS{ VK_STRUCTURE_TYPE_PIPELINE_SHADER_STAGE_CREATE_INFO };
-	shaderInfoMaskedPassthroughFS.module = m_maskedAlphaCopyShader;
+	shaderInfoMaskedPassthroughFS.module = m_maskedAlphaCopyPS;
 	shaderInfoMaskedPassthroughFS.stage = VK_SHADER_STAGE_FRAGMENT_BIT;
 	shaderInfoMaskedPassthroughFS.pName = "main";
 

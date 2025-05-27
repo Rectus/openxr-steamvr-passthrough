@@ -63,6 +63,7 @@ cbuffer psPassConstantBuffer : REGISTER_PSPASS
     bool g_bIsFirstRenderOfCameraFrame;
     bool g_bUseDepthCutoffRange;
     bool g_bClampCameraFrame;
+    bool g_bIsCutoutEnabled;
 };
 
 
