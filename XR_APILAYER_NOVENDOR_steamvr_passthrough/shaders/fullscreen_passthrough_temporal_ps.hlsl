@@ -33,7 +33,6 @@ PS_Output main(VS_OUTPUT input)
     float projectionConfidence = cameraValidation.x;
 
     bool bIsDiscontinuityFiltered = false;
-    bool bIsCrossDiscontinuityFiltered = false;
     
     [branch]
     if(g_depthContourStrength > 0)
@@ -146,11 +145,15 @@ PS_Output main(VS_OUTPUT input)
     }
     
     
-    float prevPixelDistanceFactor = clamp((abs(prevTexCoords.x - prevPixel.x - 0.5) + abs(prevTexCoords.y - prevPixel.y - 0.5)), 0.05, 1);
-
-    float finalHistoryFactor = clamp(min(projectionConfidence * 5.0, 1.0 - prevPixelDistanceFactor * 0.5), 0, g_temporalFilteringFactor);
+    float prevPixelDistanceFactor = clamp((abs(prevTexCoords.x - prevPixel.x - 0.5) + abs(prevTexCoords.y - prevPixel.y - 0.5)), 0.05, 1) / 2.0;
+    float combinedPixelDistanceBlend = lerp(pixelDistanceFactor, 1.0 - prevPixelDistanceFactor, g_temporalFilteringFactor);
     
-    if (projectionConfidence < 0.1 || bIsDiscontinuityFiltered || bIsCrossDiscontinuityFiltered) 
+    // If the current frame has a very close pixel, discard history.
+    if(pixelDistanceFactor < 0.01) { combinedPixelDistanceBlend = 0; }
+
+    float finalHistoryFactor = clamp(min(projectionConfidence * 5.0, combinedPixelDistanceBlend), 0.0, g_temporalFilteringFactor);
+    
+    if (projectionConfidence < 0.1 || bIsDiscontinuityFiltered) 
     { 
         finalHistoryFactor = 0; 
     }
@@ -211,12 +214,16 @@ PS_Output main(VS_OUTPUT input)
     {
         if (finalHistoryFactor >= g_temporalFilteringFactor)
         {
-            rgbColor.g += finalHistoryFactor;
+            rgbColor.g += 1.0;
+        }
+        else if (finalHistoryFactor <= 0.0)
+        {
+            rgbColor.r += 1.0;
         }
         else
         {
             rgbColor.b += finalHistoryFactor;
-        }
+        } 
     }
     else if (g_debugOverlay == 4) // Temporal clipping
     {
@@ -234,10 +241,6 @@ PS_Output main(VS_OUTPUT input)
         if (bIsDiscontinuityFiltered)
         {
             rgbColor.g += 1.0;
-        }
-        if (bIsCrossDiscontinuityFiltered)
-        {
-            rgbColor.b += 1.0;
         }
     }
     

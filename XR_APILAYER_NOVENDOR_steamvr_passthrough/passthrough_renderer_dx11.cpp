@@ -1681,12 +1681,10 @@ void PassthroughRendererDX11::RenderPassthroughFrame(const XrCompositionLayerPro
 
 	bool bRenderBackground = stereoConf.StereoDrawBackground && mainConf.ProjectionMode == Projection_StereoReconstruction && !stereoConf.StereoReconstructionFreeze && !renderParams.bEnableDepthRange && !m_configManager->GetConfig_Camera().ClampCameraFrame;
 
-	//bool bCompositeDepth = renderParams.bEnableDepthBlending && depthStencil != nullptr;
-
-	bool bRenderAlphaPrepass = blendMode != Masked &&
-		((blendMode != AlphaBlendPremultiplied && blendMode != AlphaBlendUnpremultiplied) ||
-			mainConf.PassthroughOpacity < 1.0f ||
-			renderParams.bEnableDepthBlending && !bUseDepthPass);
+	bool bRenderAlphaPrepass =
+		(blendMode == Opaque && !renderParams.bEnableDepthBlending) ||
+		(blendMode == Additive) ||
+		(blendMode != Masked && renderParams.bEnableDepthBlending && !bUseDepthPass);
 
 
 	// Render left eye
