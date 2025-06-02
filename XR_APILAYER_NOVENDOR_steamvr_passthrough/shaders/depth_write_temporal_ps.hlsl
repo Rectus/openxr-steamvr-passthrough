@@ -7,7 +7,44 @@
 
 SamplerState g_samplerState : register(s0);
 Texture2D<float> g_prevDepthMap : register(t0);
-Texture2D<float4> g_prevCameraValidation : register(t1);
+Texture2D<half4> g_prevCameraValidation : register(t1);
+
+
+float sobel_discontinuity_adjust(in Texture2D<float> depthTex, in SamplerState texSampler, in float depth, in float2 uvs, float2 texSize)
+{
+    float outDepth = depth;
+    
+    uint2 pixelPos = floor(saturate(uvs) * texSize);
+    
+    float dispU = depthTex.Load(int3(pixelPos + uint2(0, -1), 0));
+    float dispD = depthTex.Load(int3(pixelPos + uint2(0, 1), 0));
+    float dispL = depthTex.Load(int3(pixelPos + uint2(-1, 0), 0));
+    float dispR = depthTex.Load(int3(pixelPos + uint2(1, 0), 0));
+            
+    float dispUL = depthTex.Load(int3(pixelPos + uint2(-1, -1), 0));
+    float dispDL = depthTex.Load(int3(pixelPos + uint2(-1, 1), 0));
+    float dispUR = depthTex.Load(int3(pixelPos + uint2(1, -1), 0));
+    float dispDR = depthTex.Load(int3(pixelPos + uint2(1, 1), 0));
+    
+    float filterX = dispUL + dispL * 2 + dispDL - dispUR - dispR * 2 - dispDR; 
+    float filterY = dispUL + dispU * 2 + dispUR - dispDL - dispD * 2 - dispDR;
+    
+    float minDepth = min(depth, min(dispU, min(dispD, min(dispL, min(dispR, min(dispUL, min(dispDL, min(dispUR, dispDR))))))));
+    float maxDepth = max(depth, max(dispU, max(dispD, max(dispL, max(dispR, max(dispUL, max(dispDL, max(dispUR, dispDR))))))));
+    
+    float magnitude = length(float2(filterX, filterY));
+
+    if(magnitude > g_depthContourTreshold)
+    {
+        bool inForeground = ((maxDepth - depth) > (depth - minDepth));
+
+        float offsetFactor = saturate(g_depthContourStrength * 10.0 * magnitude);
+        
+        outDepth = lerp(depth, inForeground ? minDepth : maxDepth, offsetFactor);
+    }
+    return outDepth;
+}
+
 
 float4 main(VS_OUTPUT input, out float outDepth : SV_Depth ) : SV_Target
 {
@@ -23,9 +60,15 @@ float4 main(VS_OUTPUT input, out float outDepth : SV_Depth ) : SV_Target
 		
 		bool bPrevUVsValid = prevScreenUvs.x >= 0.0 && prevScreenUvs.y >= 0.0 && prevScreenUvs.x <= 1.0 && prevScreenUvs.y <= 1.0;
 		
-		float prevDepth = g_prevDepthMap.SampleLevel(g_samplerState, prevScreenUvs, 0);
-		float4 prevValid4 = g_prevCameraValidation.SampleLevel(g_samplerState, prevScreenUvs, 0);
+		float2 historyTextureSize;
+		g_prevDepthMap.GetDimensions(historyTextureSize.x, historyTextureSize.y);
 		
+		float prevDepth = bicubic_b_spline_4tap(g_prevDepthMap, g_samplerState, prevScreenUvs, historyTextureSize);
+		float4 prevValid4 = bicubic_b_spline_4tap(g_prevCameraValidation, g_samplerState, prevScreenUvs, historyTextureSize);
+        
+        // Create sharp edges so that the discontinuity adjust in the main pass works properly.
+        prevDepth = sobel_discontinuity_adjust(g_prevDepthMap, g_samplerState, prevDepth, prevScreenUvs, historyTextureSize);
+        
 		float prevProjectionConfidence = g_doCutout ? prevValid4.y : prevValid4.x;
 		float prevBlendConfidence = g_doCutout ? prevValid4.w : prevValid4.z;
 		
@@ -33,7 +76,7 @@ float4 main(VS_OUTPUT input, out float outDepth : SV_Depth ) : SV_Target
 		
 		if(bPrevUVsValid && prevProjectionConfidence >= outProjectionConfidence && depthDiff <= g_depthTemporalFilterDistance)
         {
-			float lerpFactor = min(g_depthTemporalFilterFactor, 0.9999);
+			float lerpFactor = min(g_depthTemporalFilterFactor, 1.0);//0.9999);
 			outDepth = lerp(outDepth, prevDepth, lerpFactor);
 			outProjectionConfidence = lerp(outProjectionConfidence, prevProjectionConfidence, lerpFactor);
 			
