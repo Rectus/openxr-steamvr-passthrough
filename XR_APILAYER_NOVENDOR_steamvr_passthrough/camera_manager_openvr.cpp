@@ -726,6 +726,8 @@ void CameraManagerOpenVR::UpdateRenderModels()
     vr::IVRSystem* vrSystem = m_openVRManager->GetVRSystem();
     vr::IVRRenderModels* vrRenderModels = m_openVRManager->GetVRRenderModels();
 
+    static char modelName[vr::k_unMaxPropertyStringSize];
+
     for (int i = 1; i < vr::k_unMaxTrackedDeviceCount; i++)
     {
         if (!vrSystem->IsTrackedDeviceConnected(i))
@@ -733,11 +735,8 @@ void CameraManagerOpenVR::UpdateRenderModels()
             break;
         }
 
-        std::string modelName;
-        modelName.resize(vr::k_unMaxPropertyStringSize);
-
         vr::TrackedPropertyError error;
-        uint32_t numBytes = m_openVRManager->GetVRSystem()->GetStringTrackedDeviceProperty(i, vr::Prop_RenderModelName_String, modelName.data(), vr::k_unMaxPropertyStringSize, &error);
+        uint32_t numBytes = m_openVRManager->GetVRSystem()->GetStringTrackedDeviceProperty(i, vr::Prop_RenderModelName_String, modelName, vr::k_unMaxPropertyStringSize, &error);
 
         bool bFoundModel = false;
 
@@ -745,13 +744,13 @@ void CameraManagerOpenVR::UpdateRenderModels()
         {
             if (model.deviceId == i)
             {
-                if (strncmp(model.modelName.data(), modelName.data(), vr::k_unMaxPropertyStringSize) != 0)
+                if (strncmp(model.modelName.data(), modelName, numBytes) != 0)
                 {
                     vr::RenderModel_t* newModel;
 
-                    if (vrRenderModels->LoadRenderModel_Async(modelName.data(), &newModel) == vr::VRRenderModelError_None)
+                    if (vrRenderModels->LoadRenderModel_Async(modelName, &newModel) == vr::VRRenderModelError_None)
                     {
-                        model.modelName = modelName.data();
+                        model.modelName = modelName;
                         MeshCreateRenderModel(model.mesh, newModel);
                     }
                 }
@@ -765,7 +764,7 @@ void CameraManagerOpenVR::UpdateRenderModels()
         {
             vr::RenderModel_t* newModel;
 
-            if (vrRenderModels->LoadRenderModel_Async(modelName.data(), &newModel) == vr::VRRenderModelError_None)
+            if (vrRenderModels->LoadRenderModel_Async(modelName, &newModel) == vr::VRRenderModelError_None)
             {
                 RenderModel rm;
                 rm.deviceId = i;
