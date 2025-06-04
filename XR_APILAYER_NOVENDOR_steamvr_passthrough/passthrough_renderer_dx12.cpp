@@ -1165,6 +1165,7 @@ void PassthroughRendererDX12::RenderPassthroughFrame(const XrCompositionLayerPro
 		vsPassBuffer->cutoutOffset = stereoConf.StereoCutoutOffset;
 		vsPassBuffer->cutoutFilterWidth = stereoConf.StereoCutoutFilterWidth;
 		vsPassBuffer->disparityFilterWidth = stereoConf.StereoDisparityFilterWidth;
+		vsPassBuffer->disparityFilterConfidenceCutout = stereoConf.StereoDisparityFilterConfidenceCutout;
 		vsPassBuffer->bProjectBorders = !stereoConf.StereoReconstructionFreeze;
 		vsPassBuffer->bFindDiscontinuities = stereoConf.StereoCutoutEnabled;
 	}

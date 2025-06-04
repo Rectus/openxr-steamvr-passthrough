@@ -743,9 +743,6 @@ if (bIsActiveTab) { ImGui::PopStyleColor(1); bIsActiveTab = false; }
 			ImGui::Checkbox("Composite Both Cameras for Each Eye", &stereoCustomConfig.StereoCutoutEnabled);
 			TextDescriptionSpaced("Detects areas occluded to the main camera and renders them with the other camera where possible.");
 
-			ImGui::Checkbox("Separate Depth Pass", &stereoCustomConfig.StereoUseSeparateDepthPass);
-			TextDescriptionSpaced("Enables a separate render pass generating passthrough depth maps for features that benefit from it, such as Composite Both Cameras for Each Eye.");
-
 			IMGUI_BIG_SPACING;
 		}
 
@@ -769,6 +766,8 @@ if (bIsActiveTab) { ImGui::PopStyleColor(1); bIsActiveTab = false; }
 			if (ImGui::TreeNode("Projection"))
 			{
 				ImGui::Spacing();
+				ImGui::Checkbox("Separate Depth Pass", &stereoCustomConfig.StereoUseSeparateDepthPass);
+				TextDescriptionSpaced("Enables a separate render pass generating passthrough depth maps for features that benefit from it, such as Composite Both Cameras for Each Eye.");
 				BeginSoftDisabled(!stereoCustomConfig.StereoUseSeparateDepthPass);
 				ImGui::Checkbox("Use Fullscreen Draw Pass", &stereoCustomConfig.StereoUseFullscreenPass);
 				TextDescription("Use a more effective main pass that does everything in the pixel shader.");
@@ -788,6 +787,10 @@ if (bIsActiveTab) { ImGui::PopStyleColor(1); bIsActiveTab = false; }
 				ScrollableSliderInt("Depth Map Scale", &stereoCustomConfig.StereoDepthMapScale, 1, 4, "%d", 1);
 				TextDescriptionSpaced("Scale of generated depth maps releative to the proecessed disparity maps.");
 				EndSoftDisabled(!stereoCustomConfig.StereoUseSeparateDepthPass);
+
+				ImGui::SetNextItemWidth(ImGui::GetContentRegionAvail().x * 0.45f);
+				ScrollableSlider("Disparity Smoothing Confidence Cutout", &stereoCustomConfig.StereoDisparityFilterConfidenceCutout, 0.0f, 1.0f, "%.2f", 0.01f);
+				TextDescriptionSpaced("Maximum confidence for applying disparity smoothing. Setting this to 1 will always apply smoothing.");
 
 				IMGUI_BIG_SPACING;
 				ImGui::PushItemWidth(ImGui::GetContentRegionAvail().x * 0.45f);

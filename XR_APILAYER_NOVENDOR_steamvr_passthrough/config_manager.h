@@ -558,6 +558,7 @@ struct Config_Stereo
 	bool StereoUseFullscreenPass = true;
 	int StereoFrameSkip = 0;
 	int StereoDownscaleFactor = 3;
+
 	bool StereoUseDisparityTemporalFiltering = false;
 	float StereoDisparityTemporalFilteringStrength = 0.9f;
 	float StereoDisparityTemporalFilteringDistance = 0.5f;
@@ -565,6 +566,7 @@ struct Config_Stereo
 
 	bool StereoDisparityBothEyes = true;
 	int StereoDisparityFilterWidth = 0;
+	float StereoDisparityFilterConfidenceCutout = 0.5f;
 	bool StereoCutoutEnabled = false;
 	float StereoCutoutFactor = 3.0f;
 	float StereoCutoutOffset = 1.0f;
@@ -624,6 +626,7 @@ struct Config_Stereo
 		StereoCutoutFactor = (float)ini.GetDoubleValue(section, "StereoCutoutFactor", StereoCutoutFactor);
 		StereoCutoutOffset = (float)ini.GetDoubleValue(section, "StereoCutoutOffset", StereoCutoutOffset);
 		StereoDisparityFilterWidth = (int)ini.GetLongValue(section, "StereoDisparityFilterWidth", StereoDisparityFilterWidth);
+		StereoDisparityFilterConfidenceCutout = (float)ini.GetDoubleValue(section, "StereoDisparityFilterConfidenceCutout", StereoDisparityFilterConfidenceCutout);
 		StereoCutoutFilterWidth = (float)ini.GetDoubleValue(section, "StereoCutoutFilterWidth", StereoCutoutFilterWidth);
 		StereoCutoutCombineFactor = (float)ini.GetDoubleValue(section, "StereoCutoutCombineFactor", StereoCutoutCombineFactor);
 		StereoCutoutSecondaryCameraWeight = (float)ini.GetDoubleValue(section, "StereoCutoutSecondaryCameraWeight", StereoCutoutSecondaryCameraWeight);
@@ -681,6 +684,7 @@ struct Config_Stereo
 		ini.SetDoubleValue(section, "StereoCutoutFactor", StereoCutoutFactor);
 		ini.SetDoubleValue(section, "StereoCutoutOffset", StereoCutoutOffset);
 		ini.SetLongValue(section, "StereoDisparityFilterWidth", StereoDisparityFilterWidth);
+		ini.SetDoubleValue(section, "StereoDisparityFilterConfidenceCutout", StereoDisparityFilterConfidenceCutout);
 		ini.SetDoubleValue(section, "StereoCutoutFilterWidth", StereoCutoutFilterWidth);
 		ini.SetDoubleValue(section, "StereoCutoutCombineFactor", StereoCutoutCombineFactor);
 		ini.SetDoubleValue(section, "StereoCutoutSecondaryCameraWeight", StereoCutoutSecondaryCameraWeight);

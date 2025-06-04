@@ -91,6 +91,7 @@ struct alignas(16) VSPassConstantBuffer
 	float cutoutOffset;
 	float cutoutFilterWidth;
 	int32_t disparityFilterWidth;
+	float disparityFilterConfidenceCutout;
 	uint32_t bProjectBorders;
 	uint32_t bFindDiscontinuities;
 	uint32_t bUseDisparityTemporalFilter;
