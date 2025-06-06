@@ -761,7 +761,7 @@ public:
 	ConfigManager(std::wstring configFile);
 	~ConfigManager();
 
-	void ReadConfigFile();
+	bool ReadConfigFile();
 	void ConfigUpdated();
 	void DispatchUpdate();
 	void ResetToDefaults();

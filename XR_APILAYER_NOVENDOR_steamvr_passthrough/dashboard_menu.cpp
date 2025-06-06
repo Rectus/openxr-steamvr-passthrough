@@ -411,7 +411,7 @@ if (bIsActiveTab) { ImGui::PopStyleColor(1); bIsActiveTab = false; }
 
 			if (mainConfig.CameraProvider == CameraProvider_OpenCV && cameraConfig.CameraFrameLayout == Mono) { ImGui::BeginDisabled(); }
 
-			if (ImGui::RadioButton("3D Stereo (Experimental)", mainConfig.ProjectionMode == Projection_StereoReconstruction))
+			if (ImGui::RadioButton("3D Stereo", mainConfig.ProjectionMode == Projection_StereoReconstruction))
 			{
 				mainConfig.ProjectionMode = Projection_StereoReconstruction;
 			}
@@ -419,7 +419,7 @@ if (bIsActiveTab) { ImGui::PopStyleColor(1); bIsActiveTab = false; }
 
 			if (mainConfig.CameraProvider == CameraProvider_OpenCV && cameraConfig.CameraFrameLayout == Mono) { ImGui::EndDisabled(); }
 
-			ImGui::Checkbox("Project onto Render Models (Experimental)", &mainConfig.ProjectToRenderModels);
+			ImGui::Checkbox("Project onto Render Models", &mainConfig.ProjectToRenderModels);
 			TextDescriptionSpaced("Project the passthough view to the correct distance on render models, such as controllers. Requires good camera calibration.");
 
 			ImGui::SetNextItemOpen(true, ImGuiCond_Once);
@@ -436,7 +436,7 @@ if (bIsActiveTab) { ImGui::PopStyleColor(1); bIsActiveTab = false; }
 
 				IMGUI_BIG_SPACING;
 
-				ImGui::Checkbox("Enable Temporal Filter (Experimental)", &mainConfig.EnableTemporalFiltering);
+				ImGui::Checkbox("Enable Temporal Filter", &mainConfig.EnableTemporalFiltering);
 				TextDescriptionSpaced("Improves image quality by removing noise and flickering, and sharpening it. Possibly slightly increases image resolution. Expensive on the GPU.");
 
 				if (ImGui::CollapsingHeader("Advanced"))

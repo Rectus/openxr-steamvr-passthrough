@@ -172,7 +172,7 @@ namespace
 			PathCchAppend((PWSTR)filePath.data(), PATHCCH_MAX_CCH, CONFIG_FILE_NAME);
 
 			m_configManager = std::make_shared<ConfigManager>(filePath);
-			m_configManager->ReadConfigFile();
+			m_bIsInitialConfig = m_configManager->ReadConfigFile();
 
 
 			// Check that the SteamVR OpenXR runtime is being used.
@@ -501,6 +501,19 @@ namespace
 					ErrorLog("Failed to initialize camera!\n");
 					return false;
 				}
+
+				if (m_bIsInitialConfig)
+				{
+					m_bIsInitialConfig = false;
+
+					// Default to stereo mode if we have a compatible headset.
+					// TODO: Just checks for the fisheye model at the moment, whitelist of known models would be better.
+					if (m_cameraManager->GetFrameLayout() != Mono && m_cameraManager->IsUsingFisheyeModel())
+					{
+						m_configManager->GetConfig_Main().ProjectionMode = Projection_StereoReconstruction;
+					}
+				}
+
 				MenuDisplayValues& vals = m_dashboardMenu->GetDisplayValues();
 				m_cameraManager->GetCameraDisplayStats(vals.CameraFrameWidth, vals.CameraFrameHeight, vals.CameraFrameRate, vals.CameraAPI);
 
@@ -1481,6 +1494,7 @@ namespace
 		bool m_bEnableVulkan2Extension = false;
 		bool m_bDepthSupportedByRenderer = false;
 		bool m_bBeginframeCalled = false;
+		bool m_bIsInitialConfig = false;
 
 		XrSwapchain m_swapChainLeft{XR_NULL_HANDLE};
 		XrSwapchain m_swapChainRight{XR_NULL_HANDLE};

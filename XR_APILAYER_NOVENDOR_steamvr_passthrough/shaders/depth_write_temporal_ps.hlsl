@@ -58,7 +58,13 @@ float4 main(VS_OUTPUT input, out float outDepth : SV_Depth ) : SV_Target
     {
 		float2 prevScreenUvs = Remap(input.prevHMDFrameScreenPos.xy / input.prevHMDFrameScreenPos.w, float2(-1.0, -1.0), float2(1.0, 1.0), float2(0.0, 1.0), float2(1.0, 0.0));
 		
-		bool bPrevUVsValid = prevScreenUvs.x >= 0.0 && prevScreenUvs.y >= 0.0 && prevScreenUvs.x <= 1.0 && prevScreenUvs.y <= 1.0;
+        float borderRejectSize = 0.01;
+        
+		bool bPrevUVsValid = 
+            prevScreenUvs.x > borderRejectSize && 
+            prevScreenUvs.y > borderRejectSize && 
+            prevScreenUvs.x < 1.0 - borderRejectSize && 
+            prevScreenUvs.y < 1.0 - borderRejectSize;
 		
 		float2 historyTextureSize;
 		g_prevDepthMap.GetDimensions(historyTextureSize.x, historyTextureSize.y);
@@ -72,14 +78,13 @@ float4 main(VS_OUTPUT input, out float outDepth : SV_Depth ) : SV_Target
 		float prevProjectionConfidence = g_doCutout ? prevValid4.y : prevValid4.x;
 		float prevBlendConfidence = g_doCutout ? prevValid4.w : prevValid4.z;
 		
-		float depthDiff = abs((prevDepth - input.position.z) / (g_depthRange.y - g_depthRange.x));
+		float depthDiff = abs((prevDepth - input.position.z) * (g_depthRange.y - g_depthRange.x));
 		
-		if(bPrevUVsValid && prevProjectionConfidence >= outProjectionConfidence && depthDiff <= g_depthTemporalFilterDistance)
+		if(bPrevUVsValid && prevProjectionConfidence >= outProjectionConfidence && prevDepth > 0 && depthDiff <= g_depthTemporalFilterDistance)
         {
-			float lerpFactor = min(g_depthTemporalFilterFactor, 1.0);//0.9999);
+			float lerpFactor = g_depthTemporalFilterFactor;
 			outDepth = lerp(outDepth, prevDepth, lerpFactor);
 			outProjectionConfidence = lerp(outProjectionConfidence, prevProjectionConfidence, lerpFactor);
-			
 			outBlendValidity = lerp(input.cameraBlendConfidence.x, prevBlendConfidence, lerpFactor);
         }
     }
