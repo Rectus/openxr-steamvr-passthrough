@@ -69,7 +69,11 @@ namespace LAYER_NAMESPACE {
         }
 
         // The list of extensions to remove or implicitly add.
-        std::vector<std::string> blockedExtensions = { XR_VARJO_COMPOSITION_LAYER_DEPTH_TEST_EXTENSION_NAME, XR_VARJO_ENVIRONMENT_DEPTH_ESTIMATION_EXTENSION_NAME };
+        std::vector<std::string> blockedExtensions = { 
+            XR_EXT_COMPOSITION_LAYER_INVERTED_ALPHA_EXTENSION_NAME,
+            XR_VARJO_COMPOSITION_LAYER_DEPTH_TEST_EXTENSION_NAME, 
+            XR_VARJO_ENVIRONMENT_DEPTH_ESTIMATION_EXTENSION_NAME };
+
         std::vector<std::string> implicitExtensions = { XR_KHR_WIN32_CONVERT_PERFORMANCE_COUNTER_TIME_EXTENSION_NAME };
 
         // Only request implicit extensions that are supported.

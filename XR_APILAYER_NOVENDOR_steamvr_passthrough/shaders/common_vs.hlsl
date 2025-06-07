@@ -39,6 +39,7 @@ cbuffer vsPassConstantBuffer : register(b1)
     float g_cutoutOffset;
     float g_cutoutFilterWidth;
     int g_disparityFilterWidth;
+    float g_disparityFilterConfidenceCutout;
     bool g_bProjectBorders;
     bool g_bFindDiscontinuities;
     bool g_bUseDisparityTemporalFilter;

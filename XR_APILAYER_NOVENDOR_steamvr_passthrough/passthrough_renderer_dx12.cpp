@@ -1060,7 +1060,7 @@ void PassthroughRendererDX12::GenerateDepthMesh(uint32_t width, uint32_t height)
 
 
 
-void PassthroughRendererDX12::RenderPassthroughFrame(const XrCompositionLayerProjection* layer, CameraFrame* frame, EPassthroughBlendMode blendMode, int leftSwapchainIndex, int rightSwapchainIndex, int leftDepthSwapchainIndex, int rightDepthSwapchainIndex, std::shared_ptr<DepthFrame> depthFrame, UVDistortionParameters& distortionParams, FrameRenderParameters& renderParams)
+void PassthroughRendererDX12::RenderPassthroughFrame(const XrCompositionLayerProjection* layer, CameraFrame* frame, FrameRenderParameters& renderParams, std::shared_ptr<DepthFrame> depthFrame, UVDistortionParameters& distortionParams)
 {
 	Config_Main& mainConf = m_configManager->GetConfig_Main();
 	Config_Core& coreConf = m_configManager->GetConfig_Core();
@@ -1076,9 +1076,9 @@ void PassthroughRendererDX12::RenderPassthroughFrame(const XrCompositionLayerPro
 	bool bDepthWrtite = depthConf.DepthWriteOutput && depthConf.DepthReadFromApplication;
 	bool bUseReversedDepth = (m_blendMode == Masked) ? coreConf.CoreForceMaskedUseCameraImage == frame->bHasReversedDepth : frame->bHasReversedDepth;
 
-	if (!m_psoMainPass.Get() || m_blendMode != blendMode || m_bUsingStereo != (mainConf.ProjectionMode == Projection_StereoReconstruction) || m_bUsingDepth != bCompositeDepth || m_bUsingReversedDepth != bUseReversedDepth || m_bWriteDepth != bDepthWrtite)
+	if (!m_psoMainPass.Get() || m_blendMode != renderParams.BlendMode || m_bUsingStereo != (mainConf.ProjectionMode == Projection_StereoReconstruction) || m_bUsingDepth != bCompositeDepth || m_bUsingReversedDepth != bUseReversedDepth || m_bWriteDepth != bDepthWrtite)
 	{
-		m_blendMode = blendMode;
+		m_blendMode = renderParams.BlendMode;
 		m_bUsingStereo = (mainConf.ProjectionMode == Projection_StereoReconstruction);
 		m_bUsingDepth = bCompositeDepth;
 		m_bUsingReversedDepth = bUseReversedDepth;
@@ -1165,6 +1165,7 @@ void PassthroughRendererDX12::RenderPassthroughFrame(const XrCompositionLayerPro
 		vsPassBuffer->cutoutOffset = stereoConf.StereoCutoutOffset;
 		vsPassBuffer->cutoutFilterWidth = stereoConf.StereoCutoutFilterWidth;
 		vsPassBuffer->disparityFilterWidth = stereoConf.StereoDisparityFilterWidth;
+		vsPassBuffer->disparityFilterConfidenceCutout = stereoConf.StereoDisparityFilterConfidenceCutout;
 		vsPassBuffer->bProjectBorders = !stereoConf.StereoReconstructionFreeze;
 		vsPassBuffer->bFindDiscontinuities = stereoConf.StereoCutoutEnabled;
 	}
@@ -1313,7 +1314,7 @@ void PassthroughRendererDX12::RenderPassthroughFrame(const XrCompositionLayerPro
 	m_commandList->SetGraphicsRootDescriptorTable(0, passCBVHandle);
 
 
-	if (blendMode == Masked)
+	if (renderParams.BlendMode == Masked)
 	{
 		PSMaskedConstantBuffer* maskedBuffer = (PSMaskedConstantBuffer*)m_psMaskedConstantBufferCPUData[m_frameIndex];
 		maskedBuffer->maskedKey[0] = powf(coreConf.CoreForceMaskedKeyColor[0], 2.2f);
@@ -1329,15 +1330,15 @@ void PassthroughRendererDX12::RenderPassthroughFrame(const XrCompositionLayerPro
 		maskedCBVHandle.ptr += (INDEX_CBV_PS_MASKED_0 + m_frameIndex) * m_CBVSRVHeapDescSize;
 		m_commandList->SetGraphicsRootDescriptorTable(2, maskedCBVHandle);
 
-		RenderMaskedPrepassView(LEFT_EYE, leftSwapchainIndex, layer, frame, numIndices);
-		RenderPassthroughView(LEFT_EYE, leftSwapchainIndex, layer, frame, blendMode, numIndices);
-		RenderMaskedPrepassView(RIGHT_EYE, rightSwapchainIndex, layer, frame, numIndices);
-		RenderPassthroughView(RIGHT_EYE, rightSwapchainIndex, layer, frame, blendMode, numIndices);
+		RenderMaskedPrepassView(LEFT_EYE, renderParams.LeftFrameIndex, layer, frame, numIndices);
+		RenderPassthroughView(LEFT_EYE, renderParams.LeftFrameIndex, layer, frame, renderParams.BlendMode, numIndices);
+		RenderMaskedPrepassView(RIGHT_EYE, renderParams.RightFrameIndex, layer, frame, numIndices);
+		RenderPassthroughView(RIGHT_EYE, renderParams.RightFrameIndex, layer, frame, renderParams.BlendMode, numIndices);
 	}
 	else
 	{
-		RenderPassthroughView(LEFT_EYE, leftSwapchainIndex, layer, frame, blendMode, numIndices);
-		RenderPassthroughView(RIGHT_EYE, rightSwapchainIndex, layer, frame, blendMode, numIndices);
+		RenderPassthroughView(LEFT_EYE, renderParams.LeftFrameIndex, layer, frame, renderParams.BlendMode, numIndices);
+		RenderPassthroughView(RIGHT_EYE, renderParams.RightFrameIndex, layer, frame, renderParams.BlendMode, numIndices);
 	}
 	RenderFrameFinish();
 }

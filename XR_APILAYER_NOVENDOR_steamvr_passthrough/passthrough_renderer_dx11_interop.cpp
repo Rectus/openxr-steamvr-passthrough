@@ -804,10 +804,10 @@ void VulkanCopyImages(VkCommandBuffer commandBuffer, std::vector<ImageCopyData>&
 }
 
 
-void PassthroughRendererDX11Interop::RenderPassthroughFrame(const XrCompositionLayerProjection* layer, CameraFrame* frame, EPassthroughBlendMode blendMode, int leftSwapchainIndex, int rightSwapchainIndex, int leftDepthSwapchainIndex, int rightDepthSwapchainIndex, std::shared_ptr<DepthFrame> depthFrame, UVDistortionParameters& distortionParams, FrameRenderParameters& renderParams)
+void PassthroughRendererDX11Interop::RenderPassthroughFrame(const XrCompositionLayerProjection* layer, CameraFrame* frame, FrameRenderParameters& renderParams, std::shared_ptr<DepthFrame> depthFrame, UVDistortionParameters& distortionParams)
 {
-	DX11ViewData& viewDataLeft = m_viewData[0][leftSwapchainIndex];
-	DX11ViewData& viewDataRight = m_viewData[1][rightSwapchainIndex];
+	DX11ViewData& viewDataLeft = m_viewData[0][renderParams.LeftFrameIndex];
+	DX11ViewData& viewDataRight = m_viewData[1][renderParams.RightFrameIndex];
 
 	switch (m_applicationRenderAPI)
 	{
@@ -819,18 +819,18 @@ void PassthroughRendererDX11Interop::RenderPassthroughFrame(const XrCompositionL
 
 			ID3D11Resource* dts[2] = { 0 };
 
-			if (m_viewDepthData[0].size() > leftDepthSwapchainIndex 
-				&& m_viewDepthData[1].size() > rightDepthSwapchainIndex 
-				&& m_viewDepthData[0][leftDepthSwapchainIndex].depthStencil 
-				&& m_viewDepthData[1][rightDepthSwapchainIndex].depthStencil)
+			if (m_viewDepthData[0].size() > renderParams.LeftDepthIndex
+				&& m_viewDepthData[1].size() > renderParams.RightDepthIndex
+				&& m_viewDepthData[0][renderParams.LeftDepthIndex].depthStencil
+				&& m_viewDepthData[1][renderParams.RightDepthIndex].depthStencil)
 			{
-				dts[0] = m_viewDepthData[0][leftDepthSwapchainIndex].depthStencil.Get();
-				dts[1] = m_viewDepthData[1][rightDepthSwapchainIndex].depthStencil.Get();
+				dts[0] = m_viewDepthData[0][renderParams.LeftDepthIndex].depthStencil.Get();
+				dts[1] = m_viewDepthData[1][renderParams.RightDepthIndex].depthStencil.Get();
 
 				m_d3d11On12Device->AcquireWrappedResources(dts, 2);
 			}
 
-			PassthroughRendererDX11::RenderPassthroughFrame(layer, frame, blendMode, leftSwapchainIndex, rightSwapchainIndex, leftDepthSwapchainIndex, rightDepthSwapchainIndex, depthFrame, distortionParams, renderParams);
+			PassthroughRendererDX11::RenderPassthroughFrame(layer, frame, renderParams, depthFrame, distortionParams);
 
 			m_d3d11On12Device->ReleaseWrappedResources(rts, 2);
 
@@ -847,7 +847,7 @@ void PassthroughRendererDX11Interop::RenderPassthroughFrame(const XrCompositionL
 
 	case Vulkan:
 	{
-		int frameIndex = leftSwapchainIndex;
+		int frameIndex = renderParams.LeftFrameIndex;
 
 		{
 			vkResetFences(m_vulkanDevice, 1, &m_vulkanRenderCompleteFence);
@@ -923,7 +923,7 @@ void PassthroughRendererDX11Interop::RenderPassthroughFrame(const XrCompositionL
 		{
 			m_d3d11DeviceContext4->Wait(m_semaphoreFence.Get(), m_semaphoreValue);
 
-			PassthroughRendererDX11::RenderPassthroughFrame(layer, frame, blendMode, leftSwapchainIndex, rightSwapchainIndex, leftDepthSwapchainIndex, rightDepthSwapchainIndex, depthFrame, distortionParams, renderParams);
+			PassthroughRendererDX11::RenderPassthroughFrame(layer, frame, renderParams, depthFrame, distortionParams);
 
 			m_semaphoreValue++;
 			m_d3d11DeviceContext4->Signal(m_semaphoreFence.Get(), m_semaphoreValue);
@@ -1018,7 +1018,7 @@ void PassthroughRendererDX11Interop::RenderPassthroughFrame(const XrCompositionL
 
 	default:
 	{
-		PassthroughRendererDX11::RenderPassthroughFrame(layer, frame, blendMode, leftSwapchainIndex, rightSwapchainIndex, rightSwapchainIndex, leftDepthSwapchainIndex, depthFrame, distortionParams, renderParams);
+		PassthroughRendererDX11::RenderPassthroughFrame(layer, frame, renderParams, depthFrame, distortionParams);
 		break;
 	}
 	}

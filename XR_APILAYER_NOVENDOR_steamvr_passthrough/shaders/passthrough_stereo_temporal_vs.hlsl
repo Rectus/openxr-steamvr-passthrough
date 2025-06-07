@@ -180,7 +180,8 @@ VS_OUTPUT main(float3 inPosition : POSITION, uint vertexID : SV_VertexID)
         
         // Filter any uncertain areas with a gaussian blur.
         [branch]
-        if (g_disparityFilterWidth > 0 && confidence < 0.5)
+        if (g_disparityFilterWidth > 0 && 
+            (g_disparityFilterConfidenceCutout >= 1.0 || confidence < g_disparityFilterConfidenceCutout))
         {
             float totalWeight = 0;
             float outDisp = 0;

@@ -411,7 +411,7 @@ if (bIsActiveTab) { ImGui::PopStyleColor(1); bIsActiveTab = false; }
 
 			if (mainConfig.CameraProvider == CameraProvider_OpenCV && cameraConfig.CameraFrameLayout == Mono) { ImGui::BeginDisabled(); }
 
-			if (ImGui::RadioButton("3D Stereo (Experimental)", mainConfig.ProjectionMode == Projection_StereoReconstruction))
+			if (ImGui::RadioButton("3D Stereo", mainConfig.ProjectionMode == Projection_StereoReconstruction))
 			{
 				mainConfig.ProjectionMode = Projection_StereoReconstruction;
 			}
@@ -419,7 +419,7 @@ if (bIsActiveTab) { ImGui::PopStyleColor(1); bIsActiveTab = false; }
 
 			if (mainConfig.CameraProvider == CameraProvider_OpenCV && cameraConfig.CameraFrameLayout == Mono) { ImGui::EndDisabled(); }
 
-			ImGui::Checkbox("Project onto Render Models (Experimental)", &mainConfig.ProjectToRenderModels);
+			ImGui::Checkbox("Project onto Render Models", &mainConfig.ProjectToRenderModels);
 			TextDescriptionSpaced("Project the passthough view to the correct distance on render models, such as controllers. Requires good camera calibration.");
 
 			ImGui::SetNextItemOpen(true, ImGuiCond_Once);
@@ -436,7 +436,7 @@ if (bIsActiveTab) { ImGui::PopStyleColor(1); bIsActiveTab = false; }
 
 				IMGUI_BIG_SPACING;
 
-				ImGui::Checkbox("Enable Temporal Filter (Experimental)", &mainConfig.EnableTemporalFiltering);
+				ImGui::Checkbox("Enable Temporal Filter", &mainConfig.EnableTemporalFiltering);
 				TextDescriptionSpaced("Improves image quality by removing noise and flickering, and sharpening it. Possibly slightly increases image resolution. Expensive on the GPU.");
 
 				if (ImGui::CollapsingHeader("Advanced"))
@@ -743,9 +743,6 @@ if (bIsActiveTab) { ImGui::PopStyleColor(1); bIsActiveTab = false; }
 			ImGui::Checkbox("Composite Both Cameras for Each Eye", &stereoCustomConfig.StereoCutoutEnabled);
 			TextDescriptionSpaced("Detects areas occluded to the main camera and renders them with the other camera where possible.");
 
-			ImGui::Checkbox("Separate Depth Pass", &stereoCustomConfig.StereoUseSeparateDepthPass);
-			TextDescriptionSpaced("Enables a separate render pass generating passthrough depth maps for features that benefit from it, such as Composite Both Cameras for Each Eye.");
-
 			IMGUI_BIG_SPACING;
 		}
 
@@ -769,6 +766,8 @@ if (bIsActiveTab) { ImGui::PopStyleColor(1); bIsActiveTab = false; }
 			if (ImGui::TreeNode("Projection"))
 			{
 				ImGui::Spacing();
+				ImGui::Checkbox("Separate Depth Pass", &stereoCustomConfig.StereoUseSeparateDepthPass);
+				TextDescriptionSpaced("Enables a separate render pass generating passthrough depth maps for features that benefit from it, such as Composite Both Cameras for Each Eye.");
 				BeginSoftDisabled(!stereoCustomConfig.StereoUseSeparateDepthPass);
 				ImGui::Checkbox("Use Fullscreen Draw Pass", &stereoCustomConfig.StereoUseFullscreenPass);
 				TextDescription("Use a more effective main pass that does everything in the pixel shader.");
@@ -788,6 +787,10 @@ if (bIsActiveTab) { ImGui::PopStyleColor(1); bIsActiveTab = false; }
 				ScrollableSliderInt("Depth Map Scale", &stereoCustomConfig.StereoDepthMapScale, 1, 4, "%d", 1);
 				TextDescriptionSpaced("Scale of generated depth maps releative to the proecessed disparity maps.");
 				EndSoftDisabled(!stereoCustomConfig.StereoUseSeparateDepthPass);
+
+				ImGui::SetNextItemWidth(ImGui::GetContentRegionAvail().x * 0.45f);
+				ScrollableSlider("Disparity Smoothing Confidence Cutout", &stereoCustomConfig.StereoDisparityFilterConfidenceCutout, 0.0f, 1.0f, "%.2f", 0.01f);
+				TextDescriptionSpaced("Maximum confidence for applying disparity smoothing. Setting this to 1 will always apply smoothing.");
 
 				IMGUI_BIG_SPACING;
 				ImGui::PushItemWidth(ImGui::GetContentRegionAvail().x * 0.45f);
