@@ -7,7 +7,7 @@ VS_OUTPUT main(float3 inPosition : POSITION, uint vertexID : SV_VertexID)
     VS_OUTPUT output;
 
 	// Single triangle from (0, 0) to (2, 2).
-    float2 clipCoords = float2((vertexID >> 1) * 2, (vertexID & 1) * 2) * 2 - 1;
+    float2 clipCoords = float2((min(vertexID, 2) >> 1) * 2, (min(vertexID, 2) & 1) * 2) * 2 - 1;
 
     output.position = float4(clipCoords, 0, 1);
     

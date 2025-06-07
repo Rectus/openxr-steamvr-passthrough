@@ -99,24 +99,29 @@ namespace
 				g_traceProvider, "xrCreateInstance", TLArg(createInfo->enabledExtensionNames[i], "ExtensionName"));
 			}
 #endif
+			bool bEnableVulkan2Extension = false;
+			bool bInverseAlphaExtensionEnabled = false;
 			bool bEnableVarjoDepthExtension = false;
 			bool bEnableVarjoCompositionExtension = false;
-			bool bEnableVulkan2Extension = false;
 
 			std::vector<std::string> extensions = GetRequestedExtensions();
 			for (uint32_t i = 0; i < extensions.size(); i++)
 			{
-				if (strncmp(extensions[i].c_str(), XR_VARJO_ENVIRONMENT_DEPTH_ESTIMATION_EXTENSION_NAME, strlen(XR_VARJO_ENVIRONMENT_DEPTH_ESTIMATION_EXTENSION_NAME)) == 0)
+				if (extensions[i].compare(XR_KHR_VULKAN_ENABLE2_EXTENSION_NAME) == 0)
+				{
+					bEnableVulkan2Extension = true;
+				}
+				else if (extensions[i].compare("XR_EXT_composition_layer_inverted_alpha") == 0)
+				{
+					bInverseAlphaExtensionEnabled = true;
+				}
+				else if (extensions[i].compare(XR_VARJO_ENVIRONMENT_DEPTH_ESTIMATION_EXTENSION_NAME) == 0)
 				{
 					bEnableVarjoDepthExtension = true;
 				}
-				else if (strncmp(extensions[i].c_str(), XR_VARJO_COMPOSITION_LAYER_DEPTH_TEST_EXTENSION_NAME, strlen(XR_VARJO_COMPOSITION_LAYER_DEPTH_TEST_EXTENSION_NAME)) == 0)
+				else if (extensions[i].compare(XR_VARJO_COMPOSITION_LAYER_DEPTH_TEST_EXTENSION_NAME) == 0)
 				{
 					bEnableVarjoCompositionExtension = true;
-				}
-				else if (strncmp(extensions[i].c_str(), XR_KHR_VULKAN_ENABLE2_EXTENSION_NAME, strlen(XR_KHR_VULKAN_ENABLE2_EXTENSION_NAME)) == 0)
-				{
-					bEnableVulkan2Extension = true;
 				}
 			}
 			
@@ -207,6 +212,7 @@ namespace
 			}
 
 			m_bEnableVulkan2Extension = bEnableVulkan2Extension;
+			m_bInverseAlphaExtensionEnabled = bInverseAlphaExtensionEnabled;
 
 			m_bSuccessfullyLoaded = true;
 			Log("OpenXR instance successfully created\n");
@@ -956,7 +962,7 @@ namespace
 		}
 
 
-		int UpdateSwapchains(const ERenderEye eye, const XrCompositionLayerProjection* layer, int& depthIndex)
+		void UpdateSwapchains(const ERenderEye eye, const XrCompositionLayerProjection* layer, FrameRenderParameters& renderParams)
 		{
 			XrSwapchain* storedSwapchain = (eye == LEFT_EYE) ? &m_swapChainLeft : &m_swapChainRight;
 			XrSwapchain* storedDepthSwapchain = (eye == LEFT_EYE) ? &m_depthSwapChainLeft : &m_depthSwapChainRight;
@@ -968,7 +974,7 @@ namespace
 
 			if (props == m_swapchainProperties.end())
 			{
-				return -1;
+				return;
 			}
 
 			int64_t imageFormat = props->second.format;
@@ -976,14 +982,19 @@ namespace
 			auto held = m_heldSwapchains.find(newSwapchain);
 			if (held == m_heldSwapchains.end() || held->second.empty())
 			{
-				return -1;
+				return;
 			}
 
 			int imageIndex = held->second.back();
-
+			
 			if (eye == LEFT_EYE)
 			{
 				m_dashboardMenu->GetDisplayValues().frameBufferFormat = props->second.format;
+				renderParams.LeftFrameIndex = imageIndex;
+			}
+			else
+			{
+				renderParams.RightFrameIndex = imageIndex;
 			}
 
 			if (newSwapchain != *storedSwapchain)
@@ -1005,13 +1016,22 @@ namespace
 				else
 				{
 					ErrorLog("Error in xrEnumerateSwapchainImages: %i\n", result);
-					return -1;
+
+					if (eye == LEFT_EYE)
+					{
+						renderParams.LeftFrameIndex = -1;
+					}
+					else
+					{
+						renderParams.RightFrameIndex = -1;
+					}
+					return;
 				}
 			}
 
 			if (!m_configManager->GetConfig_Depth().DepthReadFromApplication)
 			{
-				return imageIndex;
+				return;
 			}
 
 			// Find associated depth swapchain if one exists.
@@ -1063,15 +1083,20 @@ namespace
 				auto depth = m_heldSwapchains.find(*storedDepthSwapchain);
 				if (depth != m_heldSwapchains.end() && !depth->second.empty())
 				{
-					depthIndex = depth->second.back();
+					if (eye == LEFT_EYE)
+					{
+						renderParams.LeftDepthIndex = depth->second.back();
+					}
+					else
+					{
+						renderParams.RightDepthIndex = depth->second.back();
+					}
 				}
 				else
 				{
 					ErrorLog("Error: No valid depth swapchain found!\n");
 				}
 			}
-
-			return imageIndex;
 		}
 
 
@@ -1202,29 +1227,32 @@ namespace
 				m_cameraManager->CalculateFrameProjection(frame, depthFrame, *layer, timeToPhotons, m_refSpaces[layer->space], m_depthReconstruction->GetDistortionParameters());
 			}
 
-			int leftDepthIndex = 0;
-			int rightDepthIndex = 0;
+			FrameRenderParameters renderParams;
 
-			int leftIndex = UpdateSwapchains(LEFT_EYE, layer, leftDepthIndex);
-			int rightIndex = UpdateSwapchains(RIGHT_EYE, layer, rightDepthIndex);
+			UpdateSwapchains(LEFT_EYE, layer, renderParams);
+			UpdateSwapchains(RIGHT_EYE, layer, renderParams);
 
-			if (leftIndex < 0 || rightIndex < 0)
+			if (renderParams.LeftFrameIndex < 0 || renderParams.RightFrameIndex < 0)
 			{
 				ErrorLog("Error: No swapchains found!\n");
 				return;
 			}
 
-			EPassthroughBlendMode blendMode = (EPassthroughBlendMode)frameEndInfo->environmentBlendMode;
+			renderParams.BlendMode = (EPassthroughBlendMode)frameEndInfo->environmentBlendMode;
 
 			if (m_configManager->GetConfig_Core().CoreForcePassthrough && m_configManager->GetConfig_Core().CoreForceMode >= 0)
 			{
-				blendMode = (EPassthroughBlendMode)m_configManager->GetConfig_Core().CoreForceMode;
+				renderParams.BlendMode = (EPassthroughBlendMode)m_configManager->GetConfig_Core().CoreForceMode;
 			}
 
-			if (blendMode == AlphaBlendPremultiplied && layer->layerFlags & XR_COMPOSITION_LAYER_UNPREMULTIPLIED_ALPHA_BIT)
+			if (renderParams.BlendMode == AlphaBlendPremultiplied && 
+				(layer->layerFlags & XR_COMPOSITION_LAYER_UNPREMULTIPLIED_ALPHA_BIT))
 			{
-				blendMode = AlphaBlendUnpremultiplied;
+				renderParams.BlendMode = AlphaBlendUnpremultiplied;
 			}
+
+			renderParams.bInvertLayerAlpha =  m_bInverseAlphaExtensionEnabled &&
+				(layer->layerFlags & XR_COMPOSITION_LAYER_INVERTED_ALPHA_BIT_EXT);
 
 			if (m_configManager->GetConfig_Main().DebugTexture == DebugTexture_TestImage &&
 				m_configManager->GetDebugTexture().CurrentTexture != DebugTexture_TestImage)
@@ -1232,13 +1260,13 @@ namespace
 				GetTestPattern(m_configManager->GetDebugTexture());
 			}		
 
-			FrameRenderParameters renderParams;
-			renderParams.bEnableDepthRange = false;
+			renderParams.bEnableDepthRange = false;			
 
 			renderParams.bEnableDepthBlending = depthConf.DepthReadFromApplication &&
-				((m_bVarjoDepthEnabled && 
-				(blendMode == AlphaBlendPremultiplied || blendMode == AlphaBlendUnpremultiplied)) || 
-					depthConf.DepthForceComposition);
+					((m_bVarjoDepthEnabled && 
+					(renderParams.BlendMode == AlphaBlendPremultiplied ||
+					renderParams.BlendMode == AlphaBlendUnpremultiplied)) ||
+				depthConf.DepthForceComposition);
 
 			m_dashboardMenu->GetDisplayValues().bDepthBlendingActive = renderParams.bEnableDepthBlending;
 
@@ -1285,7 +1313,7 @@ namespace
 				m_depthReconstruction->GetDistortionParameters();
 
 
-			m_Renderer->RenderPassthroughFrame(layer, frame.get(), blendMode, leftIndex, rightIndex, leftDepthIndex, rightDepthIndex, depthFrame, distParams, renderParams);
+			m_Renderer->RenderPassthroughFrame(layer, frame.get(), renderParams, depthFrame, distParams);
 
 			depthFrame->bIsFirstRender = false;
 
@@ -1488,6 +1516,7 @@ namespace
 
 		bool m_bSuccessfullyLoaded = false;
 		bool m_bUsePassthrough = false;
+		bool m_bInverseAlphaExtensionEnabled = false;
 		bool m_bVarjoDepthExtensionEnabled = false;
 		bool m_bVarjoDepthEnabled = false;
 		bool m_bVarjoCompositionExtensionEnabled = false;

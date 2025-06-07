@@ -25,5 +25,5 @@ float4 main(VS_OUTPUT input) : SV_TARGET
 
     float alpha = g_blendMask.Sample(g_samplerState, screenUvs);
 
-    return float4(0, 0, 0, alpha);
+    return float4(0, 0, 0, g_bIsAppAlphaInverted ? 1 - alpha : alpha);
 }

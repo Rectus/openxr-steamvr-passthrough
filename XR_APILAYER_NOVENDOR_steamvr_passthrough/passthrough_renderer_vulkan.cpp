@@ -1655,7 +1655,7 @@ void PassthroughRendererVulkan::UpdateDescriptorSets(VkCommandBuffer commandBuff
 
 static bool g_bVulkanStereoErrorShown = false;
 
-void PassthroughRendererVulkan::RenderPassthroughFrame(const XrCompositionLayerProjection* layer, CameraFrame* frame, EPassthroughBlendMode blendMode, int leftSwapchainIndex, int rightSwapchainIndex, int leftDepthSwapchainIndex, int rightDepthSwapchainIndex, std::shared_ptr<DepthFrame> depthFrame, UVDistortionParameters& distortionParams, FrameRenderParameters& renderParams)
+void PassthroughRendererVulkan::RenderPassthroughFrame(const XrCompositionLayerProjection* layer, CameraFrame* frame, FrameRenderParameters& renderParams, std::shared_ptr<DepthFrame> depthFrame, UVDistortionParameters& distortionParams)
 {
 
 	Config_Main& mainConf = m_configManager->GetConfig_Main();
@@ -1753,7 +1753,7 @@ void PassthroughRendererVulkan::RenderPassthroughFrame(const XrCompositionLayerP
 		memcpy(m_psPassConstantBufferMappings[m_frameIndex], &psPassBuffer, sizeof(PSPassConstantBuffer));
 	}
 
-	if (blendMode == Masked)
+	if (renderParams.BlendMode == Masked)
 	{
 		PSMaskedConstantBuffer maskedBuffer = {};
 		maskedBuffer.maskedKey[0] = powf(coreConf.CoreForceMaskedKeyColor[0], 2.2f);
@@ -1767,15 +1767,15 @@ void PassthroughRendererVulkan::RenderPassthroughFrame(const XrCompositionLayerP
 
 		memcpy(m_psMaskedConstantBufferMappings[m_frameIndex], &maskedBuffer, sizeof(PSMaskedConstantBuffer));
 
-		RenderMaskedPrepassView(LEFT_EYE, leftSwapchainIndex, layer, frame);
-		RenderPassthroughView(LEFT_EYE, leftSwapchainIndex, layer, frame, blendMode);
-		RenderMaskedPrepassView(RIGHT_EYE, rightSwapchainIndex, layer, frame);
-		RenderPassthroughView(RIGHT_EYE, rightSwapchainIndex, layer, frame, blendMode);
+		RenderMaskedPrepassView(LEFT_EYE, renderParams.LeftFrameIndex, layer, frame);
+		RenderPassthroughView(LEFT_EYE, renderParams.LeftFrameIndex, layer, frame, renderParams.BlendMode);
+		RenderMaskedPrepassView(RIGHT_EYE, renderParams.RightFrameIndex, layer, frame);
+		RenderPassthroughView(RIGHT_EYE, renderParams.RightFrameIndex, layer, frame, renderParams.BlendMode);
 	}
 	else
 	{
-		RenderPassthroughView(LEFT_EYE, leftSwapchainIndex, layer, frame, blendMode);
-		RenderPassthroughView(RIGHT_EYE, rightSwapchainIndex, layer, frame, blendMode);
+		RenderPassthroughView(LEFT_EYE, renderParams.LeftFrameIndex, layer, frame, renderParams.BlendMode);
+		RenderPassthroughView(RIGHT_EYE, renderParams.RightFrameIndex, layer, frame, renderParams.BlendMode);
 	}
 
 

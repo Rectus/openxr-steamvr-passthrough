@@ -204,10 +204,19 @@ struct DepthFrame
 
 struct FrameRenderParameters
 {
+	EPassthroughBlendMode BlendMode = Opaque;
+	bool bInvertLayerAlpha = false;
+
+	int LeftFrameIndex = -1;
+	int RightFrameIndex = -1;
+	int LeftDepthIndex = -1;
+	int RightDepthIndex = -1;
+
 	bool bEnableDepthBlending = false;
 	bool bEnableDepthRange = false;
 	float DepthRangeMin = 0.0f;
 	float DepthRangeMax = std::numeric_limits<float>::infinity();
+	
 };
 
 struct UVDistortionParameters
