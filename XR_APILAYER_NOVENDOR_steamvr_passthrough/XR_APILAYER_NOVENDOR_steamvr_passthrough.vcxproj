@@ -151,9 +151,9 @@ copy $(SolutionDir)\readme.md $(OutDir)
       </DelayLoadDLLs>
     </Link>
     <PostBuildEvent>
-      <Command>copy $(ProjectDir)\$(ProjectName).json $(OutDir)
-copy $(SolutionDir)\readme.md $(OutDir)
-</Command>
+      <Command>copy $(ProjectDir)$(ProjectName).json $(OutDir)
+copy $(SolutionDir)readme.md $(OutDir)
+copy $(SolutionDir)THIRD_PARTY $(OutDir)THIRD_PARTY.txt</Command>
     </PostBuildEvent>
     <PostBuildEvent>
       <Message>Copy dependencies...</Message>
@@ -318,6 +318,23 @@ copy $(SolutionDir)\readme.md $(OutDir)
       <HeaderFileOutput Condition="'$(Configuration)|$(Platform)'=='Release|x64'">shaders\alpha_copy_masked_ps.h</HeaderFileOutput>
       <ShaderType Condition="'$(Configuration)|$(Platform)'=='Release|x64'">Pixel</ShaderType>
       <VariableName Condition="'$(Configuration)|$(Platform)'=='Release|x64'">g_AlphaCopyMaskedPS</VariableName>
+    </FxCompile>
+    <FxCompile Include="shaders\debug_alpha_to_color_ps.hlsl">
+      <HeaderFileOutput Condition="'$(Configuration)|$(Platform)'=='Debug|x64'">shaders\debug_alpha_to_color_ps.h</HeaderFileOutput>
+      <HeaderFileOutput Condition="'$(Configuration)|$(Platform)'=='Release|x64'">shaders\debug_alpha_to_color_ps.h</HeaderFileOutput>
+      <VariableName Condition="'$(Configuration)|$(Platform)'=='Debug|x64'">g_debugAlphaToColorPS</VariableName>
+      <VariableName Condition="'$(Configuration)|$(Platform)'=='Release|x64'">g_debugAlphaToColorPS</VariableName>
+      <ShaderType Condition="'$(Configuration)|$(Platform)'=='Debug|x64'">Pixel</ShaderType>
+      <ShaderType Condition="'$(Configuration)|$(Platform)'=='Release|x64'">Pixel</ShaderType>
+      <FileType>Document</FileType>
+    </FxCompile>
+    <FxCompile Include="shaders\debug_depth_to_color_ps.hlsl">
+      <HeaderFileOutput Condition="'$(Configuration)|$(Platform)'=='Debug|x64'">shaders\debug_depth_to_color_ps.h</HeaderFileOutput>
+      <HeaderFileOutput Condition="'$(Configuration)|$(Platform)'=='Release|x64'">shaders\debug_depth_to_color_ps.h</HeaderFileOutput>
+      <ShaderType Condition="'$(Configuration)|$(Platform)'=='Debug|x64'">Pixel</ShaderType>
+      <VariableName Condition="'$(Configuration)|$(Platform)'=='Debug|x64'">g_debugDepthToColorPS</VariableName>
+      <ShaderType Condition="'$(Configuration)|$(Platform)'=='Release|x64'">Pixel</ShaderType>
+      <VariableName Condition="'$(Configuration)|$(Platform)'=='Release|x64'">g_debugDepthToColorPS</VariableName>
     </FxCompile>
     <FxCompile Include="shaders\depth_write_ps.hlsl">
       <ShaderType Condition="'$(Configuration)|$(Platform)'=='Release|x64'">Pixel</ShaderType>

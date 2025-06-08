@@ -25,6 +25,14 @@ enum EProjectionMode
 	Projection_StereoReconstruction = 2
 };
 
+enum ESelectedDebugSource
+{
+	DebugSource_None = 0,
+	DebugSource_OutputDepth,
+	DebugSource_ApplicationAlpha,
+	DebugSource_ApplicationDepth
+};
+
 enum ESelectedDebugTexture
 {
 	DebugTexture_None = 0,
@@ -121,7 +129,7 @@ struct Config_Main
 	EStereoPreset StereoPreset = StereoPreset_Medium;
 
 	// Transient settings not written to file
-	bool DebugDepth = false;
+	ESelectedDebugSource DebugSource = DebugSource_None;
 	ESelectedDebugOverlay DebugOverlay = DebugOverlay_None;
 	ESelectedDebugTexture DebugTexture = DebugTexture_None;
 

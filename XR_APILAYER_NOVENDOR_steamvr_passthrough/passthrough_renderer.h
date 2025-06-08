@@ -266,6 +266,7 @@ struct DX11ViewDepthData
 {
 	ComPtr<ID3D11Resource> depthStencil;
 	ComPtr<ID3D11DepthStencilView> depthStencilView;
+	ComPtr<ID3D11ShaderResourceView> depthSRV;
 };
 
 
@@ -349,6 +350,8 @@ protected:
 
 	void RenderBackgroundForView(const ERenderEye eye, const XrCompositionLayerProjection* layer, CameraFrame* frame, std::shared_ptr<DepthFrame> depthFrame, UINT numIndices, FrameRenderParameters& renderParams);
 
+	void RenderDebugView(const ERenderEye eye, const XrCompositionLayerProjection* layer, FrameRenderParameters& renderParams);
+
 	void RenderFrameFinish();
 
 	std::shared_ptr<ConfigManager> m_configManager;
@@ -405,6 +408,8 @@ protected:
 	ComPtr<ID3D11PixelShader> m_fullscreenPassthroughTemporalPS;
 	ComPtr<ID3D11PixelShader> m_fullscreenPassthroughCompositePS;
 	ComPtr<ID3D11PixelShader> m_fullscreenPassthroughCompositeTemporalPS;
+	ComPtr<ID3D11PixelShader> m_debugAlphaToColorPS;
+	ComPtr<ID3D11PixelShader> m_debugDepthToColorPS;
 
 	
 	ComPtr<ID3D11Buffer> m_vsMeshConstantBuffer[vr::k_unMaxTrackedDeviceCount];

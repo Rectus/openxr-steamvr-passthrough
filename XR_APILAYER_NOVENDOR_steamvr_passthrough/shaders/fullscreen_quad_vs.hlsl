@@ -2,7 +2,7 @@
 //#include "common_vs.hlsl"
 #include "vs_outputs.hlsl"
 
-VS_OUTPUT main(float3 inPosition : POSITION, uint vertexID : SV_VertexID)
+VS_OUTPUT main(uint vertexID : SV_VertexID)
 {
     VS_OUTPUT output;
 

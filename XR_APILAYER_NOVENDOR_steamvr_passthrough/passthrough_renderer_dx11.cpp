@@ -28,6 +28,8 @@
 #include "shaders\fullscreen_passthrough_temporal_ps.h"
 #include "shaders\fullscreen_passthrough_composite_ps.h"
 #include "shaders\fullscreen_passthrough_composite_temporal_ps.h"
+#include "shaders\debug_alpha_to_color_ps.h"
+#include "shaders\debug_depth_to_color_ps.h"
 
 #include "shaders\fill_holes_cs.h"
 
@@ -244,6 +246,20 @@ bool PassthroughRendererDX11::InitRenderer()
 		return false;
 	}
 	SET_DXGI_DEBUGNAME(m_fullscreenPassthroughCompositeTemporalPS);
+
+	if (FAILED(m_d3dDevice->CreatePixelShader(g_debugAlphaToColorPS, sizeof(g_debugAlphaToColorPS), nullptr, &m_debugAlphaToColorPS)))
+	{
+		ErrorLog("g_debugAlphaToColorPS creation failure!\n");
+		return false;
+	}
+	SET_DXGI_DEBUGNAME(m_debugAlphaToColorPS);
+
+	if (FAILED(m_d3dDevice->CreatePixelShader(g_debugDepthToColorPS, sizeof(g_debugDepthToColorPS), nullptr, &m_debugDepthToColorPS)))
+	{
+		ErrorLog("g_debugDepthToColorPS creation failure!\n");
+		return false;
+	}
+	SET_DXGI_DEBUGNAME(m_debugDepthToColorPS);
 
 
 	D3D11_BUFFER_DESC bufferDesc = {};
@@ -1263,26 +1279,58 @@ void PassthroughRendererDX11::InitDepthBuffer(const ERenderEye eye, void* depthB
 		m_viewDepthData[viewIndex].resize(imageIndex + 1);
 	}
 
+	ID3D11Resource* bufferRes = static_cast<ID3D11Resource*>(depthBuffer);
+
 	DX11ViewDepthData& depthData = m_viewDepthData[viewIndex][imageIndex];
-	if (depthData.depthStencil.Get() == (ID3D11Resource*)depthBuffer)
+	if (depthData.depthStencil.Get() == bufferRes)
 	{
 		return;
 	}
 
 	// The RTV and SRV are set to use size 1 arrays to support both single and array for passed targets.
 	D3D11_DEPTH_STENCIL_VIEW_DESC dsvDesc{};
-	dsvDesc.Format = (DXGI_FORMAT)swapchainInfo.format;
+	dsvDesc.Format = static_cast<DXGI_FORMAT>(swapchainInfo.format);
 	dsvDesc.ViewDimension = D3D11_DSV_DIMENSION_TEXTURE2DARRAY;
 	dsvDesc.Texture2DArray.ArraySize = 1;
 	dsvDesc.Texture2DArray.FirstArraySlice = swapchainInfo.arraySize > 1 ? viewIndex : 0;
 
-	if (FAILED(m_d3dDevice->CreateDepthStencilView((ID3D11Resource*)depthBuffer, &dsvDesc, depthData.depthStencilView.GetAddressOf())))
+	if (FAILED(m_d3dDevice->CreateDepthStencilView(bufferRes, &dsvDesc, depthData.depthStencilView.GetAddressOf())))
 	{
 		ErrorLog("Depth map CreateDepthStencilView error!\n");
 		return;
 	}
 
-	depthData.depthStencil = (ID3D11Resource*)depthBuffer;
+	D3D11_SHADER_RESOURCE_VIEW_DESC srvDesc = {};
+	srvDesc.ViewDimension = D3D11_SRV_DIMENSION_TEXTURE2D;
+	srvDesc.Texture2D.MipLevels = 1;
+
+	switch (dsvDesc.Format)
+	{
+	case DXGI_FORMAT_D16_UNORM:
+		srvDesc.Format = DXGI_FORMAT_R16_FLOAT;
+		break;
+
+	case DXGI_FORMAT_D32_FLOAT:
+		srvDesc.Format = DXGI_FORMAT_R32_FLOAT;
+		break;
+
+	case DXGI_FORMAT_D32_FLOAT_S8X24_UINT:
+		srvDesc.Format = DXGI_FORMAT_R32_FLOAT_X8X24_TYPELESS;
+		break;
+
+	case DXGI_FORMAT_D24_UNORM_S8_UINT:
+		srvDesc.Format = DXGI_FORMAT_R24_UNORM_X8_TYPELESS;
+		break;
+
+	}
+
+	if (FAILED(m_d3dDevice->CreateShaderResourceView(bufferRes, &srvDesc, depthData.depthSRV.GetAddressOf())))
+	{
+		ErrorLog("Depth map CreateShaderResourceView error!\n");
+		return;
+	}
+
+	depthData.depthStencil = bufferRes;
 }
 
 
@@ -1608,6 +1656,21 @@ void PassthroughRendererDX11::RenderPassthroughFrame(const XrCompositionLayerPro
 
 	m_renderContext->UpdateSubresource(frameData.vsPassConstantBuffer.Get(), 0, nullptr, &vsBuffer, 0, 0);
 
+
+	if (mainConf.DebugSource == DebugSource_ApplicationAlpha || mainConf.DebugSource == DebugSource_ApplicationDepth)
+	{
+		RenderDebugView(LEFT_EYE, layer, renderParams);
+		RenderDebugView(RIGHT_EYE, layer, renderParams);
+
+		RenderFrameFinish();
+
+		m_prevSwapchainLeft = renderParams.LeftFrameIndex;
+		m_prevSwapchainRight = renderParams.RightFrameIndex;
+
+		return;
+	}
+
+
 	ID3D11ShaderResourceView* psSRVs[2] = {0};
 	psSRVs[1] = m_uvDistortionMap.SRV.Get();
 	bool bGotDebugTexture = false;
@@ -1712,7 +1775,7 @@ void PassthroughRendererDX11::RenderPassthroughFrame(const XrCompositionLayerPro
 	psPassBuffer.bDoColorAdjustment = fabsf(mainConf.Brightness) > 0.01f || fabsf(mainConf.Contrast - 1.0f) > 0.01f || fabsf(mainConf.Saturation - 1.0f) > 0.01f;
 	psPassBuffer.depthTemporalFilterFactor = stereoConf.StereoDisparityTemporalFilteringStrength;
 	psPassBuffer.depthTemporalFilterDistance = stereoConf.StereoDisparityTemporalFilteringDistance;
-	psPassBuffer.bDebugDepth = mainConf.DebugDepth;
+	psPassBuffer.bDebugDepth = mainConf.DebugSource == DebugSource_OutputDepth;
 	psPassBuffer.debugOverlay = mainConf.DebugOverlay;
 	psPassBuffer.bUseFisheyeCorrection = mainConf.ProjectionMode != Projection_RoomView2D;
 	psPassBuffer.bIsFirstRenderOfCameraFrame = frame->bIsFirstRender;
@@ -2988,6 +3051,81 @@ void PassthroughRendererDX11::RenderBackgroundForView(const ERenderEye eye,  con
 
 	m_renderContext->DrawIndexed((UINT)m_cylinderMesh.triangles.size() * 3, 0, 0);
 }
+
+
+
+
+void PassthroughRendererDX11::RenderDebugView(const ERenderEye eye, const XrCompositionLayerProjection* layer, FrameRenderParameters& renderParams)
+{
+	int swapchainIndex = (eye == LEFT_EYE) ? renderParams.LeftFrameIndex : renderParams.RightFrameIndex;
+	int depthSwapchainIndex = (eye == LEFT_EYE) ? renderParams.LeftDepthIndex : renderParams.RightDepthIndex;
+
+	if (swapchainIndex < 0) { return; }
+
+	DX11FrameData& frameData = m_frameData[m_frameIndex];
+	int viewIndex = (eye == LEFT_EYE) ? 0 : 1;
+
+	DX11ViewData& viewData = m_viewData[viewIndex][swapchainIndex];
+
+	Config_Main& mainConf = m_configManager->GetConfig_Main();
+	Config_Stereo& stereoConf = m_configManager->GetConfig_Stereo();
+	Config_Core& coreConfig = m_configManager->GetConfig_Core();
+
+	m_renderContext->IASetPrimitiveTopology(D3D11_PRIMITIVE_TOPOLOGY_TRIANGLESTRIP);
+	m_renderContext->VSSetShader(m_fullscreenQuadVS.Get(), nullptr, 0);
+
+	XrRect2Di rect = layer->views[viewIndex].subImage.imageRect;
+
+	D3D11_VIEWPORT viewport = { (float)rect.offset.x, (float)rect.offset.y, (float)rect.extent.width, (float)rect.extent.height, 0.0f, 1.0f };
+	D3D11_RECT scissor = { rect.offset.x, rect.offset.y, rect.offset.x + rect.extent.width, rect.offset.y + rect.extent.height };
+
+	m_renderContext->RSSetViewports(1, &viewport);
+	m_renderContext->RSSetScissorRects(1, &scissor);
+
+	m_renderContext->OMSetBlendState(nullptr, nullptr, UINT_MAX);
+	m_renderContext->OMSetDepthStencilState(GET_DEPTH_STENCIL_STATE(false, false, false), 1);
+	
+
+	if (mainConf.DebugSource == DebugSource_ApplicationDepth)
+	{
+		if (m_viewDepthData[viewIndex].size() <= depthSwapchainIndex)
+		{
+			return;
+		}
+
+		m_renderContext->OMSetRenderTargets(1, viewData.renderTarget.RTV.GetAddressOf(), nullptr);
+
+		m_renderContext->PSSetShaderResources(0, 1, m_viewDepthData[viewIndex][depthSwapchainIndex].depthSRV.GetAddressOf());
+		m_renderContext->PSSetShader(m_debugDepthToColorPS.Get(), nullptr, 0);
+
+		m_renderContext->Draw(3, 0);
+	}
+	else if (mainConf.DebugSource == DebugSource_ApplicationAlpha)
+	{
+		bool bSingleStereoRenderTarget = abs(layer->views[0].subImage.imageRect.offset.x - layer->views[1].subImage.imageRect.offset.x) > layer->views[0].subImage.imageRect.extent.width / 2;
+
+		DX11TemporaryRenderTarget& tempTarget = GetTemporaryRenderTarget(m_frameIndex, bSingleStereoRenderTarget ? 0 : viewIndex);
+
+		m_renderContext->OMSetRenderTargets(1, tempTarget.RTV.GetAddressOf(), nullptr);
+		m_renderContext->PSSetShaderResources(0, 1, viewData.renderTarget.SRV.GetAddressOf());
+		m_renderContext->PSSetShader(m_debugAlphaToColorPS.Get(), nullptr, 0);
+
+		
+		m_renderContext->Draw(3, 0);
+
+
+		m_renderContext->PSSetShader(m_debugDepthToColorPS.Get(), nullptr, 0);
+
+		ID3D11RenderTargetView* nullRTV = nullptr;
+		m_renderContext->OMSetRenderTargets(1, &nullRTV, nullptr);
+		m_renderContext->PSSetShaderResources(0, 1, tempTarget.SRV.GetAddressOf());
+		m_renderContext->OMSetRenderTargets(1, viewData.renderTarget.RTV.GetAddressOf(), nullptr);
+		
+
+		m_renderContext->Draw(3, 0);
+	}
+}
+
 
 
 void PassthroughRendererDX11::RenderFrameFinish()

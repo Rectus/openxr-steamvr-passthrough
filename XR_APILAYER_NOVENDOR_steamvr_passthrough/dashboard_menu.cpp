@@ -1392,9 +1392,29 @@ if (bIsActiveTab) { ImGui::PopStyleColor(1); bIsActiveTab = false; }
 		{
 			ImGui::BeginGroup();
 			ImGui::Checkbox("Freeze Stereo Projection", &stereoConfig.StereoReconstructionFreeze);
-			ImGui::Checkbox("Debug Depth", &mainConfig.DebugDepth);
+
 			ImGui::BeginGroup();
-			ImGui::Text("Overlay");
+			ImGui::Text("Debug Source");
+			if (ImGui::RadioButton("None###DebugSourceNone", mainConfig.DebugSource == DebugSource_None))
+			{
+				mainConfig.DebugSource = DebugSource_None;
+			}
+			if (ImGui::RadioButton("Application Alpha", mainConfig.DebugSource == DebugSource_ApplicationAlpha))
+			{
+				mainConfig.DebugSource = DebugSource_ApplicationAlpha;
+			}
+			if (ImGui::RadioButton("Application Depth", mainConfig.DebugSource == DebugSource_ApplicationDepth))
+			{
+				mainConfig.DebugSource = DebugSource_ApplicationDepth;
+			}
+			if (ImGui::RadioButton("Output Depth", mainConfig.DebugSource == DebugSource_OutputDepth))
+			{
+				mainConfig.DebugSource = DebugSource_OutputDepth;
+			}
+			ImGui::EndGroup();
+
+			ImGui::BeginGroup();
+			ImGui::Text("Debug Overlay");
 			if (ImGui::RadioButton("None###DebugOverlayNone", mainConfig.DebugOverlay == DebugOverlay_None))
 			{
 				mainConfig.DebugOverlay = DebugOverlay_None;
