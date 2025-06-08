@@ -1882,7 +1882,8 @@ void PassthroughRendererDX11::RenderSetupView(const ERenderEye eye, const XrComp
 	Config_Core& coreConfig = m_configManager->GetConfig_Core();
 
 	Config_Depth& depthConfig = m_configManager->GetConfig_Depth();
-	bool bCompositeDepth = renderParams.bEnableDepthBlending && 
+	bool bCompositeDepth = renderParams.bEnableDepthBlending &&
+		m_viewDepthData[viewIndex].size() > depthSwapchainIndex &&
 		m_viewDepthData[viewIndex][depthSwapchainIndex].depthStencilView.Get() != nullptr;
 
 	bool bWriteDepth = depthConfig.DepthWriteOutput && depthConfig.DepthReadFromApplication;
@@ -2587,21 +2588,7 @@ void PassthroughRendererDX11::RenderViewModelsForView(const ERenderEye eye, cons
 	ID3D11Buffer* vsBuffers[3];
 	m_renderContext->VSGetConstantBuffers(0, 2, vsBuffers);
 
-	if (mainConf.EnableTemporalFiltering)
-	{
-		ID3D11ShaderResourceView* psSRVs[3];
-		m_renderContext->PSGetShaderResources(0, 2, psSRVs);
-
-		int prevSwapchain = (eye == LEFT_EYE) ? m_prevSwapchainLeft : m_prevSwapchainRight;
-		psSRVs[2] = m_cameraFilter[viewIndex][m_currentCameraFilterIndex == 0 ? 1 : 0].SRV.Get();
-		m_renderContext->PSSetShaderResources(0, 3, psSRVs);
-
-		m_renderContext->PSSetShader(m_passthroughTemporalPS.Get(), nullptr, 0);
-	}
-	else
-	{
-		m_renderContext->PSSetShader(m_passthroughPS.Get(), nullptr, 0);
-	}
+	m_renderContext->PSSetShader(m_passthroughPS.Get(), nullptr, 0);
 
 	for (DX11RenderModel model : m_renderModels)
 	{
@@ -2768,6 +2755,17 @@ void PassthroughRendererDX11::RenderPassthroughView(const ERenderEye eye, const 
 	}
 
 	m_renderContext->OMSetDepthStencilState(GET_DEPTH_STENCIL_STATE(bCompositeDepth, frame->bHasReversedDepth, bWriteDepth), 1);
+
+
+	if (!bUseFullscreenPass && mainConf.EnableTemporalFiltering)
+	{
+		ID3D11ShaderResourceView* psSRVs[3];
+		m_renderContext->PSGetShaderResources(0, 2, psSRVs);
+
+		psSRVs[2] = m_cameraFilter[viewIndex][m_currentCameraFilterIndex == 0 ? 1 : 0].SRV.Get();
+		m_renderContext->PSSetShaderResources(0, 3, psSRVs);
+	}
+
 
 	const UINT strides[] = { sizeof(float) * 3 };
 	const UINT offsets[] = { 0 };

@@ -111,7 +111,7 @@ namespace
 				{
 					bEnableVulkan2Extension = true;
 				}
-				else if (extensions[i].compare("XR_EXT_composition_layer_inverted_alpha") == 0)
+				else if (extensions[i].compare(XR_EXT_COMPOSITION_LAYER_INVERTED_ALPHA_EXTENSION_NAME) == 0)
 				{
 					bInverseAlphaExtensionEnabled = true;
 				}
@@ -211,8 +211,17 @@ namespace
 				Log("Extension XR_VARJO_composition_layer_depth_test enabled\n");
 			}
 
-			m_bEnableVulkan2Extension = bEnableVulkan2Extension;
-			m_bInverseAlphaExtensionEnabled = bInverseAlphaExtensionEnabled;
+			if (bEnableVulkan2Extension)
+			{
+				m_bEnableVulkan2Extension = true;
+				Log("Extension XR_KHR_vulkan_enable2 detected\n");
+			}
+
+			if (bInverseAlphaExtensionEnabled)
+			{
+				m_bInverseAlphaExtensionEnabled = true;
+				Log("Extension XR_EXT_composition_layer_inverted_alpha enabled\n");
+			}
 
 			m_bSuccessfullyLoaded = true;
 			Log("OpenXR instance successfully created\n");
