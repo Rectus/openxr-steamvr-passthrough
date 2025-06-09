@@ -154,6 +154,7 @@ struct alignas(16) PSPassConstantBuffer
 	uint32_t bClampCameraFrame;
 	uint32_t bIsCutoutEnabled;
 	uint32_t bIsAppAlphaInverted;
+	uint32_t bHasReversedDepth;
 };
 
 struct alignas(16) PSViewConstantBuffer

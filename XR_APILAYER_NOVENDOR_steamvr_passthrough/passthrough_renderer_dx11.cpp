@@ -2063,7 +2063,7 @@ void PassthroughRendererDX11::RenderDepthPrepassView(const ERenderEye eye, const
 
 	m_renderContext->ClearDepthStencilView(viewData.passthroughDepthStencil[0].DSV.Get(), D3D11_CLEAR_DEPTH, frame->bHasReversedDepth ? 0.0f : 1.0f, 0);
 
-	m_renderContext->OMSetRenderTargets(1, viewData.passthroughCameraValidity.RTV.GetAddressOf(), viewData.passthroughDepthStencil[0].DSV.Get());
+	m_renderContext->OMSetRenderTargetsAndUnorderedAccessViews(1, viewData.passthroughCameraValidity.RTV.GetAddressOf(), viewData.passthroughDepthStencil[0].DSV.Get(), 0, 0, nullptr, nullptr);
 
 	float blendFactor[4] = { 1,0,1,0 };
 	m_renderContext->OMSetBlendState(m_blendStateWriteFactored.Get(), blendFactor, UINT_MAX);
@@ -2254,7 +2254,7 @@ void PassthroughRendererDX11::RenderMaskedPrepassView(const ERenderEye eye, cons
 		m_renderContext->ClearRenderTargetView(tempTarget.RTV.Get(), clearColor);
 	}
 
-	m_renderContext->OMSetRenderTargets(1, tempTarget.RTV.GetAddressOf(), depthStencil);
+	m_renderContext->OMSetRenderTargetsAndUnorderedAccessViews(1, tempTarget.RTV.GetAddressOf(), depthStencil, 0, 0, nullptr, nullptr);
 	m_renderContext->OMSetBlendState(nullptr, nullptr, UINT_MAX);
 	m_renderContext->OMSetDepthStencilState(GET_DEPTH_STENCIL_STATE(bCompositeDepth, m_configManager->GetConfig_Core().CoreForceMaskedUseCameraImage == frame->bHasReversedDepth, bWriteDepth), 1);
 
@@ -2474,7 +2474,7 @@ void PassthroughRendererDX11::RenderAlphaPrepassView(const ERenderEye eye, const
 	}
 	else
 	{
-		m_renderContext->OMSetRenderTargets(1, &rendertarget, depthStencil);
+		m_renderContext->OMSetRenderTargetsAndUnorderedAccessViews(1, &rendertarget, depthStencil, 0, 0, nullptr, nullptr);
 	}
 
 
@@ -2632,7 +2632,7 @@ void PassthroughRendererDX11::RenderViewModelsForView(const ERenderEye eye, cons
 	bool bWriteDepth = depthConfig.DepthWriteOutput && depthConfig.DepthReadFromApplication;
 	bool bUseDepthPass = mainConf.ProjectionMode == Projection_StereoReconstruction && stereoConf.StereoUseSeparateDepthPass;
 
-	m_renderContext->OMSetRenderTargets(1, &rendertarget, depthStencil);
+	m_renderContext->OMSetRenderTargetsAndUnorderedAccessViews(1, &rendertarget, depthStencil, 0, 0, nullptr, nullptr);
 
 	m_renderContext->OMSetDepthStencilState(GET_DEPTH_STENCIL_STATE(bCompositeDepth, frame->bHasReversedDepth, bWriteDepth), 1);
 
@@ -2733,7 +2733,7 @@ void PassthroughRendererDX11::RenderPassthroughView(const ERenderEye eye, const 
 	}
 	else
 	{
-		m_renderContext->OMSetRenderTargets(1, &rendertarget, depthStencil);
+		m_renderContext->OMSetRenderTargetsAndUnorderedAccessViews(1, &rendertarget, depthStencil, 0, 0, nullptr, nullptr);
 	}
 
 
@@ -3031,7 +3031,7 @@ void PassthroughRendererDX11::RenderBackgroundForView(const ERenderEye eye,  con
 	}
 	else
 	{
-		m_renderContext->OMSetRenderTargets(1, &rendertarget, depthStencil);
+		m_renderContext->OMSetRenderTargetsAndUnorderedAccessViews(1, &rendertarget, depthStencil, 0, 0, nullptr, nullptr);
 	}
 
 	m_renderContext->IASetPrimitiveTopology(D3D11_PRIMITIVE_TOPOLOGY_TRIANGLELIST);

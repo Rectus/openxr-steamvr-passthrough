@@ -1014,6 +1014,14 @@ void CameraManagerOpenVR::CalculateFrameProjectionForEye(const ERenderEye eye, s
                 frame->bHasReversedDepth = false;
             }
         }
+        else
+        {
+            frame->bHasReversedDepth = false;
+        }
+    }
+    else
+    {
+        frame->bHasReversedDepth = false;
     }
 
     XrMatrix4x4f hmdProjection;

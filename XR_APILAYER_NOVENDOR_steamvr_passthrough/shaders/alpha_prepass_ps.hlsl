@@ -10,7 +10,7 @@ float4 main(VS_OUTPUT input) : SV_TARGET
         clip(input.projectionConfidence.x);
     }
     
-    if (g_bUseDepthCutoffRange)
+    if (g_bUseDepthCutoffRange && !g_bUseFullscreenQuad)
     {
         clip(input.screenPos.w - g_depthCutoffRange.x);
         clip(g_depthCutoffRange.y - input.screenPos.w);
