@@ -65,6 +65,7 @@ cbuffer psPassConstantBuffer : REGISTER_PSPASS
     bool g_bClampCameraFrame;
     bool g_bIsCutoutEnabled;
     bool g_bIsAppAlphaInverted;
+    bool g_bHasReversedDepth;
 };
 
 

@@ -1786,6 +1786,7 @@ void PassthroughRendererDX11::RenderPassthroughFrame(const XrCompositionLayerPro
 	psPassBuffer.depthContourFilterWidth = stereoConf.StereoDepthFullscreenContourFilterWidth;
 	psPassBuffer.bIsCutoutEnabled = stereoConf.StereoCutoutEnabled;
 	psPassBuffer.bIsAppAlphaInverted = renderParams.bInvertLayerAlpha;
+	psPassBuffer.bHasReversedDepth = frame->bHasReversedDepth;
 
 	m_renderContext->UpdateSubresource(frameData.psPassConstantBuffer.Get(), 0, nullptr, &psPassBuffer, 0, 0);
 
@@ -2060,13 +2061,13 @@ void PassthroughRendererDX11::RenderDepthPrepassView(const ERenderEye eye, const
 
 	m_renderContext->VSSetShader(m_passthroughStereoVS.Get(), nullptr, 0);
 
-	m_renderContext->ClearDepthStencilView(viewData.passthroughDepthStencil[0].DSV.Get(), D3D11_CLEAR_DEPTH, 1.0f, 0);
+	m_renderContext->ClearDepthStencilView(viewData.passthroughDepthStencil[0].DSV.Get(), D3D11_CLEAR_DEPTH, frame->bHasReversedDepth ? 0.0f : 1.0f, 0);
 
 	m_renderContext->OMSetRenderTargets(1, viewData.passthroughCameraValidity.RTV.GetAddressOf(), viewData.passthroughDepthStencil[0].DSV.Get());
 
 	float blendFactor[4] = { 1,0,1,0 };
 	m_renderContext->OMSetBlendState(m_blendStateWriteFactored.Get(), blendFactor, UINT_MAX);
-	m_renderContext->OMSetDepthStencilState(m_depthStencilStateLessWrite.Get(), 1);
+	m_renderContext->OMSetDepthStencilState(frame->bHasReversedDepth ? m_depthStencilStateGreaterWrite.Get() : m_depthStencilStateLessWrite.Get(), 1);
 
 	ID3D11ShaderResourceView* oldPSSRVs[2];
 	m_renderContext->PSGetShaderResources(0, 2, oldPSSRVs);
@@ -2141,7 +2142,7 @@ void PassthroughRendererDX11::RenderDepthPrepassView(const ERenderEye eye, const
 			m_renderContext->PSSetShaderResources(0, 2, psSRVs);
 		}
 
-		m_renderContext->ClearDepthStencilView(viewData.passthroughDepthStencil[1].DSV.Get(), D3D11_CLEAR_DEPTH, 1.0f, 0);
+		m_renderContext->ClearDepthStencilView(viewData.passthroughDepthStencil[1].DSV.Get(), D3D11_CLEAR_DEPTH, frame->bHasReversedDepth ? 0.0f : 1.0f, 0);
 
 		m_renderContext->OMSetRenderTargets(1, viewData.passthroughCameraValidity.RTV.GetAddressOf(), viewData.passthroughDepthStencil[1].DSV.Get());
 
@@ -3078,6 +3079,25 @@ void PassthroughRendererDX11::RenderDebugView(const ERenderEye eye, const XrComp
 
 	D3D11_VIEWPORT viewport = { (float)rect.offset.x, (float)rect.offset.y, (float)rect.extent.width, (float)rect.extent.height, 0.0f, 1.0f };
 	D3D11_RECT scissor = { rect.offset.x, rect.offset.y, rect.offset.x + rect.extent.width, rect.offset.y + rect.extent.height };
+
+	bool bSingleStereoRenderTarget = false;
+
+	PSViewConstantBuffer psViewBuffer = {};
+	// Draw the correct half for single framebuffer views.
+	if (abs(layer->views[0].subImage.imageRect.offset.x - layer->views[1].subImage.imageRect.offset.x) > layer->views[0].subImage.imageRect.extent.width / 2)
+	{
+		bSingleStereoRenderTarget = true;
+
+		psViewBuffer.prepassUVBounds = { (eye == LEFT_EYE) ? 0.0f : 0.5f, 0.0f,
+			(eye == LEFT_EYE) ? 0.5f : 1.0f, 1.0f };
+	}
+	else
+	{
+		psViewBuffer.prepassUVBounds = { 0.0f, 0.0f, 1.0f, 1.0f };
+	}
+
+	m_renderContext->UpdateSubresource(viewData.psViewConstantBuffer.Get(), 0, nullptr, &psViewBuffer, 0, 0);
+	m_renderContext->PSSetConstantBuffers(1, 1, viewData.psViewConstantBuffer.GetAddressOf());
 
 	m_renderContext->RSSetViewports(1, &viewport);
 	m_renderContext->RSSetScissorRects(1, &scissor);

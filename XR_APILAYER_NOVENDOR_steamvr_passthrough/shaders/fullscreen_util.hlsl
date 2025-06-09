@@ -71,12 +71,20 @@ float sobel_discontinuity_adjust(in Texture2D<float> depthTex, in SamplerState t
             smoothedDepth /= totalWeight;
         }
         
-        bool inForeground = ((maxDepth - smoothedDepth) > (smoothedDepth - minDepth));
-
         float offsetFactor = saturate(g_depthContourStrength * 10.0 * magnitude);
         
+        if(g_bHasReversedDepth)
+        {
+            bool inForeground = ((maxDepth - smoothedDepth) < (smoothedDepth - minDepth));
+            outDepth = lerp(depth, inForeground ? maxDepth : minDepth, offsetFactor);
+        }
+        else
+        {
+            bool inForeground = ((maxDepth - smoothedDepth) > (smoothedDepth - minDepth));
+            outDepth = lerp(depth, inForeground ? minDepth : maxDepth, offsetFactor);
+        }
+        
         bWasFiltered = true;
-        outDepth = lerp(depth, inForeground ? minDepth : maxDepth, offsetFactor);
     }
     return outDepth;
 }

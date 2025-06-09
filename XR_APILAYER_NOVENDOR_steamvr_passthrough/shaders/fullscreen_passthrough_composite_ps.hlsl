@@ -63,7 +63,7 @@ PS_Output main(VS_OUTPUT input)
     
     if (g_bUseDepthCutoffRange)
     {
-        float4 worldHMDEyePos = mul(g_HMDProjectionToWorld, float4(0, 0, 0, 1));
+        float4 worldHMDEyePos = mul(g_HMDProjectionToWorld, float4(0, 0, g_bHasReversedDepth ? 1 : 0, 1));
         float depthMeters = distance(lerp(worldProjectionPos.xyz / worldProjectionPos.w, crossWorldProjectionPos.xyz / crossWorldProjectionPos.w, cameraBlend), worldHMDEyePos.xyz / worldHMDEyePos.w);
         clip(depthMeters - g_depthCutoffRange.x);
         clip(g_depthCutoffRange.y - depthMeters);
@@ -189,7 +189,7 @@ PS_Output main(VS_OUTPUT input)
 
     if (g_bDebugDepth)
     {
-        float debugDepth = pow(abs(finalDepth), g_depthRange.y * 5.0);
+        float debugDepth = g_bHasReversedDepth ? finalDepth : pow(abs(finalDepth), g_depthRange.y * 5.0);
         rgbColor = float3(debugDepth, debugDepth, debugDepth);
     }
     if (g_debugOverlay == 1) // Confidence

@@ -7,7 +7,7 @@ Texture2D<float4> g_inputTexture : register(t0);
 
 float main(VS_OUTPUT input) : SV_TARGET
 {
-    float2 screenUvs = Remap(input.screenPos.xy, float2(-1.0, -1.0), float2(1.0, 1.0), float2(0.0, 1.0), float2(1.0, 0.0));
+    float2 screenUvs = Remap(input.screenPos.xy, float2(-1.0, -1.0), float2(1.0, 1.0), g_uvPrepassBounds.xw, g_uvPrepassBounds.zy);
     
     float3 textureSize;
     g_inputTexture.GetDimensions(0, textureSize.x, textureSize.y, textureSize.z);
