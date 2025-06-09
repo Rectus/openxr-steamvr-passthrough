@@ -2602,7 +2602,7 @@ void PassthroughRendererDX11::RenderAlphaPrepassView(const ERenderEye eye, const
 
 
 
-// Renders all SteamVR rendermodels with passthough projected on them.
+// Renders all SteamVR rendermodels with passthrough projected on them.
 void PassthroughRendererDX11::RenderViewModelsForView(const ERenderEye eye, const XrCompositionLayerProjection* layer, CameraFrame* frame, std::shared_ptr<DepthFrame> depthFrame, UINT numIndices, FrameRenderParameters& renderParams)
 {
 	int swapchainIndex = (eye == LEFT_EYE) ? renderParams.LeftFrameIndex : renderParams.RightFrameIndex;

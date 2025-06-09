@@ -420,7 +420,7 @@ if (bIsActiveTab) { ImGui::PopStyleColor(1); bIsActiveTab = false; }
 			if (mainConfig.CameraProvider == CameraProvider_OpenCV && cameraConfig.CameraFrameLayout == Mono) { ImGui::EndDisabled(); }
 
 			ImGui::Checkbox("Project onto Render Models", &mainConfig.ProjectToRenderModels);
-			TextDescriptionSpaced("Project the passthough view to the correct distance on render models, such as controllers. Requires good camera calibration.");
+			TextDescriptionSpaced("Project the passthrough view to the correct distance on render models, such as controllers. Requires good camera calibration.");
 
 			ImGui::SetNextItemOpen(true, ImGuiCond_Once);
 			if (ImGui::TreeNode("Image Controls"))
@@ -500,7 +500,7 @@ if (bIsActiveTab) { ImGui::PopStyleColor(1); bIsActiveTab = false; }
 			ImGui::Checkbox("Show Descriptions", &mainConfig.ShowSettingDescriptions);
 
 			ImGui::Checkbox("Pause Passthrough When Idle", &mainConfig.PauseImageHandlingOnIdle);
-			TextDescription("Stops the camera passthrough stream from being processed when no passthough is being rendered.");
+			TextDescription("Stops the camera passthrough stream from being processed when no passthrough is being rendered.");
 
 			BeginSoftDisabled(!mainConfig.PauseImageHandlingOnIdle);
 			ImGui::Checkbox("Close Camera Stream On Pause", &mainConfig.CloseCameraStreamOnPause);
@@ -700,35 +700,6 @@ if (bIsActiveTab) { ImGui::PopStyleColor(1); bIsActiveTab = false; }
 		ImGui::SetNextItemOpen(true, ImGuiCond_Once);
 		if (ImGui::CollapsingHeader("Main Settings"))
 		{
-			ImGui::BeginGroup();
-			ImGui::Text("Filtering");
-			if (ImGui::RadioButton("None###FiltNone", stereoCustomConfig.StereoFiltering == StereoFiltering_None))
-			{
-				stereoCustomConfig.StereoFiltering = StereoFiltering_None;
-			}
-			TextDescription("Filtering from SGBM pass only. Noisy image with many invalid areas.");
-
-			if (ImGui::RadioButton("Weighted Least Squares###FiltWLS", stereoCustomConfig.StereoFiltering == StereoFiltering_WLS))
-			{
-				stereoCustomConfig.StereoFiltering = StereoFiltering_WLS;
-			}
-			TextDescription("Patches up invalid areas. May still be noisy.");
-
-			if (ImGui::RadioButton("Weighted Least Squares & Fast Bilateral Solver###FiltWLSFBS", stereoCustomConfig.StereoFiltering == StereoFiltering_WLS_FBS))
-			{
-				stereoCustomConfig.StereoFiltering = StereoFiltering_WLS_FBS;
-			}
-			TextDescription("Patches up invalid areas and filters the output. May produce worse depth results.");
-
-			if (ImGui::RadioButton("Fast Bilateral Solver###FiltFBS", stereoCustomConfig.StereoFiltering == StereoFiltering_FBS))
-			{
-				stereoCustomConfig.StereoFiltering = StereoFiltering_FBS;
-			}
-			TextDescription("Patches up invalid areas and filters the output. May produce worse depth results.");
-			ImGui::EndGroup();
-
-			IMGUI_BIG_SPACING;
-
 			ImGui::SetNextItemWidth(ImGui::GetContentRegionAvail().x * 0.45f);
 			ScrollableSliderInt("Image Downscale Factor", &stereoCustomConfig.StereoDownscaleFactor, 1, 16, "%d", 1);
 			TextDescriptionSpaced("Ratio of the stereo processed image to the camera frame. Larger values will improve performance.");
@@ -741,14 +712,16 @@ if (bIsActiveTab) { ImGui::PopStyleColor(1); bIsActiveTab = false; }
 			TextDescriptionSpaced("Calculates a separate disparity map for each camera, instead of using the left one for both.");
 
 			ImGui::Checkbox("Composite Both Cameras for Each Eye", &stereoCustomConfig.StereoCutoutEnabled);
-			TextDescriptionSpaced("Detects areas occluded to the main camera and renders them with the other camera where possible.");
+			TextDescriptionSpaced("Detects areas occluded to the main camera and renders them with the other camera where possible.\nCan also combine cameas to improve resolution.");
+
+			ImGui::Checkbox("Use Projection Temporal Filtering", &stereoCustomConfig.StereoUseDisparityTemporalFiltering);
+			TextDescription("Smoothes out and improves quality of the projection depth.");
 
 			IMGUI_BIG_SPACING;
-		}
 
-		ImGui::SetNextItemOpen(true, ImGuiCond_Once);
-		if (ImGui::CollapsingHeader("Performance"))
-		{
+			ImGui::SetNextItemOpen(true, ImGuiCond_Once);
+			if (ImGui::TreeNode("Performance"))
+			{
 				ImGui::Checkbox("Use Multiple Cores", &stereoCustomConfig.StereoUseMulticore);
 				TextDescriptionSpaced("Allows the stereo calculations to use multiple CPU cores. This can be turned off for CPU limited applications.");
 
@@ -756,22 +729,45 @@ if (bIsActiveTab) { ImGui::PopStyleColor(1); bIsActiveTab = false; }
 				ScrollableSliderInt("Frame Skip Ratio", &stereoCustomConfig.StereoFrameSkip, 0, 14, "%d", 1);
 				TextDescription("Skip stereo processing of this many frames for each frame processed. This does not affect the frame rate of viewed camera frames, every frame will still be reprojected on the latest stereo data.");
 
+				IMGUI_BIG_SPACING;
+				ImGui::TreePop();
+			}
+
 			IMGUI_BIG_SPACING;
 		}
 
+
 		ImGui::SetNextItemOpen(true, ImGuiCond_Once);
-		if (ImGui::CollapsingHeader("Advanced"))
+		if (ImGui::CollapsingHeader("Advanced GPU Settings"))
 		{
+
 			ImGui::SetNextItemOpen(true, ImGuiCond_Once);
 			if (ImGui::TreeNode("Projection"))
 			{
 				ImGui::Spacing();
-				ImGui::Checkbox("Separate Depth Pass", &stereoCustomConfig.StereoUseSeparateDepthPass);
-				TextDescriptionSpaced("Enables a separate render pass generating passthrough depth maps for features that benefit from it, such as Composite Both Cameras for Each Eye.");
-				BeginSoftDisabled(!stereoCustomConfig.StereoUseSeparateDepthPass);
-				ImGui::Checkbox("Use Fullscreen Draw Pass", &stereoCustomConfig.StereoUseFullscreenPass);
-				TextDescription("Use a more effective main pass that does everything in the pixel shader.");
-				EndSoftDisabled(!stereoCustomConfig.StereoUseSeparateDepthPass);
+				ImGui::BeginGroup();
+				ImGui::Text("Rendering Path");
+				if (ImGui::RadioButton("Direct Rendering (Legacy)", !stereoCustomConfig.StereoUseSeparateDepthPass))
+				{
+					stereoCustomConfig.StereoUseSeparateDepthPass = false;
+					stereoCustomConfig.StereoUseFullscreenPass = false;
+				}
+				TextDescriptionSpaced("Legacy mode that reprojects from disparity and draws passthrough in one call.\nPoor support for temporal filtering and camera composition.");
+				if (ImGui::RadioButton("Separate Depth Pass (Legacy)", stereoCustomConfig.StereoUseSeparateDepthPass && !stereoCustomConfig.StereoUseFullscreenPass))
+				{
+					stereoCustomConfig.StereoUseSeparateDepthPass = true;
+					stereoCustomConfig.StereoUseFullscreenPass = false;
+				}
+				TextDescriptionSpaced("Uses a separate render pass for drawing depth maps.\nBetter support for camera composition, but still uses original vertex grid shaders.");
+				if (ImGui::RadioButton("Separate Depth Pass Fullscreen", stereoCustomConfig.StereoUseSeparateDepthPass && stereoCustomConfig.StereoUseFullscreenPass))
+				{
+					stereoCustomConfig.StereoUseSeparateDepthPass = true;
+					stereoCustomConfig.StereoUseFullscreenPass = true;
+				}
+				TextDescription("More effective version of the above renderer that proccesses the depth maps directly in the pixel shader.");
+				ImGui::EndGroup();
+
+				IMGUI_BIG_SPACING;
 
 				ImGui::Checkbox("Use Hexagon Grid Mesh", &stereoCustomConfig.StereoUseHexagonGridMesh);
 				TextDescription("Mesh with smoother corners for less artifacting. May introduce warping.");
@@ -781,6 +777,8 @@ if (bIsActiveTab) { ImGui::PopStyleColor(1); bIsActiveTab = false; }
 
 				ImGui::Checkbox("Draw Background", &stereoCustomConfig.StereoDrawBackground);
 				TextDescription("Extra pass to render a cylinder mesh behind the stereo mesh.");
+
+				IMGUI_BIG_SPACING;
 
 				BeginSoftDisabled(!stereoCustomConfig.StereoUseSeparateDepthPass);
 				ImGui::SetNextItemWidth(ImGui::GetContentRegionAvail().x * 0.45f);
@@ -793,6 +791,12 @@ if (bIsActiveTab) { ImGui::PopStyleColor(1); bIsActiveTab = false; }
 				TextDescriptionSpaced("Maximum confidence for applying disparity smoothing. Setting this to 1 will always apply smoothing.");
 
 				IMGUI_BIG_SPACING;
+				ImGui::TreePop();
+			}
+
+			ImGui::SetNextItemOpen(true, ImGuiCond_Once);
+			if (ImGui::TreeNode("Camera Composition"))
+			{
 				ImGui::PushItemWidth(ImGui::GetContentRegionAvail().x * 0.45f);
 				BeginSoftDisabled(!stereoCustomConfig.StereoCutoutEnabled);
 				ScrollableSlider("Composition Cutout Factor", &stereoCustomConfig.StereoCutoutFactor, 0.0f, 3.0f, "%.2f", 0.01f);
@@ -801,40 +805,55 @@ if (bIsActiveTab) { ImGui::PopStyleColor(1); bIsActiveTab = false; }
 				ScrollableSlider("Composition Combine Factor", &stereoCustomConfig.StereoCutoutCombineFactor, 0.0f, 1.0f, "%.1f", 0.1f);
 				TextDescription("Merges pixels from both cameras where both have good confidence.");
 				ScrollableSlider("Composition Cutout Secondary Camera Weight", &stereoCustomConfig.StereoCutoutSecondaryCameraWeight, 0.0f, 1.0f, "%.1f", 0.1f);
-				TextDescription("Settings for Composite Both Cameras for Each Eye.");
 				EndSoftDisabled(!stereoCustomConfig.StereoCutoutEnabled);
 
-				IMGUI_BIG_SPACING;
-				
-				BeginSoftDisabled(!stereoCustomConfig.StereoUseSeparateDepthPass || stereoCustomConfig.StereoUseFullscreenPass);
-				ScrollableSlider("Depth Fold Strength", &stereoCustomConfig.StereoDepthContourStrength, 0.0f, 5.0f, "%.1f", 0.1f);
-				TextDescription("Adjusts depth mesh vertices to smooth out contours in areas with large depth discontinuities.\nThis helps with depth aliasing.");
-				ScrollableSlider("Depth Fold Theshold", &stereoCustomConfig.StereoDepthContourThreshold, 0.0f, 2.0f, "%.1f", 0.1f);
-				TextDescription("Minimum depth difference treshold for applying contour adjustment.");
-				EndSoftDisabled(!stereoCustomConfig.StereoUseSeparateDepthPass || stereoCustomConfig.StereoUseFullscreenPass);
-
-				IMGUI_BIG_SPACING;
-
-				BeginSoftDisabled(!stereoCustomConfig.StereoUseSeparateDepthPass || !stereoCustomConfig.StereoUseFullscreenPass);
-				ScrollableSlider("Fullscreen Contour Filter Strength", &stereoCustomConfig.StereoDepthFullscreenContourStrength, 0.0f, 2.0f, "%.2f", 0.01f);
-				TextDescription("");
-				ScrollableSlider("Fullscreen Contour Filter Theshold", &stereoCustomConfig.StereoDepthFullscreenContourThreshold, 0.0f, 1.0f, "%.2f", 0.01f);
-				TextDescription("");
-				ScrollableSliderInt("Fullscreen Contour Filter Width", &stereoCustomConfig.StereoDepthFullscreenContourFilterWidth, 0, 5, "%d", 1);
-				TextDescription("");
-				EndSoftDisabled(!stereoCustomConfig.StereoUseSeparateDepthPass || !stereoCustomConfig.StereoUseFullscreenPass);
-
 				ImGui::PopItemWidth();
+
+				IMGUI_BIG_SPACING;
 				ImGui::TreePop();
 			}
 
 			ImGui::SetNextItemOpen(true, ImGuiCond_Once);
-			if (ImGui::TreeNode("Temporal Filtering"))
+			if (ImGui::TreeNode("Depth Fold"))
 			{
-				ImGui::Checkbox("Use Projection Temporal Filtering", &stereoCustomConfig.StereoUseDisparityTemporalFiltering);
-				TextDescription("Possibly smoothes out and improves quality of the projection depth.");
+				TextDescription("Adjusts depth mesh vertices to smooth out contours in areas with large depth discontinuities.\nThis helps with depth aliasing. Not used in fullscreen mode");
+				ImGui::PushItemWidth(ImGui::GetContentRegionAvail().x * 0.45f);
+				BeginSoftDisabled(!stereoCustomConfig.StereoUseSeparateDepthPass || stereoCustomConfig.StereoUseFullscreenPass);
+				ScrollableSlider("Depth Fold Strength", &stereoCustomConfig.StereoDepthContourStrength, 0.0f, 5.0f, "%.1f", 0.1f);
+				TextDescription("Strength of the effect.");
+				ScrollableSlider("Depth Fold Theshold", &stereoCustomConfig.StereoDepthContourThreshold, 0.0f, 2.0f, "%.1f", 0.1f);
+				TextDescription("Minimum depth difference treshold for applying contour adjustment.");
+				EndSoftDisabled(!stereoCustomConfig.StereoUseSeparateDepthPass || stereoCustomConfig.StereoUseFullscreenPass);
+				ImGui::PopItemWidth();
 
 				IMGUI_BIG_SPACING;
+				ImGui::TreePop();
+			}
+
+			ImGui::SetNextItemOpen(true, ImGuiCond_Once);
+			if (ImGui::TreeNode("Fullscreen Contour"))
+			{
+				TextDescription("Detects edges in the depth map and moves pixels toward the front or back to provide sharp contours.\nThis reduces interpolation artifacts from low resolution depth maps.");
+
+				ImGui::PushItemWidth(ImGui::GetContentRegionAvail().x * 0.45f);
+				BeginSoftDisabled(!stereoCustomConfig.StereoUseSeparateDepthPass || !stereoCustomConfig.StereoUseFullscreenPass);
+				ScrollableSlider("Fullscreen Contour Filter Strength", &stereoCustomConfig.StereoDepthFullscreenContourStrength, 0.0f, 2.0f, "%.2f", 0.01f);
+				TextDescription("How far the depth is adjusted. Set to 0 to disable feature.");
+				ScrollableSlider("Fullscreen Contour Filter Theshold", &stereoCustomConfig.StereoDepthFullscreenContourThreshold, 0.0f, 1.0f, "%.2f", 0.01f);
+				TextDescription("Depth treshold to trigger filtering.");
+				ScrollableSliderInt("Fullscreen Contour Filter Width", &stereoCustomConfig.StereoDepthFullscreenContourFilterWidth, 0, 5, "%d", 1);
+				TextDescription("Adds Gaussian filtering to smooth out depth map pixles.\nProduces a smoother contour. Set to 0 to not use.");
+				EndSoftDisabled(!stereoCustomConfig.StereoUseSeparateDepthPass || !stereoCustomConfig.StereoUseFullscreenPass);
+
+				ImGui::PopItemWidth();
+
+				IMGUI_BIG_SPACING;
+				ImGui::TreePop();
+			}
+
+			ImGui::SetNextItemOpen(true, ImGuiCond_Once);
+			if (ImGui::TreeNode("Projection Temporal Filtering"))
+			{
 				ImGui::PushItemWidth(ImGui::GetContentRegionAvail().x * 0.45f);
 				BeginSoftDisabled(!stereoCustomConfig.StereoUseDisparityTemporalFiltering);
 				ScrollableSlider("Projection Temporal Filtering Strength", &stereoCustomConfig.StereoDisparityTemporalFilteringStrength, 0.0f, 1.0f, "%.2f", 0.01f);
@@ -844,6 +863,12 @@ if (bIsActiveTab) { ImGui::PopStyleColor(1); bIsActiveTab = false; }
 				ImGui::TreePop();
 			}
 
+			IMGUI_BIG_SPACING;
+		}
+
+		ImGui::SetNextItemOpen(true, ImGuiCond_Once);
+		if (ImGui::CollapsingHeader("Advanced CPU Settings"))
+		{
 			ImGui::SetNextItemOpen(true, ImGuiCond_Once);
 			if (ImGui::TreeNode("Block Matching"))
 			{
@@ -900,12 +925,42 @@ if (bIsActiveTab) { ImGui::PopStyleColor(1); bIsActiveTab = false; }
 				ScrollableSliderInt("SGBM SpeckleRange", &stereoCustomConfig.StereoSGBM_SpeckleRange, 1, 8, "%d", 1);
 				ImGui::PopItemWidth();
 
+				IMGUI_BIG_SPACING;
 				ImGui::TreePop();
 			}
 
 			ImGui::SetNextItemOpen(true, ImGuiCond_Once);
-			if (ImGui::TreeNode("Filtering"))
+			if (ImGui::TreeNode("Disparity Filtering"))
 			{
+				ImGui::Text("Filtering Passes");
+				ImGui::BeginGroup();
+				if (ImGui::RadioButton("None###FiltNone", stereoCustomConfig.StereoFiltering == StereoFiltering_None))
+				{
+					stereoCustomConfig.StereoFiltering = StereoFiltering_None;
+				}
+				TextDescription("Filtering from SGBM pass only. Noisy image with many invalid areas.");
+
+				if (ImGui::RadioButton("Weighted Least Squares###FiltWLS", stereoCustomConfig.StereoFiltering == StereoFiltering_WLS))
+				{
+					stereoCustomConfig.StereoFiltering = StereoFiltering_WLS;
+				}
+				TextDescription("Patches up invalid areas. May still be noisy.");
+
+				if (ImGui::RadioButton("Weighted Least Squares & Fast Bilateral Solver###FiltWLSFBS", stereoCustomConfig.StereoFiltering == StereoFiltering_WLS_FBS))
+				{
+					stereoCustomConfig.StereoFiltering = StereoFiltering_WLS_FBS;
+				}
+				TextDescription("Patches up invalid areas and filters the output. May produce worse depth results.");
+
+				if (ImGui::RadioButton("Fast Bilateral Solver###FiltFBS", stereoCustomConfig.StereoFiltering == StereoFiltering_FBS))
+				{
+					stereoCustomConfig.StereoFiltering = StereoFiltering_FBS;
+				}
+				TextDescription("Patches up invalid areas and filters the output. May produce worse depth results.");
+				ImGui::EndGroup();
+
+				IMGUI_BIG_SPACING;
+
 				BeginSoftDisabled(stereoCustomConfig.StereoFiltering == StereoFiltering_None || stereoCustomConfig.StereoFiltering == StereoFiltering_FBS);
 				ImGui::PushItemWidth(ImGui::GetContentRegionAvail().x * 0.45f);
 				ScrollableSlider("WLS Lambda", &stereoCustomConfig.StereoWLS_Lambda, 1.0f, 10000.0f, "%.0f", 100.0f);
@@ -923,6 +978,7 @@ if (bIsActiveTab) { ImGui::PopStyleColor(1); bIsActiveTab = false; }
 				ScrollableSliderInt("FBS Iterations", &stereoCustomConfig.StereoFBS_Iterations, 1, 35, "%d", 1);
 				EndSoftDisabled(stereoCustomConfig.StereoFiltering == StereoFiltering_None || stereoCustomConfig.StereoFiltering == StereoFiltering_WLS);
 				ImGui::PopItemWidth();
+
 				ImGui::TreePop();
 			}
 		}
@@ -949,10 +1005,10 @@ if (bIsActiveTab) { ImGui::PopStyleColor(1); bIsActiveTab = false; }
 		{
 			BeginSoftDisabled(!depthConfig.DepthReadFromApplication);
 			ImGui::Checkbox("Force Depth Composition", &depthConfig.DepthForceComposition);
-			TextDescription("Enables composing the passthough by depth for applications that submit a depth buffer.");
+			TextDescription("Enables composing the passthrough by depth for applications that submit a depth buffer.");
 			EndSoftDisabled(!depthConfig.DepthReadFromApplication);
 
-			//ImGui::SetNextItemOpen(true, ImGuiCond_Once);
+			ImGui::SetNextItemOpen(true, ImGuiCond_Once);
 			if (ImGui::TreeNode("Depth Range"))
 			{
 				ImGui::Checkbox("Force Depth Range testing", &depthConfig.DepthForceRangeTest);
@@ -1087,7 +1143,7 @@ if (bIsActiveTab) { ImGui::PopStyleColor(1); bIsActiveTab = false; }
 		if (ImGui::CollapsingHeader("Common"))
 		{
 			ImGui::Text("Camera Provider");
-			TextDescription("Source for passthough camera images.");
+			TextDescription("Source for passthrough camera images.");
 			if (ImGui::RadioButton("SteamVR", mainConfig.CameraProvider == CameraProvider_OpenVR))
 			{
 				if (mainConfig.CameraProvider != CameraProvider_OpenVR)
