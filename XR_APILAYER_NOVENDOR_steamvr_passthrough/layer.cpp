@@ -220,6 +220,7 @@ namespace
 			if (bInverseAlphaExtensionEnabled)
 			{
 				m_bInverseAlphaExtensionEnabled = true;
+				m_dashboardMenu->GetDisplayValues().bExtInvertedAlphaActive = true;
 				Log("Extension XR_EXT_composition_layer_inverted_alpha enabled\n");
 			}
 
@@ -675,6 +676,8 @@ namespace
 				m_dashboardMenu->GetDisplayValues().depthBufferFormat = 0;
 				m_dashboardMenu->GetDisplayValues().frameBufferWidth = 0;
 				m_dashboardMenu->GetDisplayValues().frameBufferHeight = 0;
+				m_dashboardMenu->GetDisplayValues().nearZ = 0;
+				m_dashboardMenu->GetDisplayValues().farZ = 0;
 				m_dashboardMenu->GetDisplayValues().frameToPhotonsLatencyMS = 0;
 				m_dashboardMenu->GetDisplayValues().frameToRenderLatencyMS = 0;
 				m_dashboardMenu->GetDisplayValues().renderTimeMS = 0;
@@ -1064,6 +1067,8 @@ namespace
 					if (eye == LEFT_EYE)
 					{
 						m_dashboardMenu->GetDisplayValues().depthBufferFormat = depthProps->second.format;
+						m_dashboardMenu->GetDisplayValues().nearZ = depthInfo->nearZ;
+						m_dashboardMenu->GetDisplayValues().farZ = depthInfo->farZ;
 					}
 
 					Log("Found depth swapchain %u for color swapchain %u, arraySize %u, depth range [%f:%f], Z-range[%g:%g]\n", depthInfo->subImage.swapchain, newSwapchain, depthProps->second.arraySize, depthInfo->minDepth, depthInfo->maxDepth, depthInfo->nearZ, depthInfo->farZ);

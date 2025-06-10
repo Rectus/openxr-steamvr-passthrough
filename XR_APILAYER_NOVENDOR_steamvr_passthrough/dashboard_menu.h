@@ -38,6 +38,9 @@ struct MenuDisplayValues
 	XrCompositionLayerFlags frameBufferFlags = 0;
 	int64_t frameBufferFormat = 0;
 	int64_t depthBufferFormat = 0;
+	float nearZ = 0.0f;
+	float farZ = 0.0f;
+
 	float frameToRenderLatencyMS = 0.0f;
 	float frameToPhotonsLatencyMS = 0.0f;
 	float renderTimeMS = 0.0f;
@@ -47,6 +50,7 @@ struct MenuDisplayValues
 	bool bCorePassthroughActive = false;
 	int CoreCurrentMode = 0;
 
+	bool bExtInvertedAlphaActive = false;
 	bool bVarjoDepthEstimationExtensionActive = false;
 	bool bVarjoDepthCompositionExtensionActive = false;
 

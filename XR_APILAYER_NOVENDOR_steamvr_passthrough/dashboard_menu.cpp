@@ -336,6 +336,16 @@ if (bIsActiveTab) { ImGui::PopStyleColor(1); bIsActiveTab = false; }
 	ImGui::Text("Passthrough:");
 	m_displayValues.bCorePassthroughActive ? ImGui::TextColored(colorTextGreen, "Active") : ImGui::TextColored(colorTextRed, "Inactive");
 
+	if (mainConfig.EnablePassthrough && !m_displayValues.bCorePassthroughActive && m_displayValues.CoreCurrentMode == 1)
+	{
+		ImGui::TextColored(colorTextRed, "Opaque");
+	}
+
+	if (mainConfig.EnablePassthrough && !m_displayValues.bCorePassthroughActive && m_displayValues.CoreCurrentMode == 3 && !(m_displayValues.frameBufferFlags & XR_COMPOSITION_LAYER_BLEND_TEXTURE_SOURCE_ALPHA_BIT))
+	{
+		ImGui::TextColored(colorTextRed, "No Alpha");
+	}
+
 	if (m_displayValues.bCorePassthroughActive && m_displayValues.bDepthBlendingActive)
 	{
 		ImGui::TextColored(colorTextGreen, "Depth Blending");
@@ -548,6 +558,10 @@ if (bIsActiveTab) { ImGui::PopStyleColor(1); bIsActiveTab = false; }
 			else if (m_displayValues.CoreCurrentMode == 2) { ImGui::Text("Additive"); }
 			else if (m_displayValues.CoreCurrentMode == 1) { ImGui::Text("Opaque"); }
 			else { ImGui::Text("Unknown"); }
+
+			if(mainConfig.EnablePassthrough && !m_displayValues.bCorePassthroughActive && m_displayValues.CoreCurrentMode == 3 && !(m_displayValues.frameBufferFlags& XR_COMPOSITION_LAYER_BLEND_TEXTURE_SOURCE_ALPHA_BIT))
+			{ ImGui::TextColored(colorTextRed, "No alpha channel provided!"); }
+
 			ImGui::PopFont();
 
 			IMGUI_BIG_SPACING;
@@ -582,6 +596,27 @@ if (bIsActiveTab) { ImGui::PopStyleColor(1); bIsActiveTab = false; }
 			}
 			ImGui::EndGroup();
 			EndSoftDisabled(!coreConfig.CorePassthroughEnable);
+
+			IMGUI_BIG_SPACING;
+		}
+
+		ImGui::SetNextItemOpen(true, ImGuiCond_Once);
+		if (ImGui::CollapsingHeader("Multivendor Extensions"))
+		{
+			ImGui::PushFont(m_fixedFont);
+			ImGui::Text("Composition Layer Inverted Alpha extension:");
+			ImGui::SameLine();
+			if (m_displayValues.bExtInvertedAlphaActive)
+			{
+				ImGui::TextColored(colorTextGreen, "Active");
+			}
+			else
+			{
+				ImGui::TextColored(colorTextRed, "Inactive");
+			}
+			ImGui::PopFont();
+
+			IMGUI_BIG_SPACING;
 		}
 
 		ImGui::SetNextItemOpen(true, ImGuiCond_Once);
@@ -616,6 +651,8 @@ if (bIsActiveTab) { ImGui::PopStyleColor(1); bIsActiveTab = false; }
 
 			ImGui::Checkbox("Enable Varjo Composition layer depth testing", &extConfig.ExtVarjoDepthComposition);
 			TextDescription("Allow applications to compose submitted layers based on depth using the XR_VARJO_composition_layer_depth_test extension. Requires a restart to apply.");
+
+			IMGUI_BIG_SPACING;
 		}
 
 		ImGui::EndChild();
@@ -1560,24 +1597,36 @@ if (bIsActiveTab) { ImGui::PopStyleColor(1); bIsActiveTab = false; }
 
 			ImGui::Text("Application: %s", m_displayValues.currentApplication.c_str());
 			ImGui::Text("Resolution: %i x %i", m_displayValues.frameBufferWidth, m_displayValues.frameBufferHeight);
-			if (m_displayValues.frameBufferFlags & XR_COMPOSITION_LAYER_BLEND_TEXTURE_SOURCE_ALPHA_BIT)
-			{
-				if (m_displayValues.frameBufferFlags & XR_COMPOSITION_LAYER_UNPREMULTIPLIED_ALPHA_BIT)
-				{
-					ImGui::Text("Flags: Unpremultiplied alpha");
-				}
-				else
-				{
-					ImGui::Text("Flags: Premultiplied alpha");
-				}
-			}
-			else
-			{
-				ImGui::Text("Flags: No alpha");
-			}
+			ImGui::Text("Framebuffer Flags: 0x%x", m_displayValues.frameBufferFlags);
+
+			ImGui::Text("\tChromatic Abberation Correction: ");
+			ImGui::SameLine();
+			m_displayValues.frameBufferFlags & XR_COMPOSITION_LAYER_CORRECT_CHROMATIC_ABERRATION_BIT ? 
+				ImGui::TextColored(colorTextGreen, "Forced") :
+				ImGui::TextColored(colorTextRed, "Auto");
+			ImGui::Text("\tAlpha Channel: ");
+			ImGui::SameLine();
+			m_displayValues.frameBufferFlags & XR_COMPOSITION_LAYER_BLEND_TEXTURE_SOURCE_ALPHA_BIT ? 
+				ImGui::TextColored(colorTextGreen, "Enabled") :
+				ImGui::TextColored(colorTextRed, "Disabled");
+			ImGui::Text("\tAlpha Premultiplication: ");
+			ImGui::SameLine();
+			m_displayValues.frameBufferFlags & XR_COMPOSITION_LAYER_UNPREMULTIPLIED_ALPHA_BIT ? 
+				ImGui::TextColored(colorTextGreen, "Enabled") :
+				ImGui::TextColored(colorTextRed, "Disabled");
+			ImGui::Text("\tInverted Alpha: ");
+			ImGui::SameLine();
+			m_displayValues.frameBufferFlags & XR_COMPOSITION_LAYER_INVERTED_ALPHA_BIT_EXT ? 
+				(m_displayValues.bExtInvertedAlphaActive ? 
+					ImGui::TextColored(colorTextGreen, "Enabled") :
+					ImGui::TextColored(colorTextOrange, "Enabled (Without extension!)")):
+				ImGui::TextColored(colorTextRed, "Disabled");
 
 			ImGui::Text("Framebuffer format: %s (%li)", GetImageFormatName(m_displayValues.appRenderAPI, m_displayValues.frameBufferFormat).c_str(), m_displayValues.frameBufferFormat);
 			ImGui::Text("Depthbuffer format: %s (%li)", GetImageFormatName(m_displayValues.appRenderAPI, m_displayValues.depthBufferFormat).c_str(), m_displayValues.depthBufferFormat);
+			std::isinf(m_displayValues.nearZ) ? ImGui::Text("Near Z: Infinity") : ImGui::Text("Near Z: %.3f", m_displayValues.nearZ);
+			std::isinf(m_displayValues.farZ) ? ImGui::Text("Far Z: Infinity") : ImGui::Text("Far Z: %.3f", m_displayValues.farZ);
+
 
 			ImGui::Text("Exposure to render latency: %.1fms", m_displayValues.frameToRenderLatencyMS);
 			ImGui::Text("Exposure to photons latency: %.1fms", m_displayValues.frameToPhotonsLatencyMS);
