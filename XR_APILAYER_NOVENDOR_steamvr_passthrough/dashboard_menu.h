@@ -96,11 +96,15 @@ private:
 	std::thread m_menuThread;
 	bool m_bRunThread;
 
-	ComPtr<ID3D11Device> m_d3d11Device;
-	ComPtr<ID3D11DeviceContext> m_d3d11DeviceContext;
+	ComPtr<ID3D11Device5> m_d3d11Device;
+	ComPtr<ID3D11DeviceContext4> m_d3d11DeviceContext;
 	ComPtr<ID3D11Texture2D> m_d3d11Texture[2];
 	ComPtr<ID3D11RenderTargetView> m_d3d11RTV[2];
+	ComPtr<ID3D11Fence> m_d3d11Fence;
+	HANDLE m_d3d11FenceEvent;
 	int m_frameIndex = 0;
+	uint64_t m_syncCounter = 0;
+	LARGE_INTEGER m_lastFrameStart;
 
 	bool m_bMenuIsVisible;
 	MenuDisplayValues m_displayValues;

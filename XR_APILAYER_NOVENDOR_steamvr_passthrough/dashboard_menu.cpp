@@ -44,6 +44,7 @@ DashboardMenu::~DashboardMenu()
 void DashboardMenu::RunThread()
 {
 	vr::IVROverlay* vrOverlay = m_openVRManager->GetVROverlay();
+	vr::IVRSystem* vrSystem = m_openVRManager->GetVRSystem();
 
 	while (!vrOverlay)
 	{
@@ -74,18 +75,44 @@ void DashboardMenu::RunThread()
 	ImGui_ImplDX11_Init(m_d3d11Device.Get(), m_d3d11DeviceContext.Get());
 	CreateOverlay();
 
+	uint64_t frameCount = 0;
 
 	while (m_bRunThread)
 	{
 		TickMenu();
 
-		vrOverlay->WaitFrameSync(100);
+		float frameRate = vrSystem->GetFloatTrackedDeviceProperty(vr::k_unTrackedDeviceIndex_Hmd, vr::Prop_DisplayFrequency_Float);
+
+		float timeSinceVsyncSecs;
+		uint64_t newFrameCount;
+		bool bGotVsync = vrSystem->GetTimeSinceLastVsync(&timeSinceVsyncSecs, &newFrameCount);
+		
+		if (frameRate > 0 && bGotVsync)
+		{
+			uint32_t sleepTimeMS = MAX(ceil(1000.0f / frameRate - timeSinceVsyncSecs * 1000.0f), 0.0f);
+
+			Sleep(sleepTimeMS);
+		}
+		else
+		{
+			Sleep(1000.0f / 60.0f);
+		}
+
+		frameCount = newFrameCount;
+
+		// WaitFrameSync Does not work under OpenXR applications.
+		/*if (vr::EVROverlayError error = vrOverlay->WaitFrameSync(100); error != vr::VROverlayError_None)
+		{
+			ErrorLog("WaitFrameSync error: %d\n", error);
+		}*/
 	}
 
 
 	ImGui_ImplDX11_Shutdown();
 	ImGui::GetIO().BackendRendererUserData = NULL;
 	ImGui::DestroyContext();
+
+	CloseHandle(m_d3d11FenceEvent);
 
 	if (vrOverlay)
 	{
@@ -285,6 +312,13 @@ void DashboardMenu::TickMenu()
 	ImVec4 colorTextOrange(0.85f, 0.7f, 0.2f, 1.0f);
 
 	ImGuiIO& io = ImGui::GetIO();
+
+	LARGE_INTEGER frameStart, perfFrequency;
+	QueryPerformanceCounter(&frameStart);
+	QueryPerformanceFrequency(&perfFrequency);
+
+	io.DeltaTime = ((float)(frameStart.QuadPart - m_lastFrameStart.QuadPart)) / perfFrequency.QuadPart;
+	m_lastFrameStart = frameStart;
 
 	ImGui_ImplDX11_NewFrame();
 
@@ -1586,10 +1620,10 @@ if (bIsActiveTab) { ImGui::PopStyleColor(1); bIsActiveTab = false; }
 				ImGui::Text("Layer Render API: DirectX 11");
 				break;
 			case DirectX12:
-				ImGui::Text("Layer Render API: DirectX 12");
+				ImGui::Text("Layer Render API: DirectX 12 (Legacy)");
 				break;
 			case Vulkan:
-				ImGui::Text("Layer Render API: Vulkan");
+				ImGui::Text("Layer Render API: Vulkan (Legacy)");
 				break;
 			default:
 				ImGui::Text("Layer Render API: None");
@@ -1599,28 +1633,41 @@ if (bIsActiveTab) { ImGui::PopStyleColor(1); bIsActiveTab = false; }
 			ImGui::Text("Resolution: %i x %i", m_displayValues.frameBufferWidth, m_displayValues.frameBufferHeight);
 			ImGui::Text("Framebuffer Flags: 0x%x", m_displayValues.frameBufferFlags);
 
-			ImGui::Text("\tChromatic Abberation Correction: ");
-			ImGui::SameLine();
-			m_displayValues.frameBufferFlags & XR_COMPOSITION_LAYER_CORRECT_CHROMATIC_ABERRATION_BIT ? 
-				ImGui::TextColored(colorTextGreen, "Forced") :
-				ImGui::TextColored(colorTextRed, "Auto");
-			ImGui::Text("\tAlpha Channel: ");
-			ImGui::SameLine();
-			m_displayValues.frameBufferFlags & XR_COMPOSITION_LAYER_BLEND_TEXTURE_SOURCE_ALPHA_BIT ? 
-				ImGui::TextColored(colorTextGreen, "Enabled") :
-				ImGui::TextColored(colorTextRed, "Disabled");
-			ImGui::Text("\tAlpha Premultiplication: ");
-			ImGui::SameLine();
-			m_displayValues.frameBufferFlags & XR_COMPOSITION_LAYER_UNPREMULTIPLIED_ALPHA_BIT ? 
-				ImGui::TextColored(colorTextGreen, "Enabled") :
-				ImGui::TextColored(colorTextRed, "Disabled");
-			ImGui::Text("\tInverted Alpha: ");
-			ImGui::SameLine();
-			m_displayValues.frameBufferFlags & XR_COMPOSITION_LAYER_INVERTED_ALPHA_BIT_EXT ? 
-				(m_displayValues.bExtInvertedAlphaActive ? 
-					ImGui::TextColored(colorTextGreen, "Enabled") :
-					ImGui::TextColored(colorTextOrange, "Enabled (Without extension!)")):
-				ImGui::TextColored(colorTextRed, "Disabled");
+			ImGui::Indent();
+			if (ImGui::BeginTable("FrameBufferValsTable", 2, ImGuiTableFlags_BordersInnerV |ImGuiTableFlags_NoHostExtendX |ImGuiTableFlags_SizingFixedFit))
+			{
+				ImGui::TableNextColumn();
+				ImGui::Text("Chromatic Abberation Correction");
+				ImGui::TableNextColumn();
+				m_displayValues.frameBufferFlags& XR_COMPOSITION_LAYER_CORRECT_CHROMATIC_ABERRATION_BIT ?
+					ImGui::TextColored(colorTextOrange, "Forced (1) (Deprecated)") :
+					ImGui::TextColored(colorTextGreen, "Runtime Controlled (0)");
+
+				ImGui::TableNextColumn();
+				ImGui::Text("Alpha Channel");
+				ImGui::TableNextColumn();
+				m_displayValues.frameBufferFlags& XR_COMPOSITION_LAYER_BLEND_TEXTURE_SOURCE_ALPHA_BIT ?
+					ImGui::TextColored(colorTextGreen, "Enabled (1)") :
+					ImGui::TextColored(colorTextRed, "Disabled (0)");
+
+				ImGui::TableNextColumn();
+				ImGui::Text("Alpha Premultiplication");
+				ImGui::TableNextColumn();
+				m_displayValues.frameBufferFlags& XR_COMPOSITION_LAYER_UNPREMULTIPLIED_ALPHA_BIT ?
+					ImGui::TextColored(colorTextRed, "Not Premultipled (1)") :
+					ImGui::TextColored(colorTextGreen, "Premultipled by Application (0)");
+
+				ImGui::TableNextColumn();
+				ImGui::Text("Inverted Alpha");
+				ImGui::TableNextColumn();
+				m_displayValues.frameBufferFlags& XR_COMPOSITION_LAYER_INVERTED_ALPHA_BIT_EXT ?
+					(m_displayValues.bExtInvertedAlphaActive ?
+						ImGui::TextColored(colorTextGreen, "Enabled (1)") :
+						ImGui::TextColored(colorTextOrange, "Enabled (1) (Without extension!)")) :
+					ImGui::TextColored(colorTextRed, "Disabled (0)");
+				ImGui::EndTable();
+			}
+			ImGui::Unindent();
 
 			ImGui::Text("Framebuffer format: %s (%li)", GetImageFormatName(m_displayValues.appRenderAPI, m_displayValues.frameBufferFormat).c_str(), m_displayValues.frameBufferFormat);
 			ImGui::Text("Depthbuffer format: %s (%li)", GetImageFormatName(m_displayValues.appRenderAPI, m_displayValues.depthBufferFormat).c_str(), m_displayValues.depthBufferFormat);
@@ -1633,6 +1680,7 @@ if (bIsActiveTab) { ImGui::PopStyleColor(1); bIsActiveTab = false; }
 			ImGui::Text("Passthrough CPU render duration: %.2fms", m_displayValues.renderTimeMS);
 			ImGui::Text("Stereo reconstruction duration: %.2fms", m_displayValues.stereoReconstructionTimeMS);
 			ImGui::Text("Camera frame retrieval duration: %.2fms", m_displayValues.frameRetrievalTimeMS);
+			ImGui::Text("Menu framerate: %.1fHz (%.2fms)", io.Framerate, io.DeltaTime * 1000.0f);
 			ImGui::PopFont();
 
 			IMGUI_BIG_SPACING;
@@ -1934,7 +1982,19 @@ if (bIsActiveTab) { ImGui::PopStyleColor(1); bIsActiveTab = false; }
 	const float clearColor[4] = { 0, 0, 0, 1 };
 	m_d3d11DeviceContext->ClearRenderTargetView(m_d3d11RTV[m_frameIndex].Get(), clearColor);
 	ImGui_ImplDX11_RenderDrawData(ImGui::GetDrawData());
-	m_d3d11DeviceContext->Flush();
+
+	m_syncCounter++;
+	m_d3d11DeviceContext->Signal(m_d3d11Fence.Get(), m_syncCounter);
+	m_d3d11Fence->SetEventOnCompletion(m_syncCounter, m_d3d11FenceEvent);
+
+	// Manually sync rendering before we send the output to the overlay.
+	DWORD ret = WaitForSingleObject(m_d3d11FenceEvent, 16);
+	if (ret != WAIT_OBJECT_0)
+	{
+		ErrorLog("Overlay: Failed to wait for render: 0x%x\n", ret);
+	}
+
+	ResetEvent(m_d3d11FenceEvent);
 
 	vr::Texture_t texture;
 	texture.eColorSpace = vr::ColorSpace_Linear;
@@ -2217,9 +2277,60 @@ void DashboardMenu::HandleEvents()
 
 void DashboardMenu::SetupDX11()
 {
+	IDXGIFactory1* factory = nullptr;
+	if (FAILED(CreateDXGIFactory1(__uuidof(IDXGIFactory1), reinterpret_cast<void**>(&factory))))
+	{
+		ErrorLog("Overlay: CreateDXGIFactory failure!\n");
+		return;
+	}
+
+	int32_t adapterIndex;
+	m_openVRManager->GetVRSystem()->GetDXGIOutputInfo(&adapterIndex);
+	IDXGIAdapter1* adapter = nullptr;
+
+	if (factory->EnumAdapters1(adapterIndex, &adapter) == DXGI_ERROR_NOT_FOUND)
+	{
+		ErrorLog("Overlay: No display adapter found!\n");
+		factory->Release();
+		return;
+	}
+
+	factory->Release();
+
 	std::vector<D3D_FEATURE_LEVEL> featureLevels = { D3D_FEATURE_LEVEL_12_1, D3D_FEATURE_LEVEL_12_0, D3D_FEATURE_LEVEL_11_1 };
 
-	D3D11CreateDevice(NULL, D3D_DRIVER_TYPE_HARDWARE, NULL, 0, featureLevels.data(), (UINT)featureLevels.size(), D3D11_SDK_VERSION, &m_d3d11Device, NULL, &m_d3d11DeviceContext);
+	ComPtr<ID3D11Device> device;
+	ComPtr <ID3D11DeviceContext> deviceContext;
+
+	HRESULT res = D3D11CreateDevice(adapter, D3D_DRIVER_TYPE_UNKNOWN, NULL, 0, featureLevels.data(), (uint32_t)featureLevels.size(), D3D11_SDK_VERSION, &device, NULL, &deviceContext);
+
+	adapter->Release();
+
+	if (FAILED(res))
+	{
+		ErrorLog("Overlay: D3D11CreateDevice failure: 0x%x\n", res);
+		return;
+	}
+
+	if (FAILED(device->QueryInterface(__uuidof(ID3D11Device5), reinterpret_cast<void**>(m_d3d11Device.GetAddressOf()))))
+	{
+		ErrorLog("Overlay: Querying ID3D11Device5 failure!\n");
+		return;
+	}
+
+	if (FAILED(deviceContext->QueryInterface(__uuidof(ID3D11DeviceContext4), reinterpret_cast<void**>(m_d3d11DeviceContext.GetAddressOf()))))
+	{
+		ErrorLog("Overlay: Querying ID3D11DeviceContext4 failure!\n");
+		return;
+	}
+
+	if (FAILED(m_d3d11Device->CreateFence(m_syncCounter, D3D11_FENCE_FLAG_NONE, __uuidof(ID3D11Fence), reinterpret_cast<void**>(m_d3d11Fence.GetAddressOf()))))
+	{
+		ErrorLog("Overlay: Failed to create fence!\n");
+		return;
+	}
+
+	m_d3d11FenceEvent = CreateEventW(NULL, FALSE, FALSE, NULL);
 
 	D3D11_TEXTURE2D_DESC textureDesc = {};
 	textureDesc.MipLevels = 1;
