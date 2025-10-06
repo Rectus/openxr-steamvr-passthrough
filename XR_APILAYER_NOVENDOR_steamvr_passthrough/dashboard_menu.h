@@ -33,6 +33,8 @@ struct MenuDisplayValues
 	ERenderAPI renderAPI = None;
 	ERenderAPI appRenderAPI = None;
 	std::string currentApplication;
+	int numCompositionLayers = 0;
+	bool bDepthLayerSubmitted = false;
 	int frameBufferWidth = 0;
 	int frameBufferHeight = 0;
 	XrCompositionLayerFlags frameBufferFlags = 0;

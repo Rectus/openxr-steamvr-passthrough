@@ -89,13 +89,13 @@ void DashboardMenu::RunThread()
 		
 		if (frameRate > 0 && bGotVsync)
 		{
-			uint32_t sleepTimeMS = MAX(ceil(1000.0f / frameRate - timeSinceVsyncSecs * 1000.0f), 0.0f);
+			uint32_t sleepTimeMS = static_cast<uint32_t>(MAX(ceil(1000.0f / frameRate - timeSinceVsyncSecs * 1000.0f), 0.0f));
 
 			Sleep(sleepTimeMS);
 		}
 		else
 		{
-			Sleep(1000.0f / 60.0f);
+			Sleep(static_cast<DWORD>(1000.0f / 60.0f));
 		}
 
 		frameCount = newFrameCount;
@@ -178,6 +178,41 @@ std::string GetImageFormatName(ERenderAPI api, int64_t format)
 			return "VK_FORMAT_D24_UNORM_S8_UINT";
 		case 130:
 			return "VK_FORMAT_D32_SFLOAT_S8_UINT";
+
+		default:
+			return "Unknown format";
+		}
+
+	case OpenGL:
+
+		switch (format)
+		{
+		case 0x8C43:
+			return "GL_SRGB8_ALPHA8";
+		case 0x8058:
+			return "GL_RGBA8";
+		case 0x8F97:
+			return "GL_RGBA8_SNORM";
+		case 0x8814:
+			return "GL_RGBA32F";
+		case 0x8815:
+			return "GL_RGB32F";
+		case 0x881A:
+			return "GL_RGBA16F";
+		case 0x8059:
+			return "GL_RGB10_A2";
+		case 0x8CAC:
+			return "GL_DEPTH_COMPONENT32F";
+		case 0x81A7:
+			return "GL_DEPTH_COMPONENT32";
+		case 0x81A5:
+			return "GL_DEPTH_COMPONENT16";
+		case 0x88F0:
+			return "GL_DEPTH24_STENCIL8";
+		case 0x8CAD:
+			return "GL_DEPTH32F_STENCIL8";
+		case 0x8DAC:
+			return "GL_DEPTH32F_STENCIL8_NV";
 
 		default:
 			return "Unknown format";
@@ -1610,6 +1645,9 @@ if (bIsActiveTab) { ImGui::PopStyleColor(1); bIsActiveTab = false; }
 			case Vulkan:
 				ImGui::Text("Application Render API: Vulkan");
 				break;
+			case OpenGL:
+				ImGui::Text("Application Render API: OpenGL");
+				break;
 			default:
 				ImGui::Text("Application Render API: None");
 			}
@@ -1630,6 +1668,7 @@ if (bIsActiveTab) { ImGui::PopStyleColor(1); bIsActiveTab = false; }
 			}
 
 			ImGui::Text("Application: %s", m_displayValues.currentApplication.c_str());
+			ImGui::Text("Submitting %i composition layers, %s", m_displayValues.numCompositionLayers, m_displayValues.bDepthLayerSubmitted ? "depth submitted" : "depth NOT submitted");
 			ImGui::Text("Resolution: %i x %i", m_displayValues.frameBufferWidth, m_displayValues.frameBufferHeight);
 			ImGui::Text("Framebuffer Flags: 0x%x", m_displayValues.frameBufferFlags);
 
@@ -1680,7 +1719,7 @@ if (bIsActiveTab) { ImGui::PopStyleColor(1); bIsActiveTab = false; }
 			ImGui::Text("Passthrough CPU render duration: %.2fms", m_displayValues.renderTimeMS);
 			ImGui::Text("Stereo reconstruction duration: %.2fms", m_displayValues.stereoReconstructionTimeMS);
 			ImGui::Text("Camera frame retrieval duration: %.2fms", m_displayValues.frameRetrievalTimeMS);
-			ImGui::Text("Menu framerate: %.1fHz (%.2fms)", io.Framerate, io.DeltaTime * 1000.0f);
+			ImGui::Text("Menu framerate: %.1fHz", io.Framerate);
 			ImGui::PopFont();
 
 			IMGUI_BIG_SPACING;

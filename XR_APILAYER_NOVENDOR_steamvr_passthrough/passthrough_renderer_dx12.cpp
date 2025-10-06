@@ -913,7 +913,7 @@ bool PassthroughRendererDX12::InitPipeline(bool bFlipTriangles)
 }
 
 
-void PassthroughRendererDX12::InitRenderTarget(const ERenderEye eye, void* rendertarget, const uint32_t imageIndex, const XrSwapchainCreateInfo& swapchainInfo)
+void PassthroughRendererDX12::InitRenderTarget(const ERenderEye eye, void* rendertarget, const uint32_t imageIndex, const XrSwapchainCreateInfo& swapchainInfo, const XrSwapchain swapchain)
 {
 	int viewIndex = (eye == LEFT_EYE) ? 0 : 1;
 	int bufferIndex = viewIndex * NUM_SWAPCHAINS + imageIndex;
@@ -954,7 +954,7 @@ void PassthroughRendererDX12::InitRenderTarget(const ERenderEye eye, void* rende
 }
 
 
-void PassthroughRendererDX12::InitDepthBuffer(const ERenderEye eye, void* depthBuffer, const uint32_t imageIndex, const XrSwapchainCreateInfo& swapchainInfo)
+void PassthroughRendererDX12::InitDepthBuffer(const ERenderEye eye, void* depthBuffer, const uint32_t imageIndex, const XrSwapchainCreateInfo& swapchainInfo, const XrSwapchain swapchain)
 {
 	int viewIndex = (eye == LEFT_EYE) ? 0 : 1;
 	int bufferIndex = viewIndex * NUM_SWAPCHAINS + imageIndex;
@@ -1060,7 +1060,7 @@ void PassthroughRendererDX12::GenerateDepthMesh(uint32_t width, uint32_t height)
 
 
 
-void PassthroughRendererDX12::RenderPassthroughFrame(const XrCompositionLayerProjection* layer, CameraFrame* frame, FrameRenderParameters& renderParams, std::shared_ptr<DepthFrame> depthFrame, UVDistortionParameters& distortionParams)
+void PassthroughRendererDX12::RenderPassthroughFrame(const XrCompositionLayerProjection* layer, std::shared_ptr<CameraFrame> frame, FrameRenderParameters& renderParams, std::shared_ptr<DepthFrame> depthFrame, UVDistortionParameters& distortionParams)
 {
 	Config_Main& mainConf = m_configManager->GetConfig_Main();
 	Config_Core& coreConf = m_configManager->GetConfig_Core();
@@ -1343,7 +1343,7 @@ void PassthroughRendererDX12::RenderPassthroughFrame(const XrCompositionLayerPro
 	RenderFrameFinish();
 }
 
-void PassthroughRendererDX12::RenderPassthroughView(const ERenderEye eye, const int32_t imageIndex, const XrCompositionLayerProjection* layer, CameraFrame* frame, EPassthroughBlendMode blendMode, UINT numIndices)
+void PassthroughRendererDX12::RenderPassthroughView(const ERenderEye eye, const int32_t imageIndex, const XrCompositionLayerProjection* layer, std::shared_ptr<CameraFrame> frame, EPassthroughBlendMode blendMode, UINT numIndices)
 {
 	if (imageIndex < 0) { return; }
 
@@ -1491,7 +1491,7 @@ void PassthroughRendererDX12::RenderPassthroughView(const ERenderEye eye, const 
 }
 
 
-void PassthroughRendererDX12::RenderMaskedPrepassView(const ERenderEye eye, const int32_t imageIndex, const XrCompositionLayerProjection* layer, CameraFrame* frame, UINT numIndices)
+void PassthroughRendererDX12::RenderMaskedPrepassView(const ERenderEye eye, const int32_t imageIndex, const XrCompositionLayerProjection* layer, std::shared_ptr<CameraFrame> frame, UINT numIndices)
 {
 	if (imageIndex < 0) { return; }
 

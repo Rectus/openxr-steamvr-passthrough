@@ -376,10 +376,10 @@ namespace
 				{
 				case XR_TYPE_GRAPHICS_BINDING_D3D11_KHR:
 				{
-					Log("Direct3D 11 renderer initializing...\n");
+					Log("Initializing rendering for Direct3D 11...\n");
 
-					const XrGraphicsBindingD3D11KHR* dx11bindings = reinterpret_cast<const XrGraphicsBindingD3D11KHR*>(entry);
-					m_Renderer = std::make_shared<PassthroughRendererDX11>(dx11bindings->device, g_dllModule, m_configManager);
+					const XrGraphicsBindingD3D11KHR* bindings = reinterpret_cast<const XrGraphicsBindingD3D11KHR*>(entry);
+					m_Renderer = std::make_shared<PassthroughRendererDX11>(bindings->device, g_dllModule, m_configManager);
 					m_renderAPI = DirectX11;
 					m_appRenderAPI = DirectX11;
 
@@ -392,28 +392,28 @@ namespace
 					m_dashboardMenu->GetDisplayValues().renderAPI = DirectX11;
 					m_dashboardMenu->GetDisplayValues().appRenderAPI = DirectX11;
 					m_bDepthSupportedByRenderer = true;
-					Log("Direct3D 11 renderer initialized\n");
+					Log("Direct3D 11 rendering initialized\n");
 
 					return true;
 				}
 
 				case XR_TYPE_GRAPHICS_BINDING_D3D12_KHR:
 				{
-					Log("Direct3D 12 renderer initializing...\n");
+					Log("Initializing rendering for Direct3D 12...\n");
 
-					const XrGraphicsBindingD3D12KHR* dx12bindings = reinterpret_cast<const XrGraphicsBindingD3D12KHR*>(entry);
+					const XrGraphicsBindingD3D12KHR* bindings = reinterpret_cast<const XrGraphicsBindingD3D12KHR*>(entry);
 
 					ERenderAPI usedAPI = DirectX11;
 
 					if (m_configManager->GetConfig_Main().UseLegacyD3D12Renderer)
 					{
-						m_Renderer = std::make_unique<PassthroughRendererDX12>(dx12bindings->device, dx12bindings->queue, g_dllModule, m_configManager);
+						m_Renderer = std::make_unique<PassthroughRendererDX12>(bindings->device, bindings->queue, g_dllModule, m_configManager);
 						usedAPI = DirectX12;
 						Log("Using legacy Direct3D 12 renderer\n");
 					}
 					else
 					{
-						m_Renderer = std::make_unique<PassthroughRendererDX11Interop>(dx12bindings->device, dx12bindings->queue, g_dllModule, m_configManager);
+						m_Renderer = std::make_unique<PassthroughRendererDX11Interop>(bindings->device, bindings->queue, g_dllModule, m_configManager);
 					}
 
 					m_renderAPI = usedAPI;
@@ -428,22 +428,23 @@ namespace
 					m_dashboardMenu->GetDisplayValues().renderAPI = usedAPI;
 					m_dashboardMenu->GetDisplayValues().appRenderAPI = DirectX12;
 					m_bDepthSupportedByRenderer = true;
-					Log("Direct3D 12 renderer initialized\n");
+					Log("Direct3D 12 rendering initialized\n");
 
 					return true;
 				}
 
 				case XR_TYPE_GRAPHICS_BINDING_VULKAN_KHR: // same as XR_TYPE_GRAPHICS_BINDING_VULKAN2_KHR
 				{
-					Log("Vulkan renderer initializing...\n");
+					Log("Initializing rendering for Vulkan...\n");
 
 					ERenderAPI usedAPI = Vulkan;
 
-					const XrGraphicsBindingVulkanKHR* vulkanbindings = reinterpret_cast<const XrGraphicsBindingVulkanKHR*>(entry);
+					const XrGraphicsBindingVulkanKHR* bindings = reinterpret_cast<const XrGraphicsBindingVulkanKHR*>(entry);
 					if (m_configManager->GetConfig_Main().UseLegacyVulkanRenderer)
 					{
 
-						m_Renderer = std::make_unique<PassthroughRendererVulkan>(*vulkanbindings, g_dllModule, m_configManager);
+						m_Renderer = std::make_unique<PassthroughRendererVulkan>(*bindings, g_dllModule, m_configManager);
+						Log("Using legacy Vulkan renderer\n");
 					}
 					else
 					{
@@ -454,7 +455,7 @@ namespace
 						}
 
 						usedAPI = DirectX11;
-						m_Renderer = std::make_unique<PassthroughRendererDX11Interop>(*vulkanbindings, g_dllModule, m_configManager);
+						m_Renderer = std::make_unique<PassthroughRendererDX11Interop>(*bindings, g_dllModule, m_configManager);
 					}
 
 					m_renderAPI = usedAPI;
@@ -469,7 +470,32 @@ namespace
 					m_dashboardMenu->GetDisplayValues().renderAPI = usedAPI;
 					m_dashboardMenu->GetDisplayValues().appRenderAPI = Vulkan;
 					m_bDepthSupportedByRenderer = false;
-					Log("Vulkan renderer initialized\n");
+					Log("Vulkan rendering initialized\n");
+
+					return true;
+				}
+
+				case XR_TYPE_GRAPHICS_BINDING_OPENGL_WIN32_KHR:
+				{
+					Log("Initializing rendering for OpenGL...\n");
+
+					m_appRenderAPI = OpenGL;
+					m_renderAPI = DirectX11;
+
+					const XrGraphicsBindingOpenGLWin32KHR* bindings = reinterpret_cast<const XrGraphicsBindingOpenGLWin32KHR*>(entry);
+					
+					m_Renderer = std::make_unique<PassthroughRendererDX11Interop>(*bindings, g_dllModule, m_configManager);
+
+					if (!SetupProcessingPipeline())
+					{
+						return false;
+					}
+
+					m_dashboardMenu->GetDisplayValues().bSessionActive = true;
+					m_dashboardMenu->GetDisplayValues().renderAPI = DirectX11;
+					m_dashboardMenu->GetDisplayValues().appRenderAPI = OpenGL;
+					m_bDepthSupportedByRenderer = false;
+					Log("OpenGL rendering initialized\n");
 
 					return true;
 				}
@@ -838,12 +864,95 @@ namespace
 
 		XrResult xrDestroySwapchain(XrSwapchain swapchain)
 		{
+			m_Renderer->DestroyChainedSwapchain(swapchain);
 			m_acquiredSwapchains.erase(swapchain);
 			m_waitedSwapchains.erase(swapchain);
 			m_heldSwapchains.erase(swapchain);
 			m_swapchainProperties.erase(swapchain);
 
 			return OpenXrApi::xrDestroySwapchain(swapchain);
+		}
+
+		XrResult xrEnumerateSwapchainImages(XrSwapchain swapchain, uint32_t imageCapacityInput, uint32_t* imageCountOutput, XrSwapchainImageBaseHeader* images)
+		{
+			bool bChainSwapchains = (m_appRenderAPI == OpenGL && m_renderAPI == DirectX11);
+
+			bool bHasValidSwapchainStruct = true;
+			ERenderAPI swapchainHeaderAPI = None;
+
+			if (imageCapacityInput > 0)
+			{
+				// Just checks the first structure in the array.
+				switch (images->type)
+				{
+				case XR_TYPE_SWAPCHAIN_IMAGE_D3D11_KHR:
+					swapchainHeaderAPI = DirectX11;
+					break;
+				case XR_TYPE_SWAPCHAIN_IMAGE_D3D12_KHR:
+					swapchainHeaderAPI = DirectX12;
+					break;
+				case XR_TYPE_SWAPCHAIN_IMAGE_OPENGL_KHR:
+					swapchainHeaderAPI = OpenGL;
+					break;
+				case XR_TYPE_SWAPCHAIN_IMAGE_VULKAN_KHR:
+					swapchainHeaderAPI = Vulkan;
+					break;
+				default:
+					bHasValidSwapchainStruct = false;
+				}
+
+				if (swapchainHeaderAPI != m_appRenderAPI)
+				{
+					bHasValidSwapchainStruct = false;
+				}
+
+				if (!bHasValidSwapchainStruct)
+				{
+					ErrorLog("Application submitted invalid structure in xrEnumerateSwapchainImages!\n");
+				}
+			}
+
+			if (imageCapacityInput == 0 || !bChainSwapchains || !bHasValidSwapchainStruct)
+			{
+				return OpenXrApi::xrEnumerateSwapchainImages(swapchain, imageCapacityInput, imageCountOutput, images);
+			}
+			else if (m_appRenderAPI == OpenGL)
+			{
+				std::vector<XrSwapchainImageOpenGLKHR> originalImages(imageCapacityInput, { XR_TYPE_SWAPCHAIN_IMAGE_OPENGL_KHR });
+
+				XrResult result = OpenXrApi::xrEnumerateSwapchainImages(swapchain, imageCapacityInput, imageCountOutput, reinterpret_cast<XrSwapchainImageBaseHeader*>(originalImages.data()));
+
+				if (result != XR_SUCCESS)
+				{
+					return result;
+				}
+
+				if (m_Renderer->CreateChainedSwapchain(swapchain, m_swapchainProperties[swapchain], *imageCountOutput, images))
+				{
+					Log("Chained swapchain %u with %u images\n", swapchain, *imageCountOutput);
+				}
+				else
+				{
+					ErrorLog("Failed to create chained swapchain images!\n");
+
+					auto outImages = reinterpret_cast<XrSwapchainImageOpenGLKHR*>(images);
+
+					for (uint32_t i = 0; i < *imageCountOutput; i++)
+					{
+						outImages[i] = originalImages[i];
+					}
+				}
+
+				return result;
+			}
+			else if (m_appRenderAPI == Vulkan)
+			{
+				return OpenXrApi::xrEnumerateSwapchainImages(swapchain, imageCapacityInput, imageCountOutput, images);
+			}
+			else
+			{
+				return OpenXrApi::xrEnumerateSwapchainImages(swapchain, imageCapacityInput, imageCountOutput, images);
+			}
 		}
 
 
@@ -1021,7 +1130,7 @@ namespace
 				{
 					for (uint32_t i = 0; i < numImages; i++)
 					{
-						m_Renderer->InitRenderTarget(eye, swapchainImages[i].texture, i, props->second);
+						m_Renderer->InitRenderTarget(eye, swapchainImages[i].texture, i, props->second, newSwapchain);
 					}
 					*storedSwapchain = newSwapchain;
 				}
@@ -1073,6 +1182,17 @@ namespace
 
 					Log("Found depth swapchain %u for color swapchain %u, arraySize %u, depth range [%f:%f], Z-range[%g:%g]\n", depthInfo->subImage.swapchain, newSwapchain, depthProps->second.arraySize, depthInfo->minDepth, depthInfo->maxDepth, depthInfo->nearZ, depthInfo->farZ);
 
+					const XrRect2Di& depthRect = depthInfo->subImage.imageRect;
+					const XrRect2Di& colorRect = layer->views[viewIndex].subImage.imageRect;
+
+					if (depthRect.offset.x != colorRect.offset.x || 
+						depthRect.offset.y != colorRect.offset.y ||
+						depthRect.extent.width != colorRect.extent.width || 
+						depthRect.extent.height != depthRect.extent.height)
+					{
+						ErrorLog("The color and depth textures have mismatched imageRects, this is not supported by the layer: %i, %i, %i, %i : %i, %i, %i, %i\n", colorRect.offset.x, colorRect.offset.y, colorRect.extent.width, colorRect.extent.height, depthRect.offset.x, depthRect.offset.y, depthRect.extent.width, depthRect.extent.height);
+					}
+
 					XrSwapchainImageD3D12KHR depthImages[3];
 					uint32_t numImages = 0;
 
@@ -1081,7 +1201,7 @@ namespace
 					{
 						for (uint32_t i = 0; i < numImages; i++)
 						{
-							m_Renderer->InitDepthBuffer(eye, depthImages[i].texture, i, depthProps->second);
+							m_Renderer->InitDepthBuffer(eye, depthImages[i].texture, i, depthProps->second, depthInfo->subImage.swapchain);
 						}
 						*storedDepthSwapchain = depthInfo->subImage.swapchain;
 					}
@@ -1327,7 +1447,7 @@ namespace
 				m_depthReconstruction->GetDistortionParameters();
 
 
-			m_Renderer->RenderPassthroughFrame(layer, frame.get(), renderParams, depthFrame, distParams);
+			m_Renderer->RenderPassthroughFrame(layer, frame, renderParams, depthFrame, distParams);
 
 			depthFrame->bIsFirstRender = false;
 
@@ -1367,6 +1487,27 @@ namespace
 			{
 				m_dashboardMenu->GetDisplayValues().CoreCurrentMode = frameEndInfo->environmentBlendMode;
 				m_dashboardMenu->GetDisplayValues().bCorePassthroughActive = false;
+				m_dashboardMenu->GetDisplayValues().numCompositionLayers = frameEndInfo->layerCount;
+				m_dashboardMenu->GetDisplayValues().bDepthLayerSubmitted = false;
+
+				for (uint32_t i = 0; i < frameEndInfo->layerCount; i++)
+				{
+					auto layer = reinterpret_cast<const XrCompositionLayerProjection*>(frameEndInfo->layers[i]);
+
+					if (layer->type != XR_TYPE_COMPOSITION_LAYER_PROJECTION) { continue; }
+
+					auto depthInfo = reinterpret_cast<const XrCompositionLayerDepthInfoKHR*>(layer->views[0].next);
+
+					while (depthInfo != nullptr)
+					{
+						if (depthInfo->type == XR_TYPE_COMPOSITION_LAYER_DEPTH_INFO_KHR)
+						{
+							m_dashboardMenu->GetDisplayValues().bDepthLayerSubmitted = true;
+							break;
+						}
+						depthInfo = reinterpret_cast<const XrCompositionLayerDepthInfoKHR*>(depthInfo->next);
+					}
+				}
 			}
 
 			bool bInvalidEndFrame = false;

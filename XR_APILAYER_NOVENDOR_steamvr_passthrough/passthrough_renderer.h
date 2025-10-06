@@ -287,6 +287,21 @@ struct DX11FrameData
 	DX11UAVSRVTexture disparityFilter;
 };
 
+struct DX11ChainedSwapchainTexture
+{
+	ComPtr<ID3D11Texture2D> D3D11Texture;
+	HANDLE SharedHandle;
+	union
+	{
+		struct
+		{
+			uint32_t OpenGLTexture;
+			uint32_t OpenGLMemoryObject;
+		};
+		VkImage VulkanTexture;
+	};
+};
+
 
 class IPassthroughRenderer
 {
@@ -294,13 +309,15 @@ public:
 	virtual ~IPassthroughRenderer() {};
 
 	virtual bool InitRenderer() = 0;
-	virtual void InitRenderTarget(const ERenderEye eye, void* rendertarget, const uint32_t imageIndex, const XrSwapchainCreateInfo& swapchainInfo) = 0;
-	virtual void InitDepthBuffer(const ERenderEye eye, void* depthBuffer, const uint32_t imageIndex, const XrSwapchainCreateInfo& swapchainInfo) {}
+	virtual void InitRenderTarget(const ERenderEye eye, void* rendertarget, const uint32_t imageIndex, const XrSwapchainCreateInfo& swapchainInfo, const XrSwapchain swapchain) = 0;
+	virtual void InitDepthBuffer(const ERenderEye eye, void* depthBuffer, const uint32_t imageIndex, const XrSwapchainCreateInfo& swapchainInfo, const XrSwapchain swapchain) {}
 	virtual void SetFrameSize(const uint32_t width, const uint32_t height, const uint32_t bufferSize, const uint32_t undistortedWidth, const uint32_t undistortedHeight, const uint32_t undistortedBufferSize) = 0;
-	virtual void RenderPassthroughFrame(const XrCompositionLayerProjection* layer, CameraFrame* frame, FrameRenderParameters& renderParams, std::shared_ptr<DepthFrame> depthFrame, UVDistortionParameters& distortionParams) = 0;
+	virtual void RenderPassthroughFrame(const XrCompositionLayerProjection* layer, std::shared_ptr<CameraFrame> frame, FrameRenderParameters& renderParams, std::shared_ptr<DepthFrame> depthFrame, UVDistortionParameters& distortionParams) = 0;
 	virtual void* GetRenderDevice() = 0;
 	virtual bool DownloadTextureToCPU(const void* textureSRV, const uint32_t width, const uint32_t height, const uint32_t bufferSize, uint8_t* buffer) { return false; }
 	virtual std::shared_timed_mutex& GetAccessMutex() = 0;
+	virtual bool CreateChainedSwapchain(const XrSwapchain swapchain, const XrSwapchainCreateInfo& swapchainInfo, const int numImages, XrSwapchainImageBaseHeader* chainedImages) { return false; }
+	virtual void DestroyChainedSwapchain(const XrSwapchain swapchain) { }
 };
 
 
@@ -311,11 +328,11 @@ public:
 	~PassthroughRendererDX11() {};
 
 	bool InitRenderer();
-	void InitRenderTarget(const ERenderEye eye, void* rendertarget, const uint32_t imageIndex, const XrSwapchainCreateInfo& swapchainInfo);
-	void InitDepthBuffer(const ERenderEye eye, void* depthBuffer, const uint32_t imageIndex, const XrSwapchainCreateInfo& swapchainInfo);
+	void InitRenderTarget(const ERenderEye eye, void* rendertarget, const uint32_t imageIndex, const XrSwapchainCreateInfo& swapchainInfo, const XrSwapchain swapchain);
+	void InitDepthBuffer(const ERenderEye eye, void* depthBuffer, const uint32_t imageIndex, const XrSwapchainCreateInfo& swapchainInfo, const XrSwapchain swapchain);
 	void SetFrameSize(const uint32_t width, const uint32_t height, const uint32_t bufferSize, const uint32_t undistortedWidth, const uint32_t undistortedHeight, const uint32_t undistortedBufferSize);
 
-	void RenderPassthroughFrame(const XrCompositionLayerProjection* layer, CameraFrame* frame, FrameRenderParameters& renderParams, std::shared_ptr<DepthFrame> depthFrame, UVDistortionParameters& distortionParams);
+	void RenderPassthroughFrame(const XrCompositionLayerProjection* layer, std::shared_ptr<CameraFrame> frame, FrameRenderParameters& renderParams, std::shared_ptr<DepthFrame> depthFrame, UVDistortionParameters& distortionParams);
 	void* GetRenderDevice();
 	std::shared_timed_mutex& GetAccessMutex() { return m_accessRendererMutex; }
 
@@ -333,23 +350,23 @@ protected:
 	void GenerateMesh();
 	void GenerateDepthMesh(uint32_t width, uint32_t height);
 	void SetupTemporalUAV(const uint32_t viewIndex, const uint32_t swapchainIndex, const uint32_t width, const uint32_t height);
-	void UpdateRenderModels(CameraFrame* frame);
+	void UpdateRenderModels(std::shared_ptr<CameraFrame> frame);
 
 	void RenderHoleFillCS(DX11FrameData& frameData, std::shared_ptr<DepthFrame> depthFrame);
 
-	void RenderSetupView(const ERenderEye eye, const XrCompositionLayerProjection* layer, CameraFrame* frame, std::shared_ptr<DepthFrame> depthFrame, FrameRenderParameters& renderParams);
+	void RenderSetupView(const ERenderEye eye, const XrCompositionLayerProjection* layer, std::shared_ptr<CameraFrame> frame, std::shared_ptr<DepthFrame> depthFrame, FrameRenderParameters& renderParams);
 
-	void RenderDepthPrepassView(const ERenderEye eye, const XrCompositionLayerProjection* layer, CameraFrame* frame, std::shared_ptr<DepthFrame> depthFrame, UINT numIndices, FrameRenderParameters& renderParams);
+	void RenderDepthPrepassView(const ERenderEye eye, const XrCompositionLayerProjection* layer, std::shared_ptr<CameraFrame> frame, std::shared_ptr<DepthFrame> depthFrame, UINT numIndices, FrameRenderParameters& renderParams);
 
-	void RenderMaskedPrepassView(const ERenderEye eye, const XrCompositionLayerProjection* layer, CameraFrame* frame, std::shared_ptr<DepthFrame> depthFrame, UINT numIndices, FrameRenderParameters& renderParams);
+	void RenderMaskedPrepassView(const ERenderEye eye, const XrCompositionLayerProjection* layer, std::shared_ptr<CameraFrame> frame, std::shared_ptr<DepthFrame> depthFrame, UINT numIndices, FrameRenderParameters& renderParams);
 	
-	void RenderAlphaPrepassView(const ERenderEye eye, const XrCompositionLayerProjection* layer, CameraFrame* frame, std::shared_ptr<DepthFrame> depthFrame,  UINT numIndices, FrameRenderParameters& renderParams);
+	void RenderAlphaPrepassView(const ERenderEye eye, const XrCompositionLayerProjection* layer, std::shared_ptr<CameraFrame> frame, std::shared_ptr<DepthFrame> depthFrame,  UINT numIndices, FrameRenderParameters& renderParams);
 
-	void RenderViewModelsForView(const ERenderEye eye, const XrCompositionLayerProjection* layer, CameraFrame* frame, std::shared_ptr<DepthFrame> depthFrame, UINT numIndices, FrameRenderParameters& renderParams);
+	void RenderViewModelsForView(const ERenderEye eye, const XrCompositionLayerProjection* layer, std::shared_ptr<CameraFrame> frame, std::shared_ptr<DepthFrame> depthFrame, UINT numIndices, FrameRenderParameters& renderParams);
 
-	void RenderPassthroughView(const ERenderEye eye, const XrCompositionLayerProjection* layer, CameraFrame* frame, std::shared_ptr<DepthFrame> depthFrame, UINT numIndices, FrameRenderParameters& renderParams);
+	void RenderPassthroughView(const ERenderEye eye, const XrCompositionLayerProjection* layer, std::shared_ptr<CameraFrame> frame, std::shared_ptr<DepthFrame> depthFrame, UINT numIndices, FrameRenderParameters& renderParams);
 
-	void RenderBackgroundForView(const ERenderEye eye, const XrCompositionLayerProjection* layer, CameraFrame* frame, std::shared_ptr<DepthFrame> depthFrame, UINT numIndices, FrameRenderParameters& renderParams);
+	void RenderBackgroundForView(const ERenderEye eye, const XrCompositionLayerProjection* layer, std::shared_ptr<CameraFrame> frame, std::shared_ptr<DepthFrame> depthFrame, UINT numIndices, FrameRenderParameters& renderParams);
 
 	void RenderDebugView(const ERenderEye eye, const XrCompositionLayerProjection* layer, FrameRenderParameters& renderParams);
 
@@ -477,19 +494,24 @@ class PassthroughRendererDX11Interop : public PassthroughRendererDX11
 public:
 	PassthroughRendererDX11Interop(ID3D12Device* device, ID3D12CommandQueue* commandQueue, HMODULE dllModule, std::shared_ptr<ConfigManager> configManager);
 	PassthroughRendererDX11Interop(const XrGraphicsBindingVulkanKHR& binding, HMODULE dllModule, std::shared_ptr<ConfigManager> configManager);
+	PassthroughRendererDX11Interop(const XrGraphicsBindingOpenGLWin32KHR& binding, HMODULE dllModule, std::shared_ptr<ConfigManager> configManager);
 	~PassthroughRendererDX11Interop();
 
 	bool InitRenderer();
 	
-	void RenderPassthroughFrame(const XrCompositionLayerProjection* layer, CameraFrame* frame, FrameRenderParameters& renderParams, std::shared_ptr<DepthFrame> depthFrame, UVDistortionParameters& distortionParams);
+	void RenderPassthroughFrame(const XrCompositionLayerProjection* layer, std::shared_ptr<CameraFrame> frame, FrameRenderParameters& renderParams, std::shared_ptr<DepthFrame> depthFrame, UVDistortionParameters& distortionParams);
 	bool DownloadTextureToCPU(const void* textureSRV, const uint32_t width, const uint32_t height, const uint32_t bufferSize, uint8_t* buffer);
+
+	bool CreateChainedSwapchain(const XrSwapchain swapchain, const XrSwapchainCreateInfo& swapchainInfo, const int numImages, XrSwapchainImageBaseHeader* chainedImages);
+	void DestroyChainedSwapchain(const XrSwapchain swapchain);
 
 private:
 
 	void ResetRenderer();
-	void InitRenderTarget(const ERenderEye eye, void* rendertarget, const uint32_t imageIndex, const XrSwapchainCreateInfo& swapchainInfo);
-	void InitDepthBuffer(const ERenderEye eye, void* depthBuffer, const uint32_t imageIndex, const XrSwapchainCreateInfo& swapchainInfo);
+	void InitRenderTarget(const ERenderEye eye, void* rendertarget, const uint32_t imageIndex, const XrSwapchainCreateInfo& swapchainInfo, const XrSwapchain swapchain);
+	void InitDepthBuffer(const ERenderEye eye, void* depthBuffer, const uint32_t imageIndex, const XrSwapchainCreateInfo& swapchainInfo, const XrSwapchain swapchain);
 	bool CreateLocalTextureVulkan(VkImage& localVulkanTexture, VkDeviceMemory& localVulkanTextureMemory, ID3D11Texture2D** localD3DTexture, HANDLE& sharedTextureHandle, const XrSwapchainCreateInfo& swapchainInfo, bool bIsDepthMap);
+	bool CreateLocalTextureOpenGL(uint32_t& localOpenGLTexture, ID3D11Texture2D** localD3DTexture, HANDLE& sharedTextureHandle, const XrSwapchainCreateInfo& swapchainInfo, bool bIsDepthMap);
 
 	ERenderAPI m_applicationRenderAPI;
 	bool m_rendererInitialized = false;
@@ -513,6 +535,8 @@ private:
 
 	HANDLE m_sharedTextureLeft[NUM_SWAPCHAINS] = {};
 	HANDLE m_sharedTextureRight[NUM_SWAPCHAINS] = {};
+	HANDLE m_sharedDepthTextureLeft[NUM_SWAPCHAINS] = {};
+	HANDLE m_sharedDepthTextureRight[NUM_SWAPCHAINS] = {};
 
 	VkImage m_swapchainsLeft[NUM_SWAPCHAINS] = {};
 	VkImage m_swapchainsRight[NUM_SWAPCHAINS] = {};
@@ -529,7 +553,8 @@ private:
 	VkDeviceMemory m_localDBMemLeft[NUM_SWAPCHAINS] = {};
 	VkDeviceMemory m_localDBMemRight[NUM_SWAPCHAINS] = {};
 
-	VkSemaphore m_semaphore = VK_NULL_HANDLE;
+	VkSemaphore m_semaphoreVulkan = VK_NULL_HANDLE;
+	GLuint m_semaphoreOpenGL = 0;
 	ComPtr<ID3D11Fence> m_semaphoreFence = NULL;
 	HANDLE m_semaphoreFenceHandle = NULL;
 	uint64_t m_semaphoreValue = 1;
@@ -545,6 +570,21 @@ private:
 	VkDeviceMemory m_vulkanDownloadBufferMemory = VK_NULL_HANDLE;
 	uint32_t m_downloadBufferWidth = 0;
 	uint32_t m_downloadBufferHeight = 0;
+
+	HDC m_openglDeviceContext = NULL;
+	HGLRC m_openglRenderContext = NULL;
+
+	XrSwapchain m_depthSwapchainLeft = XR_NULL_HANDLE;
+	XrSwapchain m_depthSwapchainRight = XR_NULL_HANDLE;
+
+	uint32_t m_rendertargetsOpenGLLeft[NUM_SWAPCHAINS] = {};
+	uint32_t m_rendertargetsOpenGLRight[NUM_SWAPCHAINS] = {};
+	uint32_t m_depthBuffersOpenGLLeft[NUM_SWAPCHAINS] = {};
+	uint32_t m_depthBuffersOpenGLRight[NUM_SWAPCHAINS] = {};
+
+	
+
+	std::map<XrSwapchain, std::vector<DX11ChainedSwapchainTexture>> m_chainedSwapchains;
 };
 
 
@@ -555,10 +595,10 @@ public:
 	~PassthroughRendererDX12() {};
 
 	bool InitRenderer();	
-	void InitRenderTarget(const ERenderEye eye, void* rendertarget, const uint32_t imageIndex, const XrSwapchainCreateInfo& swapchainInfo);
-	void InitDepthBuffer(const ERenderEye eye, void* depthBuffer, const uint32_t imageIndex, const XrSwapchainCreateInfo& swapchainInfo);
+	void InitRenderTarget(const ERenderEye eye, void* rendertarget, const uint32_t imageIndex, const XrSwapchainCreateInfo& swapchainInfo, const XrSwapchain swapchain);
+	void InitDepthBuffer(const ERenderEye eye, void* depthBuffer, const uint32_t imageIndex, const XrSwapchainCreateInfo& swapchainInfo, const XrSwapchain swapchain);
 	void SetFrameSize(const uint32_t width, const uint32_t height, const uint32_t bufferSize, const uint32_t undistortedWidth, const uint32_t undistortedHeight, const uint32_t undistortedBufferSize);
-	void RenderPassthroughFrame(const XrCompositionLayerProjection* layer, CameraFrame* frame, FrameRenderParameters& renderParams, std::shared_ptr<DepthFrame> depthFrame, UVDistortionParameters& distortionParams);
+	void RenderPassthroughFrame(const XrCompositionLayerProjection* layer, std::shared_ptr<CameraFrame> frame, FrameRenderParameters& renderParams, std::shared_ptr<DepthFrame> depthFrame, UVDistortionParameters& distortionParams);
 	void* GetRenderDevice();
 	std::shared_timed_mutex& GetAccessMutex() { return m_accessRendererMutex; }
 	
@@ -575,8 +615,8 @@ private:
 	void GenerateMesh();
 	void GenerateDepthMesh(uint32_t width, uint32_t height);
 
-	void RenderPassthroughView(const ERenderEye eye, const int32_t imageIndex, const XrCompositionLayerProjection* layer, CameraFrame* frame, EPassthroughBlendMode blendMode, UINT numIndices);
-	void RenderMaskedPrepassView(const ERenderEye eye, const int32_t imageIndex, const XrCompositionLayerProjection* layer, CameraFrame* frame, UINT numIndices);
+	void RenderPassthroughView(const ERenderEye eye, const int32_t imageIndex, const XrCompositionLayerProjection* layer, std::shared_ptr<CameraFrame> frame, EPassthroughBlendMode blendMode, UINT numIndices);
+	void RenderMaskedPrepassView(const ERenderEye eye, const int32_t imageIndex, const XrCompositionLayerProjection* layer, std::shared_ptr<CameraFrame> frame, UINT numIndices);
 	void RenderFrameFinish();
 
 	std::shared_ptr<ConfigManager> m_configManager;
@@ -682,9 +722,9 @@ public:
 	~PassthroughRendererVulkan();
 
 	bool InitRenderer();
-	void InitRenderTarget(const ERenderEye eye, void* rendertarget, const uint32_t imageIndex, const XrSwapchainCreateInfo& swapchainInfo);
+	void InitRenderTarget(const ERenderEye eye, void* rendertarget, const uint32_t imageIndex, const XrSwapchainCreateInfo& swapchainInfo, const XrSwapchain swapchain);
 	void SetFrameSize(const uint32_t width, const uint32_t height, const uint32_t bufferSize, const uint32_t undistortedWidth, const uint32_t undistortedHeight, const uint32_t undistortedBufferSize);
-	void RenderPassthroughFrame(const XrCompositionLayerProjection* layer, CameraFrame* frame, FrameRenderParameters& renderParams, std::shared_ptr<DepthFrame> depthFrame, UVDistortionParameters& distortionParams);
+	void RenderPassthroughFrame(const XrCompositionLayerProjection* layer, std::shared_ptr<CameraFrame> frame, FrameRenderParameters& renderParams, std::shared_ptr<DepthFrame> depthFrame, UVDistortionParameters& distortionParams);
 	void* GetRenderDevice();
 	std::shared_timed_mutex& GetAccessMutex() { return m_accessRendererMutex; }
 
@@ -701,8 +741,8 @@ private:
 	bool UpdateCameraFrameResource(VkCommandBuffer commandBuffer, int frameIndex, void* frameResource);
 	void UpdateDescriptorSets(VkCommandBuffer commandBuffer, int swapchainIndex, const XrCompositionLayerProjection* layer, EPassthroughBlendMode blendMode);
 
-	void RenderPassthroughView(const ERenderEye eye, const int32_t imageIndex, const XrCompositionLayerProjection* layer, CameraFrame* frame, EPassthroughBlendMode blendMode);
-	void RenderMaskedPrepassView(const ERenderEye eye, const int32_t imageIndex, const XrCompositionLayerProjection* layer, CameraFrame* frame);
+	void RenderPassthroughView(const ERenderEye eye, const int32_t imageIndex, const XrCompositionLayerProjection* layer, std::shared_ptr<CameraFrame> frame, EPassthroughBlendMode blendMode);
+	void RenderMaskedPrepassView(const ERenderEye eye, const int32_t imageIndex, const XrCompositionLayerProjection* layer, std::shared_ptr<CameraFrame> frame);
 
 	std::shared_ptr<ConfigManager> m_configManager;
 	HMODULE m_dllModule;

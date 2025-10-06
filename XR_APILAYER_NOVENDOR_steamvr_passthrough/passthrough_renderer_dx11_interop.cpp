@@ -8,6 +8,87 @@ using namespace steamvr_passthrough;
 using namespace steamvr_passthrough::log;
 
 
+#define HANDLE_TYPE_D3D11_IMAGE_EXT 0x958B
+#define HANDLE_TYPE_D3D11_IMAGE_KMT_EXT 0x958C
+#define HANDLE_TYPE_OPAQUE_WIN32_EXT 0x9587
+#define HANDLE_TYPE_OPAQUE_WIN32_KMT_EXT 0x9588
+#define HANDLE_TYPE_D3D12_FENCE_EXT 0x9594
+#define D3D12_FENCE_VALUE_EXT 0x9595
+
+#define TEXTURE_TILING_EXT 0x9580
+#define OPTIMAL_TILING_EXT 0x9584
+#define LINEAR_TILING_EXT 0x9585
+
+#define GL_LAYOUT_GENERAL_EXT 38285
+#define GL_LAYOUT_COLOR_ATTACHMENT_EXT 38286
+#define GL_LAYOUT_DEPTH_STENCIL_ATTACHMENT_EXT 38287
+
+#define GL_SRGB8_ALPHA8 0x8C43
+#define GL_RGBA8_SNORM 0x8F97
+#define GL_RGBA32F 0x8814
+#define GL_RGB32F 0x8815
+#define GL_RGBA16F 0x881A
+#define GL_DEPTH_COMPONENT32F 0x8CAC
+#define GL_DEPTH_COMPONENT32 0x81A7
+#define GL_DEPTH_COMPONENT16 0x81A5
+#define GL_DEPTH24_STENCIL8 0x88F0
+#define GL_DEPTH32F_STENCIL8 0x8CAD
+#define GL_DEPTH32F_STENCIL8_NV 0x8DAC
+
+
+
+typedef void (*PFN_glGenSemaphoresEXT)(GLsizei n, GLuint* semaphores);
+typedef void (*PFN_glDeleteSemaphoresEXT)(GLsizei n, GLuint* semaphores);
+typedef void (*PFN_glIsSemaphoreEXT)(GLuint semaphore);
+typedef void (*PFN_glSemaphoreParameterui64vEXT)(GLuint semaphore, GLenum pname, const uint64_t* params);
+typedef void (*PFN_glGetSemaphoreParameterui64vEXT)(GLuint semaphore, GLenum pname, uint64_t* params);
+typedef void (*PFN_glWaitSemaphoreEXT)(GLuint semaphore, GLuint numBufferBarriers, const GLuint* buffers, GLuint numTextureBarriers, const GLuint* textures, const GLenum* srcLayouts);
+typedef void (*PFN_glSignalSemaphoreEXT)(GLuint semaphore, GLuint numBufferBarriers, const GLuint* buffers, GLuint numTextureBarriers, const GLuint* textures, const GLenum* dstLayouts);
+
+typedef void (*PFN_glCreateMemoryObjectsEXT)(GLsizei n, GLuint* memoryObjects);
+typedef void (*PFN_glDeleteMemoryObjectsEXT)(GLsizei n, GLuint* memoryObjects);
+typedef void (*PFN_glImportMemoryWin32HandleEXT)(GLuint memory, uint64_t size, GLenum handleType, void* handle);
+typedef void (*PFN_glImportSemaphoreWin32HandleEXT)(GLuint semaphore, GLenum handleType, void* handle);
+typedef void (*PFN_glTexStorageMem2DEXT)(GLenum target, GLsizei levels, GLenum internalFormat, GLsizei width, GLsizei height, GLuint memory, uint64_t offset);
+typedef void (*PFN_glCopyImageSubData)(GLuint, GLenum, GLint, GLint, GLint, GLint, GLuint, GLenum, GLint, GLint, GLint, GLint, GLsizei, GLsizei, GLsizei);
+
+
+#define CAST_TEXTURE_TO_OPENGL_NAME(input) (static_cast<uint32_t>(reinterpret_cast<uint64_t>(input)))
+
+
+bool IsDepthFormat(DXGI_FORMAT in)
+{
+	switch (in)
+	{
+	case DXGI_FORMAT_D32_FLOAT:
+	case DXGI_FORMAT_D32_FLOAT_S8X24_UINT:
+	case DXGI_FORMAT_D24_UNORM_S8_UINT:
+	case DXGI_FORMAT_D16_UNORM:
+		return true;
+
+	default:
+		return false;
+	}
+}
+
+DXGI_FORMAT DXGI_DepthFormatToTypeless(DXGI_FORMAT in)
+{
+	switch (in)
+	{
+	case DXGI_FORMAT_D32_FLOAT:
+		return DXGI_FORMAT_R32_TYPELESS;
+	case DXGI_FORMAT_D32_FLOAT_S8X24_UINT:
+		return DXGI_FORMAT_R32_FLOAT_X8X24_TYPELESS;
+	case DXGI_FORMAT_D24_UNORM_S8_UINT:
+		return DXGI_FORMAT_R24G8_TYPELESS;
+	case DXGI_FORMAT_D16_UNORM:
+		return DXGI_FORMAT_R16_TYPELESS;
+
+	default:
+		return DXGI_FORMAT_UNKNOWN;
+	}
+}
+
 DXGI_FORMAT VulkanImageFormatToDXGI(VkFormat in)
 {
 	switch (in)
@@ -26,18 +107,58 @@ DXGI_FORMAT VulkanImageFormatToDXGI(VkFormat in)
 		return DXGI_FORMAT_R10G10B10A2_UNORM;
 	case VK_FORMAT_D32_SFLOAT:
 		return DXGI_FORMAT_D32_FLOAT;
-	case VK_FORMAT_D16_UNORM:
-		return DXGI_FORMAT_D16_UNORM;
-	case VK_FORMAT_D24_UNORM_S8_UINT:
-		return DXGI_FORMAT_D24_UNORM_S8_UINT;
 	case VK_FORMAT_D32_SFLOAT_S8_UINT:
 		return DXGI_FORMAT_D32_FLOAT_S8X24_UINT;
+	case VK_FORMAT_D24_UNORM_S8_UINT:
+		return DXGI_FORMAT_D24_UNORM_S8_UINT;
+	case VK_FORMAT_D16_UNORM:
+		return DXGI_FORMAT_D16_UNORM;
 
 	case VK_FORMAT_UNDEFINED:
 		return DXGI_FORMAT_UNKNOWN;
 
 	default:
 		ErrorLog("Unhandled Vulkan image format %d", in);
+		return DXGI_FORMAT_UNKNOWN;
+	}
+}
+
+DXGI_FORMAT OpenGLImageFormatToDXGI(int64_t in)
+{
+	switch (in)
+	{
+	case GL_SRGB8_ALPHA8:
+		return DXGI_FORMAT_R8G8B8A8_UNORM_SRGB;
+	//case ?: There seems to be no way of specifying a BRGA foramt
+	//	return DXGI_FORMAT_B8G8R8A8_UNORM_SRGB;
+	case GL_RGBA8:
+		return DXGI_FORMAT_R8G8B8A8_UNORM;
+	case GL_RGBA8_SNORM:
+		return DXGI_FORMAT_R8G8B8A8_SNORM;
+	case GL_RGBA32F:
+		return DXGI_FORMAT_R32G32B32A32_FLOAT;
+	case GL_RGB32F:
+		return DXGI_FORMAT_R32G32B32_FLOAT;
+	case GL_RGBA16F:
+		return DXGI_FORMAT_R16G16B16A16_FLOAT;
+	case GL_RGB10_A2:
+		return DXGI_FORMAT_R10G10B10A2_UNORM;
+	case GL_DEPTH_COMPONENT32F:
+	case GL_DEPTH_COMPONENT32: // Assuming float for 32 bit depth buffers
+		return DXGI_FORMAT_D32_FLOAT;
+	case GL_DEPTH32F_STENCIL8:
+	case GL_DEPTH32F_STENCIL8_NV:
+		return DXGI_FORMAT_D32_FLOAT_S8X24_UINT;
+	case GL_DEPTH24_STENCIL8:
+		return DXGI_FORMAT_D24_UNORM_S8_UINT;
+	case GL_DEPTH_COMPONENT16:
+		return DXGI_FORMAT_D16_UNORM;
+
+	case GL_NONE:
+		return DXGI_FORMAT_UNKNOWN;
+
+	default:
+		ErrorLog("Unhandled OpenGL image format 0x%x", in);
 		return DXGI_FORMAT_UNKNOWN;
 	}
 }
@@ -68,6 +189,16 @@ PassthroughRendererDX11Interop::PassthroughRendererDX11Interop(const XrGraphicsB
 	, m_vulkanQueueFamilyIndex(binding.queueFamilyIndex)
 	, m_vulkanQueueIndex(binding.queueIndex)
 	, m_vulkanQueue(nullptr)
+{
+}
+
+PassthroughRendererDX11Interop::PassthroughRendererDX11Interop(const XrGraphicsBindingOpenGLWin32KHR& binding, HMODULE dllModule, std::shared_ptr<ConfigManager> configManager)
+	: PassthroughRendererDX11(nullptr, dllModule, configManager)
+	, m_applicationRenderAPI(OpenGL)
+	, m_d3d12Device(nullptr)
+	, m_d3d12CommandQueue(nullptr)
+	, m_openglDeviceContext(binding.hDC)
+	, m_openglRenderContext(binding.hGLRC)
 {
 }
 
@@ -128,11 +259,11 @@ void PassthroughRendererDX11Interop::ResetRenderer()
 		}
 
 		if (m_semaphoreFenceHandle) { CloseHandle(m_semaphoreFenceHandle); }
-		if (m_semaphore) { vkDestroySemaphore(m_vulkanDevice, m_semaphore, nullptr); }
+		if (m_semaphoreVulkan) { vkDestroySemaphore(m_vulkanDevice, m_semaphoreVulkan, nullptr); }
 		if (m_vulkanRenderCompleteFence) { vkDestroyFence(m_vulkanDevice, m_vulkanRenderCompleteFence, nullptr); }
 
 		m_semaphoreFenceHandle = VK_NULL_HANDLE;
-		m_semaphore = VK_NULL_HANDLE;
+		m_semaphoreVulkan = VK_NULL_HANDLE;
 		m_vulkanRenderCompleteFence = VK_NULL_HANDLE;
 
 		if (m_vulkanCommandPool)
@@ -169,6 +300,13 @@ void PassthroughRendererDX11Interop::ResetRenderer()
 	}
 	case OpenGL:
 	{
+		for (auto const& [key, val] : m_chainedSwapchains)
+		{
+			DestroyChainedSwapchain(key);
+		}
+
+		if (m_semaphoreFenceHandle) { CloseHandle(m_semaphoreFenceHandle); }
+		
 		break;
 	}
 
@@ -316,7 +454,7 @@ bool PassthroughRendererDX11Interop::InitRenderer()
 		VkSemaphoreCreateInfo semaphoreInfo = { VK_STRUCTURE_TYPE_SEMAPHORE_CREATE_INFO };
 		semaphoreInfo.pNext = &typeInfo;
 
-		if (vkCreateSemaphore(m_vulkanDevice, &semaphoreInfo, nullptr, &m_semaphore) != VK_SUCCESS)
+		if (vkCreateSemaphore(m_vulkanDevice, &semaphoreInfo, nullptr, &m_semaphoreVulkan) != VK_SUCCESS)
 		{
 			ErrorLog("vkCreateSemaphore failure!\n");
 			return false;
@@ -327,7 +465,7 @@ bool PassthroughRendererDX11Interop::InitRenderer()
 		VkImportSemaphoreWin32HandleInfoKHR importInfo = { VK_STRUCTURE_TYPE_IMPORT_SEMAPHORE_WIN32_HANDLE_INFO_KHR };
 		importInfo.handleType = VK_EXTERNAL_SEMAPHORE_HANDLE_TYPE_D3D12_FENCE_BIT;
 		importInfo.handle = m_semaphoreFenceHandle;
-		importInfo.semaphore = m_semaphore;
+		importInfo.semaphore = m_semaphoreVulkan;
 
 		PFN_vkImportSemaphoreWin32HandleKHR importFunc = (PFN_vkImportSemaphoreWin32HandleKHR)vkGetInstanceProcAddr(m_vulkanInstance, "vkImportSemaphoreWin32HandleKHR");
 
@@ -436,6 +574,92 @@ bool PassthroughRendererDX11Interop::InitRenderer()
 
 	case OpenGL:
 	{
+
+		IDXGIFactory1* factory = nullptr;
+		if (FAILED(CreateDXGIFactory1(__uuidof(IDXGIFactory1), (void**)(&factory))))
+		{
+			ErrorLog("CreateDXGIFactory failure!\n");
+			return false;
+		}
+
+		IDXGIAdapter* adapter = nullptr;
+
+		// Assuming the default adapter is used, per the OpenXR spec for XrGraphicsBindingOpenGLWin32KHR.
+		HRESULT res = factory->EnumAdapters(0, &adapter);
+
+		factory->Release();
+
+		if (res != S_OK)
+		{
+			ErrorLog("EnumAdapters failure: 0x%x\n", res);
+			return false;	
+		}
+
+		std::vector<D3D_FEATURE_LEVEL> featureLevels = { D3D_FEATURE_LEVEL_12_1, D3D_FEATURE_LEVEL_12_0, D3D_FEATURE_LEVEL_11_1 };
+
+		res = D3D11CreateDevice(adapter, D3D_DRIVER_TYPE_UNKNOWN, NULL, 0, featureLevels.data(), (uint32_t)featureLevels.size(), D3D11_SDK_VERSION, &m_d3dDevice, NULL, &m_deviceContext);
+
+		adapter->Release();
+
+		if (FAILED(res))
+		{
+			ErrorLog("D3D11CreateDevice failure: 0x%x\n", res);
+			return false;
+		}
+
+		if (FAILED(m_d3dDevice->QueryInterface(__uuidof(ID3D11Device5), (void**)m_d3d11Device5.GetAddressOf())))
+		{
+			ErrorLog("Querying ID3D11Device5 failure!\n");
+			return false;
+		}
+
+		if (FAILED(m_deviceContext->QueryInterface(__uuidof(ID3D11DeviceContext4), (void**)m_d3d11DeviceContext4.GetAddressOf())))
+		{
+			ErrorLog("Querying ID3D11DeviceContext4 failure!\n");
+			return false;
+		}
+
+		if (FAILED(m_d3d11Device5->CreateFence(1, D3D11_FENCE_FLAG_SHARED, __uuidof(ID3D11Fence), (void**)m_semaphoreFence.GetAddressOf())))
+		{
+			ErrorLog("CreateFence failure!\n");
+			return false;
+		}
+
+		HRESULT result = m_semaphoreFence->CreateSharedHandle(NULL, GENERIC_ALL, NULL, &m_semaphoreFenceHandle);
+		/*IDXGIResource1* resource;
+		m_semaphoreFence->QueryInterface(__uuidof(IDXGIResource1), (void**)&resource);
+		result = resource->CreateSharedHandle(NULL, DXGI_SHARED_RESOURCE_READ | DXGI_SHARED_RESOURCE_WRITE, NULL, &m_chainedSwapchains[swapchain][i].SharedHandle);
+		HRESULT result = resource->GetSharedHandle(&m_semaphoreFenceHandle);
+		resource->Release();*/
+
+		if (FAILED(result))
+		{
+			ErrorLog("CreateSharedHandle failure: 0x%x\n", result);
+			return false;
+		}
+
+		static PFN_glGenSemaphoresEXT glGenSemaphoresEXT = reinterpret_cast<PFN_glGenSemaphoresEXT>(wglGetProcAddress("glGenSemaphoresEXT"));
+		static PFN_glImportSemaphoreWin32HandleEXT glImportSemaphoreWin32HandleEXT = reinterpret_cast<PFN_glImportSemaphoreWin32HandleEXT>(wglGetProcAddress("glImportSemaphoreWin32HandleEXT"));
+
+		wglMakeCurrent(m_openglDeviceContext, m_openglRenderContext);
+
+		glGenSemaphoresEXT(1, &m_semaphoreOpenGL);
+
+		GLenum error = glGetError();
+		if (GLenum error = glGetError() != GL_NO_ERROR)
+		{
+			ErrorLog("glGenSemaphoresEXT error: 0x%x\n", error);
+		}
+
+		glImportSemaphoreWin32HandleEXT(m_semaphoreOpenGL, HANDLE_TYPE_D3D12_FENCE_EXT, m_semaphoreFenceHandle);
+
+		error = glGetError();
+		if (GLenum error = glGetError() != GL_NO_ERROR)
+		{
+			ErrorLog("glImportSemaphoreWin32HandleEXT error: 0x%x\n", error);
+		}
+
+
 		break;
 	}
 
@@ -453,7 +677,7 @@ bool PassthroughRendererDX11Interop::InitRenderer()
 	return true;
 }
 
-void PassthroughRendererDX11Interop::InitRenderTarget(const ERenderEye eye, void* rendertarget, const uint32_t imageIndex, const XrSwapchainCreateInfo& swapchainInfo)
+void PassthroughRendererDX11Interop::InitRenderTarget(const ERenderEye eye, void* rendertarget, const uint32_t imageIndex, const XrSwapchainCreateInfo& swapchainInfo, const XrSwapchain swapchain)
 {
 	switch (m_applicationRenderAPI)
 	{
@@ -468,7 +692,7 @@ void PassthroughRendererDX11Interop::InitRenderTarget(const ERenderEye eye, void
 			return;
 		}
 
-		PassthroughRendererDX11::InitRenderTarget(eye, res, imageIndex, swapchainInfo);
+		PassthroughRendererDX11::InitRenderTarget(eye, res, imageIndex, swapchainInfo, swapchain);
 
 		break;
 	}
@@ -495,7 +719,7 @@ void PassthroughRendererDX11Interop::InitRenderTarget(const ERenderEye eye, void
 		{
 			XrSwapchainCreateInfo dxInfo = swapchainInfo;
 			dxInfo.format = VulkanImageFormatToDXGI((VkFormat)swapchainInfo.format);
-			PassthroughRendererDX11::InitRenderTarget(eye, d3dtexture, imageIndex, dxInfo);
+			PassthroughRendererDX11::InitRenderTarget(eye, d3dtexture, imageIndex, dxInfo, swapchain);
 		}
 
 		break;
@@ -503,21 +727,39 @@ void PassthroughRendererDX11Interop::InitRenderTarget(const ERenderEye eye, void
 
 	case OpenGL:
 	{
+		if (eye == LEFT_EYE)
+		{
+			m_rendertargetsOpenGLLeft[imageIndex] = CAST_TEXTURE_TO_OPENGL_NAME(rendertarget);
+		}
+		else
+		{
+			m_rendertargetsOpenGLRight[imageIndex] = CAST_TEXTURE_TO_OPENGL_NAME(rendertarget);
+		}
+
+		if (!m_chainedSwapchains.contains(swapchain))
+		{
+			ErrorLog("No chained swapchain found!\n");
+			return;
+		}
+
+		XrSwapchainCreateInfo dxInfo = swapchainInfo;
+		dxInfo.format = OpenGLImageFormatToDXGI(swapchainInfo.format);
+		PassthroughRendererDX11::InitRenderTarget(eye, m_chainedSwapchains[swapchain][imageIndex].D3D11Texture.Get(), imageIndex, dxInfo, swapchain);
+
 		break;
 	}
 
 	default:
 	{
-		PassthroughRendererDX11::InitRenderTarget(eye, rendertarget, imageIndex, swapchainInfo);
+		PassthroughRendererDX11::InitRenderTarget(eye, rendertarget, imageIndex, swapchainInfo, swapchain);
 		break;
 	}
-	}
-
-	
+	}	
 }
 
-void PassthroughRendererDX11Interop::InitDepthBuffer(const ERenderEye eye, void* depthBuffer, const uint32_t imageIndex, const XrSwapchainCreateInfo& swapchainInfo)
+void PassthroughRendererDX11Interop::InitDepthBuffer(const ERenderEye eye, void* depthBuffer, const uint32_t imageIndex, const XrSwapchainCreateInfo& swapchainInfo, const XrSwapchain swapchain)
 {
+	((eye == LEFT_EYE) ? m_depthSwapchainLeft : m_depthSwapchainRight) = swapchain;
 
 	switch (m_applicationRenderAPI)
 	{
@@ -533,7 +775,7 @@ void PassthroughRendererDX11Interop::InitDepthBuffer(const ERenderEye eye, void*
 		}
 
 
-		PassthroughRendererDX11::InitDepthBuffer(eye, res, imageIndex, swapchainInfo);
+		PassthroughRendererDX11::InitDepthBuffer(eye, res, imageIndex, swapchainInfo, swapchain);
 
 		break;
 	}
@@ -554,13 +796,13 @@ void PassthroughRendererDX11Interop::InitDepthBuffer(const ERenderEye eye, void*
 		VkImage& localDepthBuffer = (eye == LEFT_EYE) ? m_localDepthBuffersLeft[imageIndex] : m_localDepthBuffersRight[imageIndex];
 		VkDeviceMemory& localDBMem = (eye == LEFT_EYE) ? m_localDBMemLeft[imageIndex] : m_localDBMemRight[imageIndex];
 
-		HANDLE& handle = (eye == LEFT_EYE) ? m_sharedTextureLeft[imageIndex] : m_sharedTextureRight[imageIndex];
+		HANDLE& handle = (eye == LEFT_EYE) ? m_sharedDepthTextureLeft[imageIndex] : m_sharedDepthTextureRight[imageIndex];
 
 		if (CreateLocalTextureVulkan(localDepthBuffer, localDBMem, &d3dtexture, handle, swapchainInfo, true))
 		{
 			XrSwapchainCreateInfo dxInfo = swapchainInfo;
 			dxInfo.format = VulkanImageFormatToDXGI((VkFormat)swapchainInfo.format);
-			PassthroughRendererDX11::InitDepthBuffer(eye, d3dtexture, imageIndex, dxInfo);
+			PassthroughRendererDX11::InitDepthBuffer(eye, d3dtexture, imageIndex, dxInfo, swapchain);
 		}
 
 		
@@ -569,12 +811,31 @@ void PassthroughRendererDX11Interop::InitDepthBuffer(const ERenderEye eye, void*
 
 	case OpenGL:
 	{
+		if (eye == LEFT_EYE)
+		{
+			m_depthBuffersOpenGLLeft[imageIndex] = CAST_TEXTURE_TO_OPENGL_NAME(depthBuffer);
+		}
+		else
+		{
+			m_depthBuffersOpenGLRight[imageIndex] = CAST_TEXTURE_TO_OPENGL_NAME(depthBuffer);
+		}
+
+		if (!m_chainedSwapchains.contains(swapchain))
+		{
+			ErrorLog("No chained swapchain found!\n");
+			return;
+		}
+		
+		XrSwapchainCreateInfo dxInfo = swapchainInfo;
+		dxInfo.format = OpenGLImageFormatToDXGI(swapchainInfo.format);
+		PassthroughRendererDX11::InitDepthBuffer(eye, m_chainedSwapchains[swapchain][imageIndex].D3D11Texture.Get(), imageIndex, dxInfo, swapchain);
+
 		break;
 	}
 
 	default:
 	{
-		PassthroughRendererDX11::InitDepthBuffer(eye, depthBuffer, imageIndex, swapchainInfo);
+		PassthroughRendererDX11::InitDepthBuffer(eye, depthBuffer, imageIndex, swapchainInfo, swapchain);
 		break;
 	}
 	}
@@ -584,13 +845,12 @@ void PassthroughRendererDX11Interop::InitDepthBuffer(const ERenderEye eye, void*
 bool PassthroughRendererDX11Interop::CreateLocalTextureVulkan(VkImage& localVulkanTexture, VkDeviceMemory& localVulkanTextureMemory, ID3D11Texture2D** localD3DTexture, HANDLE& sharedTextureHandle, const XrSwapchainCreateInfo& swapchainInfo, bool bIsDepthMap)
 {
 	D3D11_TEXTURE2D_DESC textureDesc = {};
-	textureDesc.MipLevels = 1;
 	textureDesc.Format = VulkanImageFormatToDXGI((VkFormat)swapchainInfo.format);
 	textureDesc.Width = swapchainInfo.width;
 	textureDesc.Height = swapchainInfo.height;
 	textureDesc.ArraySize = swapchainInfo.arraySize;
 	textureDesc.MipLevels = swapchainInfo.mipCount;
-	textureDesc.SampleDesc.Count = 1;
+	textureDesc.SampleDesc.Count = swapchainInfo.sampleCount;
 	textureDesc.SampleDesc.Quality = 0;
 	textureDesc.BindFlags = (bIsDepthMap ? D3D11_BIND_DEPTH_STENCIL : D3D11_BIND_SHADER_RESOURCE | D3D11_BIND_RENDER_TARGET);
 	textureDesc.Usage = D3D11_USAGE_DEFAULT;
@@ -683,6 +943,76 @@ bool PassthroughRendererDX11Interop::CreateLocalTextureVulkan(VkImage& localVulk
 	return true;
 }
 
+
+bool PassthroughRendererDX11Interop::CreateLocalTextureOpenGL(uint32_t& localOpenGLTexture, ID3D11Texture2D** localD3DTexture, HANDLE& sharedTextureHandle, const XrSwapchainCreateInfo& swapchainInfo, bool bIsDepthMap)
+{
+	/*D3D11_TEXTURE2D_DESC textureDesc = {};
+	textureDesc.Format = OpenGLImageFormatToDXGI(swapchainInfo.format);
+	textureDesc.Width = swapchainInfo.width;
+	textureDesc.Height = swapchainInfo.height;
+	textureDesc.ArraySize = swapchainInfo.arraySize;
+	textureDesc.MipLevels = swapchainInfo.mipCount;
+	textureDesc.SampleDesc.Count = swapchainInfo.sampleCount;
+	textureDesc.SampleDesc.Quality = 0;
+	textureDesc.BindFlags = (bIsDepthMap ? D3D11_BIND_DEPTH_STENCIL : D3D11_BIND_SHADER_RESOURCE | D3D11_BIND_RENDER_TARGET);
+	textureDesc.Usage = D3D11_USAGE_DEFAULT;
+	textureDesc.CPUAccessFlags = 0;
+	textureDesc.MiscFlags = D3D11_RESOURCE_MISC_SHARED;
+
+	{
+		IDXGIResource* tempResource = NULL;
+		(*localD3DTexture)->QueryInterface(__uuidof(IDXGIResource), (void**)&tempResource);
+		tempResource->GetSharedHandle(&sharedTextureHandle);
+		tempResource->Release();
+	}
+
+
+	HRESULT res = m_d3dDevice->CreateTexture2D(&textureDesc, nullptr, localD3DTexture);
+	if (res != S_OK)
+	{
+		ErrorLog("Shared texture CreateTexture2D failure: 0x%x\n", res);
+		return false;
+	}
+
+
+	{
+		IDXGIResource* tempResource = NULL;
+		(*localD3DTexture)->QueryInterface(__uuidof(IDXGIResource), (void**)&tempResource);
+		tempResource->GetSharedHandle(&sharedTextureHandle);
+		tempResource->Release();
+	}
+
+	if (localOpenGLTexture != 0)
+	{
+		glDeleteTextures(1, &localOpenGLTexture);
+	}
+
+	VkExternalMemoryImageCreateInfo  extInfo = { VK_STRUCTURE_TYPE_EXTERNAL_MEMORY_IMAGE_CREATE_INFO };
+	extInfo.handleTypes = VK_EXTERNAL_MEMORY_HANDLE_TYPE_D3D11_TEXTURE_KMT_BIT;
+
+	VkImageCreateInfo imageInfo{ VK_STRUCTURE_TYPE_IMAGE_CREATE_INFO };
+	imageInfo.pNext = &extInfo;
+	imageInfo.imageType = VK_IMAGE_TYPE_2D;
+	imageInfo.extent.width = swapchainInfo.width;
+	imageInfo.extent.height = swapchainInfo.height;
+	imageInfo.extent.depth = 1;
+	imageInfo.mipLevels = swapchainInfo.mipCount;
+	imageInfo.arrayLayers = swapchainInfo.arraySize;
+	imageInfo.format = (VkFormat)swapchainInfo.format;
+	imageInfo.tiling = VK_IMAGE_TILING_OPTIMAL;
+	imageInfo.initialLayout = VK_IMAGE_LAYOUT_UNDEFINED;
+	imageInfo.usage = VK_IMAGE_USAGE_TRANSFER_SRC_BIT | VK_IMAGE_USAGE_TRANSFER_DST_BIT | (bIsDepthMap ? VK_IMAGE_USAGE_DEPTH_STENCIL_ATTACHMENT_BIT : VK_IMAGE_USAGE_SAMPLED_BIT | VK_IMAGE_USAGE_COLOR_ATTACHMENT_BIT);
+	imageInfo.sharingMode = VK_SHARING_MODE_EXCLUSIVE;
+	imageInfo.samples = VK_SAMPLE_COUNT_1_BIT;
+
+	if (vkCreateImage(m_vulkanDevice, &imageInfo, nullptr, &localVulkanTexture) != VK_SUCCESS)
+	{
+		ErrorLog("Shared texture vkCreateImage failure!\n");
+		return false;
+	}*/
+
+	return true;
+}
 
 struct ImageCopyData {
 	VkImage sourceImage;
@@ -804,7 +1134,8 @@ void VulkanCopyImages(VkCommandBuffer commandBuffer, std::vector<ImageCopyData>&
 }
 
 
-void PassthroughRendererDX11Interop::RenderPassthroughFrame(const XrCompositionLayerProjection* layer, CameraFrame* frame, FrameRenderParameters& renderParams, std::shared_ptr<DepthFrame> depthFrame, UVDistortionParameters& distortionParams)
+
+void PassthroughRendererDX11Interop::RenderPassthroughFrame(const XrCompositionLayerProjection* layer, std::shared_ptr<CameraFrame> frame, FrameRenderParameters& renderParams, std::shared_ptr<DepthFrame> depthFrame, UVDistortionParameters& distortionParams)
 {
 	DX11ViewData& viewDataLeft = m_viewData[0][renderParams.LeftFrameIndex];
 	DX11ViewData& viewDataRight = m_viewData[1][renderParams.RightFrameIndex];
@@ -814,6 +1145,12 @@ void PassthroughRendererDX11Interop::RenderPassthroughFrame(const XrCompositionL
 	case DirectX12:
 	{
 		{
+			if (viewDataLeft.renderTarget.Texture.Get() == nullptr || viewDataRight.renderTarget.Texture.Get() == nullptr)
+			{
+				ErrorLog("Tried to render without initialized rendertarget texture!\n");
+				return;
+			}
+
 			ID3D11Resource* rts[2] = { viewDataLeft.renderTarget.Texture.Get(), viewDataRight.renderTarget.Texture.Get() };
 			m_d3d11On12Device->AcquireWrappedResources(rts, 2);
 
@@ -916,7 +1253,7 @@ void PassthroughRendererDX11Interop::RenderPassthroughFrame(const XrCompositionL
 			submitInfo.commandBufferCount = 1;
 			submitInfo.pCommandBuffers = &commandBuffer;
 			submitInfo.signalSemaphoreCount = 1;
-			submitInfo.pSignalSemaphores = &m_semaphore;
+			submitInfo.pSignalSemaphores = &m_semaphoreVulkan;
 			vkQueueSubmit(m_vulkanQueue, 1, &submitInfo, VK_NULL_HANDLE);
 		}
 
@@ -1001,7 +1338,7 @@ void PassthroughRendererDX11Interop::RenderPassthroughFrame(const XrCompositionL
 			submitInfo2.commandBufferCount = 1;
 			submitInfo2.pCommandBuffers = &commandBuffer2;
 			submitInfo2.waitSemaphoreCount = 1;
-			submitInfo2.pWaitSemaphores = &m_semaphore;
+			submitInfo2.pWaitSemaphores = &m_semaphoreVulkan;
 			VkPipelineStageFlags bits = VK_PIPELINE_STAGE_ALL_COMMANDS_BIT;
 			submitInfo2.pWaitDstStageMask = &bits;
 
@@ -1013,6 +1350,121 @@ void PassthroughRendererDX11Interop::RenderPassthroughFrame(const XrCompositionL
 
 	case OpenGL:
 	{
+		{
+			static PFN_glSemaphoreParameterui64vEXT glSemaphoreParameterui64vEXT = reinterpret_cast<PFN_glSemaphoreParameterui64vEXT>(wglGetProcAddress("glSemaphoreParameterui64vEXT"));
+			static PFN_glWaitSemaphoreEXT glWaitSemaphoreEXT = reinterpret_cast<PFN_glWaitSemaphoreEXT>(wglGetProcAddress("glWaitSemaphoreEXT"));
+			static PFN_glSignalSemaphoreEXT glSignalSemaphoreEXT = reinterpret_cast<PFN_glSignalSemaphoreEXT>(wglGetProcAddress("glSignalSemaphoreEXT"));
+
+			wglMakeCurrent(m_openglDeviceContext, m_openglRenderContext);
+
+			
+			/*const XrSwapchainSubImage& subImageLeft = layer->views[0].subImage;
+			const XrSwapchainSubImage& subImageRight = layer->views[1].subImage;
+			std::vector<GLuint> inTextures;
+			std::vector<GLuint> outTextures;
+			std::vector<GLenum> inLayouts;
+			std::vector<GLenum> outLayouts;
+
+			if (subImageLeft.swapchain != XR_NULL_HANDLE && m_rendertargetsOpenGLLeft[renderParams.LeftFrameIndex] > 0)
+			{
+				inTextures.push_back(m_chainedSwapchains[subImageLeft.swapchain][renderParams.LeftFrameIndex].OpenGLTexture);
+				inTextures.push_back(m_rendertargetsOpenGLLeft[renderParams.LeftFrameIndex]);
+				inLayouts.push_back(GL_LAYOUT_GENERAL_EXT);
+				inLayouts.push_back(GL_LAYOUT_GENERAL_EXT);
+			}
+			if (subImageRight.swapchain != XR_NULL_HANDLE && m_rendertargetsOpenGLRight[renderParams.RightFrameIndex] > 0)
+			{
+				inTextures.push_back(m_chainedSwapchains[subImageRight.swapchain][renderParams.RightFrameIndex].OpenGLTexture);
+				inTextures.push_back(m_rendertargetsOpenGLRight[renderParams.RightFrameIndex]);
+				inLayouts.push_back(GL_LAYOUT_GENERAL_EXT);
+				inLayouts.push_back(GL_LAYOUT_GENERAL_EXT);
+			}
+			if (m_depthSwapchainLeft != XR_NULL_HANDLE && m_depthBuffersOpenGLLeft[renderParams.LeftDepthIndex] > 0)
+			{
+				inTextures.push_back(m_chainedSwapchains[m_depthSwapchainLeft][renderParams.LeftDepthIndex].OpenGLTexture);
+				inTextures.push_back(m_depthBuffersOpenGLLeft[renderParams.LeftDepthIndex]);
+				inLayouts.push_back(GL_LAYOUT_GENERAL_EXT);
+				inLayouts.push_back(GL_LAYOUT_GENERAL_EXT);
+			}
+			if (m_depthSwapchainLeft != XR_NULL_HANDLE && m_depthBuffersOpenGLRight[renderParams.RightDepthIndex] > 0)
+			{
+				inTextures.push_back(m_chainedSwapchains[m_depthSwapchainRight][renderParams.RightDepthIndex].OpenGLTexture);
+				inTextures.push_back(m_depthBuffersOpenGLRight[renderParams.RightDepthIndex]);
+				inLayouts.push_back(GL_LAYOUT_GENERAL_EXT);
+				inLayouts.push_back(GL_LAYOUT_GENERAL_EXT);
+			}*/
+			
+			m_semaphoreValue++;
+			glSemaphoreParameterui64vEXT(m_semaphoreOpenGL, D3D12_FENCE_VALUE_EXT, &m_semaphoreValue);
+
+			//glSignalSemaphoreEXT(m_semaphoreOpenGL, 0, nullptr, static_cast<GLuint>(inTextures.size()), inTextures.data(), inLayouts.data());
+			glSignalSemaphoreEXT(m_semaphoreOpenGL, 0, nullptr, 0, nullptr, nullptr);
+
+			GLenum error = glGetError();
+			if (GLenum error = glGetError() != GL_NO_ERROR)
+			{
+				ErrorLog("glSignalSemaphoreEXT error: 0x%x\n", error);
+			}
+
+			m_d3d11DeviceContext4->Wait(m_semaphoreFence.Get(), m_semaphoreValue);
+
+			PassthroughRendererDX11::RenderPassthroughFrame(layer, frame, renderParams, depthFrame, distortionParams);
+
+			m_semaphoreValue++;
+			m_d3d11DeviceContext4->Signal(m_semaphoreFence.Get(), m_semaphoreValue);
+
+			wglMakeCurrent(m_openglDeviceContext, m_openglRenderContext);
+
+			glSemaphoreParameterui64vEXT(m_semaphoreOpenGL, D3D12_FENCE_VALUE_EXT, &m_semaphoreValue);
+			//glWaitSemaphoreEXT(m_semaphoreOpenGL, 0, nullptr, static_cast<GLuint>(inTextures.size()), inTextures.data(), inLayouts.data());
+			glWaitSemaphoreEXT(m_semaphoreOpenGL, 0, nullptr, 0, nullptr, nullptr);
+
+			error = glGetError();
+			if (GLenum error = glGetError() != GL_NO_ERROR)
+			{
+				ErrorLog("glWaitSemaphoreEXT error: 0x%x\n", error);
+			}
+		}
+
+
+		static PFN_glCopyImageSubData glCopyImageSubData = reinterpret_cast<PFN_glCopyImageSubData>(wglGetProcAddress("glCopyImageSubData"));
+
+		if(layer->views[0].subImage.swapchain != XR_NULL_HANDLE && m_rendertargetsOpenGLLeft[renderParams.LeftFrameIndex] > 0)
+		{
+			const XrRect2Di& imageRect = layer->views[0].subImage.imageRect;
+			uint32_t sourceTexture = m_chainedSwapchains[layer->views[0].subImage.swapchain][renderParams.LeftFrameIndex].OpenGLTexture;
+			uint32_t destTexture = m_rendertargetsOpenGLLeft[renderParams.LeftFrameIndex];
+
+			glCopyImageSubData(sourceTexture, GL_TEXTURE_2D, 0, imageRect.offset.x, imageRect.offset.y, 0, destTexture, GL_TEXTURE_2D, 0, imageRect.offset.x, imageRect.offset.y, 0, imageRect.extent.width, imageRect.extent.height, 1);
+		}
+
+		if (layer->views[1].subImage.swapchain != XR_NULL_HANDLE && m_rendertargetsOpenGLRight[renderParams.RightFrameIndex] > 0)
+		{
+			const XrRect2Di& imageRect = layer->views[1].subImage.imageRect;
+			uint32_t sourceTexture = m_chainedSwapchains[layer->views[1].subImage.swapchain][renderParams.RightFrameIndex].OpenGLTexture;
+			uint32_t destTexture = m_rendertargetsOpenGLRight[renderParams.RightFrameIndex];
+
+			glCopyImageSubData(sourceTexture, GL_TEXTURE_2D, 0, imageRect.offset.x, imageRect.offset.y, 0, destTexture, GL_TEXTURE_2D, 0, imageRect.offset.x, imageRect.offset.y, 0, imageRect.extent.width, imageRect.extent.height, 1);
+		}
+
+		if (m_depthSwapchainLeft != XR_NULL_HANDLE && m_depthBuffersOpenGLLeft[renderParams.LeftDepthIndex] > 0)
+		{
+			const XrRect2Di& imageRect = layer->views[0].subImage.imageRect;
+			uint32_t sourceTexture = m_chainedSwapchains[m_depthSwapchainLeft][renderParams.LeftDepthIndex].OpenGLTexture;
+			uint32_t destTexture = m_depthBuffersOpenGLLeft[renderParams.LeftDepthIndex];
+
+			glCopyImageSubData(sourceTexture, GL_TEXTURE_2D, 0, imageRect.offset.x, imageRect.offset.y, 0, destTexture, GL_TEXTURE_2D, 0, imageRect.offset.x, imageRect.offset.y, 0, imageRect.extent.width, imageRect.extent.height, 1);
+		}
+
+		if (m_depthSwapchainRight != XR_NULL_HANDLE && m_depthBuffersOpenGLRight[renderParams.RightDepthIndex] > 0)
+		{
+			const XrRect2Di& imageRect = layer->views[1].subImage.imageRect;
+			uint32_t sourceTexture = m_chainedSwapchains[m_depthSwapchainRight][renderParams.RightDepthIndex].OpenGLTexture;
+			uint32_t destTexture = m_depthBuffersOpenGLRight[renderParams.RightDepthIndex];
+
+			glCopyImageSubData(sourceTexture, GL_TEXTURE_2D, 0, imageRect.offset.x, imageRect.offset.y, 0, destTexture, GL_TEXTURE_2D, 0, imageRect.offset.x, imageRect.offset.y, 0, imageRect.extent.width, imageRect.extent.height, 1);
+		}
+
 		break;
 	}
 
@@ -1022,8 +1474,6 @@ void PassthroughRendererDX11Interop::RenderPassthroughFrame(const XrCompositionL
 		break;
 	}
 	}
-
-	
 }
 
 
@@ -1234,3 +1684,171 @@ bool PassthroughRendererDX11Interop::DownloadTextureToCPU(const void* textureSRV
 	return false;
 
 }
+
+
+
+bool PassthroughRendererDX11Interop::CreateChainedSwapchain(const XrSwapchain swapchain, const XrSwapchainCreateInfo& swapchainInfo, const int numImages, XrSwapchainImageBaseHeader* chainedImages)
+{
+	if (m_chainedSwapchains.contains(swapchain))
+	{
+		DestroyChainedSwapchain(swapchain);
+	}
+
+	switch (m_applicationRenderAPI)
+	{
+	case Vulkan:
+	{
+		
+
+
+		return false;
+	}
+
+	case OpenGL:
+	{
+		XrSwapchainImageOpenGLKHR* images = reinterpret_cast<XrSwapchainImageOpenGLKHR*>(chainedImages);
+
+		wglMakeCurrent(m_openglDeviceContext, m_openglRenderContext);
+
+		m_chainedSwapchains[swapchain] = std::vector<DX11ChainedSwapchainTexture>(numImages);
+
+		for (int i = 0; i < numImages; i++)
+		{
+			DXGI_FORMAT texFormat = OpenGLImageFormatToDXGI(swapchainInfo.format);
+
+			D3D11_TEXTURE2D_DESC textureDesc = {};
+			textureDesc.Format = IsDepthFormat(texFormat) ? DXGI_DepthFormatToTypeless(texFormat) : texFormat;
+			textureDesc.Width = swapchainInfo.width;
+			textureDesc.Height = swapchainInfo.height;
+			textureDesc.ArraySize = swapchainInfo.arraySize;
+			textureDesc.MipLevels = swapchainInfo.mipCount;
+			textureDesc.SampleDesc.Count = swapchainInfo.sampleCount;
+			textureDesc.SampleDesc.Quality = 0;
+			textureDesc.BindFlags = IsDepthFormat(texFormat) ?
+				(D3D11_BIND_SHADER_RESOURCE | D3D11_BIND_DEPTH_STENCIL) :
+				(D3D11_BIND_SHADER_RESOURCE | D3D11_BIND_RENDER_TARGET);
+			textureDesc.Usage = D3D11_USAGE_DEFAULT;
+			textureDesc.CPUAccessFlags = 0;
+			//textureDesc.MiscFlags = D3D11_RESOURCE_MISC_SHARED_NTHANDLE | D3D11_RESOURCE_MISC_SHARED_KEYEDMUTEX;
+			textureDesc.MiscFlags = D3D11_RESOURCE_MISC_SHARED;
+
+			HRESULT result = m_d3dDevice->CreateTexture2D(&textureDesc, nullptr, &m_chainedSwapchains[swapchain][i].D3D11Texture);
+
+			if (FAILED(result))
+			{
+				ErrorLog("Shared texture CreateTexture2D failure: 0x%x\n", result);
+				return false;
+			}
+
+			IDXGIResource1* resource;
+			m_chainedSwapchains[swapchain][i].D3D11Texture->QueryInterface(__uuidof(IDXGIResource1), (void**)&resource);
+
+			//result = resource->CreateSharedHandle(NULL, DXGI_SHARED_RESOURCE_READ | DXGI_SHARED_RESOURCE_WRITE, NULL, &m_chainedSwapchains[swapchain][i].SharedHandle);
+			result = resource->GetSharedHandle(&m_chainedSwapchains[swapchain][i].SharedHandle);
+			resource->Release();
+
+			if (FAILED(result))
+			{
+				ErrorLog("Shared texture GetSharedHandle failure: 0x%x\n", result);
+				return false;
+			}
+			
+
+			glGenTextures(1, &m_chainedSwapchains[swapchain][i].OpenGLTexture);
+			glBindTexture(GL_TEXTURE_2D, m_chainedSwapchains[swapchain][i].OpenGLTexture);
+
+			glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_S, GL_REPEAT);
+			glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_T, GL_REPEAT);
+			glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MIN_FILTER, GL_LINEAR);
+			glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MAG_FILTER, GL_LINEAR);
+
+			glTexParameteri(GL_TEXTURE_2D, TEXTURE_TILING_EXT, OPTIMAL_TILING_EXT);
+			
+			
+			static PFN_glCreateMemoryObjectsEXT glCreateMemoryObjectsEXT = reinterpret_cast<PFN_glCreateMemoryObjectsEXT>(wglGetProcAddress("glCreateMemoryObjectsEXT"));
+			static PFN_glImportMemoryWin32HandleEXT glImportMemoryWin32HandleEXT = reinterpret_cast<PFN_glImportMemoryWin32HandleEXT>(wglGetProcAddress("glImportMemoryWin32HandleEXT"));
+			static PFN_glTexStorageMem2DEXT glTexStorageMem2DEXT = reinterpret_cast<PFN_glTexStorageMem2DEXT>(wglGetProcAddress("glTexStorageMem2DEXT"));
+
+			glCreateMemoryObjectsEXT(1, &m_chainedSwapchains[swapchain][i].OpenGLMemoryObject);
+
+			GLenum error = glGetError();
+			if (GLenum error = glGetError() != GL_NO_ERROR)
+			{
+				ErrorLog("glCreateMemoryObjectsEXT error: 0x%x\n", error);
+			}
+
+			glImportMemoryWin32HandleEXT(m_chainedSwapchains[swapchain][i].OpenGLMemoryObject, 0, HANDLE_TYPE_D3D11_IMAGE_KMT_EXT, static_cast<void*>(m_chainedSwapchains[swapchain][i].SharedHandle));
+
+			error = glGetError();
+			if (GLenum error = glGetError() != GL_NO_ERROR)
+			{
+				ErrorLog("glImportMemoryWin32HandleEXT error: 0x%x\n", error);
+			}
+
+			glTexStorageMem2DEXT(GL_TEXTURE_2D, 1, static_cast<GLenum>(swapchainInfo.format), swapchainInfo.width, swapchainInfo.height, m_chainedSwapchains[swapchain][i].OpenGLMemoryObject, 0);
+
+			error = glGetError();
+			if (GLenum error = glGetError() != GL_NO_ERROR)
+			{
+				ErrorLog("glTexStorageMem2DEXT error: 0x%x\n", error);
+			}
+			
+
+			images[i].type = XR_TYPE_SWAPCHAIN_IMAGE_OPENGL_KHR;
+			images[i].next = nullptr;
+			images[i].image = m_chainedSwapchains[swapchain][i].OpenGLTexture;
+		}
+
+		return true;
+	}
+
+	default:
+	{
+		return false;
+	}
+	}
+}
+
+void PassthroughRendererDX11Interop::DestroyChainedSwapchain(const XrSwapchain swapchain)
+{
+	if (!m_chainedSwapchains.contains(swapchain))
+	{
+		return;
+	}
+
+	for (int i = 0; i < m_chainedSwapchains[swapchain].size(); i++)
+	{
+		switch (m_applicationRenderAPI)
+		{
+		case Vulkan:
+
+			break;
+
+		case OpenGL:
+
+			wglMakeCurrent(m_openglDeviceContext, m_openglRenderContext);
+
+			static PFN_glDeleteMemoryObjectsEXT glDeleteMemoryObjectsEXT = reinterpret_cast<PFN_glDeleteMemoryObjectsEXT>(wglGetProcAddress("glDeleteMemoryObjectsEXT"));
+			if (glDeleteMemoryObjectsEXT != nullptr)
+			{
+				glDeleteMemoryObjectsEXT(1, &m_chainedSwapchains[swapchain][i].OpenGLTexture);
+				glDeleteTextures(1, &m_chainedSwapchains[swapchain][i].OpenGLTexture);
+			}
+
+			break;
+
+		default:
+			break;
+		}
+
+		/*if (m_chainedSwapchains[swapchain][i].SharedHandle)
+		{
+			CloseHandle(m_chainedSwapchains[swapchain][i].SharedHandle);
+		}*/
+		m_chainedSwapchains[swapchain][i].D3D11Texture.Reset();
+
+	}
+
+	m_chainedSwapchains.erase(swapchain);
+}
+

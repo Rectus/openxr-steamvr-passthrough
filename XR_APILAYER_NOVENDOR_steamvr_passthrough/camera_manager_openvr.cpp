@@ -891,6 +891,12 @@ void CameraManagerOpenVR::CalculateFrameProjection(std::shared_ptr<CameraFrame>&
     // Detect the FOV being upside-down in order to prevent triangles from being backface culled
     frame->bIsRenderingMirrored = (layer.views[0].fov.angleUp - layer.views[0].fov.angleDown) < 0.0f;
 
+    if (m_appRenderAPI == OpenGL)
+    {
+        // Flip mirrored setting on OpenGL to get correct backface culling on rendering to upside down texture.
+        frame->bIsRenderingMirrored = !frame->bIsRenderingMirrored;
+    }
+
     if (depthFrame->bIsFirstRender)
     {
         depthFrame->prevDispWorldToCameraProjectionLeft = m_lastDispWorldToCameraProjectionLeft;
@@ -1037,6 +1043,15 @@ void CameraManagerOpenVR::CalculateFrameProjectionForEye(const ERenderEye eye, s
     {
         hmdProjection.m[10] = -(depthInfo->farZ * depthInfo->maxDepth - depthInfo->nearZ * depthInfo->minDepth) / (depthInfo->farZ - depthInfo->nearZ);
         hmdProjection.m[14] = -(depthInfo->farZ * depthInfo->nearZ * (depthInfo->maxDepth - depthInfo->minDepth)) / (depthInfo->farZ - depthInfo->nearZ);
+    }
+
+    if (m_appRenderAPI == OpenGL)
+    {
+        // Flip vertical axis to render to upside down texture.
+        hmdProjection.m[1] *= -1;
+        hmdProjection.m[5] *= -1;
+        hmdProjection.m[9] *= -1;
+        hmdProjection.m[13] *= -1;
     }
 
     XrMatrix4x4f* worldToHMDMatrix = (eye == LEFT_EYE) ? &frame->worldToHMDProjectionLeft : &frame->worldToHMDProjectionRight;

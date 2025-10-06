@@ -1064,7 +1064,7 @@ DX11TemporaryRenderTarget& PassthroughRendererDX11::GetTemporaryRenderTarget(con
 }
 
 
-void PassthroughRendererDX11::InitRenderTarget(const ERenderEye eye, void* rendertarget, const uint32_t imageIndex, const XrSwapchainCreateInfo& swapchainInfo)
+void PassthroughRendererDX11::InitRenderTarget(const ERenderEye eye, void* rendertarget, const uint32_t imageIndex, const XrSwapchainCreateInfo& swapchainInfo, const XrSwapchain swapchain)
 {
 	int viewIndex = (eye == LEFT_EYE) ? 0 : 1;
 
@@ -1270,7 +1270,7 @@ void PassthroughRendererDX11::SetupTemporalUAV(const uint32_t viewIndex, const u
 }
 
 
-void PassthroughRendererDX11::InitDepthBuffer(const ERenderEye eye, void* depthBuffer, const uint32_t imageIndex, const XrSwapchainCreateInfo& swapchainInfo)
+void PassthroughRendererDX11::InitDepthBuffer(const ERenderEye eye, void* depthBuffer, const uint32_t imageIndex, const XrSwapchainCreateInfo& swapchainInfo, const XrSwapchain swapchain)
 {
 	int viewIndex = (eye == LEFT_EYE) ? 0 : 1;
 
@@ -1402,7 +1402,7 @@ void PassthroughRendererDX11::GenerateDepthMesh(uint32_t width, uint32_t height)
 }
 
 
-void PassthroughRendererDX11::UpdateRenderModels(CameraFrame* frame)
+void PassthroughRendererDX11::UpdateRenderModels(std::shared_ptr<CameraFrame> frame)
 {
 	for (RenderModel& model : *frame->renderModels)
 	{
@@ -1485,10 +1485,10 @@ void PassthroughRendererDX11::UpdateRenderModels(CameraFrame* frame)
 	m_depthStencilStateDisabled.Get() )
 
 
-void PassthroughRendererDX11::RenderPassthroughFrame(const XrCompositionLayerProjection* layer, CameraFrame* frame, FrameRenderParameters& renderParams, std::shared_ptr<DepthFrame> depthFrame, UVDistortionParameters& distortionParams)
+void PassthroughRendererDX11::RenderPassthroughFrame(const XrCompositionLayerProjection* layer, std::shared_ptr<CameraFrame> frame, FrameRenderParameters& renderParams, std::shared_ptr<DepthFrame> depthFrame, UVDistortionParameters& distortionParams)
 {
 	m_prevFrameIndex = m_frameIndex;
-	//Relying on the application not doing anything too weird with the swaphain indices
+	//Relying on the application not doing anything too weird with the swapchain indices
 	m_frameIndex = renderParams.LeftFrameIndex;
 
 	if (frame->bIsFirstRender) { m_currentCameraFilterIndex = m_currentCameraFilterIndex == 0 ? 1 : 0; }
@@ -1736,11 +1736,8 @@ void PassthroughRendererDX11::RenderPassthroughFrame(const XrCompositionLayerPro
 	m_renderContext->PSSetShaderResources(0, 2, psSRVs);
 
 	m_renderContext->IASetInputLayout(m_inputLayout.Get());
-	const UINT strides[] = { sizeof(float) * 3 };
-	const UINT offsets[] = { 0 };
 
 	m_renderContext->RSSetState(frame->bIsRenderingMirrored ? m_rasterizerStateMirrored.Get() : m_rasterizerState.Get());
-
 	m_renderContext->VSSetSamplers(0, 1, m_defaultSampler.GetAddressOf());
 	m_renderContext->PSSetSamplers(0, 1, m_defaultSampler.GetAddressOf());
 
@@ -1928,7 +1925,7 @@ void PassthroughRendererDX11::RenderHoleFillCS(DX11FrameData& frameData, std::sh
 
 
 
-void PassthroughRendererDX11::RenderSetupView(const ERenderEye eye, const XrCompositionLayerProjection* layer, CameraFrame* frame, std::shared_ptr<DepthFrame> depthFrame, FrameRenderParameters& renderParams)
+void PassthroughRendererDX11::RenderSetupView(const ERenderEye eye, const XrCompositionLayerProjection* layer, std::shared_ptr<CameraFrame> frame, std::shared_ptr<DepthFrame> depthFrame, FrameRenderParameters& renderParams)
 {
 	int swapchainIndex = (eye == LEFT_EYE) ? renderParams.LeftFrameIndex : renderParams.RightFrameIndex;
 	int depthSwapchainIndex = (eye == LEFT_EYE) ? renderParams.LeftDepthIndex : renderParams.RightDepthIndex;
@@ -1962,6 +1959,7 @@ void PassthroughRendererDX11::RenderSetupView(const ERenderEye eye, const XrComp
 	D3D11_VIEWPORT viewport = { (float)rect.offset.x, (float)rect.offset.y, (float)rect.extent.width, (float)rect.extent.height, 0.0f, 1.0f };
 	D3D11_RECT scissor = { rect.offset.x, rect.offset.y, rect.offset.x + rect.extent.width, rect.offset.y + rect.extent.height };
 
+	m_renderContext->RSSetState(frame->bIsRenderingMirrored ? m_rasterizerStateMirrored.Get() : m_rasterizerState.Get());
 	m_renderContext->RSSetViewports(1, &viewport);
 	m_renderContext->RSSetScissorRects(1, &scissor);
 
@@ -2021,14 +2019,13 @@ void PassthroughRendererDX11::RenderSetupView(const ERenderEye eye, const XrComp
 		m_renderContext->IASetVertexBuffers(0, 1, m_cylinderMeshVertexBuffer.GetAddressOf(), strides, offsets);
 		m_renderContext->IASetIndexBuffer(m_cylinderMeshIndexBuffer.Get(), DXGI_FORMAT_R32_UINT, 0);
 		m_renderContext->IASetPrimitiveTopology(D3D11_PRIMITIVE_TOPOLOGY_TRIANGLELIST);
-		m_renderContext->VSSetShader(m_passthroughVS.Get(), nullptr, 0);
 	}
 }
 
 
 
 // Reprojects one or two disparity maps into HMD projection space depth maps.
-void PassthroughRendererDX11::RenderDepthPrepassView(const ERenderEye eye, const XrCompositionLayerProjection* layer, CameraFrame* frame, std::shared_ptr<DepthFrame> depthFrame, UINT numIndices, FrameRenderParameters& renderParams)
+void PassthroughRendererDX11::RenderDepthPrepassView(const ERenderEye eye, const XrCompositionLayerProjection* layer, std::shared_ptr<CameraFrame> frame, std::shared_ptr<DepthFrame> depthFrame, UINT numIndices, FrameRenderParameters& renderParams)
 {
 	int swapchainIndex = (eye == LEFT_EYE) ? renderParams.LeftFrameIndex : renderParams.RightFrameIndex;
 	int depthSwapchainIndex = (eye == LEFT_EYE) ? renderParams.LeftDepthIndex : renderParams.RightDepthIndex;
@@ -2043,6 +2040,7 @@ void PassthroughRendererDX11::RenderDepthPrepassView(const ERenderEye eye, const
 
 	D3D11_VIEWPORT viewport = { 0.0f, 0.0f, (float)viewData.passthroughDepthStencil[0].Width, (float)viewData.passthroughDepthStencil[0].Height, 0.0f, 1.0f };
 	D3D11_RECT scissor = { 0, 0, (long)viewData.passthroughDepthStencil[0].Width, (long)viewData.passthroughDepthStencil[0].Height };
+	m_renderContext->RSSetState(frame->bIsRenderingMirrored ? m_rasterizerStateMirrored.Get() : m_rasterizerState.Get());
 	m_renderContext->RSSetViewports(1, &viewport);
 	m_renderContext->RSSetScissorRects(1, &scissor);
 
@@ -2162,7 +2160,7 @@ void PassthroughRendererDX11::RenderDepthPrepassView(const ERenderEye eye, const
 
 
 // Renders chroma key cutout into the rendertarget alpha channel.
-void PassthroughRendererDX11::RenderMaskedPrepassView(const ERenderEye eye, const XrCompositionLayerProjection* layer, CameraFrame* frame, std::shared_ptr<DepthFrame> depthFrame, UINT numIndices, FrameRenderParameters& renderParams)
+void PassthroughRendererDX11::RenderMaskedPrepassView(const ERenderEye eye, const XrCompositionLayerProjection* layer, std::shared_ptr<CameraFrame> frame, std::shared_ptr<DepthFrame> depthFrame, UINT numIndices, FrameRenderParameters& renderParams)
 {
 	int swapchainIndex = (eye == LEFT_EYE) ? renderParams.LeftFrameIndex : renderParams.RightFrameIndex;
 	int depthSwapchainIndex = (eye == LEFT_EYE) ? renderParams.LeftDepthIndex : renderParams.RightDepthIndex;
@@ -2194,6 +2192,20 @@ void PassthroughRendererDX11::RenderMaskedPrepassView(const ERenderEye eye, cons
 
 	bool bUseDepthPass = mainConf.ProjectionMode == Projection_StereoReconstruction && stereoConf.StereoUseSeparateDepthPass;
 	bool bUseFullscreenPass = bUseDepthPass && stereoConf.StereoUseFullscreenPass;
+
+	const UINT strides[] = { sizeof(float) * 3 };
+	const UINT offsets[] = { 0 };
+
+	if (mainConf.ProjectionMode == Projection_StereoReconstruction)
+	{
+		m_renderContext->IASetVertexBuffers(0, 1, m_gridMeshVertexBuffer.GetAddressOf(), strides, offsets);
+		m_renderContext->IASetIndexBuffer(m_gridMeshIndexBuffer.Get(), DXGI_FORMAT_R32_UINT, 0);
+	}
+	else
+	{
+		m_renderContext->IASetVertexBuffers(0, 1, m_cylinderMeshVertexBuffer.GetAddressOf(), strides, offsets);
+		m_renderContext->IASetIndexBuffer(m_cylinderMeshIndexBuffer.Get(), DXGI_FORMAT_R32_UINT, 0);
+	}
 
 	XrRect2Di rect = layer->views[viewIndex].subImage.imageRect;
 
@@ -2342,6 +2354,7 @@ void PassthroughRendererDX11::RenderMaskedPrepassView(const ERenderEye eye, cons
 	// Draw with simple vertex shader if we don't need to sample camera
 	if (bUseFullscreenPass || (!bCompositeDepth && !m_configManager->GetConfig_Core().CoreForceMaskedUseCameraImage))
 	{
+		m_renderContext->RSSetState(m_rasterizerState.Get());
 		m_renderContext->IASetPrimitiveTopology(D3D11_PRIMITIVE_TOPOLOGY_TRIANGLESTRIP);
 		m_renderContext->VSSetShader(m_fullscreenQuadVS.Get(), nullptr, 0);
 		
@@ -2352,6 +2365,7 @@ void PassthroughRendererDX11::RenderMaskedPrepassView(const ERenderEye eye, cons
 	else
 	{
 		m_renderContext->IASetPrimitiveTopology(D3D11_PRIMITIVE_TOPOLOGY_TRIANGLELIST);
+		m_renderContext->RSSetState(frame->bIsRenderingMirrored ? m_rasterizerStateMirrored.Get() : m_rasterizerState.Get());
 
 		if (bUseDepthPass)
 		{
@@ -2391,6 +2405,8 @@ void PassthroughRendererDX11::RenderMaskedPrepassView(const ERenderEye eye, cons
 		m_renderContext->PSSetShaderResources(0, 3, views);
 	}
 
+	m_renderContext->RSSetState(m_rasterizerState.Get());
+
 	ID3D11ShaderResourceView* views[3] = { cameraFrameSRV, nullptr, tempTarget.SRV.Get() };
 
 	psViewBuffer.bDoCutout = false;
@@ -2421,7 +2437,7 @@ void PassthroughRendererDX11::RenderMaskedPrepassView(const ERenderEye eye, cons
 
 
 // Renders an alpha cutout into the rendertarget.
-void PassthroughRendererDX11::RenderAlphaPrepassView(const ERenderEye eye, const XrCompositionLayerProjection* layer, CameraFrame* frame, std::shared_ptr<DepthFrame> depthFrame, UINT numIndices, FrameRenderParameters& renderParams)
+void PassthroughRendererDX11::RenderAlphaPrepassView(const ERenderEye eye, const XrCompositionLayerProjection* layer, std::shared_ptr<CameraFrame> frame, std::shared_ptr<DepthFrame> depthFrame, UINT numIndices, FrameRenderParameters& renderParams)
 {
 	int swapchainIndex = (eye == LEFT_EYE) ? renderParams.LeftFrameIndex : renderParams.RightFrameIndex;
 	int depthSwapchainIndex = (eye == LEFT_EYE) ? renderParams.LeftDepthIndex : renderParams.RightDepthIndex;
@@ -2603,7 +2619,7 @@ void PassthroughRendererDX11::RenderAlphaPrepassView(const ERenderEye eye, const
 
 
 // Renders all SteamVR rendermodels with passthrough projected on them.
-void PassthroughRendererDX11::RenderViewModelsForView(const ERenderEye eye, const XrCompositionLayerProjection* layer, CameraFrame* frame, std::shared_ptr<DepthFrame> depthFrame, UINT numIndices, FrameRenderParameters& renderParams)
+void PassthroughRendererDX11::RenderViewModelsForView(const ERenderEye eye, const XrCompositionLayerProjection* layer, std::shared_ptr<CameraFrame> frame, std::shared_ptr<DepthFrame> depthFrame, UINT numIndices, FrameRenderParameters& renderParams)
 {
 	int swapchainIndex = (eye == LEFT_EYE) ? renderParams.LeftFrameIndex : renderParams.RightFrameIndex;
 	int depthSwapchainIndex = (eye == LEFT_EYE) ? renderParams.LeftDepthIndex : renderParams.RightDepthIndex;
@@ -2677,7 +2693,7 @@ void PassthroughRendererDX11::RenderViewModelsForView(const ERenderEye eye, cons
 
 
 // Renders the main passthrough view.
-void PassthroughRendererDX11::RenderPassthroughView(const ERenderEye eye, const XrCompositionLayerProjection* layer, CameraFrame* frame, std::shared_ptr<DepthFrame> depthFrame, UINT numIndices, FrameRenderParameters& renderParams)
+void PassthroughRendererDX11::RenderPassthroughView(const ERenderEye eye, const XrCompositionLayerProjection* layer, std::shared_ptr<CameraFrame> frame, std::shared_ptr<DepthFrame> depthFrame, UINT numIndices, FrameRenderParameters& renderParams)
 {
 	int swapchainIndex = (eye == LEFT_EYE) ? renderParams.LeftFrameIndex : renderParams.RightFrameIndex;
 	int depthSwapchainIndex = (eye == LEFT_EYE) ? renderParams.LeftDepthIndex : renderParams.RightDepthIndex;
@@ -2987,7 +3003,7 @@ void PassthroughRendererDX11::RenderPassthroughView(const ERenderEye eye, const 
 
 
 // Renders a background cylinder behind any gaps.
-void PassthroughRendererDX11::RenderBackgroundForView(const ERenderEye eye,  const XrCompositionLayerProjection* layer, CameraFrame* frame, std::shared_ptr<DepthFrame> depthFrame,  UINT numIndices, FrameRenderParameters& renderParams)
+void PassthroughRendererDX11::RenderBackgroundForView(const ERenderEye eye,  const XrCompositionLayerProjection* layer, std::shared_ptr<CameraFrame> frame, std::shared_ptr<DepthFrame> depthFrame,  UINT numIndices, FrameRenderParameters& renderParams)
 {
 	int swapchainIndex = (eye == LEFT_EYE) ? renderParams.LeftFrameIndex : renderParams.RightFrameIndex;
 	int depthSwapchainIndex = (eye == LEFT_EYE) ? renderParams.LeftDepthIndex : renderParams.RightDepthIndex;
@@ -3099,6 +3115,7 @@ void PassthroughRendererDX11::RenderDebugView(const ERenderEye eye, const XrComp
 	m_renderContext->UpdateSubresource(viewData.psViewConstantBuffer.Get(), 0, nullptr, &psViewBuffer, 0, 0);
 	m_renderContext->PSSetConstantBuffers(1, 1, viewData.psViewConstantBuffer.GetAddressOf());
 
+	m_renderContext->RSSetState(m_rasterizerState.Get());
 	m_renderContext->RSSetViewports(1, &viewport);
 	m_renderContext->RSSetScissorRects(1, &scissor);
 

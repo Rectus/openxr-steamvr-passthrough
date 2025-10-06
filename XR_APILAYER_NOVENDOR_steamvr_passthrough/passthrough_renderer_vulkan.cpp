@@ -1005,7 +1005,7 @@ bool PassthroughRendererVulkan::SetupDebugTexture(DebugTexture& texture)
 }
 
 
-void PassthroughRendererVulkan::InitRenderTarget(const ERenderEye eye, void* rendertarget, const uint32_t imageIndex, const XrSwapchainCreateInfo& swapchainInfo)
+void PassthroughRendererVulkan::InitRenderTarget(const ERenderEye eye, void* rendertarget, const uint32_t imageIndex, const XrSwapchainCreateInfo& swapchainInfo, const XrSwapchain swapchain)
 {
 	int viewIndex = (eye == LEFT_EYE) ? 0 : 1;
 	int bufferIndex = viewIndex * NUM_SWAPCHAINS + imageIndex;
@@ -1655,7 +1655,7 @@ void PassthroughRendererVulkan::UpdateDescriptorSets(VkCommandBuffer commandBuff
 
 static bool g_bVulkanStereoErrorShown = false;
 
-void PassthroughRendererVulkan::RenderPassthroughFrame(const XrCompositionLayerProjection* layer, CameraFrame* frame, FrameRenderParameters& renderParams, std::shared_ptr<DepthFrame> depthFrame, UVDistortionParameters& distortionParams)
+void PassthroughRendererVulkan::RenderPassthroughFrame(const XrCompositionLayerProjection* layer, std::shared_ptr<CameraFrame> frame, FrameRenderParameters& renderParams, std::shared_ptr<DepthFrame> depthFrame, UVDistortionParameters& distortionParams)
 {
 
 	Config_Main& mainConf = m_configManager->GetConfig_Main();
@@ -1791,7 +1791,7 @@ void PassthroughRendererVulkan::RenderPassthroughFrame(const XrCompositionLayerP
 }
 
 
-void PassthroughRendererVulkan::RenderPassthroughView(const ERenderEye eye, const int32_t swapchainIndex, const XrCompositionLayerProjection* layer, CameraFrame* frame, EPassthroughBlendMode blendMode)
+void PassthroughRendererVulkan::RenderPassthroughView(const ERenderEye eye, const int32_t swapchainIndex, const XrCompositionLayerProjection* layer, std::shared_ptr<CameraFrame> frame, EPassthroughBlendMode blendMode)
 {
 	if (swapchainIndex < 0) { return; }
 
@@ -1898,7 +1898,7 @@ void PassthroughRendererVulkan::RenderPassthroughView(const ERenderEye eye, cons
 }
 
 
-void PassthroughRendererVulkan::RenderMaskedPrepassView(const ERenderEye eye, const int32_t swapchainIndex, const XrCompositionLayerProjection* layer, CameraFrame* frame)
+void PassthroughRendererVulkan::RenderMaskedPrepassView(const ERenderEye eye, const int32_t swapchainIndex, const XrCompositionLayerProjection* layer, std::shared_ptr<CameraFrame> frame)
 {
 	if (swapchainIndex < 0) { return; }
 
