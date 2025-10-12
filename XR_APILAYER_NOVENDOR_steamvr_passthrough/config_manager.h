@@ -464,6 +464,8 @@ struct Config_Core
 	int CorePreferredMode = 3;
 	bool CoreForcePassthrough = false;
 	int CoreForceMode = 1;
+	int CoreForcePremultipliedAlpha = -1;
+
 	float CoreForceMaskedFractionChroma = 0.2f;
 	float CoreForceMaskedFractionLuma = 0.4f;
 	float CoreForceMaskedSmoothing = 0.01f;
@@ -481,6 +483,8 @@ struct Config_Core
 
 		CoreForcePassthrough = ini.GetBoolValue(section, "CoreForcePassthrough", CoreForcePassthrough);
 		CoreForceMode = (int)ini.GetLongValue(section, "CoreForceMode", CoreForceMode);
+		CoreForcePremultipliedAlpha = (int)ini.GetLongValue(section, "CoreForcePremultipliedAlpha", CoreForcePremultipliedAlpha);
+
 		CoreForceMaskedFractionChroma = (float)ini.GetDoubleValue(section, "CoreForceMaskedFractionChroma", CoreForceMaskedFractionChroma);
 		CoreForceMaskedFractionLuma = (float)ini.GetDoubleValue(section, "CoreForceMaskedFractionLuma", CoreForceMaskedFractionLuma);
 		CoreForceMaskedSmoothing = (float)ini.GetDoubleValue(section, "CoreForceMaskedSmoothing", CoreForceMaskedSmoothing);
@@ -503,6 +507,8 @@ struct Config_Core
 
 		ini.SetBoolValue(section, "CoreForcePassthrough", CoreForcePassthrough);
 		ini.SetLongValue(section, "CoreForceMode", CoreForceMode);
+		ini.SetLongValue(section, "CoreForcePremultipliedAlpha", CoreForcePremultipliedAlpha);
+
 		ini.SetDoubleValue(section, "CoreForceMaskedFractionChroma", CoreForceMaskedFractionChroma);
 		ini.SetDoubleValue(section, "CoreForceMaskedFractionLuma", CoreForceMaskedFractionLuma);
 		ini.SetDoubleValue(section, "CoreForceMaskedSmoothing", CoreForceMaskedSmoothing);

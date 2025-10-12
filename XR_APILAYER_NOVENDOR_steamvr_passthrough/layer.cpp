@@ -1344,6 +1344,7 @@ namespace
 
 			float timeToPhotons = GetPerfTimerDiff(preRenderTime.QuadPart, displayTime.QuadPart);
 			
+			Config_Core& coreConf = m_configManager->GetConfig_Core();
 			Config_Depth& depthConf = m_configManager->GetConfig_Depth();
 
 			std::shared_ptr<DepthFrame> depthFrame = m_depthReconstruction->GetDepthFrame();
@@ -1374,15 +1375,19 @@ namespace
 
 			renderParams.BlendMode = (EPassthroughBlendMode)frameEndInfo->environmentBlendMode;
 
-			if (m_configManager->GetConfig_Core().CoreForcePassthrough && m_configManager->GetConfig_Core().CoreForceMode >= 0)
+			if (coreConf.CoreForcePassthrough && coreConf.CoreForceMode >= 0)
 			{
-				renderParams.BlendMode = (EPassthroughBlendMode)m_configManager->GetConfig_Core().CoreForceMode;
+				renderParams.BlendMode = (EPassthroughBlendMode)coreConf.CoreForceMode;
 			}
 
-			if (renderParams.BlendMode == AlphaBlendPremultiplied && 
-				(layer->layerFlags & XR_COMPOSITION_LAYER_UNPREMULTIPLIED_ALPHA_BIT))
+			if (renderParams.BlendMode == AlphaBlendPremultiplied)
 			{
-				renderParams.BlendMode = AlphaBlendUnpremultiplied;
+				if (coreConf.CoreForcePremultipliedAlpha == 0 || 
+					(coreConf.CoreForcePremultipliedAlpha == -1 && 
+						(layer->layerFlags & XR_COMPOSITION_LAYER_UNPREMULTIPLIED_ALPHA_BIT) != 0))
+				{
+					renderParams.BlendMode = AlphaBlendUnpremultiplied;
+				}
 			}
 
 			renderParams.bInvertLayerAlpha =  m_bInverseAlphaExtensionEnabled &&

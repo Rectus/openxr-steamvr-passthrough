@@ -1174,6 +1174,28 @@ if (bIsActiveTab) { ImGui::PopStyleColor(1); bIsActiveTab = false; }
 			}
 			TextDescription("Blends passthrough with the application output using a chroma key mask.");
 			ImGui::EndGroup();
+			
+			ImGui::Spacing();
+
+			ImGui::Text("Premultiplied Alpha");
+			ImGui::BeginGroup();
+			if (ImGui::RadioButton("Application Controlled", coreConfig.CoreForcePremultipliedAlpha == -1))
+			{
+				coreConfig.CoreForcePremultipliedAlpha = -1;
+			}
+			ImGui::SameLine();
+			if (ImGui::RadioButton("Force On", coreConfig.CoreForcePremultipliedAlpha == 1))
+			{
+				coreConfig.CoreForcePremultipliedAlpha = 1;
+			}
+			ImGui::SameLine();
+			if (ImGui::RadioButton("Force Off", coreConfig.CoreForcePremultipliedAlpha == 0))
+			{
+				coreConfig.CoreForcePremultipliedAlpha = 0;
+			}
+			TextDescription("Overrides alpha premultiplication handling for applications that report it incorrectly.");
+			ImGui::EndGroup();
+
 			IMGUI_BIG_SPACING;
 
 			EndSoftDisabled(!coreConfig.CoreForcePassthrough);
