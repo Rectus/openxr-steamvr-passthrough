@@ -1,18 +1,25 @@
 OpenXR SteamVR Passthrough API Layer
 ---
 
-This OpenXR API layer adds camera passthrough (Mixed Reality) support to the SteamVR OpenXR runtime. It allows OpenXR applications that use the OpenXR passthrough feature to enable it when using the SteamVR runtime. 
+OpenXR API layer for providing camera passthrough (Mixed Reality) support to SteamVR. 
 
-The SteamVR runtime itself does not currently support any OpenXR passthrough features, but provides access to the camera video feeds and projection data through the proprietary OpenVR interface. This layer acts as a compositor in-between the application and runtime, retrieves the passthrough data from OpenVR (or a USB webcam), and renders it on the frames submitted by the application before passing them on to the runtime.
+This layer allows OpenXR applications that use the OpenXR passthrough feature to enable it when using the SteamVR runtime. It also allows forcing several different passthrough modes onto applications that themselves do not support it.
+
+The SteamVR runtime itself does not currently support any OpenXR passthrough features, but provides access to the camera video feeds and projection data through the proprietary OpenVR interface. This layer acts as a compositor in-between the application and runtime, retrieves the passthrough data from either OpenVR or a USB camera, and renders it on the frames submitted by the application before passing them on to the runtime.
 
 Please report any issues! Any comments and suggestions are also appreciated.
 
 ### DISCLAIMER ###
-This is an experimental release. Please be careful when using the passthrough. 
+This is an experimental release. Please be careful when using passthrough. 
 
 This software is distributed as-is, without any warranties or conditions of any kind. Use at your own risk!
 
 Using the 3D stereo mode may induce heavy flickering on the display. Exercise caution if you are photosensitive.
+
+
+### Hardware/software support ###
+
+See [Wiki Compatibility Page](https://github.com/Rectus/openxr-steamvr-passthrough/wiki/Compatibility)
 
 
 ### Features ###
@@ -20,44 +27,27 @@ Using the 3D stereo mode may induce heavy flickering on the display. Exercise ca
 - Supports both application selectable environment blend modes in the OpenXR core specification: Alpha Blended and Additive.
 - Configuration menu available in the SteamVR dashboard.
 - User adjustable color parameters and opacity.
-- Override mode for applying passthrough to applications that do not support it. The passthrough view can be blended using chroma keying.
+- Override mode for applying passthrough to applications that do not support it. The passthrough view can be blended either additively, using chroma keying, using alpha, or using depth.
 - The floor projection height can be shifted up to get correct projection on an horizontal surface such as a desk.
-- EXPERIMENTAL: Supports 3D stereo reconstruction to estimate projection depth, using OpenCV. Includes support for Weighted Least Squares disparity filtering, and Fast Bilateral Solver filtering.
+- Supports 3D stereo reconstruction to estimate projection depth, using OpenCV. Includes support for Weighted Least Squares disparity filtering, and Fast Bilateral Solver filtering.
 - Supports custom fisheye lens rectification instead of using the OpenVR pre-rectified output.
 - Supports compositing the passthrough based on scene depth, for applications that supply depth buffers.
-- EXPERIMENTAL: Support for USB camera input. This can be used alone or in conjunction with the depth provided by a stereoscopic HMD camera. The camera can either be attached to a tracked SteamVR device, or be set up in a static position. Manual calibration is required.
+- Basic support for USB camera input. This can be used alone or in conjunction with the depth provided by a stereoscopic HMD camera. The camera can either be attached to a tracked SteamVR device, or be set up in a static position. Manual calibration is required.
 
 
 ### Limitations ###
 
 - Only the SteamVR runtime is supported.
-- Only headsets that provide the passthrough camera feed to SteamVR are supported. If the SteamVR Room View does not work, this will not work.
+- Only HMD cameras that provide the passthrough camera feed to SteamVR are supported. If the SteamVR Room View does not work, the HMD camera will not be accessible.
 - OpenVR applications are not supported.
 - Only applications that use the core specification passthrough by submitting frames with `environmentBlendMode` set are supported.
 - Applications using the Meta `XR_FB_passthrough` extension are not currently supported.
-- The default passthrough view only supports a fixed depth reconstruction, while clamping the projection depth to the floor plane of the playspace. This works the same as the the SteamVR 2D Room View mode.
 - The depth reconstruction from the 3D Room View is not supported. It is not currently accessible to developers. A custom depth reconstruction is used instead.
 - The passthrough view has higher latency than the SteamVR compositor.
 - OpenGL applications are not currently supported.
 - The Vulkan renderer interop does not support the the old XR_KHR_vulkan_enable extension.
-- Depth blending requires the application to submit depth buffers using the `XR_KHR_composition_layer_depth` extension, which only a few do.
+- Depth blending requires the application to submit depth buffers using the `XR_KHR_composition_layer_depth` extension.
 - USB webcam frames can not be accurately timed. This will cause hitching in the image, especially if the frame rate jitters.
-
-### Supported Headsets ###
-
-- Valve Index - Supported
-- HTC Vive - Untested, driver only provides correct pose data in 60 Hz mode.
-- HTC Vive Pro - Untested
-- HTC Vive Pro 2 - Untested
-- Other HTC headsets - Unknown
-- Varjo XR headsets - Unknown
-- Windows Mixed Reality headsets - Unsupported, no passthrough support in driver
-- Oculus/Meta headsets - Unsupported, no passthrough support in driver
-- PSVR2 - Unsupported, no passthrough support in driver
-
-The SteamVR settings UI will misconfigure the original HTC Vive camera if the frame rate is not set the right way. To correctly set it, click the right end of the slider instead of dragging it. The USB drivers may need to be reset if the camera is incorrectly configured.
-
-The Valve Index camera poses may be poorly calibrated from the factory. The options menu allows adjusting the distance between cameras for better depth-perception when using the custom projection modes.
 
 
 ### Installation ###
@@ -89,6 +79,7 @@ The settings can also be edited from `%APPDATA%\OpenXR SteamVR Passthrough\confi
 
 See the project [Wiki](https://github.com/Rectus/openxr-steamvr-passthrough/wiki) for more information.
 
+
 ### Building from source ###
 The following are required:
 - Visual Studio 2022 
@@ -103,6 +94,7 @@ The following are required:
 - [Vulkan SDK](https://vulkan.lunarg.com/sdk/home) (Uses the VULKAN_SDK environment variable)
 - [OpenCV 4.10.0](https://github.com/opencv/opencv) (The project is setup for static linking by default - requires custom source build)
 - [OpenCV-Contrib](https://github.com/opencv/opencv_contrib) (The ximgproc module needs to be built along with OpenCV for WLS and FBS filtering support.)
+
 
 ### Possible improvements ###
 
