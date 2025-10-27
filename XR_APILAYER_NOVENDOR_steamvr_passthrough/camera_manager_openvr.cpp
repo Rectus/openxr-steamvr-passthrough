@@ -593,8 +593,11 @@ void CameraManagerOpenVR::ServeFrames()
 
         m_underConstructionFrame->bHasFrameBuffer = false;
 
-        if(m_renderAPI == DirectX12 || 
-            (mainConf.ProjectionMode == Projection_StereoReconstruction && m_appRenderAPI != Vulkan))
+        // Get the CPU frame for depth reconstruction, or the legacy D3D12 renderer.
+        // GetVideoStreamFrameBuffer crashes when used with Vulkan and OpenGL apps,
+        // for those APIs we manually copy it from the GPU texture instead.
+        if(m_renderAPI == DirectX12 || (mainConf.ProjectionMode == Projection_StereoReconstruction 
+            && (m_appRenderAPI == DirectX11 || m_appRenderAPI == DirectX12)))
         {
             if (m_underConstructionFrame->frameBuffer.get() == nullptr)
             {
@@ -610,7 +613,7 @@ void CameraManagerOpenVR::ServeFrames()
 
             m_underConstructionFrame->bHasFrameBuffer = true;
         }
-        else if (mainConf.ProjectionMode == Projection_StereoReconstruction && m_renderAPI == DirectX11 && m_appRenderAPI == Vulkan && m_underConstructionFrame->frameTextureResource != nullptr)
+        else if (mainConf.ProjectionMode == Projection_StereoReconstruction && m_renderAPI == DirectX11 && m_underConstructionFrame->frameTextureResource != nullptr)
         {
             if (m_underConstructionFrame->frameBuffer.get() == nullptr)
             {
@@ -632,7 +635,6 @@ void CameraManagerOpenVR::ServeFrames()
                 continue;
             }
 
-            // Since SteamVR still crashes when using GetVideoStreamFrameBuffer under Vulkan, we manually download the image.
             if (renderer->DownloadTextureToCPU(m_underConstructionFrame->frameTextureResource, m_underConstructionFrame->header.nWidth, m_underConstructionFrame->header.nHeight, (uint32_t)m_underConstructionFrame->frameBuffer->size(), m_underConstructionFrame->frameBuffer->data()))
             {
                 m_underConstructionFrame->bHasFrameBuffer = true;

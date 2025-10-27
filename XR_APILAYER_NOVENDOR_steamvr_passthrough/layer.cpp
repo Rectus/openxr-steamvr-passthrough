@@ -857,6 +857,8 @@ namespace
 			if (XR_SUCCEEDED(result))
 			{
 				m_swapchainProperties[*swapchain] = *createInfo;
+
+				Log("App created new %u x %u swapchain %u, createFlags 0x%x, usageFlags 0x%x, format %i, sampleCount %u, faceCount %u, arraySize %u, mipCount %u\n", createInfo->width, createInfo->height, *swapchain, createInfo->createFlags, createInfo->usageFlags, createInfo->format, createInfo->sampleCount, createInfo->faceCount, createInfo->arraySize, createInfo->mipCount);
 			}
 			return result;
 		}
@@ -864,95 +866,12 @@ namespace
 
 		XrResult xrDestroySwapchain(XrSwapchain swapchain)
 		{
-			m_Renderer->DestroyChainedSwapchain(swapchain);
 			m_acquiredSwapchains.erase(swapchain);
 			m_waitedSwapchains.erase(swapchain);
 			m_heldSwapchains.erase(swapchain);
 			m_swapchainProperties.erase(swapchain);
 
 			return OpenXrApi::xrDestroySwapchain(swapchain);
-		}
-
-		XrResult xrEnumerateSwapchainImages(XrSwapchain swapchain, uint32_t imageCapacityInput, uint32_t* imageCountOutput, XrSwapchainImageBaseHeader* images)
-		{
-			bool bChainSwapchains = (m_appRenderAPI == OpenGL && m_renderAPI == DirectX11);
-
-			bool bHasValidSwapchainStruct = true;
-			ERenderAPI swapchainHeaderAPI = None;
-
-			if (imageCapacityInput > 0)
-			{
-				// Just checks the first structure in the array.
-				switch (images->type)
-				{
-				case XR_TYPE_SWAPCHAIN_IMAGE_D3D11_KHR:
-					swapchainHeaderAPI = DirectX11;
-					break;
-				case XR_TYPE_SWAPCHAIN_IMAGE_D3D12_KHR:
-					swapchainHeaderAPI = DirectX12;
-					break;
-				case XR_TYPE_SWAPCHAIN_IMAGE_OPENGL_KHR:
-					swapchainHeaderAPI = OpenGL;
-					break;
-				case XR_TYPE_SWAPCHAIN_IMAGE_VULKAN_KHR:
-					swapchainHeaderAPI = Vulkan;
-					break;
-				default:
-					bHasValidSwapchainStruct = false;
-				}
-
-				if (swapchainHeaderAPI != m_appRenderAPI)
-				{
-					bHasValidSwapchainStruct = false;
-				}
-
-				if (!bHasValidSwapchainStruct)
-				{
-					ErrorLog("Application submitted invalid structure in xrEnumerateSwapchainImages!\n");
-				}
-			}
-
-			if (imageCapacityInput == 0 || !bChainSwapchains || !bHasValidSwapchainStruct)
-			{
-				return OpenXrApi::xrEnumerateSwapchainImages(swapchain, imageCapacityInput, imageCountOutput, images);
-			}
-			else if (m_appRenderAPI == OpenGL)
-			{
-				std::vector<XrSwapchainImageOpenGLKHR> originalImages(imageCapacityInput, { XR_TYPE_SWAPCHAIN_IMAGE_OPENGL_KHR });
-
-				XrResult result = OpenXrApi::xrEnumerateSwapchainImages(swapchain, imageCapacityInput, imageCountOutput, reinterpret_cast<XrSwapchainImageBaseHeader*>(originalImages.data()));
-
-				if (result != XR_SUCCESS)
-				{
-					return result;
-				}
-
-				if (m_Renderer->CreateChainedSwapchain(swapchain, m_swapchainProperties[swapchain], *imageCountOutput, images))
-				{
-					Log("Chained swapchain %u with %u images\n", swapchain, *imageCountOutput);
-				}
-				else
-				{
-					ErrorLog("Failed to create chained swapchain images!\n");
-
-					auto outImages = reinterpret_cast<XrSwapchainImageOpenGLKHR*>(images);
-
-					for (uint32_t i = 0; i < *imageCountOutput; i++)
-					{
-						outImages[i] = originalImages[i];
-					}
-				}
-
-				return result;
-			}
-			else if (m_appRenderAPI == Vulkan)
-			{
-				return OpenXrApi::xrEnumerateSwapchainImages(swapchain, imageCapacityInput, imageCountOutput, images);
-			}
-			else
-			{
-				return OpenXrApi::xrEnumerateSwapchainImages(swapchain, imageCapacityInput, imageCountOutput, images);
-			}
 		}
 
 

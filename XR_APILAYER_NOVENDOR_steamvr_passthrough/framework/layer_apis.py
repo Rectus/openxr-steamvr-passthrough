@@ -10,7 +10,6 @@ override_functions = [
     "xrDestroySpace",
     "xrCreateSwapchain",
     "xrDestroySwapchain",
-    "xrEnumerateSwapchainImages",
 	"xrAcquireSwapchainImage",
     "xrWaitSwapchainImage",
 	"xrReleaseSwapchainImage",

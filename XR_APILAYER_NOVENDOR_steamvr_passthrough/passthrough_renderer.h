@@ -287,21 +287,6 @@ struct DX11FrameData
 	DX11UAVSRVTexture disparityFilter;
 };
 
-struct DX11ChainedSwapchainTexture
-{
-	ComPtr<ID3D11Texture2D> D3D11Texture;
-	HANDLE SharedHandle;
-	union
-	{
-		struct
-		{
-			uint32_t OpenGLTexture;
-			uint32_t OpenGLMemoryObject;
-		};
-		VkImage VulkanTexture;
-	};
-};
-
 
 class IPassthroughRenderer
 {
@@ -314,10 +299,8 @@ public:
 	virtual void SetFrameSize(const uint32_t width, const uint32_t height, const uint32_t bufferSize, const uint32_t undistortedWidth, const uint32_t undistortedHeight, const uint32_t undistortedBufferSize) = 0;
 	virtual void RenderPassthroughFrame(const XrCompositionLayerProjection* layer, std::shared_ptr<CameraFrame> frame, FrameRenderParameters& renderParams, std::shared_ptr<DepthFrame> depthFrame, UVDistortionParameters& distortionParams) = 0;
 	virtual void* GetRenderDevice() = 0;
-	virtual bool DownloadTextureToCPU(const void* textureSRV, const uint32_t width, const uint32_t height, const uint32_t bufferSize, uint8_t* buffer) { return false; }
+	virtual bool DownloadTextureToCPU(void* textureSRV, const uint32_t width, const uint32_t height, const uint32_t bufferSize, uint8_t* buffer) { return false; }
 	virtual std::shared_timed_mutex& GetAccessMutex() = 0;
-	virtual bool CreateChainedSwapchain(const XrSwapchain swapchain, const XrSwapchainCreateInfo& swapchainInfo, const int numImages, XrSwapchainImageBaseHeader* chainedImages) { return false; }
-	virtual void DestroyChainedSwapchain(const XrSwapchain swapchain) { }
 };
 
 
@@ -500,18 +483,16 @@ public:
 	bool InitRenderer();
 	
 	void RenderPassthroughFrame(const XrCompositionLayerProjection* layer, std::shared_ptr<CameraFrame> frame, FrameRenderParameters& renderParams, std::shared_ptr<DepthFrame> depthFrame, UVDistortionParameters& distortionParams);
-	bool DownloadTextureToCPU(const void* textureSRV, const uint32_t width, const uint32_t height, const uint32_t bufferSize, uint8_t* buffer);
-
-	bool CreateChainedSwapchain(const XrSwapchain swapchain, const XrSwapchainCreateInfo& swapchainInfo, const int numImages, XrSwapchainImageBaseHeader* chainedImages);
-	void DestroyChainedSwapchain(const XrSwapchain swapchain);
+	bool DownloadTextureToCPU(void* textureSRV, const uint32_t width, const uint32_t height, const uint32_t bufferSize, uint8_t* buffer);
 
 private:
 
 	void ResetRenderer();
+	bool InitVulkanDownloadTexture();
 	void InitRenderTarget(const ERenderEye eye, void* rendertarget, const uint32_t imageIndex, const XrSwapchainCreateInfo& swapchainInfo, const XrSwapchain swapchain);
 	void InitDepthBuffer(const ERenderEye eye, void* depthBuffer, const uint32_t imageIndex, const XrSwapchainCreateInfo& swapchainInfo, const XrSwapchain swapchain);
 	bool CreateLocalTextureVulkan(VkImage& localVulkanTexture, VkDeviceMemory& localVulkanTextureMemory, ID3D11Texture2D** localD3DTexture, HANDLE& sharedTextureHandle, const XrSwapchainCreateInfo& swapchainInfo, bool bIsDepthMap);
-	bool CreateLocalTextureOpenGL(uint32_t& localOpenGLTexture, ID3D11Texture2D** localD3DTexture, HANDLE& sharedTextureHandle, const XrSwapchainCreateInfo& swapchainInfo, bool bIsDepthMap);
+	bool CreateLocalTextureOpenGL(uint32_t& localOpenGLTexture, uint32_t& localOpenGLMemory, ID3D11Texture2D** localD3DTexture, HANDLE& sharedTextureHandle, const XrSwapchainCreateInfo& swapchainInfo, bool bIsDepthMap);
 
 	ERenderAPI m_applicationRenderAPI;
 	bool m_rendererInitialized = false;
@@ -582,9 +563,15 @@ private:
 	uint32_t m_depthBuffersOpenGLLeft[NUM_SWAPCHAINS] = {};
 	uint32_t m_depthBuffersOpenGLRight[NUM_SWAPCHAINS] = {};
 
-	
+	uint32_t m_localRendertargetsOpenGLLeft[NUM_SWAPCHAINS] = {};
+	uint32_t m_localRendertargetsOpenGLRight[NUM_SWAPCHAINS] = {};
+	uint32_t m_localRTMemOpenGLLeft[NUM_SWAPCHAINS] = {};
+	uint32_t m_localRTMemOpenGLRight[NUM_SWAPCHAINS] = {};
 
-	std::map<XrSwapchain, std::vector<DX11ChainedSwapchainTexture>> m_chainedSwapchains;
+	uint32_t m_localDepthBuffersOpenGLLeft[NUM_SWAPCHAINS] = {};
+	uint32_t m_localDepthBuffersOpenGLRight[NUM_SWAPCHAINS] = {};
+	uint32_t m_localDBMemOpenGLLeft[NUM_SWAPCHAINS] = {};
+	uint32_t m_localDBMemOpenGLRight[NUM_SWAPCHAINS] = {};
 };
 
 

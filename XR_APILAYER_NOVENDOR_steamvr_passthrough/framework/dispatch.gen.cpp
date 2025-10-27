@@ -271,35 +271,6 @@ namespace LAYER_NAMESPACE
 		return result;
 	}
 
-	XrResult xrEnumerateSwapchainImages(XrSwapchain swapchain, uint32_t imageCapacityInput, uint32_t* imageCountOutput, XrSwapchainImageBaseHeader* images)
-	{
-#if USE_TRACELOGGING
-		TraceLoggingWrite(g_traceProvider, "xrEnumerateSwapchainImages");
-#endif
-
-		XrResult result;
-		try
-		{
-			result = LAYER_NAMESPACE::GetInstance()->xrEnumerateSwapchainImages(swapchain, imageCapacityInput, imageCountOutput, images);
-		}
-		catch (std::exception exc)
-		{
-#if USE_TRACELOGGING
-			TraceLoggingWrite(g_traceProvider, "xrEnumerateSwapchainImages_Error", TLArg(exc.what(), "Error"));
-#endif
-			ErrorLog("xrEnumerateSwapchainImages: %s\n", exc.what());
-			result = XR_ERROR_RUNTIME_FAILURE;
-		}
-#if USE_TRACELOGGING
-		TraceLoggingWrite(g_traceProvider, "xrEnumerateSwapchainImages_Result", TLArg(xr::ToCString(result), "Result"));
-#endif
-		if (XR_FAILED(result)) {
-			ErrorLog("xrEnumerateSwapchainImages failed with %d\n", result);
-		}
-
-		return result;
-	}
-
 	XrResult xrAcquireSwapchainImage(XrSwapchain swapchain, const XrSwapchainImageAcquireInfo* acquireInfo, uint32_t* index)
 	{
 #if USE_TRACELOGGING
@@ -584,11 +555,6 @@ namespace LAYER_NAMESPACE
 		{
 			m_xrDestroySwapchain = reinterpret_cast<PFN_xrDestroySwapchain>(*function);
 			*function = reinterpret_cast<PFN_xrVoidFunction>(LAYER_NAMESPACE::xrDestroySwapchain);
-		}
-		else if (apiName == "xrEnumerateSwapchainImages")
-		{
-			m_xrEnumerateSwapchainImages = reinterpret_cast<PFN_xrEnumerateSwapchainImages>(*function);
-			*function = reinterpret_cast<PFN_xrVoidFunction>(LAYER_NAMESPACE::xrEnumerateSwapchainImages);
 		}
 		else if (apiName == "xrAcquireSwapchainImage")
 		{
