@@ -101,6 +101,7 @@ namespace
 #endif
 			bool bEnableVulkan2Extension = false;
 			bool bInverseAlphaExtensionEnabled = false;
+			bool bEnableAndroidCameraStateExtension = false;
 			bool bEnableVarjoDepthExtension = false;
 			bool bEnableVarjoCompositionExtension = false;
 
@@ -114,6 +115,10 @@ namespace
 				else if (extensions[i].compare(XR_EXT_COMPOSITION_LAYER_INVERTED_ALPHA_EXTENSION_NAME) == 0)
 				{
 					bInverseAlphaExtensionEnabled = true;
+				}
+				else if (extensions[i].compare(XR_ANDROID_PASSTHROUGH_CAMERA_STATE_EXTENSION_NAME) == 0)
+				{
+					bEnableAndroidCameraStateExtension = true;
 				}
 				else if (extensions[i].compare(XR_VARJO_ENVIRONMENT_DEPTH_ESTIMATION_EXTENSION_NAME) == 0)
 				{
@@ -222,6 +227,13 @@ namespace
 				m_bInverseAlphaExtensionEnabled = true;
 				m_dashboardMenu->GetDisplayValues().bExtInvertedAlphaActive = true;
 				Log("Extension XR_EXT_composition_layer_inverted_alpha enabled\n");
+			}
+
+			if (bEnableAndroidCameraStateExtension)
+			{
+				m_bAndroidPassthroughStateExtensionEnabled = true;
+				m_dashboardMenu->GetDisplayValues().bAndroidPassthroughStateActive = true;
+				Log("Extension XR_ANDROID_passthrough_camera_state enabled\n");
 			}
 
 			m_bSuccessfullyLoaded = true;
@@ -366,11 +378,53 @@ namespace
 		}
 
 
+		XrResult xrGetSystemProperties(XrInstance instance, XrSystemId systemId, XrSystemProperties* properties)
+		{
+			if (!m_bAndroidPassthroughStateExtensionEnabled)
+			{
+				return OpenXrApi::xrGetSystemProperties(instance, systemId, properties);
+			}
+
+			XrBaseOutStructure* prevProperty = reinterpret_cast<XrBaseOutStructure*>(properties);
+			XrBaseOutStructure* property = reinterpret_cast<XrBaseOutStructure*>(properties->next);
+			bool bFoundCamStateProperty = false;
+
+			while (property != nullptr)
+			{
+				if (property->type == XR_TYPE_SYSTEM_PASSTHROUGH_CAMERA_STATE_PROPERTIES_ANDROID)
+				{
+					prevProperty->next = property->next; // Temporarily remove property struct from chain.
+					bFoundCamStateProperty = true;
+
+
+					auto camProperty = reinterpret_cast<XrSystemPassthroughCameraStatePropertiesANDROID*>(property);
+
+					camProperty->supportsPassthroughCameraState = XR_TRUE;
+
+					break;
+				}
+
+				prevProperty = property;
+				property = reinterpret_cast<XrBaseOutStructure*>(property->next);
+			}
+
+			XrResult result = OpenXrApi::xrGetSystemProperties(instance, systemId, properties);
+
+			// Restore property struct to chain.
+			if (bFoundCamStateProperty)
+			{
+				prevProperty->next = property;
+			}
+
+			return result;
+		}
+
+
 		bool SetupRenderer(const XrInstance instance, const XrSessionCreateInfo* createInfo, const XrSession* session)
 		{
 			const XrBaseInStructure* entry = reinterpret_cast<const XrBaseInStructure*>(createInfo->next);
 
-			while (entry)
+			while (entry != nullptr)
 			{
 				switch (entry->type)
 				{
@@ -1555,6 +1609,12 @@ namespace
 				return XR_ERROR_RUNTIME_FAILURE;
 			}
 
+			if (!isCurrentSession(session))
+			{
+				ErrorLog("xrSetEnvironmentDepthEstimationVARJO called on untracked session!\n");
+				return XR_ERROR_HANDLE_INVALID;
+			}
+
 			if (m_bDepthSupportedByRenderer && m_configManager->GetConfig_Extensions().ExtVarjoDepthEstimation && enabled)
 			{
 				m_bVarjoDepthEnabled = true;
@@ -1573,6 +1633,49 @@ namespace
 				m_bVarjoDepthEnabled = false;
 				return XR_SUCCESS;
 			}
+		}
+
+
+		XrResult xrGetPassthroughCameraStateANDROID(XrSession session, const XrPassthroughCameraStateGetInfoANDROID* getInfo, XrPassthroughCameraStateANDROID* cameraStateOutput)
+		{
+			if (!m_bAndroidPassthroughStateExtensionEnabled)
+			{
+				ErrorLog("xrGetPassthroughCameraStateANDROID called without enabling extension!\n");
+				return XR_ERROR_RUNTIME_FAILURE;
+			}
+
+			if (!isCurrentSession(session))
+			{
+				ErrorLog("xrGetPassthroughCameraStateANDROID called on untracked session!\n");
+				return XR_ERROR_HANDLE_INVALID;
+			}
+
+			if (!m_cameraManager.get())
+			{
+				return XR_ERROR_RUNTIME_FAILURE;
+			}
+
+			switch (m_cameraManager->GetCameraState())
+			{
+			case CameraState_Uninitialized:
+			case CameraState_Idle:
+				*cameraStateOutput = XR_PASSTHROUGH_CAMERA_STATE_DISABLED_ANDROID;
+				break;
+
+			case CameraState_Waiting:
+				*cameraStateOutput = XR_PASSTHROUGH_CAMERA_STATE_INITIALIZING_ANDROID;
+				break;
+
+			case CameraState_Active:
+				*cameraStateOutput = XR_PASSTHROUGH_CAMERA_STATE_READY_ANDROID;
+				break;
+
+			case CameraState_Error:
+			default:
+				*cameraStateOutput = XR_PASSTHROUGH_CAMERA_STATE_ERROR_ANDROID;
+			}
+
+			return XR_SUCCESS;
 		}
 
 
@@ -1599,6 +1702,7 @@ namespace
 		bool m_bVarjoDepthExtensionEnabled = false;
 		bool m_bVarjoDepthEnabled = false;
 		bool m_bVarjoCompositionExtensionEnabled = false;
+		bool m_bAndroidPassthroughStateExtensionEnabled = false;
 		bool m_bEnableVulkan2Extension = false;
 		bool m_bDepthSupportedByRenderer = false;
 		bool m_bBeginframeCalled = false;

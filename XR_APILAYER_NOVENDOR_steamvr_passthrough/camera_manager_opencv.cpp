@@ -114,6 +114,23 @@ void CameraManagerOpenCV::DeinitCamera()
     m_videoCapture.release();
 }
 
+EPassthroughCameraState CameraManagerOpenCV::GetCameraState() const
+{
+    // TODO: Errors and waiting not tracked currently.
+    if (!m_bCameraInitialized)
+    {
+        return CameraState_Uninitialized;
+    }
+    else if(m_bIsPaused)
+    {
+        return CameraState_Idle;
+    }
+    else
+    {
+        return CameraState_Active;
+    }
+}
+
 void CameraManagerOpenCV::GetCameraDisplayStats(uint32_t& width, uint32_t& height, float& fps, std::string& API) const
 {
     if (m_videoCapture.isOpened())

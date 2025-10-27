@@ -16,6 +16,11 @@
 			"entrypoints": []
 		},
 		{
+			"name": "XR_ANDROID_passthrough_camera_state",
+			"extension_version": "1",
+			"entrypoints": []
+		},
+		{
 			"name": "XR_VARJO_composition_layer_depth_test",
 			"extension_version": "2",
 			"entrypoints": []

@@ -68,6 +68,35 @@ namespace LAYER_NAMESPACE
 		return result;
 	}
 
+	XrResult xrGetSystemProperties(XrInstance instance, XrSystemId systemId, XrSystemProperties* properties)
+	{
+#if USE_TRACELOGGING
+		TraceLoggingWrite(g_traceProvider, "xrGetSystemProperties");
+#endif
+
+		XrResult result;
+		try
+		{
+			result = LAYER_NAMESPACE::GetInstance()->xrGetSystemProperties(instance, systemId, properties);
+		}
+		catch (std::exception exc)
+		{
+#if USE_TRACELOGGING
+			TraceLoggingWrite(g_traceProvider, "xrGetSystemProperties_Error", TLArg(exc.what(), "Error"));
+#endif
+			ErrorLog("xrGetSystemProperties: %s\n", exc.what());
+			result = XR_ERROR_RUNTIME_FAILURE;
+		}
+#if USE_TRACELOGGING
+		TraceLoggingWrite(g_traceProvider, "xrGetSystemProperties_Result", TLArg(xr::ToCString(result), "Result"));
+#endif
+		if (XR_FAILED(result)) {
+			ErrorLog("xrGetSystemProperties failed with %d\n", result);
+		}
+
+		return result;
+	}
+
 	XrResult xrEnumerateEnvironmentBlendModes(XrInstance instance, XrSystemId systemId, XrViewConfigurationType viewConfigurationType, uint32_t environmentBlendModeCapacityInput, uint32_t* environmentBlendModeCountOutput, XrEnvironmentBlendMode* environmentBlendModes)
 	{
 #if USE_TRACELOGGING
@@ -503,6 +532,35 @@ namespace LAYER_NAMESPACE
 		return result;
 	}
 
+	XrResult xrGetPassthroughCameraStateANDROID(XrSession session, const XrPassthroughCameraStateGetInfoANDROID* getInfo, XrPassthroughCameraStateANDROID* cameraStateOutput)
+	{
+#if USE_TRACELOGGING
+		TraceLoggingWrite(g_traceProvider, "xrGetPassthroughCameraStateANDROID");
+#endif
+
+		XrResult result;
+		try
+		{
+			result = LAYER_NAMESPACE::GetInstance()->xrGetPassthroughCameraStateANDROID(session, getInfo, cameraStateOutput);
+		}
+		catch (std::exception exc)
+		{
+#if USE_TRACELOGGING
+			TraceLoggingWrite(g_traceProvider, "xrGetPassthroughCameraStateANDROID_Error", TLArg(exc.what(), "Error"));
+#endif
+			ErrorLog("xrGetPassthroughCameraStateANDROID: %s\n", exc.what());
+			result = XR_ERROR_RUNTIME_FAILURE;
+		}
+#if USE_TRACELOGGING
+		TraceLoggingWrite(g_traceProvider, "xrGetPassthroughCameraStateANDROID_Result", TLArg(xr::ToCString(result), "Result"));
+#endif
+		if (XR_FAILED(result)) {
+			ErrorLog("xrGetPassthroughCameraStateANDROID failed with %d\n", result);
+		}
+
+		return result;
+	}
+
 
 	// Auto-generated dispatcher handler.
 	XrResult OpenXrApi::xrGetInstanceProcAddr(XrInstance instance, const char* name, PFN_xrVoidFunction* function)
@@ -520,6 +578,11 @@ namespace LAYER_NAMESPACE
 		{
 			m_xrGetSystem = reinterpret_cast<PFN_xrGetSystem>(*function);
 			*function = reinterpret_cast<PFN_xrVoidFunction>(LAYER_NAMESPACE::xrGetSystem);
+		}
+		else if (apiName == "xrGetSystemProperties")
+		{
+			m_xrGetSystemProperties = reinterpret_cast<PFN_xrGetSystemProperties>(*function);
+			*function = reinterpret_cast<PFN_xrVoidFunction>(LAYER_NAMESPACE::xrGetSystemProperties);
 		}
 		else if (apiName == "xrEnumerateEnvironmentBlendModes")
 		{
@@ -597,6 +660,12 @@ namespace LAYER_NAMESPACE
 		{
 			m_xrSetEnvironmentDepthEstimationVARJO = reinterpret_cast<PFN_xrSetEnvironmentDepthEstimationVARJO>(*function);
 			*function = reinterpret_cast<PFN_xrVoidFunction>(LAYER_NAMESPACE::xrSetEnvironmentDepthEstimationVARJO);
+			result = XR_SUCCESS;
+		}
+		else if (apiName == "xrGetPassthroughCameraStateANDROID")
+		{
+			m_xrGetPassthroughCameraStateANDROID = reinterpret_cast<PFN_xrGetPassthroughCameraStateANDROID>(*function);
+			*function = reinterpret_cast<PFN_xrVoidFunction>(LAYER_NAMESPACE::xrGetPassthroughCameraStateANDROID);
 			result = XR_SUCCESS;
 		}
 

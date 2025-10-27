@@ -42,6 +42,8 @@ bool CameraManagerOpenVR::InitCamera()
 {
     if (m_bCameraInitialized) { return true; }
 
+    m_bCameraFailed = false;
+
     m_hmdDeviceId = m_openVRManager->GetHMDDeviceId();
     vr::IVRTrackedCamera* trackedCamera = m_openVRManager->GetVRTrackedCamera();
 
@@ -56,11 +58,13 @@ bool CameraManagerOpenVR::InitCamera()
     if (error != vr::VRTrackedCameraError_None)
     {
         ErrorLog("Error %i checking camera on device %i\n", error, m_hmdDeviceId);
+        m_bCameraFailed = true;
         return false;
     }
     else if(!bHasCamera)
     {
         ErrorLog("No passthrough camera found!\n");
+        m_bCameraFailed = true;
         return false;
     }
 
@@ -71,6 +75,7 @@ bool CameraManagerOpenVR::InitCamera()
     if (cameraError != vr::VRTrackedCameraError_None)
     {
         Log("AcquireVideoStreamingService error %i on device %i\n", (int)cameraError, m_hmdDeviceId);
+        m_bCameraFailed = true;
         return false;
     }
 
@@ -107,6 +112,30 @@ void CameraManagerOpenVR::DeinitCamera()
         {
             Log("ReleaseVideoStreamingService error %i\n", (int)error);
         }
+    }
+}
+
+EPassthroughCameraState CameraManagerOpenVR::GetCameraState() const
+{
+    if (m_bCameraFailed)
+    {
+        return CameraState_Error;
+    }
+    if (!m_bCameraInitialized)
+    {
+        return CameraState_Uninitialized;
+    }
+    else if (m_bIsPaused)
+    {
+        return CameraState_Idle;
+    }
+    else if (m_bWaitingForCamera)
+    {
+        return CameraState_Waiting;
+    }
+    else
+    {
+        return CameraState_Active;
     }
 }
 
@@ -494,7 +523,7 @@ void CameraManagerOpenVR::ServeFrames()
 
     ComPtr<ID3D11Device> d3dInteropDevice;
 
-    if (m_renderAPI == Vulkan)
+    if (m_renderAPI == Vulkan) // For the legacy Vulkan renderer.
     {
         D3D11CreateDevice(NULL, D3D_DRIVER_TYPE_HARDWARE, NULL, 0, NULL, 0, D3D11_SDK_VERSION, &d3dInteropDevice, NULL, NULL);
     }

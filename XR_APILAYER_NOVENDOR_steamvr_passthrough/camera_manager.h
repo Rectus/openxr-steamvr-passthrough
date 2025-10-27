@@ -14,6 +14,15 @@
 using namespace steamvr_passthrough;
 using namespace steamvr_passthrough::log;
 
+enum EPassthroughCameraState
+{
+	CameraState_Uninitialized = 0,
+	CameraState_Idle,
+	CameraState_Waiting,
+	CameraState_Active,
+	CameraState_Error
+};
+
 enum ETrackedCameraFrameType
 {
 	VRFrameType_Distorted = 0,
@@ -41,6 +50,7 @@ public:
 	virtual void DeinitCamera() = 0;
 	virtual void SetPaused(bool bIsPaused) = 0;
 
+	virtual EPassthroughCameraState GetCameraState() const = 0;
 	virtual void GetCameraDisplayStats(uint32_t& width, uint32_t& height, float& fps, std::string& API) const = 0;
 	virtual void GetDistortedTextureSize(uint32_t& width, uint32_t& height, uint32_t& bufferSize) const = 0;
 	virtual void GetUndistortedTextureSize(uint32_t& width, uint32_t& height, uint32_t& bufferSize) const = 0;
@@ -89,6 +99,7 @@ public:
 		m_bIsPaused = bIsPaused;
 	}
 
+	EPassthroughCameraState GetCameraState() const;
 	void GetCameraDisplayStats(uint32_t& width, uint32_t& height, float& fps, std::string& API) const;
 	void GetDistortedTextureSize(uint32_t& width, uint32_t& height, uint32_t& bufferSize) const;
 	void GetUndistortedTextureSize(uint32_t& width, uint32_t& height, uint32_t& bufferSize) const;
@@ -142,6 +153,7 @@ private:
 	std::mutex m_serveMutex;
 	bool m_bIsPaused = false;
 	std::atomic_bool m_bWaitingForCamera = false;
+	bool m_bCameraFailed = false;
 
 	std::shared_ptr<CameraFrame> m_renderFrame;
 	std::shared_ptr<CameraFrame> m_servedFrame;
@@ -207,6 +219,7 @@ public:
 		m_bIsPaused = bIsPaused;
 	}
 
+	EPassthroughCameraState GetCameraState() const;
 	void GetCameraDisplayStats(uint32_t& width, uint32_t& height, float& fps, std::string& API) const;
 	void GetDistortedTextureSize(uint32_t& width, uint32_t& height, uint32_t& bufferSize) const;
 	void GetUndistortedTextureSize(uint32_t& width, uint32_t& height, uint32_t& bufferSize) const;

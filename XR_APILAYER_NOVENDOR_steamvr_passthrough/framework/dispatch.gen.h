@@ -289,6 +289,14 @@ namespace LAYER_NAMESPACE
 	private:
 		PFN_xrSetEnvironmentDepthEstimationVARJO m_xrSetEnvironmentDepthEstimationVARJO{ nullptr };
 
+	public:
+		virtual XrResult xrGetPassthroughCameraStateANDROID(XrSession session, const XrPassthroughCameraStateGetInfoANDROID* getInfo, XrPassthroughCameraStateANDROID* cameraStateOutput)
+		{
+			return m_xrGetPassthroughCameraStateANDROID(session, getInfo, cameraStateOutput);
+		}
+	private:
+		PFN_xrGetPassthroughCameraStateANDROID m_xrGetPassthroughCameraStateANDROID{ nullptr };
+
 
 
 	};

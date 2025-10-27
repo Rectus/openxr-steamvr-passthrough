@@ -53,6 +53,7 @@ struct MenuDisplayValues
 	int CoreCurrentMode = 0;
 
 	bool bExtInvertedAlphaActive = false;
+	bool bAndroidPassthroughStateActive = false;
 	bool bVarjoDepthEstimationExtensionActive = false;
 	bool bVarjoDepthCompositionExtensionActive = false;
 

@@ -71,6 +71,7 @@ namespace LAYER_NAMESPACE {
         // The list of extensions to remove or implicitly add.
         std::vector<std::string> blockedExtensions = { 
             XR_EXT_COMPOSITION_LAYER_INVERTED_ALPHA_EXTENSION_NAME,
+            XR_ANDROID_PASSTHROUGH_CAMERA_STATE_EXTENSION_NAME,
             XR_VARJO_COMPOSITION_LAYER_DEPTH_TEST_EXTENSION_NAME, 
             XR_VARJO_ENVIRONMENT_DEPTH_ESTIMATION_EXTENSION_NAME };
 

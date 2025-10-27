@@ -1,6 +1,7 @@
 # The list of OpenXR functions our layer will override.
 override_functions = [
     "xrGetSystem",
+    "xrGetSystemProperties",
     "xrGetVulkanDeviceExtensionsKHR",
     "xrCreateVulkanDeviceKHR",
     "xrCreateSession",
@@ -15,7 +16,8 @@ override_functions = [
 	"xrReleaseSwapchainImage",
     "xrBeginFrame",
     "xrEndFrame",
-    "xrSetEnvironmentDepthEstimationVARJO"
+    "xrSetEnvironmentDepthEstimationVARJO",
+    "xrGetPassthroughCameraStateANDROID"
 ]
 
 # The list of OpenXR functions our layer will use from the runtime.
@@ -46,6 +48,7 @@ extensions = [
     "XR_KHR_vulkan_enable2",
     "XR_KHR_win32_convert_performance_counter_time",
     "XR_EXT_composition_layer_inverted_alpha",
+    "XR_ANDROID_passthrough_camera_state",
     "XR_VARJO_composition_layer_depth_test",
     "XR_VARJO_environment_depth_estimation"
 ]
