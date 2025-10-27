@@ -499,7 +499,7 @@ void CameraManagerOpenVR::ServeFrames()
         D3D11CreateDevice(NULL, D3D_DRIVER_TYPE_HARDWARE, NULL, 0, NULL, 0, D3D11_SDK_VERSION, &d3dInteropDevice, NULL, NULL);
     }
 
-    bool bHasFrame = false;
+    m_bWaitingForCamera = true;
     uint32_t lastFrameSequence = 0;
     LARGE_INTEGER startFrameRetrievalTime;
 
@@ -524,16 +524,26 @@ void CameraManagerOpenVR::ServeFrames()
 
             if (error == vr::VRTrackedCameraError_None)
             {
-                if (!bHasFrame)
+                float frameLatencyMS = GetPerfTimerDiff(m_underConstructionFrame->header.ulFrameExposureTime, startFrameRetrievalTime.QuadPart);
+
+                if (frameLatencyMS > FRAME_TIMEOUT_MS) // We were served a too old frame to be useful.
+                {
+                    m_bWaitingForCamera = true;
+                }
+                else if (m_bWaitingForCamera) // Always accept the first frame offered if we were timed out.
                 {
                     break;
                 }
-                else if (m_underConstructionFrame->header.nFrameSequence != lastFrameSequence)
+                else if (m_underConstructionFrame->header.nFrameSequence != lastFrameSequence) // Normal wait for the next frame.
                 {
                     break;
                 }
             }
-            else if (error != vr::VRTrackedCameraError_NoFrameAvailable)
+            else if (error == vr::VRTrackedCameraError_NoFrameAvailable)
+            {
+                m_bWaitingForCamera = true;
+            }
+            else
             {
                 ErrorLog("GetVideoStreamFrameBuffer-header error %i\n", error);
             }
@@ -646,7 +656,7 @@ void CameraManagerOpenVR::ServeFrames()
             DumpCameraFrameTexture(m_underConstructionFrame->frameBuffer, m_cameraTextureWidth, m_cameraTextureHeight, "OpenVR");
         }
 
-        bHasFrame = true;
+        m_bWaitingForCamera = false;
         lastFrameSequence = m_underConstructionFrame->header.nFrameSequence;
 
         m_underConstructionFrame->bIsValid = true;

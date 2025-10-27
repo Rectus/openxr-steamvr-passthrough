@@ -28,6 +28,7 @@ struct ECameraDistortionCoefficients
 
 #define POSTFRAME_SLEEP_INTERVAL (std::chrono::milliseconds(10))
 #define FRAME_POLL_INTERVAL (std::chrono::microseconds(100))
+#define FRAME_TIMEOUT_MS 1000
 
 class ICameraManager
 {
@@ -140,6 +141,7 @@ private:
 	std::atomic_bool m_bRunThread = true;
 	std::mutex m_serveMutex;
 	bool m_bIsPaused = false;
+	std::atomic_bool m_bWaitingForCamera = false;
 
 	std::shared_ptr<CameraFrame> m_renderFrame;
 	std::shared_ptr<CameraFrame> m_servedFrame;
