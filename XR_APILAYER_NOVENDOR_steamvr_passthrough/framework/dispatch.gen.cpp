@@ -503,6 +503,354 @@ namespace LAYER_NAMESPACE
 		return result;
 	}
 
+	XrResult xrCreatePassthroughFB(XrSession session, const XrPassthroughCreateInfoFB* createInfo, XrPassthroughFB* outPassthrough)
+	{
+#if USE_TRACELOGGING
+		TraceLoggingWrite(g_traceProvider, "xrCreatePassthroughFB");
+#endif
+
+		XrResult result;
+		try
+		{
+			result = LAYER_NAMESPACE::GetInstance()->xrCreatePassthroughFB(session, createInfo, outPassthrough);
+		}
+		catch (std::exception exc)
+		{
+#if USE_TRACELOGGING
+			TraceLoggingWrite(g_traceProvider, "xrCreatePassthroughFB_Error", TLArg(exc.what(), "Error"));
+#endif
+			ErrorLog("xrCreatePassthroughFB: %s\n", exc.what());
+			result = XR_ERROR_RUNTIME_FAILURE;
+		}
+#if USE_TRACELOGGING
+		TraceLoggingWrite(g_traceProvider, "xrCreatePassthroughFB_Result", TLArg(xr::ToCString(result), "Result"));
+#endif
+		if (XR_FAILED(result)) {
+			ErrorLog("xrCreatePassthroughFB failed with %d\n", result);
+		}
+
+		return result;
+	}
+
+	XrResult xrDestroyPassthroughFB(XrPassthroughFB passthrough)
+	{
+#if USE_TRACELOGGING
+		TraceLoggingWrite(g_traceProvider, "xrDestroyPassthroughFB");
+#endif
+
+		XrResult result;
+		try
+		{
+			result = LAYER_NAMESPACE::GetInstance()->xrDestroyPassthroughFB(passthrough);
+		}
+		catch (std::exception exc)
+		{
+#if USE_TRACELOGGING
+			TraceLoggingWrite(g_traceProvider, "xrDestroyPassthroughFB_Error", TLArg(exc.what(), "Error"));
+#endif
+			ErrorLog("xrDestroyPassthroughFB: %s\n", exc.what());
+			result = XR_ERROR_RUNTIME_FAILURE;
+		}
+#if USE_TRACELOGGING
+		TraceLoggingWrite(g_traceProvider, "xrDestroyPassthroughFB_Result", TLArg(xr::ToCString(result), "Result"));
+#endif
+		if (XR_FAILED(result)) {
+			ErrorLog("xrDestroyPassthroughFB failed with %d\n", result);
+		}
+
+		return result;
+	}
+
+	XrResult xrPassthroughStartFB(XrPassthroughFB passthrough)
+	{
+#if USE_TRACELOGGING
+		TraceLoggingWrite(g_traceProvider, "xrPassthroughStartFB");
+#endif
+
+		XrResult result;
+		try
+		{
+			result = LAYER_NAMESPACE::GetInstance()->xrPassthroughStartFB(passthrough);
+		}
+		catch (std::exception exc)
+		{
+#if USE_TRACELOGGING
+			TraceLoggingWrite(g_traceProvider, "xrPassthroughStartFB_Error", TLArg(exc.what(), "Error"));
+#endif
+			ErrorLog("xrPassthroughStartFB: %s\n", exc.what());
+			result = XR_ERROR_RUNTIME_FAILURE;
+		}
+#if USE_TRACELOGGING
+		TraceLoggingWrite(g_traceProvider, "xrPassthroughStartFB_Result", TLArg(xr::ToCString(result), "Result"));
+#endif
+		if (XR_FAILED(result)) {
+			ErrorLog("xrPassthroughStartFB failed with %d\n", result);
+		}
+
+		return result;
+	}
+
+	XrResult xrPassthroughPauseFB(XrPassthroughFB passthrough)
+	{
+#if USE_TRACELOGGING
+		TraceLoggingWrite(g_traceProvider, "xrPassthroughPauseFB");
+#endif
+
+		XrResult result;
+		try
+		{
+			result = LAYER_NAMESPACE::GetInstance()->xrPassthroughPauseFB(passthrough);
+		}
+		catch (std::exception exc)
+		{
+#if USE_TRACELOGGING
+			TraceLoggingWrite(g_traceProvider, "xrPassthroughPauseFB_Error", TLArg(exc.what(), "Error"));
+#endif
+			ErrorLog("xrPassthroughPauseFB: %s\n", exc.what());
+			result = XR_ERROR_RUNTIME_FAILURE;
+		}
+#if USE_TRACELOGGING
+		TraceLoggingWrite(g_traceProvider, "xrPassthroughPauseFB_Result", TLArg(xr::ToCString(result), "Result"));
+#endif
+		if (XR_FAILED(result)) {
+			ErrorLog("xrPassthroughPauseFB failed with %d\n", result);
+		}
+
+		return result;
+	}
+
+	XrResult xrCreatePassthroughLayerFB(XrSession session, const XrPassthroughLayerCreateInfoFB* createInfo, XrPassthroughLayerFB* outLayer)
+	{
+#if USE_TRACELOGGING
+		TraceLoggingWrite(g_traceProvider, "xrCreatePassthroughLayerFB");
+#endif
+
+		XrResult result;
+		try
+		{
+			result = LAYER_NAMESPACE::GetInstance()->xrCreatePassthroughLayerFB(session, createInfo, outLayer);
+		}
+		catch (std::exception exc)
+		{
+#if USE_TRACELOGGING
+			TraceLoggingWrite(g_traceProvider, "xrCreatePassthroughLayerFB_Error", TLArg(exc.what(), "Error"));
+#endif
+			ErrorLog("xrCreatePassthroughLayerFB: %s\n", exc.what());
+			result = XR_ERROR_RUNTIME_FAILURE;
+		}
+#if USE_TRACELOGGING
+		TraceLoggingWrite(g_traceProvider, "xrCreatePassthroughLayerFB_Result", TLArg(xr::ToCString(result), "Result"));
+#endif
+		if (XR_FAILED(result)) {
+			ErrorLog("xrCreatePassthroughLayerFB failed with %d\n", result);
+		}
+
+		return result;
+	}
+
+	XrResult xrDestroyPassthroughLayerFB(XrPassthroughLayerFB layer)
+	{
+#if USE_TRACELOGGING
+		TraceLoggingWrite(g_traceProvider, "xrDestroyPassthroughLayerFB");
+#endif
+
+		XrResult result;
+		try
+		{
+			result = LAYER_NAMESPACE::GetInstance()->xrDestroyPassthroughLayerFB(layer);
+		}
+		catch (std::exception exc)
+		{
+#if USE_TRACELOGGING
+			TraceLoggingWrite(g_traceProvider, "xrDestroyPassthroughLayerFB_Error", TLArg(exc.what(), "Error"));
+#endif
+			ErrorLog("xrDestroyPassthroughLayerFB: %s\n", exc.what());
+			result = XR_ERROR_RUNTIME_FAILURE;
+		}
+#if USE_TRACELOGGING
+		TraceLoggingWrite(g_traceProvider, "xrDestroyPassthroughLayerFB_Result", TLArg(xr::ToCString(result), "Result"));
+#endif
+		if (XR_FAILED(result)) {
+			ErrorLog("xrDestroyPassthroughLayerFB failed with %d\n", result);
+		}
+
+		return result;
+	}
+
+	XrResult xrPassthroughLayerPauseFB(XrPassthroughLayerFB layer)
+	{
+#if USE_TRACELOGGING
+		TraceLoggingWrite(g_traceProvider, "xrPassthroughLayerPauseFB");
+#endif
+
+		XrResult result;
+		try
+		{
+			result = LAYER_NAMESPACE::GetInstance()->xrPassthroughLayerPauseFB(layer);
+		}
+		catch (std::exception exc)
+		{
+#if USE_TRACELOGGING
+			TraceLoggingWrite(g_traceProvider, "xrPassthroughLayerPauseFB_Error", TLArg(exc.what(), "Error"));
+#endif
+			ErrorLog("xrPassthroughLayerPauseFB: %s\n", exc.what());
+			result = XR_ERROR_RUNTIME_FAILURE;
+		}
+#if USE_TRACELOGGING
+		TraceLoggingWrite(g_traceProvider, "xrPassthroughLayerPauseFB_Result", TLArg(xr::ToCString(result), "Result"));
+#endif
+		if (XR_FAILED(result)) {
+			ErrorLog("xrPassthroughLayerPauseFB failed with %d\n", result);
+		}
+
+		return result;
+	}
+
+	XrResult xrPassthroughLayerResumeFB(XrPassthroughLayerFB layer)
+	{
+#if USE_TRACELOGGING
+		TraceLoggingWrite(g_traceProvider, "xrPassthroughLayerResumeFB");
+#endif
+
+		XrResult result;
+		try
+		{
+			result = LAYER_NAMESPACE::GetInstance()->xrPassthroughLayerResumeFB(layer);
+		}
+		catch (std::exception exc)
+		{
+#if USE_TRACELOGGING
+			TraceLoggingWrite(g_traceProvider, "xrPassthroughLayerResumeFB_Error", TLArg(exc.what(), "Error"));
+#endif
+			ErrorLog("xrPassthroughLayerResumeFB: %s\n", exc.what());
+			result = XR_ERROR_RUNTIME_FAILURE;
+		}
+#if USE_TRACELOGGING
+		TraceLoggingWrite(g_traceProvider, "xrPassthroughLayerResumeFB_Result", TLArg(xr::ToCString(result), "Result"));
+#endif
+		if (XR_FAILED(result)) {
+			ErrorLog("xrPassthroughLayerResumeFB failed with %d\n", result);
+		}
+
+		return result;
+	}
+
+	XrResult xrPassthroughLayerSetStyleFB(XrPassthroughLayerFB layer, const XrPassthroughStyleFB* style)
+	{
+#if USE_TRACELOGGING
+		TraceLoggingWrite(g_traceProvider, "xrPassthroughLayerSetStyleFB");
+#endif
+
+		XrResult result;
+		try
+		{
+			result = LAYER_NAMESPACE::GetInstance()->xrPassthroughLayerSetStyleFB(layer, style);
+		}
+		catch (std::exception exc)
+		{
+#if USE_TRACELOGGING
+			TraceLoggingWrite(g_traceProvider, "xrPassthroughLayerSetStyleFB_Error", TLArg(exc.what(), "Error"));
+#endif
+			ErrorLog("xrPassthroughLayerSetStyleFB: %s\n", exc.what());
+			result = XR_ERROR_RUNTIME_FAILURE;
+		}
+#if USE_TRACELOGGING
+		TraceLoggingWrite(g_traceProvider, "xrPassthroughLayerSetStyleFB_Result", TLArg(xr::ToCString(result), "Result"));
+#endif
+		if (XR_FAILED(result)) {
+			ErrorLog("xrPassthroughLayerSetStyleFB failed with %d\n", result);
+		}
+
+		return result;
+	}
+
+	XrResult xrCreateGeometryInstanceFB(XrSession session, const XrGeometryInstanceCreateInfoFB* createInfo, XrGeometryInstanceFB* outGeometryInstance)
+	{
+#if USE_TRACELOGGING
+		TraceLoggingWrite(g_traceProvider, "xrCreateGeometryInstanceFB");
+#endif
+
+		XrResult result;
+		try
+		{
+			result = LAYER_NAMESPACE::GetInstance()->xrCreateGeometryInstanceFB(session, createInfo, outGeometryInstance);
+		}
+		catch (std::exception exc)
+		{
+#if USE_TRACELOGGING
+			TraceLoggingWrite(g_traceProvider, "xrCreateGeometryInstanceFB_Error", TLArg(exc.what(), "Error"));
+#endif
+			ErrorLog("xrCreateGeometryInstanceFB: %s\n", exc.what());
+			result = XR_ERROR_RUNTIME_FAILURE;
+		}
+#if USE_TRACELOGGING
+		TraceLoggingWrite(g_traceProvider, "xrCreateGeometryInstanceFB_Result", TLArg(xr::ToCString(result), "Result"));
+#endif
+		if (XR_FAILED(result)) {
+			ErrorLog("xrCreateGeometryInstanceFB failed with %d\n", result);
+		}
+
+		return result;
+	}
+
+	XrResult xrDestroyGeometryInstanceFB(XrGeometryInstanceFB instance)
+	{
+#if USE_TRACELOGGING
+		TraceLoggingWrite(g_traceProvider, "xrDestroyGeometryInstanceFB");
+#endif
+
+		XrResult result;
+		try
+		{
+			result = LAYER_NAMESPACE::GetInstance()->xrDestroyGeometryInstanceFB(instance);
+		}
+		catch (std::exception exc)
+		{
+#if USE_TRACELOGGING
+			TraceLoggingWrite(g_traceProvider, "xrDestroyGeometryInstanceFB_Error", TLArg(exc.what(), "Error"));
+#endif
+			ErrorLog("xrDestroyGeometryInstanceFB: %s\n", exc.what());
+			result = XR_ERROR_RUNTIME_FAILURE;
+		}
+#if USE_TRACELOGGING
+		TraceLoggingWrite(g_traceProvider, "xrDestroyGeometryInstanceFB_Result", TLArg(xr::ToCString(result), "Result"));
+#endif
+		if (XR_FAILED(result)) {
+			ErrorLog("xrDestroyGeometryInstanceFB failed with %d\n", result);
+		}
+
+		return result;
+	}
+
+	XrResult xrGeometryInstanceSetTransformFB(XrGeometryInstanceFB instance, const XrGeometryInstanceTransformFB* transformation)
+	{
+#if USE_TRACELOGGING
+		TraceLoggingWrite(g_traceProvider, "xrGeometryInstanceSetTransformFB");
+#endif
+
+		XrResult result;
+		try
+		{
+			result = LAYER_NAMESPACE::GetInstance()->xrGeometryInstanceSetTransformFB(instance, transformation);
+		}
+		catch (std::exception exc)
+		{
+#if USE_TRACELOGGING
+			TraceLoggingWrite(g_traceProvider, "xrGeometryInstanceSetTransformFB_Error", TLArg(exc.what(), "Error"));
+#endif
+			ErrorLog("xrGeometryInstanceSetTransformFB: %s\n", exc.what());
+			result = XR_ERROR_RUNTIME_FAILURE;
+		}
+#if USE_TRACELOGGING
+		TraceLoggingWrite(g_traceProvider, "xrGeometryInstanceSetTransformFB_Result", TLArg(xr::ToCString(result), "Result"));
+#endif
+		if (XR_FAILED(result)) {
+			ErrorLog("xrGeometryInstanceSetTransformFB failed with %d\n", result);
+		}
+
+		return result;
+	}
+
 	XrResult xrSetEnvironmentDepthEstimationVARJO(XrSession session, XrBool32 enabled)
 	{
 #if USE_TRACELOGGING
@@ -654,6 +1002,78 @@ namespace LAYER_NAMESPACE
 		{
 			m_xrCreateVulkanDeviceKHR = reinterpret_cast<PFN_xrCreateVulkanDeviceKHR>(*function);
 			*function = reinterpret_cast<PFN_xrVoidFunction>(LAYER_NAMESPACE::xrCreateVulkanDeviceKHR);
+			result = XR_SUCCESS;
+		}
+		else if (apiName == "xrCreatePassthroughFB")
+		{
+			m_xrCreatePassthroughFB = reinterpret_cast<PFN_xrCreatePassthroughFB>(*function);
+			*function = reinterpret_cast<PFN_xrVoidFunction>(LAYER_NAMESPACE::xrCreatePassthroughFB);
+			result = XR_SUCCESS;
+		}
+		else if (apiName == "xrDestroyPassthroughFB")
+		{
+			m_xrDestroyPassthroughFB = reinterpret_cast<PFN_xrDestroyPassthroughFB>(*function);
+			*function = reinterpret_cast<PFN_xrVoidFunction>(LAYER_NAMESPACE::xrDestroyPassthroughFB);
+			result = XR_SUCCESS;
+		}
+		else if (apiName == "xrPassthroughStartFB")
+		{
+			m_xrPassthroughStartFB = reinterpret_cast<PFN_xrPassthroughStartFB>(*function);
+			*function = reinterpret_cast<PFN_xrVoidFunction>(LAYER_NAMESPACE::xrPassthroughStartFB);
+			result = XR_SUCCESS;
+		}
+		else if (apiName == "xrPassthroughPauseFB")
+		{
+			m_xrPassthroughPauseFB = reinterpret_cast<PFN_xrPassthroughPauseFB>(*function);
+			*function = reinterpret_cast<PFN_xrVoidFunction>(LAYER_NAMESPACE::xrPassthroughPauseFB);
+			result = XR_SUCCESS;
+		}
+		else if (apiName == "xrCreatePassthroughLayerFB")
+		{
+			m_xrCreatePassthroughLayerFB = reinterpret_cast<PFN_xrCreatePassthroughLayerFB>(*function);
+			*function = reinterpret_cast<PFN_xrVoidFunction>(LAYER_NAMESPACE::xrCreatePassthroughLayerFB);
+			result = XR_SUCCESS;
+		}
+		else if (apiName == "xrDestroyPassthroughLayerFB")
+		{
+			m_xrDestroyPassthroughLayerFB = reinterpret_cast<PFN_xrDestroyPassthroughLayerFB>(*function);
+			*function = reinterpret_cast<PFN_xrVoidFunction>(LAYER_NAMESPACE::xrDestroyPassthroughLayerFB);
+			result = XR_SUCCESS;
+		}
+		else if (apiName == "xrPassthroughLayerPauseFB")
+		{
+			m_xrPassthroughLayerPauseFB = reinterpret_cast<PFN_xrPassthroughLayerPauseFB>(*function);
+			*function = reinterpret_cast<PFN_xrVoidFunction>(LAYER_NAMESPACE::xrPassthroughLayerPauseFB);
+			result = XR_SUCCESS;
+		}
+		else if (apiName == "xrPassthroughLayerResumeFB")
+		{
+			m_xrPassthroughLayerResumeFB = reinterpret_cast<PFN_xrPassthroughLayerResumeFB>(*function);
+			*function = reinterpret_cast<PFN_xrVoidFunction>(LAYER_NAMESPACE::xrPassthroughLayerResumeFB);
+			result = XR_SUCCESS;
+		}
+		else if (apiName == "xrPassthroughLayerSetStyleFB")
+		{
+			m_xrPassthroughLayerSetStyleFB = reinterpret_cast<PFN_xrPassthroughLayerSetStyleFB>(*function);
+			*function = reinterpret_cast<PFN_xrVoidFunction>(LAYER_NAMESPACE::xrPassthroughLayerSetStyleFB);
+			result = XR_SUCCESS;
+		}
+		else if (apiName == "xrCreateGeometryInstanceFB")
+		{
+			m_xrCreateGeometryInstanceFB = reinterpret_cast<PFN_xrCreateGeometryInstanceFB>(*function);
+			*function = reinterpret_cast<PFN_xrVoidFunction>(LAYER_NAMESPACE::xrCreateGeometryInstanceFB);
+			result = XR_SUCCESS;
+		}
+		else if (apiName == "xrDestroyGeometryInstanceFB")
+		{
+			m_xrDestroyGeometryInstanceFB = reinterpret_cast<PFN_xrDestroyGeometryInstanceFB>(*function);
+			*function = reinterpret_cast<PFN_xrVoidFunction>(LAYER_NAMESPACE::xrDestroyGeometryInstanceFB);
+			result = XR_SUCCESS;
+		}
+		else if (apiName == "xrGeometryInstanceSetTransformFB")
+		{
+			m_xrGeometryInstanceSetTransformFB = reinterpret_cast<PFN_xrGeometryInstanceSetTransformFB>(*function);
+			*function = reinterpret_cast<PFN_xrVoidFunction>(LAYER_NAMESPACE::xrGeometryInstanceSetTransformFB);
 			result = XR_SUCCESS;
 		}
 		else if (apiName == "xrSetEnvironmentDepthEstimationVARJO")

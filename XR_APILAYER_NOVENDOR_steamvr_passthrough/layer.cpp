@@ -102,6 +102,7 @@ namespace
 			bool bEnableVulkan2Extension = false;
 			bool bInverseAlphaExtensionEnabled = false;
 			bool bEnableAndroidCameraStateExtension = false;
+			bool bEnableFBPassthroughExtension = false;
 			bool bEnableVarjoDepthExtension = false;
 			bool bEnableVarjoCompositionExtension = false;
 
@@ -119,6 +120,10 @@ namespace
 				else if (extensions[i].compare(XR_ANDROID_PASSTHROUGH_CAMERA_STATE_EXTENSION_NAME) == 0)
 				{
 					bEnableAndroidCameraStateExtension = true;
+				}
+				else if (extensions[i].compare(XR_FB_PASSTHROUGH_EXTENSION_NAME) == 0)
+				{
+					bEnableFBPassthroughExtension = true;
 				}
 				else if (extensions[i].compare(XR_VARJO_ENVIRONMENT_DEPTH_ESTIMATION_EXTENSION_NAME) == 0)
 				{
@@ -201,18 +206,19 @@ namespace
 			m_openVRManager = std::make_shared<OpenVRManager>();
 			m_dashboardMenu = std::make_unique<DashboardMenu>(g_dllModule, m_configManager, m_openVRManager);
 
+			MenuDisplayValues& vals = m_dashboardMenu->GetDisplayValues();
 
 			if (bEnableVarjoDepthExtension && m_configManager->GetConfig_Extensions().ExtVarjoDepthEstimation)
 			{
 				m_bVarjoDepthExtensionEnabled = true;
-				m_dashboardMenu->GetDisplayValues().bVarjoDepthEstimationExtensionActive = true;
+				vals.bVarjoDepthEstimationExtensionActive = true;
 				Log("Extension XR_VARJO_environment_depth_estimation enabled\n");
 			}
 
 			if (bEnableVarjoCompositionExtension && m_configManager->GetConfig_Extensions().ExtVarjoDepthComposition)
 			{
 				m_bVarjoCompositionExtensionEnabled = true;
-				m_dashboardMenu->GetDisplayValues().bVarjoDepthCompositionExtensionActive = true;
+				vals.bVarjoDepthCompositionExtensionActive = true;
 				Log("Extension XR_VARJO_composition_layer_depth_test enabled\n");
 			}
 
@@ -225,15 +231,22 @@ namespace
 			if (bInverseAlphaExtensionEnabled)
 			{
 				m_bInverseAlphaExtensionEnabled = true;
-				m_dashboardMenu->GetDisplayValues().bExtInvertedAlphaActive = true;
+				vals.bExtInvertedAlphaActive = true;
 				Log("Extension XR_EXT_composition_layer_inverted_alpha enabled\n");
 			}
 
 			if (bEnableAndroidCameraStateExtension)
 			{
 				m_bAndroidPassthroughStateExtensionEnabled = true;
-				m_dashboardMenu->GetDisplayValues().bAndroidPassthroughStateActive = true;
+				vals.bAndroidPassthroughStateActive = true;
 				Log("Extension XR_ANDROID_passthrough_camera_state enabled\n");
+			}
+
+			if (bEnableFBPassthroughExtension && m_configManager->GetConfig_Extensions().ExtFBPassthrough)
+			{
+				m_bFBPassthroughExtensionEnabled = true;
+				vals.bFBPassthroughExtensionActive = true;
+				Log("Extension XR_FB_passthrough enabled\n");
 			}
 
 			m_bSuccessfullyLoaded = true;
@@ -380,40 +393,90 @@ namespace
 
 		XrResult xrGetSystemProperties(XrInstance instance, XrSystemId systemId, XrSystemProperties* properties)
 		{
-			if (!m_bAndroidPassthroughStateExtensionEnabled)
+			if (!m_bAndroidPassthroughStateExtensionEnabled || !m_bFBPassthroughExtensionEnabled)
 			{
 				return OpenXrApi::xrGetSystemProperties(instance, systemId, properties);
 			}
 
 			XrBaseOutStructure* prevProperty = reinterpret_cast<XrBaseOutStructure*>(properties);
 			XrBaseOutStructure* property = reinterpret_cast<XrBaseOutStructure*>(properties->next);
+
 			bool bFoundCamStateProperty = false;
+			XrSystemPassthroughCameraStatePropertiesANDROID* camStateProperty = nullptr;
+			XrBaseOutStructure* camStatePrevProperty = nullptr;
+
+			bool bFoundFBPassthroughProperty = false;
+			XrSystemPassthroughPropertiesFB* FBPassthroughProperty = nullptr;
+			XrBaseOutStructure* FBPassthroughPrevProperty = nullptr;
+
+			bool bFoundFBPassthrough2Property = false;
+			XrSystemPassthroughProperties2FB* FBPassthrough2Property = nullptr;
+			XrBaseOutStructure* FBPassthrough2PrevProperty = nullptr;
 
 			while (property != nullptr)
 			{
 				if (property->type == XR_TYPE_SYSTEM_PASSTHROUGH_CAMERA_STATE_PROPERTIES_ANDROID)
 				{
-					prevProperty->next = property->next; // Temporarily remove property struct from chain.
 					bFoundCamStateProperty = true;
+					camStatePrevProperty = prevProperty;
+					prevProperty->next = property->next; // Temporarily remove property struct from chain.
+
+					camStateProperty = reinterpret_cast<XrSystemPassthroughCameraStatePropertiesANDROID*>(property);
+					camStateProperty->supportsPassthroughCameraState = XR_TRUE;
+				}
+				else if (property->type == XR_TYPE_SYSTEM_PASSTHROUGH_PROPERTIES_FB)
+				{
+					bFoundCamStateProperty = true;
+					FBPassthroughPrevProperty = prevProperty;
+					prevProperty->next = property->next;
 
 
-					auto camProperty = reinterpret_cast<XrSystemPassthroughCameraStatePropertiesANDROID*>(property);
+					FBPassthroughProperty = reinterpret_cast<XrSystemPassthroughPropertiesFB*>(property);
+					FBPassthroughProperty->supportsPassthrough = XR_TRUE;
+				}
+				else if (property->type == XR_TYPE_SYSTEM_PASSTHROUGH_PROPERTIES2_FB)
+				{
+					bFoundCamStateProperty = true;
+					FBPassthrough2PrevProperty = prevProperty;
+					prevProperty->next = property->next;
 
-					camProperty->supportsPassthroughCameraState = XR_TRUE;
 
-					break;
+					FBPassthrough2Property = reinterpret_cast<XrSystemPassthroughProperties2FB*>(property);
+					FBPassthrough2Property->capabilities = XR_PASSTHROUGH_CAPABILITY_BIT_FB | XR_PASSTHROUGH_CAPABILITY_COLOR_BIT_FB;
+					if (m_configManager->GetConfig_Extensions().ExtFBPassthroughAllowDepth)
+					{
+						FBPassthrough2Property->capabilities |= XR_PASSTHROUGH_CAPABILITY_LAYER_DEPTH_BIT_FB;
+					}
 				}
 
 				prevProperty = property;
-				property = reinterpret_cast<XrBaseOutStructure*>(property->next);
+				property = property->next;
 			}
 
 			XrResult result = OpenXrApi::xrGetSystemProperties(instance, systemId, properties);
 
-			// Restore property struct to chain.
-			if (bFoundCamStateProperty)
+
+			// Restore property structs to chain in same order to maintain consecutive removed structs.
+
+			property = reinterpret_cast<XrBaseOutStructure*>(properties->next);
+
+			while (property != nullptr)
 			{
-				prevProperty->next = property;
+
+				if (bFoundCamStateProperty && property == camStatePrevProperty)
+				{
+					property->next = reinterpret_cast<XrBaseOutStructure*>(camStateProperty);
+				}
+				else if (bFoundFBPassthroughProperty && property == FBPassthroughPrevProperty)
+				{
+					property->next = reinterpret_cast<XrBaseOutStructure*>(FBPassthroughProperty);
+				}
+				else if (bFoundFBPassthrough2Property && property == FBPassthrough2PrevProperty)
+				{
+					property->next = reinterpret_cast<XrBaseOutStructure*>(FBPassthrough2Property);
+				}
+
+				property = property->next;
 			}
 
 			return result;
@@ -422,6 +485,8 @@ namespace
 
 		bool SetupRenderer(const XrInstance instance, const XrSessionCreateInfo* createInfo, const XrSession* session)
 		{
+			MenuDisplayValues& displayValues = m_dashboardMenu->GetDisplayValues();
+
 			const XrBaseInStructure* entry = reinterpret_cast<const XrBaseInStructure*>(createInfo->next);
 
 			while (entry != nullptr)
@@ -442,9 +507,9 @@ namespace
 						return false;
 					}
 
-					m_dashboardMenu->GetDisplayValues().bSessionActive = true;
-					m_dashboardMenu->GetDisplayValues().renderAPI = DirectX11;
-					m_dashboardMenu->GetDisplayValues().appRenderAPI = DirectX11;
+					displayValues.bSessionActive = true;
+					displayValues.renderAPI = DirectX11;
+					displayValues.appRenderAPI = DirectX11;
 					m_bDepthSupportedByRenderer = true;
 					Log("Direct3D 11 rendering initialized\n");
 
@@ -478,9 +543,9 @@ namespace
 						return false;
 					}
 
-					m_dashboardMenu->GetDisplayValues().bSessionActive = true;
-					m_dashboardMenu->GetDisplayValues().renderAPI = usedAPI;
-					m_dashboardMenu->GetDisplayValues().appRenderAPI = DirectX12;
+					displayValues.bSessionActive = true;
+					displayValues.renderAPI = usedAPI;
+					displayValues.appRenderAPI = DirectX12;
 					m_bDepthSupportedByRenderer = true;
 					Log("Direct3D 12 rendering initialized\n");
 
@@ -520,9 +585,9 @@ namespace
 						return false;
 					}
 
-					m_dashboardMenu->GetDisplayValues().bSessionActive = true;
-					m_dashboardMenu->GetDisplayValues().renderAPI = usedAPI;
-					m_dashboardMenu->GetDisplayValues().appRenderAPI = Vulkan;
+					displayValues.bSessionActive = true;
+					displayValues.renderAPI = usedAPI;
+					displayValues.appRenderAPI = Vulkan;
 					m_bDepthSupportedByRenderer = false;
 					Log("Vulkan rendering initialized\n");
 
@@ -545,9 +610,9 @@ namespace
 						return false;
 					}
 
-					m_dashboardMenu->GetDisplayValues().bSessionActive = true;
-					m_dashboardMenu->GetDisplayValues().renderAPI = DirectX11;
-					m_dashboardMenu->GetDisplayValues().appRenderAPI = OpenGL;
+					displayValues.bSessionActive = true;
+					displayValues.renderAPI = DirectX11;
+					displayValues.appRenderAPI = OpenGL;
 					m_bDepthSupportedByRenderer = false;
 					Log("OpenGL rendering initialized\n");
 
@@ -749,21 +814,23 @@ namespace
 				m_currentSession = XR_NULL_HANDLE;
 				m_currentInstance = XR_NULL_HANDLE;
 
-				m_dashboardMenu->GetDisplayValues().bSessionActive = false;
-				m_dashboardMenu->GetDisplayValues().renderAPI = None;
-				m_dashboardMenu->GetDisplayValues().frameBufferFlags = 0;
-				m_dashboardMenu->GetDisplayValues().frameBufferFormat = 0;
-				m_dashboardMenu->GetDisplayValues().depthBufferFormat = 0;
-				m_dashboardMenu->GetDisplayValues().frameBufferWidth = 0;
-				m_dashboardMenu->GetDisplayValues().frameBufferHeight = 0;
-				m_dashboardMenu->GetDisplayValues().nearZ = 0;
-				m_dashboardMenu->GetDisplayValues().farZ = 0;
-				m_dashboardMenu->GetDisplayValues().frameToPhotonsLatencyMS = 0;
-				m_dashboardMenu->GetDisplayValues().frameToRenderLatencyMS = 0;
-				m_dashboardMenu->GetDisplayValues().renderTimeMS = 0;
+				MenuDisplayValues& vals = m_dashboardMenu->GetDisplayValues();
 
-				m_dashboardMenu->GetDisplayValues().bCorePassthroughActive = false;
-				m_dashboardMenu->GetDisplayValues().CoreCurrentMode = 0;
+				vals.bSessionActive = false;
+				vals.renderAPI = None;
+				vals.frameBufferFlags = 0;
+				vals.frameBufferFormat = 0;
+				vals.depthBufferFormat = 0;
+				vals.frameBufferWidth = 0;
+				vals.frameBufferHeight = 0;
+				vals.nearZ = 0;
+				vals.farZ = 0;
+				vals.frameToPhotonsLatencyMS = 0;
+				vals.frameToRenderLatencyMS = 0;
+				vals.renderTimeMS = 0;
+
+				vals.bCorePassthroughActive = false;
+				vals.CoreCurrentMode = 0;
 			}
 
 			XrResult result = OpenXrApi::xrDestroySession(session);
@@ -1148,9 +1215,10 @@ namespace
 				{
 					if (eye == LEFT_EYE)
 					{
-						m_dashboardMenu->GetDisplayValues().depthBufferFormat = depthProps->second.format;
-						m_dashboardMenu->GetDisplayValues().nearZ = depthInfo->nearZ;
-						m_dashboardMenu->GetDisplayValues().farZ = depthInfo->farZ;
+						MenuDisplayValues& vals = m_dashboardMenu->GetDisplayValues();
+						vals.depthBufferFormat = depthProps->second.format;
+						vals.nearZ = depthInfo->nearZ;
+						vals.farZ = depthInfo->farZ;
 					}
 
 					Log("Found depth swapchain %u for color swapchain %u, arraySize %u, depth range [%f:%f], Z-range[%g:%g]\n", depthInfo->subImage.swapchain, newSwapchain, depthProps->second.arraySize, depthInfo->minDepth, depthInfo->maxDepth, depthInfo->nearZ, depthInfo->farZ);
@@ -1275,14 +1343,10 @@ namespace
 			return;
 		}
 
-		void RenderPassthroughOnAppLayer(const XrFrameEndInfo* frameEndInfo, uint32_t layerNum)
+		void RenderPassthroughOnAppLayer(const XrFrameEndInfo* frameEndInfo, uint32_t layerNum, bool bUseFBPassthrough, FBPassthroughLayerInstance* fbLayer)
 		{
 			XrCompositionLayerProjection* layer = (XrCompositionLayerProjection*)frameEndInfo->layers[layerNum];
 			std::shared_ptr<CameraFrame> frame;
-
-			m_dashboardMenu->GetDisplayValues().frameBufferHeight = layer->views[0].subImage.imageRect.extent.height;
-			m_dashboardMenu->GetDisplayValues().frameBufferWidth = layer->views[0].subImage.imageRect.extent.width;
-			m_dashboardMenu->GetDisplayValues().frameBufferFlags = layer->layerFlags;
 
 			if (m_configManager->GetConfig_Main().CameraProvider == CameraProvider_Augmented)
 			{
@@ -1299,25 +1363,28 @@ namespace
 				}
 			}
 
+			MenuDisplayValues& displayValues = m_dashboardMenu->GetDisplayValues();
+
 			std::shared_lock readLock(frame->readWriteMutex);
 
 
 			LARGE_INTEGER preRenderTime = StartPerfTimer();
 
 			float frameToRenderTime = GetPerfTimerDiff(frame->header.ulFrameExposureTime, preRenderTime.QuadPart);
-			m_dashboardMenu->GetDisplayValues().frameToRenderLatencyMS = UpdateAveragePerfTime(m_frameToRenderTimes, frameToRenderTime, 20);
+			displayValues.frameToRenderLatencyMS = UpdateAveragePerfTime(m_frameToRenderTimes, frameToRenderTime, 20);
 
 			LARGE_INTEGER displayTime;
 
 			OpenXrApi::xrConvertTimeToWin32PerformanceCounterKHR(m_currentInstance, frameEndInfo->displayTime, &displayTime);
 
 			float frameToPhotonsTime = GetPerfTimerDiff(frame->header.ulFrameExposureTime, displayTime.QuadPart);
-			m_dashboardMenu->GetDisplayValues().frameToPhotonsLatencyMS = UpdateAveragePerfTime(m_frameToPhotonTimes, frameToPhotonsTime, 20);
+			displayValues.frameToPhotonsLatencyMS = UpdateAveragePerfTime(m_frameToPhotonTimes, frameToPhotonsTime, 20);
 
 
 			float timeToPhotons = GetPerfTimerDiff(preRenderTime.QuadPart, displayTime.QuadPart);
 			
 			Config_Core& coreConf = m_configManager->GetConfig_Core();
+			Config_Extensions& extConf = m_configManager->GetConfig_Extensions();
 			Config_Depth& depthConf = m_configManager->GetConfig_Depth();
 
 			std::shared_ptr<DepthFrame> depthFrame = m_depthReconstruction->GetDepthFrame();
@@ -1337,6 +1404,19 @@ namespace
 
 			FrameRenderParameters renderParams;
 
+			if (bUseFBPassthrough)
+			{
+				if (extConf.ExtFBPassthroughAllowColorSettings && fbLayer->ColorAdjustmentEnabled)
+				{
+					renderParams.bForceColorSettings = true;
+					renderParams.ForcedBrightness = fbLayer->Brightness;
+					renderParams.ForcedContrast = fbLayer->Contrast;
+					renderParams.ForcedSaturation = fbLayer->Saturation;
+				}
+
+				renderParams.RenderOpacity = fbLayer->Opacity;
+			}
+
 			UpdateSwapchains(LEFT_EYE, layer, renderParams);
 			UpdateSwapchains(RIGHT_EYE, layer, renderParams);
 
@@ -1344,13 +1424,25 @@ namespace
 			{
 				ErrorLog("Error: No swapchains found!\n");
 				return;
-			}
-
-			renderParams.BlendMode = (EPassthroughBlendMode)frameEndInfo->environmentBlendMode;
+			}			
 
 			if (coreConf.CoreForcePassthrough && coreConf.CoreForceMode >= 0)
 			{
 				renderParams.BlendMode = (EPassthroughBlendMode)coreConf.CoreForceMode;
+				displayValues.bCorePassthroughActive = true;
+				displayValues.bFBPassthroughDepthActive = false;
+			}
+			else if (bUseFBPassthrough)
+			{
+				renderParams.BlendMode = AlphaBlendPremultiplied;
+				displayValues.bFBPassthroughActive = true;
+				displayValues.bFBPassthroughDepthActive = fbLayer->DepthEnabled;
+			}
+			else
+			{
+				renderParams.BlendMode = (EPassthroughBlendMode)frameEndInfo->environmentBlendMode;
+				displayValues.bCorePassthroughActive = true;
+				displayValues.bFBPassthroughDepthActive = false;
 			}
 
 			if (renderParams.BlendMode == AlphaBlendPremultiplied)
@@ -1378,9 +1470,10 @@ namespace
 					((m_bVarjoDepthEnabled && 
 					(renderParams.BlendMode == AlphaBlendPremultiplied ||
 					renderParams.BlendMode == AlphaBlendUnpremultiplied)) ||
+				(bUseFBPassthrough && fbLayer->DepthEnabled) ||
 				depthConf.DepthForceComposition);
 
-			m_dashboardMenu->GetDisplayValues().bDepthBlendingActive = renderParams.bEnableDepthBlending;
+			displayValues.bDepthBlendingActive = renderParams.bEnableDepthBlending;
 
 			
 			if (m_bVarjoCompositionExtensionEnabled)
@@ -1431,10 +1524,10 @@ namespace
 
 
 			float renderTime = EndPerfTimer(preRenderTime.QuadPart);
-			m_dashboardMenu->GetDisplayValues().renderTimeMS = UpdateAveragePerfTime(m_passthroughRenderTimes, renderTime, 20);
+			displayValues.renderTimeMS = UpdateAveragePerfTime(m_passthroughRenderTimes, renderTime, 20);
 
-			m_dashboardMenu->GetDisplayValues().stereoReconstructionTimeMS = m_depthReconstruction->GetReconstructionPerfTime();
-			m_dashboardMenu->GetDisplayValues().frameRetrievalTimeMS = m_cameraManager->GetFrameRetrievalPerfTime();
+			displayValues.stereoReconstructionTimeMS = m_depthReconstruction->GetReconstructionPerfTime();
+			displayValues.frameRetrievalTimeMS = m_cameraManager->GetFrameRetrievalPerfTime();
 		}
 
 
@@ -1446,6 +1539,25 @@ namespace
 				XrFrameEndInfo modifiedFrameEndInfo = *frameEndInfo;
 				modifiedFrameEndInfo.environmentBlendMode = XR_ENVIRONMENT_BLEND_MODE_OPAQUE;
 
+				std::vector<const XrCompositionLayerBaseHeader*>newLayers;
+
+				if (m_bFBPassthroughExtensionEnabled)
+				{
+					for (uint32_t i = 0; i < modifiedFrameEndInfo.layerCount; i++)
+					{
+						auto layer = modifiedFrameEndInfo.layers[i];
+
+						if (layer->type == XR_TYPE_COMPOSITION_LAYER_PASSTHROUGH_FB)
+						{
+							continue;
+						}
+
+						newLayers.push_back(layer);
+					}
+
+					modifiedFrameEndInfo.layers = newLayers.data();
+					modifiedFrameEndInfo.layerCount = newLayers.size();
+				}
 				return OpenXrApi::xrEndFrame(session, &modifiedFrameEndInfo);
 			}
 
@@ -1463,10 +1575,13 @@ namespace
 
 			if (m_dashboardMenu.get())
 			{
-				m_dashboardMenu->GetDisplayValues().CoreCurrentMode = frameEndInfo->environmentBlendMode;
-				m_dashboardMenu->GetDisplayValues().bCorePassthroughActive = false;
-				m_dashboardMenu->GetDisplayValues().numCompositionLayers = frameEndInfo->layerCount;
-				m_dashboardMenu->GetDisplayValues().bDepthLayerSubmitted = false;
+				MenuDisplayValues& vals = m_dashboardMenu->GetDisplayValues();
+
+				vals.CoreCurrentMode = frameEndInfo->environmentBlendMode;
+				vals.bCorePassthroughActive = false;
+				vals.bFBPassthroughActive = false;
+				vals.numCompositionLayers = frameEndInfo->layerCount;
+				vals.bDepthLayerSubmitted = false;
 
 				for (uint32_t i = 0; i < frameEndInfo->layerCount; i++)
 				{
@@ -1474,17 +1589,23 @@ namespace
 
 					if (layer->type != XR_TYPE_COMPOSITION_LAYER_PROJECTION) { continue; }
 
+					vals.frameBufferHeight = layer->views[0].subImage.imageRect.extent.height;
+					vals.frameBufferWidth = layer->views[0].subImage.imageRect.extent.width;
+					vals.frameBufferFlags = layer->layerFlags;
+
 					auto depthInfo = reinterpret_cast<const XrCompositionLayerDepthInfoKHR*>(layer->views[0].next);
 
 					while (depthInfo != nullptr)
 					{
 						if (depthInfo->type == XR_TYPE_COMPOSITION_LAYER_DEPTH_INFO_KHR)
 						{
-							m_dashboardMenu->GetDisplayValues().bDepthLayerSubmitted = true;
+							vals.bDepthLayerSubmitted = true;
 							break;
 						}
 						depthInfo = reinterpret_cast<const XrCompositionLayerDepthInfoKHR*>(depthInfo->next);
 					}
+
+					break;
 				}
 			}
 
@@ -1500,43 +1621,71 @@ namespace
 			bool bDidRender = false;
 			if (m_bUsePassthrough && !bResetPending && !bInvalidEndFrame)
 			{
+				bool bHasUnderlayLayer = false;
+				FBPassthroughLayerInstance* fbLayer = nullptr;
+
 				for (uint32_t i = 0; i < frameEndInfo->layerCount; i++)
 				{
-					if (frameEndInfo->layers[i] != nullptr && frameEndInfo->layers[i]->type == XR_TYPE_COMPOSITION_LAYER_PROJECTION && IsBlendModeEnabled(frameEndInfo->environmentBlendMode, (const XrCompositionLayerProjection*)frameEndInfo->layers[i]))
+					if (m_bFBPassthroughExtensionEnabled && m_fbPassthough.PassthroughStarted && frameEndInfo->layers[i]->type == XR_TYPE_COMPOSITION_LAYER_PASSTHROUGH_FB)
 					{
-						if (m_bIsPaused)
-						{
-							if (mainConfig.CameraProvider == CameraProvider_Augmented)
-							{
-								m_augmentedCameraManager->SetPaused(false);
-							}
-							m_cameraManager->SetPaused(false);
+						auto layer = reinterpret_cast<const XrCompositionLayerPassthroughFB*>(frameEndInfo->layers[i]);
 
-							if (!m_bCamerasInitialized)
+						for (auto& instance : m_fbPassthough.Layers)
+						{
+							if (instance.Handle != layer->layerHandle)
+							{
+								continue;
+							}
+
+							if (instance.LayerStarted)
+							{
+								bHasUnderlayLayer = true;
+								fbLayer = &instance;
+							}
+
+							break;
+						}
+					}
+					else if (frameEndInfo->layers[i]->type == XR_TYPE_COMPOSITION_LAYER_PROJECTION)
+					{
+						bool bCanRenderDirect = IsBlendModeEnabled(frameEndInfo->environmentBlendMode, reinterpret_cast<const XrCompositionLayerProjection*>(frameEndInfo->layers[i]));
+						bool bCanRenderFBPassthrough = bHasUnderlayLayer && frameEndInfo->layers[i]->layerFlags & XR_COMPOSITION_LAYER_BLEND_TEXTURE_SOURCE_ALPHA_BIT;
+
+						if (bCanRenderDirect || bCanRenderFBPassthrough)
+						{
+							if (m_bIsPaused)
 							{
 								if (mainConfig.CameraProvider == CameraProvider_Augmented)
 								{
-									if ((!m_cameraManager->InitCamera() || !m_augmentedCameraManager->InitCamera()))
+									m_augmentedCameraManager->SetPaused(false);
+								}
+								m_cameraManager->SetPaused(false);
+
+								if (!m_bCamerasInitialized)
+								{
+									if (mainConfig.CameraProvider == CameraProvider_Augmented)
+									{
+										if ((!m_cameraManager->InitCamera() || !m_augmentedCameraManager->InitCamera()))
+										{
+											ErrorLog("Failed to reinitialize camera!\n");
+											break;
+										}
+									}
+									else if (!m_cameraManager->InitCamera())
 									{
 										ErrorLog("Failed to reinitialize camera!\n");
 										break;
 									}
+									m_bCamerasInitialized = true;
 								}
-								else if(!m_cameraManager->InitCamera())
-								{
-									ErrorLog("Failed to reinitialize camera!\n");
-									break;
-								}
-								m_bCamerasInitialized = true;
+								m_bIsPaused = false;
 							}
-							m_bIsPaused = false;
+
+							RenderPassthroughOnAppLayer(frameEndInfo, i, bCanRenderFBPassthrough, fbLayer);
+							bDidRender = true;
+
+							break;
 						}
-
-						m_dashboardMenu->GetDisplayValues().bCorePassthroughActive = true;
-						RenderPassthroughOnAppLayer(frameEndInfo, i);
-						bDidRender = true;
-
-						break;
 					}
 				}
 			}
@@ -1560,6 +1709,30 @@ namespace
 
 			XrFrameEndInfo modifiedFrameEndInfo = *frameEndInfo;
 			modifiedFrameEndInfo.environmentBlendMode = XR_ENVIRONMENT_BLEND_MODE_OPAQUE;
+			std::vector<const XrCompositionLayerBaseHeader*>newLayers;
+
+			if (m_bFBPassthroughExtensionEnabled)
+			{
+				for (uint32_t i = 0; i < modifiedFrameEndInfo.layerCount; i++)
+				{
+					auto layer = modifiedFrameEndInfo.layers[i];
+
+					if (layer->type == XR_TYPE_COMPOSITION_LAYER_PASSTHROUGH_FB)
+					{
+						if (i > 0)
+						{
+							ErrorLog("Non-underlay XrCompositionLayerPassthroughFB detected (layer #%d). The API layer currently only supports underlay passthrough.\n", i);
+						}
+
+						continue;
+					}
+
+					newLayers.push_back(layer);
+				}
+
+				modifiedFrameEndInfo.layers = newLayers.data();
+				modifiedFrameEndInfo.layerCount = newLayers.size();
+			}
 
 			result = OpenXrApi::xrEndFrame(session, &modifiedFrameEndInfo);
 
@@ -1574,7 +1747,9 @@ namespace
 			else
 			{
 				float time = EndPerfTimer(m_lastRenderTime);
-				if (!m_bIsPaused && mainConfig.PauseImageHandlingOnIdle && time > mainConfig.IdleTimeSeconds * 1000.0f)
+
+				// Never consider idle as long as FB passthrough is unpaused.
+				if (!m_bIsPaused && !m_fbPassthough.PassthroughStarted && mainConfig.PauseImageHandlingOnIdle && time > mainConfig.IdleTimeSeconds * 1000.0f)
 				{
 					m_bIsPaused = true;
 
@@ -1679,6 +1854,320 @@ namespace
 		}
 
 
+
+		XrResult xrCreatePassthroughFB(XrSession session, const XrPassthroughCreateInfoFB* createInfo, XrPassthroughFB* outPassthrough)
+		{
+			if (!m_bFBPassthroughExtensionEnabled)
+			{
+				ErrorLog("xrCreatePassthroughFB called without enabling extension!\n");
+				return XR_ERROR_RUNTIME_FAILURE;
+			}
+
+			if (!isCurrentSession(session))
+			{
+				ErrorLog("xrCreatePassthroughFB called on untracked session!\n");
+				return XR_ERROR_HANDLE_INVALID;
+			}
+
+			if (m_fbPassthough.InstanceCreated)
+			{
+				ErrorLog("Multiple calls to xrCreatePassthroughFB!\n");
+				return XR_ERROR_FEATURE_ALREADY_CREATED_PASSTHROUGH_FB;
+			}
+
+			m_fbPassthough.InstanceCreated = true;
+			m_fbPassthough.Layers.clear();
+			m_fbPassthough.LastLayerHandle = XR_NULL_HANDLE;
+			m_fbPassthough.InstanceHandle = reinterpret_cast<XrPassthroughFB>(1);
+			*outPassthrough = m_fbPassthough.InstanceHandle;
+
+			m_fbPassthough.PassthroughStarted = (createInfo->flags & XR_PASSTHROUGH_IS_RUNNING_AT_CREATION_BIT_FB);
+
+			return XR_SUCCESS;
+		}
+
+		XrResult xrDestroyPassthroughFB(XrPassthroughFB passthrough)
+		{
+			if (!m_bFBPassthroughExtensionEnabled)
+			{
+				ErrorLog("xrDestroyPassthroughFB called without enabling extension!\n");
+				return XR_ERROR_RUNTIME_FAILURE;
+			}
+
+			if (!m_fbPassthough.InstanceCreated 
+				|| passthrough == XR_NULL_HANDLE 
+				|| passthrough != m_fbPassthough.InstanceHandle)
+			{
+				return XR_ERROR_HANDLE_INVALID;
+			}
+
+			m_fbPassthough.InstanceCreated = false;
+			m_fbPassthough.Layers.clear();
+			m_fbPassthough.LastLayerHandle = XR_NULL_HANDLE;
+			m_fbPassthough.InstanceHandle = XR_NULL_HANDLE;
+
+			return XR_SUCCESS;
+		}
+
+		XrResult xrPassthroughStartFB(XrPassthroughFB passthrough)
+		{
+			if (!m_bFBPassthroughExtensionEnabled)
+			{
+				ErrorLog("xrPassthroughStartFB called without enabling extension!\n");
+				return XR_ERROR_RUNTIME_FAILURE;
+			}
+
+			if (!m_fbPassthough.InstanceCreated
+				|| passthrough == XR_NULL_HANDLE
+				|| passthrough != m_fbPassthough.InstanceHandle)
+			{
+				return XR_ERROR_HANDLE_INVALID;
+			}
+
+			m_fbPassthough.PassthroughStarted = true;
+
+			return XR_SUCCESS;
+		}
+
+		XrResult xrPassthroughPauseFB(XrPassthroughFB passthrough)
+		{
+			if (!m_bFBPassthroughExtensionEnabled)
+			{
+				ErrorLog("xrPassthroughPauseFB called without enabling extension!\n");
+				return XR_ERROR_RUNTIME_FAILURE;
+			}
+
+			if (!m_fbPassthough.InstanceCreated
+				|| passthrough == XR_NULL_HANDLE
+				|| passthrough != m_fbPassthough.InstanceHandle)
+			{
+				return XR_ERROR_HANDLE_INVALID;
+			}
+
+			m_fbPassthough.PassthroughStarted = false;
+
+			return XR_SUCCESS;
+		}
+
+		XrResult xrCreatePassthroughLayerFB(XrSession session, const XrPassthroughLayerCreateInfoFB* createInfo, XrPassthroughLayerFB* outLayer)
+		{
+
+			if (!m_bFBPassthroughExtensionEnabled)
+			{
+				ErrorLog("xrCreatePassthroughLayerFB called without enabling extension!\n");
+				return XR_ERROR_RUNTIME_FAILURE;
+			}
+
+			if (!isCurrentSession(session))
+			{
+				ErrorLog("xrCreatePassthroughLayerFB called on untracked session!\n");
+				return XR_ERROR_HANDLE_INVALID;
+			}
+
+			if (!m_fbPassthough.InstanceCreated
+				|| createInfo->passthrough == XR_NULL_HANDLE
+				|| createInfo->passthrough != m_fbPassthough.InstanceHandle)
+			{
+				return XR_ERROR_HANDLE_INVALID;
+			}
+
+			if (createInfo->purpose != XR_PASSTHROUGH_LAYER_PURPOSE_RECONSTRUCTION_FB)
+			{
+				ErrorLog("xrCreatePassthroughLayerFB: unsupported purpose requested: %u!\n", createInfo->purpose);
+
+				if (!m_configManager->GetConfig_Extensions().ExtFBPassthroughFakeUnsupportedFeatures)
+				{
+					return XR_ERROR_FEATURE_UNSUPPORTED;
+				}
+			}
+
+			FBPassthroughLayerInstance& layer = m_fbPassthough.Layers.emplace_back();
+
+			m_fbPassthough.LastLayerHandle = reinterpret_cast<XrPassthroughLayerFB>(reinterpret_cast<size_t>(m_fbPassthough.LastLayerHandle) + 1);
+			layer.Handle = m_fbPassthough.LastLayerHandle;
+			layer.LayerStarted = (createInfo->flags & XR_PASSTHROUGH_IS_RUNNING_AT_CREATION_BIT_FB);
+			layer.DepthEnabled = (createInfo->flags & XR_PASSTHROUGH_LAYER_DEPTH_BIT_FB) && m_configManager->GetConfig_Extensions().ExtFBPassthroughAllowDepth;
+			layer.ColorAdjustmentEnabled = false;
+			layer.Opacity = 1.0f;
+
+			*outLayer = layer.Handle;
+
+			return XR_SUCCESS;
+		}
+
+		XrResult xrDestroyPassthroughLayerFB(XrPassthroughLayerFB layer)
+		{
+			if (!m_bFBPassthroughExtensionEnabled)
+			{
+				ErrorLog("xrDestroyPassthroughLayerFB called without enabling extension!\n");
+				return XR_ERROR_RUNTIME_FAILURE;
+			}
+
+			for (auto iterator = m_fbPassthough.Layers.begin(); iterator != m_fbPassthough.Layers.end();)
+			{
+				if ((*iterator).Handle == layer)
+				{
+					m_fbPassthough.Layers.erase(iterator);
+					return XR_SUCCESS;
+				}
+			}
+
+			return XR_ERROR_HANDLE_INVALID;
+		}
+
+		XrResult xrPassthroughLayerPauseFB(XrPassthroughLayerFB layer)
+		{
+			if (!m_bFBPassthroughExtensionEnabled)
+			{
+				ErrorLog("xrPassthroughLayerPauseFB called without enabling extension!\n");
+				return XR_ERROR_RUNTIME_FAILURE;
+			}
+
+			for (auto& instance : m_fbPassthough.Layers)
+			{
+				if (instance.Handle == layer)
+				{
+					instance.LayerStarted = false;
+
+					return XR_SUCCESS;
+				}
+			}
+
+			return XR_ERROR_HANDLE_INVALID;
+		}
+
+		XrResult xrPassthroughLayerResumeFB(XrPassthroughLayerFB layer)
+		{
+			if (!m_bFBPassthroughExtensionEnabled)
+			{
+				ErrorLog("xrPassthroughLayerResumeFB called without enabling extension!\n");
+				return XR_ERROR_RUNTIME_FAILURE;
+			}
+
+			for (auto& instance : m_fbPassthough.Layers)
+			{
+				if (instance.Handle == layer)
+				{
+					instance.LayerStarted = true;
+
+					return XR_SUCCESS;
+				}
+			}
+
+			return XR_ERROR_HANDLE_INVALID;
+		}
+
+		XrResult xrPassthroughLayerSetStyleFB(XrPassthroughLayerFB layer, const XrPassthroughStyleFB* style)
+		{
+			if (!m_bFBPassthroughExtensionEnabled)
+			{
+				ErrorLog("xrPassthroughLayerSetStyleFB called without enabling extension!\n");
+				return XR_ERROR_RUNTIME_FAILURE;
+			}
+
+			for (auto& instance : m_fbPassthough.Layers)
+			{
+				if (instance.Handle == layer)
+				{
+					bool bFoundStruct = false;
+					const XrPassthroughBrightnessContrastSaturationFB* colorStruct = nullptr;
+					auto chained = reinterpret_cast<const XrBaseInStructure*>(style->next);
+					while (chained != nullptr)
+					{
+						if (bFoundStruct)
+						{
+							ErrorLog("Multiple chained structs passed to xrPassthroughLayerSetStyleFB!\n");
+							return XR_ERROR_VALIDATION_FAILURE;
+						}
+
+						if (chained->type != XR_TYPE_PASSTHROUGH_BRIGHTNESS_CONTRAST_SATURATION_FB)
+						{
+							ErrorLog("Currently unsupported chained struct %u passed to xrPassthroughLayerSetStyleFB!\n", chained->type);
+							if (!m_configManager->GetConfig_Extensions().ExtFBPassthroughFakeUnsupportedFeatures)
+							{
+								return XR_ERROR_FEATURE_UNSUPPORTED;
+							}
+						}
+
+						bFoundStruct = true;
+						colorStruct = reinterpret_cast<const XrPassthroughBrightnessContrastSaturationFB*>(chained);
+
+						chained = chained->next;
+					}
+
+					if (bFoundStruct && m_configManager->GetConfig_Extensions().ExtFBPassthroughAllowColorSettings)
+					{
+						instance.ColorAdjustmentEnabled = true;
+						instance.Brightness = colorStruct->brightness;
+						instance.Contrast = colorStruct->contrast;
+						instance.Saturation = colorStruct->saturation;
+					}
+					else
+					{
+						instance.ColorAdjustmentEnabled = false;
+					}
+
+					instance.Opacity = style->textureOpacityFactor;
+
+					return XR_SUCCESS;
+				}
+			}
+
+			return XR_ERROR_HANDLE_INVALID;
+		}
+
+		XrResult xrCreateGeometryInstanceFB(XrSession session, const XrGeometryInstanceCreateInfoFB* createInfo, XrGeometryInstanceFB* outGeometryInstance)
+		{
+			if (!m_bFBPassthroughExtensionEnabled)
+			{
+				ErrorLog("xrCreateGeometryInstanceFB called without enabling extension!\n");
+				return XR_ERROR_RUNTIME_FAILURE;
+			}
+
+			ErrorLog("xrCreateGeometryInstanceFB is not currently supported!\n");
+
+			if (!m_configManager->GetConfig_Extensions().ExtFBPassthroughFakeUnsupportedFeatures)
+			{
+				return XR_ERROR_FEATURE_UNSUPPORTED;
+			}
+			return XR_SUCCESS;
+		}
+
+		XrResult xrDestroyGeometryInstanceFB(XrGeometryInstanceFB  instance)
+		{
+			if (!m_bFBPassthroughExtensionEnabled)
+			{
+				ErrorLog("xrDestroyGeometryInstanceFB called without enabling extension!\n");
+				return XR_ERROR_RUNTIME_FAILURE;
+			}
+
+			ErrorLog("xrDestroyGeometryInstanceFB is not currently supported!\n");
+
+			if (!m_configManager->GetConfig_Extensions().ExtFBPassthroughFakeUnsupportedFeatures)
+			{
+				return XR_ERROR_FEATURE_UNSUPPORTED;
+			}
+			return XR_SUCCESS;
+		}
+
+		XrResult xrGeometryInstanceSetTransformFB(XrGeometryInstanceFB instance, const XrGeometryInstanceTransformFB* transformation)
+		{
+			if (!m_bFBPassthroughExtensionEnabled)
+			{
+				ErrorLog("xrGeometryInstanceSetTransformFB called without enabling extension!\n");
+				return XR_ERROR_RUNTIME_FAILURE;
+			}
+
+			ErrorLog("xrGeometryInstanceSetTransformFB is not currently supported!\n");
+
+			if (!m_configManager->GetConfig_Extensions().ExtFBPassthroughFakeUnsupportedFeatures)
+			{
+				return XR_ERROR_FEATURE_UNSUPPORTED;
+			}
+			return XR_SUCCESS;
+		}
+
+
 		private:
 
 		bool isSystemHandled(XrSystemId systemId) const { return systemId == m_systemId; }
@@ -1699,6 +2188,7 @@ namespace
 		bool m_bSuccessfullyLoaded = false;
 		bool m_bUsePassthrough = false;
 		bool m_bInverseAlphaExtensionEnabled = false;
+		bool m_bFBPassthroughExtensionEnabled = false;
 		bool m_bVarjoDepthExtensionEnabled = false;
 		bool m_bVarjoDepthEnabled = false;
 		bool m_bVarjoCompositionExtensionEnabled = false;
@@ -1727,6 +2217,8 @@ namespace
 		LARGE_INTEGER m_lastRenderTime;
 		bool m_bIsPaused = false;
 		bool m_bCamerasInitialized = false;
+
+		FBPassthroughInstance m_fbPassthough;
 
 		ERenderAPI m_renderAPI = DirectX11;
 		ERenderAPI m_appRenderAPI = DirectX11;

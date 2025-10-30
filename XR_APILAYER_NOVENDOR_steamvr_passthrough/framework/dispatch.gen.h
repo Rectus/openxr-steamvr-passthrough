@@ -282,6 +282,102 @@ namespace LAYER_NAMESPACE
 		PFN_xrCreateVulkanDeviceKHR m_xrCreateVulkanDeviceKHR{ nullptr };
 
 	public:
+		virtual XrResult xrCreatePassthroughFB(XrSession session, const XrPassthroughCreateInfoFB* createInfo, XrPassthroughFB* outPassthrough)
+		{
+			return m_xrCreatePassthroughFB(session, createInfo, outPassthrough);
+		}
+	private:
+		PFN_xrCreatePassthroughFB m_xrCreatePassthroughFB{ nullptr };
+
+	public:
+		virtual XrResult xrDestroyPassthroughFB(XrPassthroughFB passthrough)
+		{
+			return m_xrDestroyPassthroughFB(passthrough);
+		}
+	private:
+		PFN_xrDestroyPassthroughFB m_xrDestroyPassthroughFB{ nullptr };
+
+	public:
+		virtual XrResult xrPassthroughStartFB(XrPassthroughFB passthrough)
+		{
+			return m_xrPassthroughStartFB(passthrough);
+		}
+	private:
+		PFN_xrPassthroughStartFB m_xrPassthroughStartFB{ nullptr };
+
+	public:
+		virtual XrResult xrPassthroughPauseFB(XrPassthroughFB passthrough)
+		{
+			return m_xrPassthroughPauseFB(passthrough);
+		}
+	private:
+		PFN_xrPassthroughPauseFB m_xrPassthroughPauseFB{ nullptr };
+
+	public:
+		virtual XrResult xrCreatePassthroughLayerFB(XrSession session, const XrPassthroughLayerCreateInfoFB* createInfo, XrPassthroughLayerFB* outLayer)
+		{
+			return m_xrCreatePassthroughLayerFB(session, createInfo, outLayer);
+		}
+	private:
+		PFN_xrCreatePassthroughLayerFB m_xrCreatePassthroughLayerFB{ nullptr };
+
+	public:
+		virtual XrResult xrDestroyPassthroughLayerFB(XrPassthroughLayerFB layer)
+		{
+			return m_xrDestroyPassthroughLayerFB(layer);
+		}
+	private:
+		PFN_xrDestroyPassthroughLayerFB m_xrDestroyPassthroughLayerFB{ nullptr };
+
+	public:
+		virtual XrResult xrPassthroughLayerPauseFB(XrPassthroughLayerFB layer)
+		{
+			return m_xrPassthroughLayerPauseFB(layer);
+		}
+	private:
+		PFN_xrPassthroughLayerPauseFB m_xrPassthroughLayerPauseFB{ nullptr };
+
+	public:
+		virtual XrResult xrPassthroughLayerResumeFB(XrPassthroughLayerFB layer)
+		{
+			return m_xrPassthroughLayerResumeFB(layer);
+		}
+	private:
+		PFN_xrPassthroughLayerResumeFB m_xrPassthroughLayerResumeFB{ nullptr };
+
+	public:
+		virtual XrResult xrPassthroughLayerSetStyleFB(XrPassthroughLayerFB layer, const XrPassthroughStyleFB* style)
+		{
+			return m_xrPassthroughLayerSetStyleFB(layer, style);
+		}
+	private:
+		PFN_xrPassthroughLayerSetStyleFB m_xrPassthroughLayerSetStyleFB{ nullptr };
+
+	public:
+		virtual XrResult xrCreateGeometryInstanceFB(XrSession session, const XrGeometryInstanceCreateInfoFB* createInfo, XrGeometryInstanceFB* outGeometryInstance)
+		{
+			return m_xrCreateGeometryInstanceFB(session, createInfo, outGeometryInstance);
+		}
+	private:
+		PFN_xrCreateGeometryInstanceFB m_xrCreateGeometryInstanceFB{ nullptr };
+
+	public:
+		virtual XrResult xrDestroyGeometryInstanceFB(XrGeometryInstanceFB instance)
+		{
+			return m_xrDestroyGeometryInstanceFB(instance);
+		}
+	private:
+		PFN_xrDestroyGeometryInstanceFB m_xrDestroyGeometryInstanceFB{ nullptr };
+
+	public:
+		virtual XrResult xrGeometryInstanceSetTransformFB(XrGeometryInstanceFB instance, const XrGeometryInstanceTransformFB* transformation)
+		{
+			return m_xrGeometryInstanceSetTransformFB(instance, transformation);
+		}
+	private:
+		PFN_xrGeometryInstanceSetTransformFB m_xrGeometryInstanceSetTransformFB{ nullptr };
+
+	public:
 		virtual XrResult xrSetEnvironmentDepthEstimationVARJO(XrSession session, XrBool32 enabled)
 		{
 			return m_xrSetEnvironmentDepthEstimationVARJO(session, enabled);

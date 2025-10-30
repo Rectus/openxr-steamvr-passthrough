@@ -50,10 +50,13 @@ struct MenuDisplayValues
 	float frameRetrievalTimeMS = 0.0f;
 
 	bool bCorePassthroughActive = false;
+	bool bFBPassthroughActive = false;
+	bool bFBPassthroughDepthActive = false;
 	int CoreCurrentMode = 0;
 
 	bool bExtInvertedAlphaActive = false;
 	bool bAndroidPassthroughStateActive = false;
+	bool bFBPassthroughExtensionActive = false;
 	bool bVarjoDepthEstimationExtensionActive = false;
 	bool bVarjoDepthCompositionExtensionActive = false;
 

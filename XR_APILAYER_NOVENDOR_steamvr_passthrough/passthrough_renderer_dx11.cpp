@@ -1760,10 +1760,20 @@ void PassthroughRendererDX11::RenderPassthroughFrame(const XrCompositionLayerPro
 
 	psPassBuffer.depthRange = XrVector2f(NEAR_PROJECTION_DISTANCE, mainConf.ProjectionDistanceFar);
 	psPassBuffer.depthCutoffRange = XrVector2f(renderParams.DepthRangeMin, renderParams.DepthRangeMax);
-	psPassBuffer.opacity = mainConf.PassthroughOpacity;
-	psPassBuffer.brightness = mainConf.Brightness;
-	psPassBuffer.contrast = mainConf.Contrast;
-	psPassBuffer.saturation = mainConf.Saturation;
+	psPassBuffer.opacity = fminf(mainConf.PassthroughOpacity, renderParams.RenderOpacity);
+	if (renderParams.bForceColorSettings)
+	{
+		psPassBuffer.brightness = renderParams.ForcedBrightness;
+		psPassBuffer.contrast = renderParams.ForcedContrast;
+		psPassBuffer.saturation = renderParams.ForcedSaturation;
+	}
+	else
+	{
+		psPassBuffer.brightness = mainConf.Brightness;
+		psPassBuffer.contrast = mainConf.Contrast;
+		psPassBuffer.saturation = mainConf.Saturation;
+		
+	}
 	psPassBuffer.sharpness = mainConf.Sharpness;
 	psPassBuffer.temporalFilteringSampling = mainConf.TemporalFilteringSampling;
 	psPassBuffer.temporalFilteringFactor = mainConf.TemporalFilteringFactor;

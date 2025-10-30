@@ -401,21 +401,23 @@ if (bIsActiveTab) { ImGui::PopStyleColor(1); bIsActiveTab = false; }
 	ImGui::Text("Session:");
 	m_displayValues.bSessionActive ? ImGui::TextColored(colorTextGreen, "Active") : ImGui::TextColored(colorTextRed, "Inactive");
 
+	bool bPassthoughActive = (m_displayValues.bCorePassthroughActive || m_displayValues.bFBPassthroughActive);
+
 	ImGui::Separator();
 	ImGui::Text("Passthrough:");
-	m_displayValues.bCorePassthroughActive ? ImGui::TextColored(colorTextGreen, "Active") : ImGui::TextColored(colorTextRed, "Inactive");
+	bPassthoughActive ? ImGui::TextColored(colorTextGreen, "Active") : ImGui::TextColored(colorTextRed, "Inactive");
 
-	if (mainConfig.EnablePassthrough && !m_displayValues.bCorePassthroughActive && m_displayValues.CoreCurrentMode == 1)
+	if (mainConfig.EnablePassthrough && !bPassthoughActive && m_displayValues.CoreCurrentMode == 1)
 	{
 		ImGui::TextColored(colorTextRed, "Opaque");
 	}
 
-	if (mainConfig.EnablePassthrough && !m_displayValues.bCorePassthroughActive && m_displayValues.CoreCurrentMode == 3 && !(m_displayValues.frameBufferFlags & XR_COMPOSITION_LAYER_BLEND_TEXTURE_SOURCE_ALPHA_BIT))
+	if (mainConfig.EnablePassthrough && !bPassthoughActive && m_displayValues.CoreCurrentMode == 3 && !(m_displayValues.frameBufferFlags & XR_COMPOSITION_LAYER_BLEND_TEXTURE_SOURCE_ALPHA_BIT))
 	{
 		ImGui::TextColored(colorTextRed, "No Alpha");
 	}
 
-	if (m_displayValues.bCorePassthroughActive && m_displayValues.bDepthBlendingActive)
+	if (bPassthoughActive && m_displayValues.bDepthBlendingActive)
 	{
 		ImGui::TextColored(colorTextGreen, "Depth Blending");
 	}
@@ -637,6 +639,7 @@ if (bIsActiveTab) { ImGui::PopStyleColor(1); bIsActiveTab = false; }
 
 			ImGui::Checkbox("Enable###CoreEnable", &coreConfig.CorePassthroughEnable);
 			TextDescriptionSpaced("Allow OpenXR applications to enable passthrough.");
+			IMGUI_BIG_SPACING;
 
 			BeginSoftDisabled(!coreConfig.CorePassthroughEnable);
 			ImGui::BeginGroup();
@@ -670,58 +673,138 @@ if (bIsActiveTab) { ImGui::PopStyleColor(1); bIsActiveTab = false; }
 		}
 
 		ImGui::SetNextItemOpen(true, ImGuiCond_Once);
-		if (ImGui::CollapsingHeader("Multivendor Extensions"))
+		if (ImGui::CollapsingHeader("OpenXR Extensions"))
 		{
-			ImGui::PushFont(m_fixedFont);
-			ImGui::Text("Composition Layer Inverted Alpha extension:");
-			ImGui::SameLine();
-			if (m_displayValues.bExtInvertedAlphaActive)
+			ImGui::SetNextItemOpen(true, ImGuiCond_Once);
+			if (ImGui::TreeNode("Multivendor"))
 			{
-				ImGui::TextColored(colorTextGreen, "Active");
-			}
-			else
-			{
-				ImGui::TextColored(colorTextRed, "Inactive");
-			}
-			ImGui::PopFont();
+				ImGui::PushFont(m_fixedFont);
+				ImGui::Text("Composition Layer Inverted Alpha extension:");
+				ImGui::SameLine();
+				if (m_displayValues.bExtInvertedAlphaActive)
+				{
+					ImGui::TextColored(colorTextGreen, "Active");
+				}
+				else
+				{
+					ImGui::TextColored(colorTextRed, "Inactive");
+				}
+				ImGui::PopFont();
 
-			IMGUI_BIG_SPACING;
-		}
-
-		ImGui::SetNextItemOpen(true, ImGuiCond_Once);
-		if (ImGui::CollapsingHeader("Varjo Extensions"))
-		{
-			ImGui::PushFont(m_fixedFont);
-			ImGui::Text("Varjo Depth Estimation extension:");
-			ImGui::SameLine();
-			if (m_displayValues.bVarjoDepthEstimationExtensionActive)
-			{
-				ImGui::TextColored(colorTextGreen, "Active");
-			}
-			else
-			{
-				ImGui::TextColored(colorTextRed, "Inactive");
+				IMGUI_BIG_SPACING;
+				ImGui::TreePop();
 			}
 
-			ImGui::Text("Varjo Depth Composition extension:");
-			ImGui::SameLine();
-			if (m_displayValues.bVarjoDepthCompositionExtensionActive)
+			ImGui::SetNextItemOpen(true, ImGuiCond_Once);
+			if (ImGui::TreeNode("Android"))
 			{
-				ImGui::TextColored(colorTextGreen, "Active");
+				ImGui::PushFont(m_fixedFont);
+				ImGui::Text("Android Passthrough Camera State extension:");
+				ImGui::SameLine();
+				if (m_displayValues.bAndroidPassthroughStateActive)
+				{
+					ImGui::TextColored(colorTextGreen, "Active");
+				}
+				else
+				{
+					ImGui::TextColored(colorTextRed, "Inactive");
+				}
+				ImGui::PopFont();
+
+				IMGUI_BIG_SPACING;
+				ImGui::TreePop();
 			}
-			else
+
+			ImGui::SetNextItemOpen(true, ImGuiCond_Once);
+			if (ImGui::TreeNode("Facebook"))
 			{
-				ImGui::TextColored(colorTextRed, "Inactive");
+				ImGui::PushFont(m_fixedFont);
+				ImGui::Text("Facebook Passthrough extension:");
+				ImGui::SameLine();
+				if (m_displayValues.bFBPassthroughExtensionActive)
+				{
+					ImGui::TextColored(colorTextGreen, "Active");
+				}
+				else
+				{
+					ImGui::TextColored(colorTextRed, "Inactive");
+				}
+
+				ImGui::Text("Facebook Passthrough:");
+				ImGui::SameLine();
+				if (m_displayValues.bFBPassthroughActive)
+				{
+					ImGui::TextColored(colorTextGreen, "Active");
+				}
+				else
+				{
+					ImGui::TextColored(colorTextRed, "Inactive");
+				}
+
+				ImGui::Text("Facebook Passthrough Depth:");
+				ImGui::SameLine();
+				if (m_displayValues.bFBPassthroughDepthActive)
+				{
+					ImGui::TextColored(colorTextGreen, "Active");
+				}
+				else
+				{
+					ImGui::TextColored(colorTextRed, "Inactive");
+				}
+				ImGui::PopFont();
+
+				ImGui::Checkbox("Enable Facebook Passthrough", &extConfig.ExtFBPassthrough);
+				TextDescription("Allow applications to use passthrough through the XR_FB_passthrough extension. Requires a restart to apply.");
+
+				BeginSoftDisabled(!extConfig.ExtFBPassthrough);
+				ImGui::Checkbox("Allow Facebook Passthrough Depth Composition", &extConfig.ExtFBPassthroughAllowDepth);
+				TextDescription("Allow applications to composite passthough using depth testing. Requires a restart to apply.");
+				ImGui::Checkbox("Allow Facebook Passthrough Color Settings", &extConfig.ExtFBPassthroughAllowColorSettings);
+				TextDescription("Allow applications to modify Brightness, Contrast and Saturation. Overrides the layer color settings when activated by application.");
+				ImGui::Checkbox("Fake Unsupported Extension Features", &extConfig.ExtFBPassthroughFakeUnsupportedFeatures);
+				TextDescription("Pretends that passthrough features unsupported by the layer are working, by reporting success to the application when it tries using them.");
+				EndSoftDisabled(!extConfig.ExtFBPassthrough);
+
+				IMGUI_BIG_SPACING;
+				ImGui::TreePop();
 			}
-			ImGui::PopFont();
 
-			ImGui::Checkbox("Enable Varjo Depth estimation", &extConfig.ExtVarjoDepthEstimation);
-			TextDescription("Allow applications to use depth blending using the XR_VARJO_environment_depth_estimation extension. Requires a restart to apply.");
+			ImGui::SetNextItemOpen(true, ImGuiCond_Once);
+			if (ImGui::TreeNode("Varjo"))
+			{
+				ImGui::PushFont(m_fixedFont);
+				ImGui::Text("Varjo Depth Estimation extension:");
+				ImGui::SameLine();
+				if (m_displayValues.bVarjoDepthEstimationExtensionActive)
+				{
+					ImGui::TextColored(colorTextGreen, "Active");
+				}
+				else
+				{
+					ImGui::TextColored(colorTextRed, "Inactive");
+				}
 
-			ImGui::Checkbox("Enable Varjo Composition layer depth testing", &extConfig.ExtVarjoDepthComposition);
-			TextDescription("Allow applications to compose submitted layers based on depth using the XR_VARJO_composition_layer_depth_test extension. Requires a restart to apply.");
+				ImGui::Text("Varjo Depth Composition extension:");
+				ImGui::SameLine();
+				if (m_displayValues.bVarjoDepthCompositionExtensionActive)
+				{
+					ImGui::TextColored(colorTextGreen, "Active");
+				}
+				else
+				{
+					ImGui::TextColored(colorTextRed, "Inactive");
+				}
+				ImGui::PopFont();
 
-			IMGUI_BIG_SPACING;
+				ImGui::Checkbox("Enable Varjo Depth estimation", &extConfig.ExtVarjoDepthEstimation);
+				TextDescription("Allow applications to use depth blending using the XR_VARJO_environment_depth_estimation extension. Requires a restart to apply.");
+
+				ImGui::Checkbox("Enable Varjo Composition layer depth testing", &extConfig.ExtVarjoDepthComposition);
+				TextDescription("Allow applications to compose submitted layers based on depth using the XR_VARJO_composition_layer_depth_test extension. Requires a restart to apply.");
+
+				IMGUI_BIG_SPACING;
+				ImGui::TreePop();
+			}
 		}
 
 		ImGui::EndChild();

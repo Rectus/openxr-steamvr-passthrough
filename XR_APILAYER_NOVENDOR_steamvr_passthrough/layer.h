@@ -217,6 +217,12 @@ struct FrameRenderParameters
 	float DepthRangeMin = 0.0f;
 	float DepthRangeMax = std::numeric_limits<float>::infinity();
 	
+	bool bForceColorSettings = false;
+	float ForcedBrightness = 0.0f;
+	float ForcedContrast = 0.0f;
+	float ForcedSaturation = 0.0f;
+
+	float RenderOpacity = 1.0f;
 };
 
 struct UVDistortionParameters
@@ -291,6 +297,28 @@ struct DeviceIdentProperties
 	uint32_t DeviceId;
 	std::string DeviceName;
 	std::string DeviceSerial;
+};
+
+struct FBPassthroughLayerInstance
+{
+	// Only the type 0 (reconstruction) XrPassthroughLayerPurposeFB is supported.
+	XrPassthroughLayerFB Handle;
+	bool LayerStarted;
+	bool DepthEnabled;
+	float Opacity;
+	bool ColorAdjustmentEnabled;
+	float Brightness;
+	float Contrast;
+	float Saturation;
+};
+
+struct FBPassthroughInstance
+{
+	bool InstanceCreated = false;
+	XrPassthroughFB InstanceHandle = XR_NULL_HANDLE;
+	bool PassthroughStarted = false;
+	std::vector<FBPassthroughLayerInstance>Layers;
+	XrPassthroughLayerFB LastLayerHandle = XR_NULL_HANDLE;
 };
 
 #define NEAR_PROJECTION_DISTANCE 0.05f

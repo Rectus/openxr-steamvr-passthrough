@@ -21,6 +21,11 @@
 			"entrypoints": []
 		},
 		{
+			"name": "XR_FB_passthrough",
+			"extension_version": "4",
+			"entrypoints": []
+		},
+		{
 			"name": "XR_VARJO_composition_layer_depth_test",
 			"extension_version": "2",
 			"entrypoints": []

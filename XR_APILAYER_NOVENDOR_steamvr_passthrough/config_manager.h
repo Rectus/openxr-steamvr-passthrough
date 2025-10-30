@@ -525,17 +525,32 @@ struct Config_Core
 
 struct Config_Extensions
 {
+	bool ExtFBPassthrough = true;
+	bool ExtFBPassthroughAllowDepth = true;
+	bool ExtFBPassthroughAllowColorSettings = true;
+	bool ExtFBPassthroughFakeUnsupportedFeatures = false;
+
 	bool ExtVarjoDepthEstimation = true;
 	bool ExtVarjoDepthComposition = true;
 
 	void ParseConfig(CSimpleIniA& ini, const char* section)
 	{
+		ExtFBPassthrough = ini.GetBoolValue(section, "ExtFBPassthrough", ExtFBPassthrough);
+		ExtFBPassthroughAllowDepth = ini.GetBoolValue(section, "ExtFBPassthroughAllowDepth", ExtFBPassthroughAllowDepth);
+		ExtFBPassthroughAllowColorSettings = ini.GetBoolValue(section, "ExtFBPassthroughAllowColorSettings", ExtFBPassthroughAllowColorSettings);
+		ExtFBPassthroughFakeUnsupportedFeatures = ini.GetBoolValue(section, "ExtFBPassthroughFakeUnsupportedFeatures", ExtFBPassthroughFakeUnsupportedFeatures);
+
 		ExtVarjoDepthEstimation = ini.GetBoolValue(section, "ExtVarjoDepthEstimation", ExtVarjoDepthEstimation);
 		ExtVarjoDepthComposition = ini.GetBoolValue(section, "ExtVarjoDepthComposition", ExtVarjoDepthComposition);
 	}
 
 	void UpdateConfig(CSimpleIniA& ini, const char* section)
 	{
+		ini.SetBoolValue(section, "ExtFBPassthrough", ExtFBPassthrough);
+		ini.SetBoolValue(section, "ExtFBPassthroughAllowDepth", ExtFBPassthroughAllowDepth);
+		ini.SetBoolValue(section, "ExtFBPassthroughAllowColorSettings", ExtFBPassthroughAllowColorSettings);
+		ini.SetBoolValue(section, "ExtFBPassthroughFakeUnsupportedFeatures", ExtFBPassthroughFakeUnsupportedFeatures);
+
 		ini.SetBoolValue(section, "ExtVarjoDepthEstimation", ExtVarjoDepthEstimation);
 		ini.SetBoolValue(section, "ExtVarjoDepthComposition", ExtVarjoDepthComposition);
 	}

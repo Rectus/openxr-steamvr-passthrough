@@ -17,7 +17,19 @@ override_functions = [
     "xrBeginFrame",
     "xrEndFrame",
     "xrSetEnvironmentDepthEstimationVARJO",
-    "xrGetPassthroughCameraStateANDROID"
+    "xrGetPassthroughCameraStateANDROID",
+    "xrCreatePassthroughFB",
+    "xrDestroyPassthroughFB",
+    "xrPassthroughStartFB",
+    "xrPassthroughPauseFB",
+    "xrCreatePassthroughLayerFB",
+    "xrDestroyPassthroughLayerFB",
+    "xrPassthroughLayerPauseFB",
+    "xrPassthroughLayerResumeFB",
+    "xrPassthroughLayerSetStyleFB",
+    "xrCreateGeometryInstanceFB",
+    "xrDestroyGeometryInstanceFB",
+    "xrGeometryInstanceSetTransformFB"
 ]
 
 # The list of OpenXR functions our layer will use from the runtime.
@@ -49,6 +61,7 @@ extensions = [
     "XR_KHR_win32_convert_performance_counter_time",
     "XR_EXT_composition_layer_inverted_alpha",
     "XR_ANDROID_passthrough_camera_state",
+    "XR_FB_passthrough",
     "XR_VARJO_composition_layer_depth_test",
     "XR_VARJO_environment_depth_estimation"
 ]
