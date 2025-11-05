@@ -29,7 +29,7 @@ namespace steamvr_passthrough
 {
 
     const std::string LayerName = "XR_APILAYER_NOVENDOR_steamvr_passthrough";
-    const std::string VersionString = "0.3.4";
+    const std::string VersionString = "0.3.5";
 
     // Singleton accessor.
     OpenXrApi* GetInstance();

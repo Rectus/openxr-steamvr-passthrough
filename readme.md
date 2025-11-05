@@ -33,21 +33,21 @@ See [Wiki Compatibility Page](https://github.com/Rectus/openxr-steamvr-passthrou
 - Supports custom fisheye lens rectification instead of using the OpenVR pre-rectified output.
 - Supports compositing the passthrough based on scene depth, for applications that supply depth buffers.
 - Basic support for USB camera input. This can be used alone or in conjunction with the depth provided by a stereoscopic HMD camera. The camera can either be attached to a tracked SteamVR device, or be set up in a static position. Manual calibration is required.
+- Supports several OpenXR vendor extensions, including partial support for `XR_FB_passthrough`.
+- Basic temporal filtering available for both the camera images and stereo reconstruction depth.
 
 
 ### Limitations ###
 
 - Only the SteamVR runtime is supported.
-- Only HMD cameras that provide the passthrough camera feed to SteamVR are supported. If the SteamVR Room View does not work, the HMD camera will not be accessible.
+- Only HMD cameras that provide the passthrough camera feed to SteamVR are supported. If the SteamVR Room View does not work, the HMD camera will not be accessible. 
 - OpenVR applications are not supported.
-- Only applications that use the core specification passthrough by submitting frames with `environmentBlendMode` set are supported.
-- Applications using the Meta `XR_FB_passthrough` extension are not currently supported.
 - The depth reconstruction from the 3D Room View is not supported. It is not currently accessible to developers. A custom depth reconstruction is used instead.
 - The passthrough view has higher latency than the SteamVR compositor.
-- OpenGL applications are not currently supported.
 - The Vulkan renderer interop does not support the the old XR_KHR_vulkan_enable extension.
 - Depth blending requires the application to submit depth buffers using the `XR_KHR_composition_layer_depth` extension.
 - USB webcam frames can not be accurately timed. This will cause hitching in the image, especially if the frame rate jitters.
+- Applications using the `XR_FB_passthrough` extension may or may not work.
 
 
 ### Installation ###
@@ -59,7 +59,7 @@ See [Wiki Compatibility Page](https://github.com/Rectus/openxr-steamvr-passthrou
 
 
 ### Usage ###
-Starting an OpenXR application will automatically start the API layer. If the application natively supports passthrough, the API layer will by default notify the application that additional environment blend modes are available. If the application does not support the OpenXR passthrough features, it is still possible to enable limited passthrough modes (see below).
+Starting an OpenXR application will automatically start the API layer. If the application natively supports passthrough, the API layer will by default notify the application that additional environment blend modes and vendor features are available. If the application does not support any OpenXR passthrough features, it is still possible to enable limited passthrough modes (see below).
 
 While an application is running, the SteamVR dashboard will have an additional button in the bottom left, pressing it will open the settings overlay.
 
@@ -94,19 +94,6 @@ The following are required:
 - [Vulkan SDK](https://vulkan.lunarg.com/sdk/home) (Uses the VULKAN_SDK environment variable)
 - [OpenCV 4.10.0](https://github.com/opencv/opencv) (The project is setup for static linking by default - requires custom source build)
 - [OpenCV-Contrib](https://github.com/opencv/opencv_contrib) (The ximgproc module needs to be built along with OpenCV for WLS and FBS filtering support.)
-
-
-### Possible improvements ###
-
-- Add partial support for the `XR_FB_passthrough` extension
-- OpenGL support
-- Add edge shader modes
-- Hand depth projection + masking on 3D mode
-- Improvements to 3D reconstruction
-- `XR_HTC_passthrough` extension support (no headsets or applications use this yet)
-- Linux support (does passthrough work on Linux?)
-- Passthrough override support for OpenVR apps (better as independent application)
-
 
 
 ### Notes ###

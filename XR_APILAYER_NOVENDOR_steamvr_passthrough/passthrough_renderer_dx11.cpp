@@ -1094,7 +1094,6 @@ void PassthroughRendererDX11::InitRenderTarget(const ERenderEye eye, void* rende
 	rtvDesc.ViewDimension = D3D11_RTV_DIMENSION_TEXTURE2DARRAY;
 	rtvDesc.Texture2DArray.ArraySize = 1;
 	rtvDesc.Texture2DArray.FirstArraySlice = swapchainInfo.arraySize > 1 ? viewIndex : 0;
-	//rtvDesc.ViewDimension = swapchainInfo.arraySize > 1 ? D3D11_RTV_DIMENSION_TEXTURE2DARRAY : D3D11_RTV_DIMENSION_TEXTURE2D;
 
 	if (FAILED(m_d3dDevice->CreateRenderTargetView((ID3D11Texture2D*)rendertarget, &rtvDesc, viewData.renderTarget.RTV.GetAddressOf())))
 	{
@@ -1106,12 +1105,10 @@ void PassthroughRendererDX11::InitRenderTarget(const ERenderEye eye, void* rende
 
 	D3D11_SHADER_RESOURCE_VIEW_DESC srvDesc = {};
 	srvDesc.ViewDimension = D3D11_SRV_DIMENSION_TEXTURE2DARRAY;
-	//srvDesc.ViewDimension = swapchainInfo.arraySize > 1 ? D3D11_SRV_DIMENSION_TEXTURE2DARRAY : D3D11_SRV_DIMENSION_TEXTURE2D;
 	srvDesc.Format = (DXGI_FORMAT)swapchainInfo.format;
-	//srvDesc.Texture2D.MipLevels = 1;
 	srvDesc.Texture2DArray.MipLevels = 1;
-	srvDesc.Texture2DArray.ArraySize = swapchainInfo.arraySize;
-	//srvDesc.Texture2DArray.FirstArraySlice = swapchainInfo.arraySize > 1 ? viewIndex : 0;
+	srvDesc.Texture2DArray.ArraySize = 1;
+	srvDesc.Texture2DArray.FirstArraySlice = swapchainInfo.arraySize > 1 ? viewIndex : 0;
 
 	if (FAILED(m_d3dDevice->CreateShaderResourceView((ID3D11Resource*)rendertarget, &srvDesc, &viewData.renderTarget.SRV)))
 	{
@@ -1259,8 +1256,7 @@ void PassthroughRendererDX11::SetupTemporalUAV(const uint32_t viewIndex, const u
 	D3D11_SHADER_RESOURCE_VIEW_DESC filterSRVDesc = {};
 	filterSRVDesc.ViewDimension = D3D11_SRV_DIMENSION_TEXTURE2D;
 	filterSRVDesc.Format = DXGI_FORMAT_R16G16B16A16_UNORM;
-	filterSRVDesc.Texture2DArray.MipLevels = 1;
-	filterSRVDesc.Texture2DArray.ArraySize = 1;
+	filterSRVDesc.Texture2D.MipLevels = 1;
 
 	if (FAILED(m_d3dDevice->CreateShaderResourceView(m_cameraFilter[viewIndex][frameIndex].Texture.Get(), &filterSRVDesc, &m_cameraFilter[viewIndex][frameIndex].SRV)))
 	{
@@ -1301,8 +1297,10 @@ void PassthroughRendererDX11::InitDepthBuffer(const ERenderEye eye, void* depthB
 	}
 
 	D3D11_SHADER_RESOURCE_VIEW_DESC srvDesc = {};
-	srvDesc.ViewDimension = D3D11_SRV_DIMENSION_TEXTURE2D;
-	srvDesc.Texture2D.MipLevels = 1;
+	srvDesc.ViewDimension = D3D11_SRV_DIMENSION_TEXTURE2DARRAY;
+	srvDesc.Texture2DArray.MipLevels = 1;
+	srvDesc.Texture2DArray.ArraySize = 1;
+	srvDesc.Texture2DArray.FirstArraySlice = swapchainInfo.arraySize > 1 ? viewIndex : 0;
 
 	switch (dsvDesc.Format)
 	{
@@ -3100,7 +3098,7 @@ void PassthroughRendererDX11::RenderDebugView(const ERenderEye eye, const XrComp
 
 	DX11FrameData& frameData = m_frameData[m_frameIndex];
 	int viewIndex = (eye == LEFT_EYE) ? 0 : 1;
-
+	
 	DX11ViewData& viewData = m_viewData[viewIndex][swapchainIndex];
 
 	Config_Main& mainConf = m_configManager->GetConfig_Main();

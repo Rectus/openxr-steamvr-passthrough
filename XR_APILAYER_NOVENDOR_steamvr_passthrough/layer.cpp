@@ -393,7 +393,7 @@ namespace
 
 		XrResult xrGetSystemProperties(XrInstance instance, XrSystemId systemId, XrSystemProperties* properties)
 		{
-			if (!m_bAndroidPassthroughStateExtensionEnabled || !m_bFBPassthroughExtensionEnabled)
+			if (!m_bAndroidPassthroughStateExtensionEnabled && !m_bFBPassthroughExtensionEnabled)
 			{
 				return OpenXrApi::xrGetSystemProperties(instance, systemId, properties);
 			}
@@ -1430,11 +1430,13 @@ namespace
 			{
 				renderParams.BlendMode = (EPassthroughBlendMode)coreConf.CoreForceMode;
 				displayValues.bCorePassthroughActive = true;
+				displayValues.bFBPassthroughActive = false;
 				displayValues.bFBPassthroughDepthActive = false;
 			}
 			else if (bUseFBPassthrough)
 			{
 				renderParams.BlendMode = AlphaBlendPremultiplied;
+				displayValues.bCorePassthroughActive = false;
 				displayValues.bFBPassthroughActive = true;
 				displayValues.bFBPassthroughDepthActive = fbLayer->DepthEnabled;
 			}
@@ -1442,6 +1444,7 @@ namespace
 			{
 				renderParams.BlendMode = (EPassthroughBlendMode)frameEndInfo->environmentBlendMode;
 				displayValues.bCorePassthroughActive = true;
+				displayValues.bFBPassthroughActive = false;
 				displayValues.bFBPassthroughDepthActive = false;
 			}
 
@@ -1556,7 +1559,7 @@ namespace
 					}
 
 					modifiedFrameEndInfo.layers = newLayers.data();
-					modifiedFrameEndInfo.layerCount = newLayers.size();
+					modifiedFrameEndInfo.layerCount = static_cast<uint32_t>(newLayers.size());
 				}
 				return OpenXrApi::xrEndFrame(session, &modifiedFrameEndInfo);
 			}
@@ -1578,10 +1581,8 @@ namespace
 				MenuDisplayValues& vals = m_dashboardMenu->GetDisplayValues();
 
 				vals.CoreCurrentMode = frameEndInfo->environmentBlendMode;
-				vals.bCorePassthroughActive = false;
-				vals.bFBPassthroughActive = false;
 				vals.numCompositionLayers = frameEndInfo->layerCount;
-				vals.bDepthLayerSubmitted = false;
+				bool bDepthSubmitted = false;
 
 				for (uint32_t i = 0; i < frameEndInfo->layerCount; i++)
 				{
@@ -1599,7 +1600,7 @@ namespace
 					{
 						if (depthInfo->type == XR_TYPE_COMPOSITION_LAYER_DEPTH_INFO_KHR)
 						{
-							vals.bDepthLayerSubmitted = true;
+							bDepthSubmitted = true;
 							break;
 						}
 						depthInfo = reinterpret_cast<const XrCompositionLayerDepthInfoKHR*>(depthInfo->next);
@@ -1607,6 +1608,7 @@ namespace
 
 					break;
 				}
+				vals.bDepthLayerSubmitted = bDepthSubmitted;
 			}
 
 			bool bInvalidEndFrame = false;
@@ -1719,8 +1721,10 @@ namespace
 
 					if (layer->type == XR_TYPE_COMPOSITION_LAYER_PASSTHROUGH_FB)
 					{
-						if (i > 0)
+						static bool bErrorShown = false;
+						if (i > 0 && !bErrorShown)
 						{
+							bErrorShown = true;
 							ErrorLog("Non-underlay XrCompositionLayerPassthroughFB detected (layer #%d). The API layer currently only supports underlay passthrough.\n", i);
 						}
 
@@ -1731,7 +1735,7 @@ namespace
 				}
 
 				modifiedFrameEndInfo.layers = newLayers.data();
-				modifiedFrameEndInfo.layerCount = newLayers.size();
+				modifiedFrameEndInfo.layerCount = static_cast<uint32_t>(newLayers.size());
 			}
 
 			result = OpenXrApi::xrEndFrame(session, &modifiedFrameEndInfo);
@@ -1746,6 +1750,13 @@ namespace
 			}
 			else
 			{
+				if (m_dashboardMenu.get())
+				{
+					MenuDisplayValues& vals = m_dashboardMenu->GetDisplayValues();
+					vals.bCorePassthroughActive = false;
+					vals.bFBPassthroughActive = false;
+				}
+
 				float time = EndPerfTimer(m_lastRenderTime);
 
 				// Never consider idle as long as FB passthrough is unpaused.
