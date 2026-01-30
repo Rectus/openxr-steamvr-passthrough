@@ -1908,6 +1908,17 @@ if (bIsActiveTab) { ImGui::PopStyleColor(1); bIsActiveTab = false; }
 				if (props.bHasCamera) { ImGui::Text("Has camera: True"); } else { ImGui::Text("Has camera: False"); }
 				ImGui::Text("Number of cameras: %u", props.NumCameras);
 				ImGui::Text("Camera firmware: %s, version: %lu", props.CameraFirmwareDescription.c_str(), props.CameraFirmwareVersion);
+				ImGui::Text("HMD firmware version: %lu, FPGA version: %lu",props.HMDFirmwareVersion, props.FPGAFirmwareVersion);
+
+				if (props.bAllowCameraToggle) { ImGui::Text("Camera toggle allowed: True"); }
+				else { ImGui::Text("Camera toggle allowed: False"); }
+				if (props.bAllowLightSourceFrequency) { ImGui::Text("Camera supports changing light source frequency: True"); }
+				else { ImGui::Text("Camera supports changing light source frequency: False"); }
+				if (props.bHMDSupportsRoomViewDirect) { ImGui::Text("HMD supports Room View Direct: True"); }
+				else { ImGui::Text("HMD supports Room View Direct: False"); }
+				if (props.bSupportsRoomViewDepthProjection) { ImGui::Text("Camera supports Room View depth projection: True"); }
+				else { ImGui::Text("Camera supports Room View depth projection: False"); }
+
 				ImGui::Text("Camera compatibility mode: %u", props.CameraCompatibilityMode);
 				if (props.bCameraSupportsCompatibilityModes) { ImGui::Text("Camera supports compatibility modes: True"); }
 				else { ImGui::Text("Camera supports compatibility modes: False"); }

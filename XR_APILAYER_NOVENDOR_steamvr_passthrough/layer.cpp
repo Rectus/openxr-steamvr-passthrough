@@ -204,21 +204,21 @@ namespace
 			}
 
 			m_openVRManager = std::make_shared<OpenVRManager>();
-			m_dashboardMenu = std::make_unique<DashboardMenu>(g_dllModule, m_configManager, m_openVRManager);
+			//m_dashboardMenu = std::make_unique<DashboardMenu>(g_dllModule, m_configManager, m_openVRManager);
 
-			MenuDisplayValues& vals = m_dashboardMenu->GetDisplayValues();
+			//MenuDisplayValues& vals = m_dashboardMenu->GetDisplayValues();
 
 			if (bEnableVarjoDepthExtension && m_configManager->GetConfig_Extensions().ExtVarjoDepthEstimation)
 			{
 				m_bVarjoDepthExtensionEnabled = true;
-				vals.bVarjoDepthEstimationExtensionActive = true;
+				//vals.bVarjoDepthEstimationExtensionActive = true;
 				Log("Extension XR_VARJO_environment_depth_estimation enabled\n");
 			}
 
 			if (bEnableVarjoCompositionExtension && m_configManager->GetConfig_Extensions().ExtVarjoDepthComposition)
 			{
 				m_bVarjoCompositionExtensionEnabled = true;
-				vals.bVarjoDepthCompositionExtensionActive = true;
+				//vals.bVarjoDepthCompositionExtensionActive = true;
 				Log("Extension XR_VARJO_composition_layer_depth_test enabled\n");
 			}
 
@@ -231,21 +231,21 @@ namespace
 			if (bInverseAlphaExtensionEnabled)
 			{
 				m_bInverseAlphaExtensionEnabled = true;
-				vals.bExtInvertedAlphaActive = true;
+				//vals.bExtInvertedAlphaActive = true;
 				Log("Extension XR_EXT_composition_layer_inverted_alpha enabled\n");
 			}
 
 			if (bEnableAndroidCameraStateExtension)
 			{
 				m_bAndroidPassthroughStateExtensionEnabled = true;
-				vals.bAndroidPassthroughStateActive = true;
+				//vals.bAndroidPassthroughStateActive = true;
 				Log("Extension XR_ANDROID_passthrough_camera_state enabled\n");
 			}
 
 			if (bEnableFBPassthroughExtension && m_configManager->GetConfig_Extensions().ExtFBPassthrough)
 			{
 				m_bFBPassthroughExtensionEnabled = true;
-				vals.bFBPassthroughExtensionActive = true;
+				//vals.bFBPassthroughExtensionActive = true;
 				Log("Extension XR_FB_passthrough enabled\n");
 			}
 
@@ -773,12 +773,23 @@ namespace
 				}
 				else if (isSystemHandled(createInfo->systemId) && !isCurrentSession(*session))
 				{
+					m_dashboardMenu = std::make_unique<DashboardMenu>(g_dllModule, m_configManager, m_openVRManager);
+
 					m_currentInstance = instance;
 					m_currentSession = *session;
 					if (SetupRenderer(instance, createInfo, session))
 					{
 						Log("Passthrough API layer enabled for session\n");
 						m_bUsePassthrough = m_configManager->GetConfig_Main().EnablePassthrough;
+
+						MenuDisplayValues& vals = m_dashboardMenu->GetDisplayValues();
+
+						vals.bVarjoDepthEstimationExtensionActive = m_bVarjoDepthExtensionEnabled;
+						vals.bVarjoDepthCompositionExtensionActive = m_bVarjoCompositionExtensionEnabled;
+						vals.bExtInvertedAlphaActive = m_bInverseAlphaExtensionEnabled;
+						vals.bAndroidPassthroughStateActive = m_bAndroidPassthroughStateExtensionEnabled;
+						vals.bFBPassthroughExtensionActive = m_bFBPassthroughExtensionEnabled;
+
 						m_dashboardMenu->GetDisplayValues().currentApplication = GetApplicationName();
 					}
 					else
@@ -786,6 +797,7 @@ namespace
 						m_bUsePassthrough = false;
 						m_currentSession = XR_NULL_HANDLE;
 						ErrorLog("Failed to initialize rendering system!\n");
+						m_dashboardMenu.reset();
 					}
 				}
 
@@ -811,10 +823,12 @@ namespace
 
 				m_Renderer.reset();
 
+				m_dashboardMenu.reset();
+
 				m_currentSession = XR_NULL_HANDLE;
 				m_currentInstance = XR_NULL_HANDLE;
 
-				MenuDisplayValues& vals = m_dashboardMenu->GetDisplayValues();
+				/*MenuDisplayValues& vals = m_dashboardMenu->GetDisplayValues();
 
 				vals.bSessionActive = false;
 				vals.renderAPI = None;
@@ -830,7 +844,7 @@ namespace
 				vals.renderTimeMS = 0;
 
 				vals.bCorePassthroughActive = false;
-				vals.CoreCurrentMode = 0;
+				vals.CoreCurrentMode = 0;*/
 			}
 
 			XrResult result = OpenXrApi::xrDestroySession(session);

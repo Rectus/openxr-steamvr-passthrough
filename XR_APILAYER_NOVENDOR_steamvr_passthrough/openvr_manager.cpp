@@ -170,6 +170,14 @@ void OpenVRManager::GetCameraDebugProperties(std::vector<DeviceDebugProperties>&
         deviceProps.bCameraSupportsCompatibilityModes = vrSystem->GetBoolTrackedDeviceProperty(deviceId, vr::Prop_CameraSupportsCompatibilityModes_Bool);
         deviceProps.CameraExposureTime = vrSystem->GetFloatTrackedDeviceProperty(deviceId, vr::Prop_CameraExposureTime_Float);
         deviceProps.CameraGlobalGain = vrSystem->GetFloatTrackedDeviceProperty(deviceId, vr::Prop_CameraGlobalGain_Float);
+
+        deviceProps.HMDFirmwareVersion = vrSystem->GetUint64TrackedDeviceProperty(deviceId, vr::Prop_FirmwareVersion_Uint64);
+        deviceProps.FPGAFirmwareVersion = vrSystem->GetUint64TrackedDeviceProperty(deviceId, vr::Prop_FPGAVersion_Uint64);
+        deviceProps.bHMDSupportsRoomViewDirect = vrSystem->GetBoolTrackedDeviceProperty(deviceId, vr::Prop_Hmd_SupportsRoomViewDirect_Bool);
+        deviceProps.bSupportsRoomViewDepthProjection = vrSystem->GetBoolTrackedDeviceProperty(deviceId, vr::Prop_SupportsRoomViewDepthProjection_Bool);
+        deviceProps.bAllowCameraToggle = vrSystem->GetBoolTrackedDeviceProperty(deviceId, (vr::ETrackedDeviceProperty)1055); // vr::Prop_AllowCameraToggle_Bool
+        deviceProps.bAllowLightSourceFrequency = vrSystem->GetBoolTrackedDeviceProperty(deviceId, (vr::ETrackedDeviceProperty)1056); // vr::Prop_AllowLightSourceFrequency_Bool
+        
     } 
 }
 

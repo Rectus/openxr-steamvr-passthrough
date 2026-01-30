@@ -290,6 +290,13 @@ struct DeviceDebugProperties
 	bool bCameraSupportsCompatibilityModes;
 	float CameraExposureTime;
 	float CameraGlobalGain;
+
+	uint64_t HMDFirmwareVersion;
+	uint64_t FPGAFirmwareVersion;
+	bool bHMDSupportsRoomViewDirect;
+	bool bSupportsRoomViewDepthProjection;
+	bool bAllowCameraToggle;
+	bool bAllowLightSourceFrequency;
 };
 
 struct DeviceIdentProperties
