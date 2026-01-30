@@ -32,7 +32,7 @@ float4 main(VS_OUTPUT input) : SV_TARGET
     
     if (g_bUseDepthCutoffRange)
     {
-        float depth = (input.screenPos.z / input.screenPos.w);// * (g_depthRange.y - g_depthRange.x) + g_depthRange.x;
+        float depth = g_bHasReversedDepth ? (1.0 - input.screenPos.z) : input.screenPos.z;
         clip(depth - g_depthCutoffRange.x);
         clip(g_depthCutoffRange.y - depth);
     }
@@ -93,7 +93,7 @@ float4 main(VS_OUTPUT input) : SV_TARGET
 
     if (g_bDebugDepth)
     {
-        float depth = saturate((input.screenPos.z / input.screenPos.w) / (g_depthRange.y - g_depthRange.x) - g_depthRange.x);
+        float depth = (g_bHasReversedDepth ? ((g_depthRange.y - g_depthRange.x) - input.screenPos.z) : input.screenPos.z) / (g_depthRange.y - g_depthRange.x) - g_depthRange.x;
         rgbColor = float3(depth, depth, depth);
     }
     if (g_debugOverlay == 1) // Confidence

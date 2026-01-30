@@ -12,8 +12,9 @@ float4 main(VS_OUTPUT input) : SV_TARGET
     
     if (g_bUseDepthCutoffRange && !g_bUseFullscreenQuad)
     {
-        clip(input.screenPos.w - g_depthCutoffRange.x);
-        clip(g_depthCutoffRange.y - input.screenPos.w);
+        float depth = g_bHasReversedDepth ? (1.0 - input.screenPos.z) : input.screenPos.z;
+        clip(depth - g_depthCutoffRange.x);
+        clip(g_depthCutoffRange.y - depth);
     }
     
     float outAlpha = g_bIsAppAlphaInverted ? 1.0 : 1.0 - g_opacity;

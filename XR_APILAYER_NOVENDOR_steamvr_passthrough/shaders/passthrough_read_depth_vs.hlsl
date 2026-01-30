@@ -109,7 +109,6 @@ VS_OUTPUT main(float3 inPosition : POSITION, uint vertexID : SV_VertexID)
     
     output.position = clipSpacePos;
     output.screenPos = clipSpacePos;
-    output.screenPos.z *= output.screenPos.w; //Linearize depth
     
     output.projectionConfidence = projectionConfidence;
     output.cameraBlendConfidence = cameraBlendValidity;
