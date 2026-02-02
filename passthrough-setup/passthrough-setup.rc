@@ -51,8 +51,8 @@ END
 //
 
 VS_VERSION_INFO VERSIONINFO
- FILEVERSION 0,3,5,0
- PRODUCTVERSION 0,3,5,0
+ FILEVERSION 0,3,6,0
+ PRODUCTVERSION 0,3,6,0
  FILEFLAGSMASK 0x3fL
 #ifdef _DEBUG
  FILEFLAGS 0x1L
@@ -69,12 +69,12 @@ BEGIN
         BEGIN
             VALUE "CompanyName", "N/A"
             VALUE "FileDescription", "Passthrough API Layer Setup"
-            VALUE "FileVersion", "0.3.5.0"
+            VALUE "FileVersion", "0.3.6.0"
             VALUE "InternalName", "passthrough-setup.exe"
-            VALUE "LegalCopyright", "Copyright (C) Rectus 2025"
+            VALUE "LegalCopyright", "Copyright (C) Rectus 2026"
             VALUE "OriginalFilename", "passthrough-setup.exe"
             VALUE "ProductName", "OpenXR SteamVR Passthrough API Layer"
-            VALUE "ProductVersion", "0.3.5"
+            VALUE "ProductVersion", "0.3.6"
         END
     END
     BLOCK "VarFileInfo"

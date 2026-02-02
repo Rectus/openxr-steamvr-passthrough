@@ -214,8 +214,9 @@ void CameraManagerOpenVR::GetIntrinsics(const ERenderEye cameraEye, XrVector2f& 
         float xRatio = ((float)m_cameraFrameWidth) / m_cameraUndistortedFrameWidth;
         float yRatio = ((float)m_cameraFrameHeight) / m_cameraUndistortedFrameHeight;
 
-        focalLength.x *= xRatio;
-        focalLength.y *= yRatio;
+        // For some reason the focal length is incorrect for enlarged undistorted frames, at least on the Vive.
+        //focalLength.x *= xRatio;
+        //focalLength.y *= yRatio;
 
         center.x *= xRatio;
         center.y *= yRatio;
@@ -317,8 +318,9 @@ bool CameraManagerOpenVR::IsUsingFisheyeModel() const
         return false;
     }
 
-    // Assuming that cameras with VRDistortionFunctionType_FTheta are non-fisheye, since there seems to be no proper way of finding out.
-    return distTypes[0] == vr::VRDistortionFunctionType_Extended_FTheta;
+    // Both options in the enum are f-theta fisheye models. Assuming the None model is just a f-tan(theta) pinhole camera.
+    return distTypes[0] == vr::VRDistortionFunctionType_FTheta || 
+        distTypes[0] == vr::VRDistortionFunctionType_Extended_FTheta;
 }
 
 XrMatrix4x4f CameraManagerOpenVR::GetLeftToRightCameraTransform() const
@@ -382,15 +384,20 @@ void CameraManagerOpenVR::GetTrackedCameraEyePoses(XrMatrix4x4f& LeftPose, XrMat
 
         XrMatrix4x4f_Multiply(&camera1Pose, &rotMatrix, &transMatrix); 
 
-        if (m_frameLayout == EStereoFrameLayout::StereoVerticalLayout)
+        if (m_frameLayout == EStereoFrameLayout::StereoHorizontalLayout)
+        {
+            XrMatrix4x4f_Invert(&LeftPose, &camera0Pose);
+            XrMatrix4x4f_Invert(&RightPose, &camera1Pose);
+        }
+        else if (m_frameLayout == EStereoFrameLayout::StereoVerticalLayout)
         {
             XrMatrix4x4f_Invert(&LeftPose, &camera1Pose);
             XrMatrix4x4f_Invert(&RightPose, &camera0Pose);
         }
-        else
+        else 
         {
             XrMatrix4x4f_Invert(&LeftPose, &camera0Pose);
-            XrMatrix4x4f_Invert(&RightPose, &camera1Pose);
+            XrMatrix4x4f_Invert(&RightPose, &camera0Pose);
         }
     }
 }
