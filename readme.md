@@ -9,6 +9,8 @@ The SteamVR runtime itself does not currently support any OpenXR passthrough fea
 
 Please report any issues! Any comments and suggestions are also appreciated.
 
+Website: https://github.com/Rectus/openxr-steamvr-passthrough
+
 ### DISCLAIMER ###
 This is an experimental release. Please be careful when using passthrough. 
 
