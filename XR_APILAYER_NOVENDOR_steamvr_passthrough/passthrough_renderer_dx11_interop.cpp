@@ -23,6 +23,7 @@ using namespace steamvr_passthrough::log;
 #define GL_LAYOUT_COLOR_ATTACHMENT_EXT 38286
 #define GL_LAYOUT_DEPTH_STENCIL_ATTACHMENT_EXT 38287
 
+#define GL_SRGB8 0x8C41
 #define GL_SRGB8_ALPHA8 0x8C43
 #define GL_RGBA8_SNORM 0x8F97
 #define GL_RGBA32F 0x8814
@@ -30,6 +31,7 @@ using namespace steamvr_passthrough::log;
 #define GL_RGBA16F 0x881A
 #define GL_DEPTH_COMPONENT32F 0x8CAC
 #define GL_DEPTH_COMPONENT32 0x81A7
+#define GL_DEPTH_COMPONENT24 0x81A6
 #define GL_DEPTH_COMPONENT16 0x81A5
 #define GL_DEPTH24_STENCIL8 0x88F0
 #define GL_DEPTH32F_STENCIL8 0x8CAD
@@ -133,7 +135,7 @@ DXGI_FORMAT VulkanImageFormatToDXGI(VkFormat in)
 		return DXGI_FORMAT_UNKNOWN;
 
 	default:
-		ErrorLog("Unhandled Vulkan image format %d", in);
+		ErrorLog("Unhandled Vulkan image format %d\n", in);
 		return DXGI_FORMAT_UNKNOWN;
 	}
 }
@@ -156,6 +158,8 @@ DXGI_FORMAT OpenGLImageFormatToDXGI(int64_t in)
 		return DXGI_FORMAT_R32G32B32_FLOAT;
 	case GL_RGBA16F:
 		return DXGI_FORMAT_R16G16B16A16_FLOAT;
+	case GL_RGBA16:
+		return DXGI_FORMAT_R16G16B16A16_UNORM;
 	case GL_RGB10_A2:
 		return DXGI_FORMAT_R10G10B10A2_UNORM;
 	case GL_DEPTH_COMPONENT32F:
@@ -164,7 +168,7 @@ DXGI_FORMAT OpenGLImageFormatToDXGI(int64_t in)
 	case GL_DEPTH32F_STENCIL8:
 	case GL_DEPTH32F_STENCIL8_NV:
 		return DXGI_FORMAT_D32_FLOAT_S8X24_UINT;
-	case GL_DEPTH24_STENCIL8:
+	case GL_DEPTH24_STENCIL8:	
 		return DXGI_FORMAT_D24_UNORM_S8_UINT;
 	case GL_DEPTH_COMPONENT16:
 		return DXGI_FORMAT_D16_UNORM;
@@ -172,8 +176,11 @@ DXGI_FORMAT OpenGLImageFormatToDXGI(int64_t in)
 	case GL_NONE:
 		return DXGI_FORMAT_UNKNOWN;
 
+	//case GL_RGB8:
+	//case GL_DEPTH_COMPONENT24:
+
 	default:
-		ErrorLog("Unhandled OpenGL image format 0x%x", in);
+		ErrorLog("Unhandled OpenGL image format 0x%x\n", in);
 		return DXGI_FORMAT_UNKNOWN;
 	}
 }
