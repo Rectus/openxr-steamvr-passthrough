@@ -1175,8 +1175,28 @@ namespace
 			if (newSwapchain != *storedSwapchain)
 			{
 				Log("Updating swapchain %u to %u with eye %u, index %u, arraySize %u\n", *storedSwapchain, newSwapchain, eye, imageIndex, props->second.arraySize);
+			
+				XrStructureType type = XR_TYPE_SWAPCHAIN_IMAGE_D3D11_KHR;
 
-				XrSwapchainImageD3D12KHR swapchainImages[3];
+				if (m_appRenderAPI == DirectX12)
+				{
+					type = XR_TYPE_SWAPCHAIN_IMAGE_D3D12_KHR;
+				}
+				else if (m_appRenderAPI == Vulkan)
+				{
+					type = XR_TYPE_SWAPCHAIN_IMAGE_VULKAN_KHR;
+				}
+				if (m_appRenderAPI == OpenGL)
+				{
+					type = XR_TYPE_SWAPCHAIN_IMAGE_OPENGL_KHR;
+				}
+
+				// Assuming the structs are all the same size
+				XrSwapchainImageD3D12KHR swapchainImages[3] = { };
+				swapchainImages[0].type = type;
+				swapchainImages[1].type = type;
+				swapchainImages[2].type = type;
+
 				uint32_t numImages = 0;
 
 				XrResult result = OpenXrApi::xrEnumerateSwapchainImages(newSwapchain, 3, &numImages, (XrSwapchainImageBaseHeader*)swapchainImages);
@@ -1248,7 +1268,25 @@ namespace
 						ErrorLog("The color and depth textures have mismatched imageRects, this is not supported by the layer: %i, %i, %i, %i : %i, %i, %i, %i\n", colorRect.offset.x, colorRect.offset.y, colorRect.extent.width, colorRect.extent.height, depthRect.offset.x, depthRect.offset.y, depthRect.extent.width, depthRect.extent.height);
 					}
 
-					XrSwapchainImageD3D12KHR depthImages[3];
+					XrStructureType type = XR_TYPE_SWAPCHAIN_IMAGE_D3D11_KHR;
+
+					if (m_appRenderAPI == DirectX12)
+					{
+						type = XR_TYPE_SWAPCHAIN_IMAGE_D3D12_KHR;
+					}
+					else if (m_appRenderAPI == Vulkan)
+					{
+						type = XR_TYPE_SWAPCHAIN_IMAGE_VULKAN_KHR;
+					}
+					if (m_appRenderAPI == OpenGL)
+					{
+						type = XR_TYPE_SWAPCHAIN_IMAGE_OPENGL_KHR;
+					}
+
+					XrSwapchainImageD3D12KHR depthImages[3] = { };
+					depthImages[0].type = type;
+					depthImages[1].type = type;
+					depthImages[2].type = type;
 					uint32_t numImages = 0;
 
 					XrResult result = OpenXrApi::xrEnumerateSwapchainImages(depthInfo->subImage.swapchain, 3, &numImages, (XrSwapchainImageBaseHeader*)depthImages);
