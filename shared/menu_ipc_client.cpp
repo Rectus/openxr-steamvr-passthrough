@@ -1,0 +1,327 @@
+
+#include "pch.h"
+#include "menu_ipc_client.h"
+
+MenuIPCClient::MenuIPCClient()
+{
+	m_event = CreateEvent(NULL, TRUE, FALSE, NULL);
+
+	if (m_event == INVALID_HANDLE_VALUE || m_event == NULL)
+	{ 
+		ErrorLog("Failed to create IPC event!\n");
+		return; 
+	}
+
+	m_readOverlap.hEvent = m_event;
+	m_writeOverlap.hEvent = m_event;
+
+	m_bRunThread = true;
+	m_listenThread = std::thread(&MenuIPCClient::Listen, this);
+}
+
+MenuIPCClient::~MenuIPCClient()
+{
+	m_bRunThread = false;
+	if (m_event != NULL && m_event != INVALID_HANDLE_VALUE)
+	{
+		SetEvent(m_event);
+	}
+
+	if (m_listenThread.joinable())
+	{
+		m_listenThread.join();
+	}
+
+	if (m_event != NULL && m_event != INVALID_HANDLE_VALUE)
+	{
+		CloseHandle(m_event);
+	}
+}
+
+bool MenuIPCClient::RegisterReader(std::weak_ptr<IMenuIPCReader> callback)
+{
+	if (callback.expired())
+	{
+		return false;
+	}
+	m_callback = callback;
+	return true;
+}
+
+bool MenuIPCClient::WriteMessage(MenuIPCMessage& message, bool bAllowBlocking)
+{
+	std::lock_guard<std::mutex> lock(m_mutex);
+
+	if (m_pipe == NULL || m_pipe == INVALID_HANDLE_VALUE)
+	{
+		return false;
+	}
+
+	if (m_bWritePending)
+	{
+		if (!bAllowBlocking)
+		{
+			return false;
+		}
+
+		std::this_thread::yield();
+
+		bool bSucceeded = false;
+		for (int i = 0; i < 10; i++)
+		{
+			if (!m_bWritePending)
+			{
+				bSucceeded = true;
+				break;
+			}
+			std::this_thread::sleep_for(std::chrono::milliseconds(1));
+		}
+
+		if (!bSucceeded || m_pipe == NULL || m_pipe == INVALID_HANDLE_VALUE)
+		{
+			ErrorLog("IPC WriteMessage: Write timed out!\n");
+			return false;
+		}
+	}
+
+	if (message.Header.PayloadSize > IPC_PAYLOAD_SIZE)
+	{
+		ErrorLog("IPC WriteMessage: Payload too large!\n");
+		return false;
+	}
+
+	m_writeSize = IPC_HEADER_SIZE + message.Header.PayloadSize;
+	memcpy(m_writeBuffer, &message, m_writeSize);
+
+	DWORD bytesWritten = 0;
+
+	bool bSuccess = WriteFile(m_pipe, m_writeBuffer, m_writeSize, &bytesWritten, &m_writeOverlap);
+	DWORD error = GetLastError();
+	if (bSuccess)
+	{
+		if (m_writeSize != bytesWritten)
+		{
+			ErrorLog("IPC WriteMessage: Incorrect bytes written: %d, expected &d\n", m_writeSize, bytesWritten);
+			return false;
+		}
+	}
+	else if (error == ERROR_IO_PENDING || error == ERROR_IO_INCOMPLETE)
+	{
+		m_bWritePending = true;
+	}
+	else if (error == ERROR_BROKEN_PIPE)
+	{
+		Log("IPC disconnected from menu server\n");
+		ClosePipe();
+		return false;
+	}
+	else
+	{
+		ErrorLog("IPC WriteMessage: WriteFile error: %d\n", error);
+		return false;
+	}
+
+	return true;
+}
+
+void MenuIPCClient::Listen()
+{
+	while (m_bRunThread)
+	{
+		if (m_pipe == NULL || m_pipe == INVALID_HANDLE_VALUE)
+		{
+			if (OpenPipe())
+			{
+				Log("IPC connected to menu server\n");
+				m_bReadPending = false;
+				m_bWritePending = false;
+
+				if (auto callback = m_callback.lock())
+				{
+					callback->MenuIPCConnectedToServer();
+				}
+				
+				CueRead();
+			}
+			else
+			{
+				std::this_thread::sleep_for(std::chrono::milliseconds(10));
+				continue;
+			}
+		}
+
+		if (WaitForSingleObject(m_event, 100) != WAIT_OBJECT_0)
+		{
+			continue;
+		}
+
+		if (!m_bRunThread) { break; }
+
+		if (m_pipe == NULL) // If a write closed the pipe.
+		{
+			continue;
+		}
+
+		std::lock_guard<std::mutex> lock(m_mutex);
+
+		DWORD numBytes = 0;
+
+	
+		if (m_bReadPending)
+		{
+			bool bSuccess = GetOverlappedResult(m_pipe, &m_readOverlap, &numBytes, FALSE);
+			DWORD error = GetLastError();
+
+			if (bSuccess)
+			{
+				m_bReadPending = false;
+
+				auto message = reinterpret_cast<MenuIPCMessage*>(m_readBuffer);
+
+				if (numBytes < IPC_HEADER_SIZE || numBytes != IPC_HEADER_SIZE + message->Header.PayloadSize)
+				{
+					ErrorLog("Invalid IPC message size: %d, expected %d\n", numBytes, IPC_HEADER_SIZE + message->Header.PayloadSize);
+				}
+				else if (auto callback = m_callback.lock())
+				{
+					callback->MenuIPCMessageReceived(*message, 0);
+				}
+
+				CueRead();
+			}
+			else if (error == ERROR_IO_PENDING || error == ERROR_IO_INCOMPLETE)
+			{
+				// Still waiting
+			}
+			else if (error == ERROR_PIPE_NOT_CONNECTED)
+			{
+				ClosePipe();
+				continue;
+			}
+			else if (error == ERROR_BROKEN_PIPE)
+			{
+				Log("IPC disconnected from menu server\n");
+				ClosePipe();
+				continue;
+			}
+			else
+			{
+				ErrorLog("IPC Pipe read error: %d\n", error);
+
+				ClosePipe();
+				continue;
+			}
+		}
+		else
+		{
+			CueRead();
+		}
+
+		if (m_bWritePending)
+		{
+			bool bSuccess = GetOverlappedResult(m_pipe, &m_writeOverlap, &numBytes, FALSE);
+			DWORD error = GetLastError();
+			if (bSuccess)
+			{
+				if (numBytes != m_writeSize)
+				{
+					ErrorLog("Invalid IPC write size %d, expected %d\n", numBytes, m_writeSize);
+				}
+
+				m_bWritePending = false;
+			}
+			else if (error == ERROR_IO_PENDING || error == ERROR_IO_INCOMPLETE)
+			{
+				// Still waiting
+			}
+			else if (error == ERROR_BROKEN_PIPE)
+			{
+				Log("IPC disconnected from menu server\n");
+				ClosePipe();
+				continue;
+			}
+			else
+			{
+				ErrorLog("IPC Pipe write error: %d\n", error);
+
+				ClosePipe();
+				m_bWritePending = false;
+				continue;
+			}
+		}
+	}
+
+	Log("IPC client shutting down...\n");
+	ClosePipe();
+}
+
+bool MenuIPCClient::CueRead()
+{
+	DWORD numBytes = 0;
+
+	bool result = ReadFile(m_pipe, m_readBuffer, IPC_BUFFER_SIZE, &numBytes, &m_readOverlap);
+	if (result && numBytes > 0)
+	{
+		m_bReadPending = true;
+		SetEvent(m_event);
+		return true;
+	}
+
+	if (GetLastError() == ERROR_IO_PENDING)
+	{
+		m_bReadPending = true;
+		return true;
+	}
+
+	ErrorLog("CueRead error %d\n", GetLastError());
+	m_bReadPending = false;
+	return false;
+}
+
+bool MenuIPCClient::OpenPipe()
+{
+	m_pipe = CreateFileW(IPC_PIPE_NAME, GENERIC_READ | GENERIC_WRITE, 0, NULL, OPEN_EXISTING, FILE_FLAG_OVERLAPPED, NULL);
+
+	if (m_pipe != INVALID_HANDLE_VALUE && m_pipe != NULL)
+	{
+		m_bNoServerLogged = true;
+		return true;
+	}
+
+	DWORD error = GetLastError();
+
+	if (error == ERROR_FILE_NOT_FOUND) // No pipe open on server.
+	{
+		if (!m_bNoServerLogged)
+		{
+			m_bNoServerLogged = true;
+			Log("IPC client: No menu server found on start\n");
+		}
+
+		return false;
+	}
+
+	if (GetLastError() == ERROR_PIPE_BUSY)
+	{
+		//ErrorLog("IPC client: Pipe busy.\n");
+		return false;
+	}
+
+	ErrorLog("IPC client: Failed to connect to menu sever! Error %d\n", error);
+
+	return false;
+}
+
+bool MenuIPCClient::ClosePipe()
+{
+	if (m_pipe != INVALID_HANDLE_VALUE && m_pipe != NULL)
+	{
+		CloseHandle(m_pipe);
+		m_pipe = NULL;
+
+		return true;
+	}
+
+	ErrorLog("IPC client: Failed to close pipe!\n");
+	return false;
+}

@@ -1,5 +1,5 @@
 #pragma once
-#include "layer.h"
+#include "shared_structs.h"
 #include "SimpleIni.h"
 
 
@@ -129,6 +129,7 @@ struct Config_Main
 	EStereoPreset StereoPreset = StereoPreset_Medium;
 
 	// Transient settings not written to file
+	bool DebugStereoReconstructionFreeze = false;
 	ESelectedDebugSource DebugSource = DebugSource_None;
 	ESelectedDebugOverlay DebugOverlay = DebugOverlay_None;
 	ESelectedDebugTexture DebugTexture = DebugTexture_None;
@@ -175,7 +176,6 @@ struct Config_Main
 		ini.SetLongValue(section, "ProjectionMode", (long)ProjectionMode);
 		ini.SetBoolValue(section, "ProjectToRenderModels", ProjectToRenderModels);
 
-		//ini.SetBoolValue(section, "ShowTestImage", ShowTestImage);
 		ini.SetDoubleValue(section, "PassthroughOpacity", PassthroughOpacity);
 		ini.SetDoubleValue(section, "ProjectionDistanceFar", ProjectionDistanceFar);
 		ini.SetDoubleValue(section, "FloorHeightOffset", FloorHeightOffset);
@@ -576,7 +576,6 @@ enum EStereoFiltering
 struct Config_Stereo
 {
 	bool StereoUseMulticore = true;
-	bool StereoReconstructionFreeze = false;
 	bool StereoRectificationFiltering = false;
 	bool StereoUseColor = false;
 	bool StereoUseBWInputAlpha= false;
@@ -787,7 +786,7 @@ struct Config_Depth
 class ConfigManager
 {
 public:
-	ConfigManager(std::wstring configFile);
+	ConfigManager(std::wstring configFile, bool bAllowWrite);
 	~ConfigManager();
 
 	bool ReadConfigFile();
@@ -837,6 +836,7 @@ private:
 	std::wstring m_configFile;
 	CSimpleIniA m_iniData;
 	bool m_bConfigUpdated = false;
+	bool m_bAllowWrite = false;
 	bool m_bRendererResetPending = false;
 	bool m_bCameraParamChangesPending = false;
 	bool m_bFrameTextureDumpPending = false;

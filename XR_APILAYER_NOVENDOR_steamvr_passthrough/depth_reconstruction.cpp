@@ -1,12 +1,8 @@
 #include "pch.h"
 #include "depth_reconstruction.h"
 
-#include <log.h>
 #include "mathutil.h"
 
-
-using namespace steamvr_passthrough;
-using namespace steamvr_passthrough::log;
 
 
 
@@ -384,7 +380,7 @@ void DepthReconstruction::RunThread()
         std::shared_ptr<CameraFrame> frame;
         XrMatrix4x4f viewToWorldLeft, viewToWorldRight;
 
-        if (mainConfig.ProjectionMode != Projection_StereoReconstruction || stereoConfig.StereoReconstructionFreeze || !m_cameraManager->GetCameraFrame(frame))
+        if (mainConfig.ProjectionMode != Projection_StereoReconstruction || mainConfig.DebugStereoReconstructionFreeze || !m_cameraManager->GetCameraFrame(frame))
         {
             continue;
         }

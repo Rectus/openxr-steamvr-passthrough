@@ -22,9 +22,9 @@
 
 #pragma once
 
-#include "pch.h"
+//#include "pch.h"
 
-namespace LAYER_NAMESPACE::log {
+namespace LAYER_NAMESPACE::logging {
 
 #if USE_TRACELOGGING
     TRACELOGGING_DECLARE_PROVIDER(g_traceProvider);
@@ -52,4 +52,4 @@ namespace LAYER_NAMESPACE::log {
     // Read buffer of log lines through passed function for display.
     void ReadLogBuffer(void (*printFunc)(std::deque<std::string>& logBuffer));
 
-} // namespace LAYER_NAMESPACE::log
+} // namespace LAYER_NAMESPACE::logging

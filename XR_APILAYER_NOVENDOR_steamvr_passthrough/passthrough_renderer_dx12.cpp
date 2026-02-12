@@ -3,7 +3,6 @@
 
 #include "pch.h"
 #include "passthrough_renderer.h"
-#include <log.h>
 #include <PathCch.h>
 #include <xr_linear.h>
 #include "lodepng.h"
@@ -16,9 +15,6 @@
 #include "shaders\alpha_prepass_masked_ps.h"
 #include "shaders\passthrough_ps.h"
 #include "shaders\alpha_copy_masked_ps.h"
-
-using namespace steamvr_passthrough;
-using namespace steamvr_passthrough::log;
 
 
 enum ECBV_SRVIndex
@@ -1166,7 +1162,7 @@ void PassthroughRendererDX12::RenderPassthroughFrame(const XrCompositionLayerPro
 		vsPassBuffer->cutoutFilterWidth = stereoConf.StereoCutoutFilterWidth;
 		vsPassBuffer->disparityFilterWidth = stereoConf.StereoDisparityFilterWidth;
 		vsPassBuffer->disparityFilterConfidenceCutout = stereoConf.StereoDisparityFilterConfidenceCutout;
-		vsPassBuffer->bProjectBorders = !stereoConf.StereoReconstructionFreeze;
+		vsPassBuffer->bProjectBorders = !mainConf.DebugStereoReconstructionFreeze;
 		vsPassBuffer->bFindDiscontinuities = stereoConf.StereoCutoutEnabled;
 	}
 
@@ -1452,7 +1448,7 @@ void PassthroughRendererDX12::RenderPassthroughView(const ERenderEye eye, const 
 
 
 	// Draw cylinder mesh to fill out any holes
-	if (stereoConf.StereoDrawBackground && mainConf.ProjectionMode == Projection_StereoReconstruction && !stereoConf.StereoReconstructionFreeze)
+	if (stereoConf.StereoDrawBackground && mainConf.ProjectionMode == Projection_StereoReconstruction && !mainConf.DebugStereoReconstructionFreeze)
 	{
 		m_commandList->RSSetScissorRects(1, &scissor);
 		m_commandList->SetGraphicsRootDescriptorTable(6, cbvVSHandle);

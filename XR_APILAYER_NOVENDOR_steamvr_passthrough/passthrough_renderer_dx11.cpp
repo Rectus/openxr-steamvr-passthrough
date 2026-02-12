@@ -2,7 +2,6 @@
 
 #include "pch.h"
 #include "passthrough_renderer.h"
-#include <log.h>
 #include <xr_linear.h>
 #include <dxgidebug.h>
 
@@ -33,8 +32,6 @@
 
 #include "shaders\fill_holes_cs.h"
 
-using namespace steamvr_passthrough;
-using namespace steamvr_passthrough::log;
 
 
 #define SET_DXGI_DEBUGNAME(object) \
@@ -1642,7 +1639,7 @@ void PassthroughRendererDX11::RenderPassthroughFrame(const XrCompositionLayerPro
 		vsBuffer.cutoutFilterWidth = stereoConf.StereoCutoutFilterWidth;
 		vsBuffer.disparityFilterWidth = stereoConf.StereoDisparityFilterWidth;
 		vsBuffer.disparityFilterConfidenceCutout = stereoConf.StereoDisparityFilterConfidenceCutout;
-		vsBuffer.bProjectBorders = !stereoConf.StereoReconstructionFreeze;
+		vsBuffer.bProjectBorders = !mainConf.DebugStereoReconstructionFreeze;
 		vsBuffer.bFindDiscontinuities = stereoConf.StereoCutoutEnabled || stereoConf.StereoUseSeparateDepthPass;
 		vsBuffer.bUseDisparityTemporalFilter = stereoConf.StereoUseDisparityTemporalFiltering && m_bIsVSUAVSupported;
 		vsBuffer.bBlendDepthMaps = stereoConf.StereoCutoutEnabled;
@@ -1811,7 +1808,7 @@ void PassthroughRendererDX11::RenderPassthroughFrame(const XrCompositionLayerPro
 		m_renderContext->UpdateSubresource(frameData.psMaskedConstantBuffer.Get(), 0, nullptr, &maskedBuffer, 0, 0);
 	}
 
-	bool bRenderBackground = stereoConf.StereoDrawBackground && mainConf.ProjectionMode == Projection_StereoReconstruction && !stereoConf.StereoReconstructionFreeze && !renderParams.bEnableDepthRange && !m_configManager->GetConfig_Camera().ClampCameraFrame;
+	bool bRenderBackground = stereoConf.StereoDrawBackground && mainConf.ProjectionMode == Projection_StereoReconstruction && !mainConf.DebugStereoReconstructionFreeze && !renderParams.bEnableDepthRange && !m_configManager->GetConfig_Camera().ClampCameraFrame;
 
 	bool bRenderAlphaPrepass =
 		(renderParams.bInvertLayerAlpha && (!bUseDepthPass || renderParams.BlendMode == Masked)) || // Use prepass for inverting alpha channel

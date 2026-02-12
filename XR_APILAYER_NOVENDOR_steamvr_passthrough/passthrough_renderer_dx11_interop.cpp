@@ -1,11 +1,7 @@
 #include "pch.h"
 #include "passthrough_renderer.h"
-#include <log.h>
 #include "comdef.h"
 
-
-using namespace steamvr_passthrough;
-using namespace steamvr_passthrough::log;
 
 
 #define HANDLE_TYPE_D3D11_IMAGE_EXT 0x958B

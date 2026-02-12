@@ -1,7 +1,7 @@
 
 #include "pch.h"
 #include "passthrough_renderer.h"
-#include <log.h>
+
 #include <PathCch.h>
 #include <xr_linear.h>
 #include "lodepng.h"
@@ -13,11 +13,6 @@
 #include "shaders\alpha_prepass_masked_ps.spv.h"
 #include "shaders\passthrough_ps.spv.h"
 #include "shaders\alpha_copy_masked_ps.spv.h"
-
-
-using namespace steamvr_passthrough;
-using namespace steamvr_passthrough::log;
-
 
 
 

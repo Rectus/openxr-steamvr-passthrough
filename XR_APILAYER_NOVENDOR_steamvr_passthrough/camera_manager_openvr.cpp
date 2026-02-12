@@ -1,12 +1,7 @@
 #include "pch.h"
 #include "camera_manager.h"
-#include <log.h>
 #include "layer.h"
 #include "mathutil.h"
-
-
-using namespace steamvr_passthrough;
-using namespace steamvr_passthrough::log;
 
 
 
@@ -853,6 +848,7 @@ XrMatrix4x4f CameraManagerOpenVR::GetHMDWorldToViewMatrix(const ERenderEye eye, 
         XrMatrix4x4f_Multiply(&pose, &refSpacePose, &trackingToStage);
         XrMatrix4x4f_Multiply(&output,  &viewToTracking, &pose);
     }
+    // TODO: Add cases for handling view and local floor
     else
     {
         XrMatrix4x4f_Multiply(&output, &viewToTracking, &refSpacePose);

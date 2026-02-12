@@ -38,14 +38,14 @@ namespace LAYER_NAMESPACE {
     // The path that is writable (eg: to store logs).
     std::filesystem::path localAppData;
 
-    namespace log {
+    namespace logging {
         // The file logger.
         std::ofstream logStream;
     } // namespace log
 } // namespace LAYER_NAMESPACE
 
 using namespace LAYER_NAMESPACE;
-using namespace LAYER_NAMESPACE::log;
+using namespace LAYER_NAMESPACE::logging;
 
 extern "C" {
 
@@ -72,8 +72,10 @@ XrResult __declspec(dllexport) XRAPI_CALL
 
     // Start logging to file.
     if (!logStream.is_open()) {
+#pragma warning(disable: 4996)// for getenv
         std::string logFile = (std::filesystem::path(getenv("LOCALAPPDATA")) / (LayerName + ".log")).string();
         logStream.open(logFile, std::ios_base::ate);
+#pragma warning(default: 4996)
     }
 
     DebugLog("--> xrNegotiateLoaderApiLayerInterface\n");

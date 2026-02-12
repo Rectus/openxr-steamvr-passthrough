@@ -1,59 +1,50 @@
 #include "pch.h"
-#include "dashboard_menu.h"
+#include "settings_menu.h"
+#include "desktop_window_win32.h"
+#include "dashboard_overlay.h"
+#include "version.h"
+
 #include "imgui.h"
 #include "imgui_internal.h"
-#include "imgui_impl_dx11.h"
+#define VK_USE_PLATFORM_WIN32_KHR
+#include "imgui_impl_vulkan.h"
+#include "backends/imgui_impl_win32.h"
+
+#include <vulkan/vulkan_beta.h>
 #include "lodepng.h"
 #include "resource.h"
 #include "camera_enumerator.h"
 #include "mathutil.h"
-#include "menu_ipc_client.h"
 
 #include "fonts/roboto_medium.cpp"
 #include "fonts/cousine_regular.cpp"
 
 
-DashboardMenu::DashboardMenu(HMODULE dllModule, std::shared_ptr<ConfigManager> configManager, std::shared_ptr<OpenVRManager> openVRManager)
-	: m_dllModule(dllModule)
-	, m_configManager(configManager)
+#define max(a,b) (((a) > (b)) ? (a) : (b))
+#define min(a,b) (((a) < (b)) ? (a) : (b))
+
+
+
+SettingsMenu::SettingsMenu(std::shared_ptr<ConfigManager> configManager, std::shared_ptr<OpenVRManager> openVRManager, std::shared_ptr<DesktopWindowWin32> window, std::shared_ptr<MenuIPCServer> IPCServer)
+	: m_configManager(configManager)
 	, m_openVRManager(openVRManager)
-	, m_overlayHandle(vr::k_ulOverlayHandleInvalid)
-	, m_thumbnailHandle(vr::k_ulOverlayHandleInvalid)
+	, m_window(window)
+	, m_IPCServer(IPCServer)
 	, m_bMenuIsVisible(false)
 	, m_displayValues()
 	, m_activeTab(TabMain)
 {
-	m_bRunThread = true;
-	m_menuThread = std::thread(&DashboardMenu::RunThread, this);
+	m_renderer = VulkanMenuRenderer();
 }
 
 
-DashboardMenu::~DashboardMenu()
+SettingsMenu::~SettingsMenu()
 {
-	m_bRunThread = false;
-	if (m_menuThread.joinable())
-	{
-		m_menuThread.join();
-	}
 }
 
 
-void DashboardMenu::RunThread()
+bool SettingsMenu::InitMenu()
 {
-	vr::IVROverlay* vrOverlay = m_openVRManager->GetVROverlay();
-	vr::IVRSystem* vrSystem = m_openVRManager->GetVRSystem();
-
-	while (!vrOverlay)
-	{
-		if (!m_bRunThread)
-		{
-			return;
-		}
-
-		std::this_thread::sleep_for(std::chrono::milliseconds(1));
-		vrOverlay = m_openVRManager->GetVROverlay();
-	}
-
 	IMGUI_CHECKVERSION();
 	ImGui::CreateContext();
 	ImGuiIO& io = ImGui::GetIO();
@@ -66,59 +57,51 @@ void DashboardMenu::RunThread()
 	ImGui::StyleColorsDark();
 
 	// TODO: Using single clicks since double clicks don't seem to be working (timing issue?)
-	io.ConfigDragClickToInputText = true;
+	//io.ConfigDragClickToInputText = true;
 
-	SetupDX11();
-	ImGui_ImplDX11_Init(m_d3d11Device.Get(), m_d3d11DeviceContext.Get());
-	CreateOverlay();
+	m_renderer.SetupRenderer(m_window);
+	ImGui_ImplWin32_Init(m_window->GetWindowHandle());
+	m_renderer.InitImGui();
 
-	uint64_t frameCount = 0;
+	//CreateOverlay();
 
-	while (m_bRunThread)
-	{
-		TickMenu();
+	// Hack to fix Dear ImGui not rendering (mostly) correctly to sRGB target
+	// From: https://github.com/ocornut/imgui/issues/8271#issuecomment-2564954070
+	//ImGuiStyle& style = ImGui::GetStyle();
+	//for (int i = 0; i < ImGuiCol_COUNT; i++)
+	//{
+	//	ImVec4& col = style.Colors[i];
 
-		float frameRate = vrSystem->GetFloatTrackedDeviceProperty(vr::k_unTrackedDeviceIndex_Hmd, vr::Prop_DisplayFrequency_Float);
+	//	// Multiply out the alpha factor, and add it back afterwards
+	//	col.x *= col.w;
+	//	col.y *= col.w;
+	//	col.z *= col.w;
 
-		float timeSinceVsyncSecs;
-		uint64_t newFrameCount;
-		bool bGotVsync = vrSystem->GetTimeSinceLastVsync(&timeSinceVsyncSecs, &newFrameCount);
-		
-		if (frameRate > 0 && bGotVsync)
-		{
-			uint32_t sleepTimeMS = static_cast<uint32_t>(MAX(ceil(1000.0f / frameRate - timeSinceVsyncSecs * 1000.0f), 0.0f));
+	//	col.x = (col.x <= 0.04045f ? col.x / 12.92f : pow((col.x + 0.055f) / 1.055f, 2.4f)) / max(col.w, 0.01f);
+	//	col.y = (col.y <= 0.04045f ? col.y / 12.92f : pow((col.y + 0.055f) / 1.055f, 2.4f)) / max(col.w, 0.01f);
+	//	col.z = (col.z <= 0.04045f ? col.z / 12.92f : pow((col.z + 0.055f) / 1.055f, 2.4f)) / max(col.w, 0.01f);
+	//}
 
-			Sleep(sleepTimeMS);
-		}
-		else
-		{
-			Sleep(static_cast<DWORD>(1000.0f / 60.0f));
-		}
+	return true;
+}
 
-		frameCount = newFrameCount;
+void SettingsMenu::DeinitMenu()
+{
+	m_renderer.WaitDeinitImGui();
 
-		// WaitFrameSync Does not work under OpenXR applications.
-		/*if (vr::EVROverlayError error = vrOverlay->WaitFrameSync(100); error != vr::VROverlayError_None)
-		{
-			ErrorLog("WaitFrameSync error: %d\n", error);
-		}*/
-	}
-
-
-	ImGui_ImplDX11_Shutdown();
-	ImGui::GetIO().BackendRendererUserData = NULL;
+	ImGui_ImplWin32_Shutdown();
 	ImGui::DestroyContext();
 
-	CloseHandle(m_d3d11FenceEvent);
+	m_renderer.CleanupRenderer();
 
-	if (vrOverlay)
+	/*if (vrOverlay)
 	{
 		if (m_bIsKeyboardOpen)
 		{
 			vrOverlay->HideKeyboard();
 		}
 		vrOverlay->DestroyOverlay(m_overlayHandle);
-	}
+	}*/
 }
 
 
@@ -274,7 +257,7 @@ inline void ScrollableSliderInt(const char* label, int* v, int v_min, int v_max,
 
 #define IMGUI_BIG_SPACING ImGui::Dummy(ImVec2(0.0f, 20.0f))
 
-inline void DashboardMenu::TextDescription(const char* fmt, ...)
+inline void SettingsMenu::TextDescription(const char* fmt, ...)
 {
 	if (m_configManager->GetConfig_Main().ShowSettingDescriptions)
 	{
@@ -291,7 +274,7 @@ inline void DashboardMenu::TextDescription(const char* fmt, ...)
 	}
 }
 
-inline void DashboardMenu::TextDescriptionSpaced(const char* fmt, ...)
+inline void SettingsMenu::TextDescriptionSpaced(const char* fmt, ...)
 {
 	if (m_configManager->GetConfig_Main().ShowSettingDescriptions)
 	{
@@ -326,14 +309,28 @@ inline void EndSoftDisabled(bool bIsDisabled)
 }
 
 
-void DashboardMenu::TickMenu() 
+void SettingsMenu::TickMenu()
 {
-	HandleEvents();
+	//HandleEvents();
 
-	if (!m_bMenuIsVisible)
+
+	if (!m_window->IsVisible())
 	{
 		return;
 	}
+
+	DrawMenu();
+
+	m_renderer.RenderMenu();
+}
+
+void SettingsMenu::DrawMenu()
+{
+	std::lock_guard<std::mutex> lock(m_menuWriteMutex);
+
+	bool rendererResetPending = false;
+	bool cameraParamChangesPending = false;
+	bool frameDumpPending = false;
 
 	Config_Main& mainConfig = m_configManager->GetConfig_Main();
 	Config_Core& coreConfig = m_configManager->GetConfig_Core();
@@ -356,7 +353,8 @@ void DashboardMenu::TickMenu()
 	io.DeltaTime = ((float)(frameStart.QuadPart - m_lastFrameStart.QuadPart)) / perfFrequency.QuadPart;
 	m_lastFrameStart = frameStart;
 
-	ImGui_ImplDX11_NewFrame();
+	ImGui_ImplVulkan_NewFrame();
+	ImGui_ImplWin32_NewFrame();
 
 	ImGui::NewFrame();
 
@@ -447,7 +445,7 @@ if (bIsActiveTab) { ImGui::PopStyleColor(1); bIsActiveTab = false; }
 
 		if (mainConfig.ProjectionMode != mode || mainConfig.CameraProvider != cam)
 		{
-			m_configManager->SetRendererResetPending();
+			rendererResetPending = true;
 		}
 	}
 
@@ -848,37 +846,37 @@ if (bIsActiveTab) { ImGui::PopStyleColor(1); bIsActiveTab = false; }
 			if (ImGui::RadioButton("Very Low", mainConfig.StereoPreset == StereoPreset_VeryLow))
 			{
 				mainConfig.StereoPreset = StereoPreset_VeryLow;
-				m_configManager->SetRendererResetPending();
+				rendererResetPending = true;
 			}
 
 			if (ImGui::RadioButton("Low", mainConfig.StereoPreset == StereoPreset_Low))
 			{
 				mainConfig.StereoPreset = StereoPreset_Low;
-				m_configManager->SetRendererResetPending();
+				rendererResetPending = true;
 			}
 
 			if (ImGui::RadioButton("Medium", mainConfig.StereoPreset == StereoPreset_Medium))
 			{
 				mainConfig.StereoPreset = StereoPreset_Medium;
-				m_configManager->SetRendererResetPending();
+				rendererResetPending = true;
 			}
 
 			if (ImGui::RadioButton("High", mainConfig.StereoPreset == StereoPreset_High))
 			{
 				mainConfig.StereoPreset = StereoPreset_High;
-				m_configManager->SetRendererResetPending();
+				rendererResetPending = true;
 			}
 
 			if (ImGui::RadioButton("Very High", mainConfig.StereoPreset == StereoPreset_VeryHigh))
 			{
 				mainConfig.StereoPreset = StereoPreset_VeryHigh;
-				m_configManager->SetRendererResetPending();
+				rendererResetPending = true;
 			}
 
 			if (ImGui::RadioButton("Custom", mainConfig.StereoPreset == StereoPreset_Custom))
 			{
 				mainConfig.StereoPreset = StereoPreset_Custom;
-				m_configManager->SetRendererResetPending();
+				rendererResetPending = true;
 			}
 			ImGui::EndGroup();
 
@@ -1333,7 +1331,10 @@ if (bIsActiveTab) { ImGui::PopStyleColor(1); bIsActiveTab = false; }
 		if (!m_cameraTabBeenOpened)
 		{
 			CameraEnumerator::EnumerateCameras(m_cameraDevices);
-			m_openVRManager->GetDeviceIdentProperties(m_deviceIdentProps);
+			if (m_openVRManager->IsRuntimeIntialized())
+			{
+				m_openVRManager->GetDeviceIdentProperties(m_deviceIdentProps);
+			}
 			m_cameraTabBeenOpened = true;
 		}
 
@@ -1361,7 +1362,7 @@ if (bIsActiveTab) { ImGui::PopStyleColor(1); bIsActiveTab = false; }
 				if (mainConfig.CameraProvider != CameraProvider_OpenVR)
 				{
 					mainConfig.CameraProvider = CameraProvider_OpenVR;
-					m_configManager->SetRendererResetPending();
+					rendererResetPending = true;
 				}
 			}
 			TextDescription("Use the passthrough cameras on a compatible HMD. Uses the OpenVR Tracked Camera interface.");
@@ -1372,7 +1373,7 @@ if (bIsActiveTab) { ImGui::PopStyleColor(1); bIsActiveTab = false; }
 				{
 					mainConfig.CameraProvider = CameraProvider_OpenCV;
 					mainConfig.ProjectionMode = Projection_Custom2D;
-					m_configManager->SetRendererResetPending();
+					rendererResetPending = true;
 				}
 			}
 			TextDescription("Use a regular webcam from the OpenCV camera interface. Requires manual configuration.");
@@ -1383,7 +1384,7 @@ if (bIsActiveTab) { ImGui::PopStyleColor(1); bIsActiveTab = false; }
 				{
 					mainConfig.CameraProvider = CameraProvider_Augmented;
 					mainConfig.ProjectionMode = Projection_StereoReconstruction;
-					m_configManager->SetRendererResetPending();
+					rendererResetPending = true;
 				}
 			}
 			TextDescription("Use SteamVR for calculating depth, and a webcam for color data. Requires a HMD with a stereo camera and manual configuration.");
@@ -1464,10 +1465,15 @@ if (bIsActiveTab) { ImGui::PopStyleColor(1); bIsActiveTab = false; }
 
 			BeginSoftDisabled(!cameraConfig.UseTrackedDevice);
 
+			ImGui::BeginDisabled(m_openVRManager->IsRuntimeIntialized());
 			if (ImGui::Button("Refresh"))
 			{
-				m_openVRManager->GetDeviceIdentProperties(m_deviceIdentProps);
+				if (m_openVRManager->IsRuntimeIntialized())
+				{
+					m_openVRManager->GetDeviceIdentProperties(m_deviceIdentProps);
+				}
 			}
+			ImGui::EndDisabled();
 
 			ImGui::SameLine();
 
@@ -1520,7 +1526,7 @@ if (bIsActiveTab) { ImGui::PopStyleColor(1); bIsActiveTab = false; }
 
 			if (prevAutoeExp != cameraConfig.AutoExposureEnable || prefExp != cameraConfig.ExposureValue)
 			{
-				m_configManager->SetCameraParamChangesPending();
+				cameraParamChangesPending = true;
 			}
 
 			IMGUI_BIG_SPACING;
@@ -1637,7 +1643,7 @@ if (bIsActiveTab) { ImGui::PopStyleColor(1); bIsActiveTab = false; }
 
 		if (ImGui::Button("Apply Camera Parameters"))
 		{
-			m_configManager->SetRendererResetPending();
+			rendererResetPending = true;
 		}
 
 		ImGui::EndChild();
@@ -1649,7 +1655,10 @@ if (bIsActiveTab) { ImGui::PopStyleColor(1); bIsActiveTab = false; }
 	{
 		if (!m_debugTabBeenOpened)
 		{
-			m_openVRManager->GetCameraDebugProperties(m_deviceDebugProps);
+			if (m_openVRManager->IsRuntimeIntialized())
+			{
+				m_openVRManager->GetCameraDebugProperties(m_deviceDebugProps);
+			}
 			m_debugTabBeenOpened = true;
 		}
 
@@ -1832,7 +1841,7 @@ if (bIsActiveTab) { ImGui::PopStyleColor(1); bIsActiveTab = false; }
 
 			if (ImGui::Button("Dump Camera Frame to File"))
 			{
-				m_configManager->SetFrameTextureDumpPending();
+				frameDumpPending = true;
 			}
 
 			ImGui::EndGroup();		
@@ -1841,10 +1850,16 @@ if (bIsActiveTab) { ImGui::PopStyleColor(1); bIsActiveTab = false; }
 		ImGui::SetNextItemOpen(true, ImGuiCond_Once);
 		if (ImGui::CollapsingHeader("Device Properties"))
 		{
+
+			ImGui::BeginDisabled(m_openVRManager->IsRuntimeIntialized());
 			if (ImGui::Button("Refresh"))
 			{
-				m_openVRManager->GetCameraDebugProperties(m_deviceDebugProps);
+				if (m_openVRManager->IsRuntimeIntialized())
+				{
+					m_openVRManager->GetCameraDebugProperties(m_deviceDebugProps);
+				}
 			}
+			ImGui::EndDisabled();
 
 			ImGui::SameLine();
 
@@ -2120,394 +2135,201 @@ if (bIsActiveTab) { ImGui::PopStyleColor(1); bIsActiveTab = false; }
 		ImGui::EndChild();
 	}
 
+	ImGui::End();
 
-	if (ImGui::IsAnyItemActive())
+	bool bInteractionEnded = !ImGui::IsAnyItemActive() && m_bElementActiveLastFrame;
+	m_bElementActiveLastFrame = ImGui::IsAnyItemActive();	
+
+	if (bInteractionEnded)
 	{
 		m_configManager->ConfigUpdated();
+
+		MenuIPCMessage message = {};
+
+		switch (m_activeTab)
+		{
+		case TabMain:
+		{
+			message.Header.Type = MessageType_SendConfig_Main;
+			message.Header.PayloadSize = sizeof(Config_Main);
+			memcpy(message.Payload, &mainConfig, sizeof(Config_Main));
+			m_IPCServer->BroadcastMessage(message);
+
+			break;
+		}
+		case TabApplication:
+		{
+			message.Header.Type = MessageType_SendConfig_Core;
+			message.Header.PayloadSize = sizeof(Config_Core);
+			memcpy(message.Payload, &coreConfig, sizeof(Config_Core));
+			m_IPCServer->BroadcastMessage(message);
+
+			message.Header.Type = MessageType_SendConfig_Extensions;
+			message.Header.PayloadSize = sizeof(Config_Extensions);
+			memcpy(message.Payload, &extConfig, sizeof(Config_Extensions));
+			m_IPCServer->BroadcastMessage(message);
+
+			break;
+		}
+		case TabCamera:
+		{
+			message.Header.Type = MessageType_SendConfig_Main;
+			message.Header.PayloadSize = sizeof(Config_Main);
+			memcpy(message.Payload, &mainConfig, sizeof(Config_Main));
+			m_IPCServer->BroadcastMessage(message);
+
+			message.Header.Type = MessageType_SendConfig_Camera;
+			message.Header.PayloadSize = sizeof(Config_Camera);
+			memcpy(message.Payload, &cameraConfig, sizeof(Config_Camera));
+			m_IPCServer->BroadcastMessage(message);
+
+			break;
+		}
+		case TabStereo:
+		{
+			message.Header.Type = MessageType_SendConfig_Main;
+			message.Header.PayloadSize = sizeof(Config_Main);
+			memcpy(message.Payload, &mainConfig, sizeof(Config_Main));
+			m_IPCServer->BroadcastMessage(message);
+
+			message.Header.Type = MessageType_SendConfig_Stereo;
+			message.Header.PayloadSize = sizeof(Config_Stereo);
+			Config_Stereo& usedStereoPreset = m_configManager->GetConfig_Stereo();
+			memcpy(message.Payload, &usedStereoPreset, sizeof(Config_Stereo));
+			m_IPCServer->BroadcastMessage(message);
+
+			break;
+		}
+		case TabOverrides:
+		{
+			message.Header.Type = MessageType_SendConfig_Core;
+			message.Header.PayloadSize = sizeof(Config_Core);
+			memcpy(message.Payload, &coreConfig, sizeof(Config_Core));
+			m_IPCServer->BroadcastMessage(message);
+
+			message.Header.Type = MessageType_SendConfig_Depth;
+			message.Header.PayloadSize = sizeof(Config_Depth);
+			memcpy(message.Payload, &depthConfig, sizeof(Config_Depth));
+			m_IPCServer->BroadcastMessage(message);
+
+			break;
+		}
+		case TabDebug:
+		{
+			message.Header.Type = MessageType_SendConfig_Main;
+			message.Header.PayloadSize = sizeof(Config_Main);
+			memcpy(message.Payload, &mainConfig, sizeof(Config_Main));
+			m_IPCServer->BroadcastMessage(message);
+
+			break;
+		}
+		default:
+			break;
+		}
+		
 	}
 
-	ImGui::End();
+	if (rendererResetPending)
+	{
+		MenuIPCMessage message = {};
+		message.Header.Type = MessageType_SendCommand_ApplyRendererReset;
+		message.Header.PayloadSize = 0;
+		m_IPCServer->BroadcastMessage(message);
+	}
+
+	if (cameraParamChangesPending)
+	{
+		MenuIPCMessage message = {};
+		message.Header.Type = MessageType_SendCommand_ApplyCameraParamChanges;
+		message.Header.PayloadSize = 0;
+		m_IPCServer->BroadcastMessage(message);
+	}
+
+	if (frameDumpPending)
+	{
+		MenuIPCMessage message = {};
+		message.Header.Type = MessageType_SendCommand_DumpFrameTexture;
+		message.Header.PayloadSize = 0;
+		m_IPCServer->BroadcastMessage(message);
+	}
 
 	ImGui::PopFont();
 	ImGui::PopStyleVar(3);
 
-	ImGui::Render();
-
-	ID3D11RenderTargetView* rtv = m_d3d11RTV[m_frameIndex].Get();
-	m_d3d11DeviceContext->OMSetRenderTargets(1, &rtv, NULL);
-	const float clearColor[4] = { 0, 0, 0, 1 };
-	m_d3d11DeviceContext->ClearRenderTargetView(m_d3d11RTV[m_frameIndex].Get(), clearColor);
-	ImGui_ImplDX11_RenderDrawData(ImGui::GetDrawData());
-
-	m_syncCounter++;
-	m_d3d11DeviceContext->Signal(m_d3d11Fence.Get(), m_syncCounter);
-	m_d3d11Fence->SetEventOnCompletion(m_syncCounter, m_d3d11FenceEvent);
-
-	// Manually sync rendering before we send the output to the overlay.
-	DWORD ret = WaitForSingleObject(m_d3d11FenceEvent, 16);
-	if (ret != WAIT_OBJECT_0)
-	{
-		ErrorLog("Overlay: Failed to wait for render: 0x%x\n", ret);
-	}
-
-	ResetEvent(m_d3d11FenceEvent);
-
-	vr::Texture_t texture;
-	texture.eColorSpace = vr::ColorSpace_Linear;
-	texture.eType = vr::TextureType_DXGISharedHandle;
-
-	ComPtr<IDXGIResource> DXGIResource;
-	m_d3d11Texture[m_frameIndex]->QueryInterface(IID_PPV_ARGS(&DXGIResource));
-	DXGIResource->GetSharedHandle(&texture.handle);
-
-	vr::EVROverlayError error = m_openVRManager->GetVROverlay()->SetOverlayTexture(m_overlayHandle, &texture);
-	if (error != vr::VROverlayError_None)
-	{
-		ErrorLog("SteamVR had an error on updating overlay (%d)\n", error);
-	}
-
-	m_frameIndex = (m_frameIndex + 1) % 2;
-
-	if (!m_bIsKeyboardOpen && io.WantTextInput)
-	{
-		m_openVRManager->GetVROverlay()->ShowKeyboardForOverlay(m_overlayHandle, vr::k_EGamepadTextInputModeNormal, vr::k_EGamepadTextInputLineModeMultipleLines, vr::KeyboardFlag_Modal | vr::KeyboardFlag_Minimal | vr::KeyboardFlag_ShowArrowKeys, "", 255, "", 0);
-		m_bIsKeyboardOpen = true;
-	}
-	else if (m_bIsKeyboardOpen && !io.WantTextInput)
-	{
-		m_openVRManager->GetVROverlay()->HideKeyboard();
-		m_bIsKeyboardOpen = false;
-	}
 }
 
 
-void DashboardMenu::CreateOverlay()
+
+extern IMGUI_IMPL_API LRESULT ImGui_ImplWin32_WndProcHandler(HWND hWnd, UINT msg, WPARAM wParam, LPARAM lParam);
+
+LRESULT SettingsMenu::HandleWin32Events(HWND hWnd, UINT msg, WPARAM wParam, LPARAM lParam)
 {
-	vr::IVROverlay* vrOverlay = m_openVRManager->GetVROverlay();
-
-	if (!vrOverlay)
+	if (ImGui_ImplWin32_WndProcHandler(hWnd, msg, wParam, lParam))
 	{
-		return;
+		return true;
 	}
 
-	std::string overlayKey = std::format(DASHBOARD_OVERLAY_KEY, GetCurrentProcessId());
-
-	vr::EVROverlayError error = vrOverlay->FindOverlay(overlayKey.c_str(), &m_overlayHandle);
-	if (error != vr::EVROverlayError::VROverlayError_None && error != vr::EVROverlayError::VROverlayError_UnknownOverlay)
+	switch (msg)
 	{
-		Log("Warning: SteamVR FindOverlay error (%d)\n", error);
-	}
-
-	if (m_overlayHandle == vr::k_ulOverlayHandleInvalid)
-	{
-		error = vrOverlay->CreateDashboardOverlay(overlayKey.c_str(), "OpenXR Passthrough", &m_overlayHandle, &m_thumbnailHandle);
-		if (error != vr::EVROverlayError::VROverlayError_None)
+	case WM_SIZE:
+		if (wParam == SIZE_MINIMIZED)
 		{
-			ErrorLog("SteamVR overlay init error (%d)\n", error);
+			return 0;
+		}
+		uint32_t resizeWidth = (UINT)LOWORD(lParam);
+		uint32_t resizeHeight = (UINT)HIWORD(lParam);
+
+		m_renderer.ResizeWindow(resizeWidth, resizeHeight);
+
+		return 0;
+
+
+	}
+	return 0;
+}
+
+void SettingsMenu::MenuIPCMessageReceived(MenuIPCMessage& message, int clientIndex)
+{
+	switch (message.Header.Type)
+	{
+	case MessageType_SetDisplayValues:
+
+		if (message.Header.PayloadSize == sizeof(MenuDisplayValues))
+		{
+			std::lock_guard<std::mutex> lock(m_menuWriteMutex);
+
+			std::string appname = std::move(m_displayValues.currentApplication);
+
+			m_displayValues = *reinterpret_cast<MenuDisplayValues*>(message.Payload);
+			m_displayValues.currentApplication = std::move(appname);
 		}
 		else
 		{
-			vrOverlay->SetOverlayInputMethod(m_overlayHandle, vr::VROverlayInputMethod_Mouse);
-			vrOverlay->SetOverlayFlag(m_overlayHandle, vr::VROverlayFlags_IsPremultiplied, true);
-			vrOverlay->SetOverlayFlag(m_overlayHandle, vr::VROverlayFlags_SendVRDiscreteScrollEvents, true);
-			vrOverlay->SetOverlayFlag(m_overlayHandle, vr::VROverlayFlags_SortWithNonSceneOverlays, true);
-			vrOverlay->SetOverlayFlag(m_overlayHandle, vr::VROverlayFlags_MakeOverlaysInteractiveIfVisible, true);
-			vrOverlay->SetOverlayFlag(m_overlayHandle, vr::VROverlayFlags_EnableControlBar, true);
-			vrOverlay->SetOverlayFlag(m_overlayHandle, vr::VROverlayFlags_EnableControlBarKeyboard, true);
-			vrOverlay->SetOverlayTextureColorSpace(m_overlayHandle, vr::ColorSpace_Gamma);
-
-			vrOverlay->SetOverlayWidthInMeters(m_overlayHandle, 2.775f);
-
-			vr::HmdVector2_t ScaleVec;
-			ScaleVec.v[0] = OVERLAY_RES_WIDTH;
-			ScaleVec.v[1] = OVERLAY_RES_HEIGHT;
-			vrOverlay->SetOverlayMouseScale(m_overlayHandle, &ScaleVec);
-
-			CreateThumbnail();
+			ErrorLog("Invalid size MenuDisplayValues from IPC: %d\n", (int)message.Header.PayloadSize);
 		}
-	}
-}
 
+		break;
 
-void DashboardMenu::DestroyOverlay()
-{
-	vr::IVROverlay* vrOverlay = m_openVRManager->GetVROverlay();
+	case MessageType_SetAppName:
 
-	if (!vrOverlay || m_overlayHandle == vr::k_ulOverlayHandleInvalid)
-	{
-		m_overlayHandle = vr::k_ulOverlayHandleInvalid;
-		return;
-	}
-
-	vr::EVROverlayError error = vrOverlay->DestroyOverlay(m_overlayHandle);
-	if (error != vr::EVROverlayError::VROverlayError_None)
-	{
-		ErrorLog("SteamVR DestroyOverlay error (%d)\n", error);
-	}
-
-	m_overlayHandle = vr::k_ulOverlayHandleInvalid;
-}
-
-
-void DashboardMenu::CreateThumbnail()
-{
-	HRSRC resInfo = FindResource(m_dllModule, MAKEINTRESOURCE(IDB_PNG_DASHBOARD_ICON), L"PNG");
-	if (resInfo == nullptr)
-	{
-		ErrorLog("Error finding icon resource.\n");
-		return;
-	}
-	HGLOBAL memory = LoadResource(m_dllModule, resInfo);
-	if (memory == nullptr)
-	{
-		ErrorLog("Error loading icon resource.\n");
-		return;
-	}
-	size_t data_size = SizeofResource(m_dllModule, resInfo);
-	void* data = LockResource(memory);
-
-	if (data == nullptr)
-	{
-		ErrorLog("Error reading icon resource.\n");
-		return;
-	}
-	std::vector<uint8_t> buffer;
-
-	uint32_t width, height;
-	uint32_t error = lodepng::decode(buffer, width, height, (uint8_t*)data, data_size);
-
-	if (error)
-	{
-		ErrorLog("Error decoding icon.\n");
-		return;
-	}
-	
-	m_openVRManager->GetVROverlay()->SetOverlayRaw(m_thumbnailHandle, &buffer[0], width, height, 4);
-}
-
-
-void DashboardMenu::HandleEvents()
-{
-	vr::IVROverlay* vrOverlay = m_openVRManager->GetVROverlay();
-
-	if (!vrOverlay || m_overlayHandle == vr::k_ulOverlayHandleInvalid)
-	{
-		return;
-	}
-
-	ImGuiIO& io = ImGui::GetIO();
-
-	vr::VREvent_t event;
-	while (vrOverlay->PollNextOverlayEvent(m_overlayHandle, &event, sizeof(event)))
-	{
-		vr::VREvent_Overlay_t& overlayData = (vr::VREvent_Overlay_t&)event.data;
-		vr::VREvent_Mouse_t& mouseData = (vr::VREvent_Mouse_t&)event.data;
-		vr::VREvent_Scroll_t& scrollData = (vr::VREvent_Scroll_t&)event.data;
-		vr::VREvent_Keyboard_t& keyboardData = (vr::VREvent_Keyboard_t&)event.data;
-
-		switch (event.eventType)
+		if (message.Header.PayloadSize < IPC_PAYLOAD_SIZE && message.Payload[message.Header.PayloadSize] == '\0')
 		{
-		case vr::VREvent_MouseButtonDown:
+			std::lock_guard<std::mutex> lock(m_menuWriteMutex);
 
-			if (mouseData.button & vr::VRMouseButton_Left)
-			{
-				io.AddMouseButtonEvent(ImGuiMouseButton_Left, true);
-			}
-			if (mouseData.button & vr::VRMouseButton_Middle)
-			{
-				io.AddMouseButtonEvent(ImGuiMouseButton_Middle, true);
-			}
-			if (mouseData.button & vr::VRMouseButton_Right)
-			{
-				io.AddMouseButtonEvent(ImGuiMouseButton_Right, true);
-			}
-
-			break;
-
-		case vr::VREvent_MouseButtonUp:
-
-			if (mouseData.button & vr::VRMouseButton_Left)
-			{
-				io.AddMouseButtonEvent(ImGuiMouseButton_Left, false);
-			}
-			if (mouseData.button & vr::VRMouseButton_Middle)
-			{
-				io.AddMouseButtonEvent(ImGuiMouseButton_Middle, false);
-			}
-			if (mouseData.button & vr::VRMouseButton_Right)
-			{
-				io.AddMouseButtonEvent(ImGuiMouseButton_Right, false);
-			}
-
-			break;
-
-		case vr::VREvent_MouseMove:
-
-			io.AddMousePosEvent(mouseData.x, OVERLAY_RES_HEIGHT - mouseData.y);
-
-			break;
-
-		case vr::VREvent_ScrollDiscrete:
-		case vr::VREvent_ScrollSmooth:
-
-			io.AddMouseWheelEvent(scrollData.xdelta, scrollData.ydelta);
-			break;
-
-		case vr::VREvent_FocusEnter:
-
-
-			break;
-
-		case vr::VREvent_FocusLeave:
-
-			if (((vr::VREvent_Overlay_t&)event.data).overlayHandle == m_overlayHandle)
-			{
-				io.AddMousePosEvent(-FLT_MAX, -FLT_MAX);
-			}
-
-			break;
-
-		case vr::VREvent_OverlayShown:
-
-			m_bMenuIsVisible = true;
-			break;
-
-		case vr::VREvent_OverlayHidden:
-
-			m_bMenuIsVisible = false;
-			m_configManager->DispatchUpdate();
-			break;
-
-		case vr::VREvent_DashboardActivated:
-			//bThumbnailNeedsUpdate = true;
-			break;
-
-		case vr::VREvent_KeyboardCharInput:
-
-			if (keyboardData.cNewInput[0] == 0x0A || keyboardData.cNewInput[0] == 0x0D)
-			{
-				io.AddKeyEvent(ImGuiKey_Enter, true);
-				io.AddKeyEvent(ImGuiKey_Enter, false);
-			}
-			else if (keyboardData.cNewInput[0] == 0x08)
-			{
-				io.AddKeyEvent(ImGuiKey_Backspace, true);
-				io.AddKeyEvent(ImGuiKey_Backspace, false);
-			}
-			else if (keyboardData.cNewInput[0] == 0x1b && keyboardData.cNewInput[1] == 0x5b && keyboardData.cNewInput[2] == 0x44)
-			{
-				io.AddKeyEvent(ImGuiKey_LeftArrow, true);
-				io.AddKeyEvent(ImGuiKey_LeftArrow, false);
-			}
-			else if (keyboardData.cNewInput[0] == 0x1b && keyboardData.cNewInput[1] == 0x5b && keyboardData.cNewInput[2] == 0x43)
-			{
-				io.AddKeyEvent(ImGuiKey_RightArrow, true);
-				io.AddKeyEvent(ImGuiKey_RightArrow, false);
-			}
-			else
-			{
-				io.AddInputCharactersUTF8(keyboardData.cNewInput);
-			}
-
-			break;
-
-		case vr::VREvent_KeyboardDone:
-
-			io.AddKeyEvent(ImGuiKey_Enter, true);
-			io.AddKeyEvent(ImGuiKey_Enter, false);
-			break;
-
-		case vr::VREvent_KeyboardClosed_Global:
-
-			if (m_bIsKeyboardOpen && keyboardData.overlayHandle == m_overlayHandle)
-			{
-				io.AddKeyEvent(ImGuiKey_Enter, true);
-				io.AddKeyEvent(ImGuiKey_Enter, false);
-				m_bIsKeyboardOpen = false;
-			}
-			break;
+			m_displayValues.currentApplication = std::string(reinterpret_cast<const char*>(message.Payload));
 		}
+		else
+		{
+			ErrorLog("Invalid application name string from IPC!\n");
+		}
+
+		break;
+
+	default:
+
+		ErrorLog("Unhandled IPC message type %d\n", (int)message.Header.Type);
+
 	}
 }
 
 
-void DashboardMenu::SetupDX11()
-{
-	IDXGIFactory1* factory = nullptr;
-	if (FAILED(CreateDXGIFactory1(__uuidof(IDXGIFactory1), reinterpret_cast<void**>(&factory))))
-	{
-		ErrorLog("Overlay: CreateDXGIFactory failure!\n");
-		return;
-	}
-
-	int32_t adapterIndex;
-	m_openVRManager->GetVRSystem()->GetDXGIOutputInfo(&adapterIndex);
-	IDXGIAdapter1* adapter = nullptr;
-
-	if (factory->EnumAdapters1(adapterIndex, &adapter) == DXGI_ERROR_NOT_FOUND)
-	{
-		ErrorLog("Overlay: No display adapter found!\n");
-		factory->Release();
-		return;
-	}
-
-	factory->Release();
-
-	std::vector<D3D_FEATURE_LEVEL> featureLevels = { D3D_FEATURE_LEVEL_12_1, D3D_FEATURE_LEVEL_12_0, D3D_FEATURE_LEVEL_11_1 };
-
-	ComPtr<ID3D11Device> device;
-	ComPtr <ID3D11DeviceContext> deviceContext;
-
-	HRESULT res = D3D11CreateDevice(adapter, D3D_DRIVER_TYPE_UNKNOWN, NULL, 0, featureLevels.data(), (uint32_t)featureLevels.size(), D3D11_SDK_VERSION, &device, NULL, &deviceContext);
-
-	adapter->Release();
-
-	if (FAILED(res))
-	{
-		ErrorLog("Overlay: D3D11CreateDevice failure: 0x%x\n", res);
-		return;
-	}
-
-	if (FAILED(device->QueryInterface(__uuidof(ID3D11Device5), reinterpret_cast<void**>(m_d3d11Device.GetAddressOf()))))
-	{
-		ErrorLog("Overlay: Querying ID3D11Device5 failure!\n");
-		return;
-	}
-
-	if (FAILED(deviceContext->QueryInterface(__uuidof(ID3D11DeviceContext4), reinterpret_cast<void**>(m_d3d11DeviceContext.GetAddressOf()))))
-	{
-		ErrorLog("Overlay: Querying ID3D11DeviceContext4 failure!\n");
-		return;
-	}
-
-	if (FAILED(m_d3d11Device->CreateFence(m_syncCounter, D3D11_FENCE_FLAG_NONE, __uuidof(ID3D11Fence), reinterpret_cast<void**>(m_d3d11Fence.GetAddressOf()))))
-	{
-		ErrorLog("Overlay: Failed to create fence!\n");
-		return;
-	}
-
-	m_d3d11FenceEvent = CreateEventW(NULL, FALSE, FALSE, NULL);
-
-	D3D11_TEXTURE2D_DESC textureDesc = {};
-	textureDesc.MipLevels = 1;
-	textureDesc.Format = DXGI_FORMAT_R8G8B8A8_UNORM;
-	textureDesc.Width = OVERLAY_RES_WIDTH;
-	textureDesc.Height = OVERLAY_RES_HEIGHT;
-	textureDesc.ArraySize = 1;
-	textureDesc.SampleDesc.Count = 1;
-	textureDesc.SampleDesc.Quality = 0;
-	textureDesc.BindFlags = D3D11_BIND_RENDER_TARGET | D3D11_BIND_SHADER_RESOURCE;
-	textureDesc.Usage = D3D11_USAGE_DEFAULT;
-	textureDesc.CPUAccessFlags = 0;
-	textureDesc.MiscFlags = D3D11_RESOURCE_MISC_SHARED;
-
-	D3D11_RENDER_TARGET_VIEW_DESC renderTargetViewDesc{};
-	renderTargetViewDesc.Format = textureDesc.Format;
-	renderTargetViewDesc.ViewDimension = D3D11_RTV_DIMENSION_TEXTURE2D;
-
-	for (int i = 0; i < 2; i++)
-	{
-		m_d3d11Device->CreateTexture2D(&textureDesc, nullptr, &m_d3d11Texture[i]);
-		m_d3d11Device->CreateRenderTargetView(m_d3d11Texture[i].Get(), &renderTargetViewDesc, &m_d3d11RTV[i]);
-	}
-}

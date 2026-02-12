@@ -9,10 +9,7 @@
 #include "mesh.h"
 #include <opencv2/videoio.hpp>
 #include "lodepng.h"
-#include <log.h>
 
-using namespace steamvr_passthrough;
-using namespace steamvr_passthrough::log;
 
 enum EPassthroughCameraState
 {
@@ -70,7 +67,9 @@ public:
 	{
 		const auto time = std::chrono::current_zone()->to_local(std::chrono::system_clock::now());
 
+#pragma warning(disable: 4996)// for getenv
 		const std::string fileName = (std::filesystem::path(getenv("LOCALAPPDATA")) / std::format("{} Camera Frame {:%Y-%m-%d %H-%M-%S}.png", cameraProvider, time)).string();
+#pragma warning(default: 4996)
 
 		uint32_t error = lodepng::encode(fileName, frameBuffer->data(), width, height);
 

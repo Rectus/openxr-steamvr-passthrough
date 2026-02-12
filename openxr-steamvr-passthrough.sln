@@ -23,6 +23,8 @@ Project("{8BC9CEB8-8B4A-11D0-8D11-00A0C91BC942}") = "passthrough-setup", "passth
 EndProject
 Project("{8BC9CEB8-8B4A-11D0-8D11-00A0C91BC942}") = "camera-calibration", "camera-calibration\camera-calibration.vcxproj", "{35F05883-9563-4ADA-911E-506E27EC6269}"
 EndProject
+Project("{8BC9CEB8-8B4A-11D0-8D11-00A0C91BC942}") = "passthrough-menu", "passthrough-menu\passthrough-menu.vcxproj", "{D0CBB929-4B2F-4D99-ABF5-ED0575CFEB8E}"
+EndProject
 Global
 	GlobalSection(SolutionConfigurationPlatforms) = preSolution
 		Debug|x64 = Debug|x64
@@ -41,6 +43,10 @@ Global
 		{35F05883-9563-4ADA-911E-506E27EC6269}.Debug|x64.Build.0 = Debug|x64
 		{35F05883-9563-4ADA-911E-506E27EC6269}.Release|x64.ActiveCfg = Release|x64
 		{35F05883-9563-4ADA-911E-506E27EC6269}.Release|x64.Build.0 = Release|x64
+		{D0CBB929-4B2F-4D99-ABF5-ED0575CFEB8E}.Debug|x64.ActiveCfg = Debug|x64
+		{D0CBB929-4B2F-4D99-ABF5-ED0575CFEB8E}.Debug|x64.Build.0 = Debug|x64
+		{D0CBB929-4B2F-4D99-ABF5-ED0575CFEB8E}.Release|x64.ActiveCfg = Release|x64
+		{D0CBB929-4B2F-4D99-ABF5-ED0575CFEB8E}.Release|x64.Build.0 = Release|x64
 	EndGlobalSection
 	GlobalSection(SolutionProperties) = preSolution
 		HideSolutionNode = FALSE

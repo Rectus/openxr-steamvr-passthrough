@@ -18,6 +18,9 @@
     <Filter Include="Libraries">
       <UniqueIdentifier>{7fb9ef4f-5887-4810-b86f-3b4724e1c8e2}</UniqueIdentifier>
     </Filter>
+    <Filter Include="Shared">
+      <UniqueIdentifier>{dce32d9d-f95f-468c-a350-a475523b0bed}</UniqueIdentifier>
+    </Filter>
   </ItemGroup>
   <ItemGroup>
     <ClInclude Include="pch.h">
@@ -74,9 +77,6 @@
     <ClInclude Include="resource.h">
       <Filter>Header Files</Filter>
     </ClInclude>
-    <ClInclude Include="openvr_manager.h">
-      <Filter>Header Files</Filter>
-    </ClInclude>
     <ClInclude Include="depth_reconstruction.h">
       <Filter>Header Files</Filter>
     </ClInclude>
@@ -87,6 +87,24 @@
       <Filter>Header Files</Filter>
     </ClInclude>
     <ClInclude Include="mathutil.h">
+      <Filter>Header Files</Filter>
+    </ClInclude>
+    <ClInclude Include="openvr_manager.h">
+      <Filter>Header Files</Filter>
+    </ClInclude>
+    <ClInclude Include="shared_structs.h">
+      <Filter>Header Files</Filter>
+    </ClInclude>
+    <ClInclude Include="version.h">
+      <Filter>Header Files</Filter>
+    </ClInclude>
+    <ClInclude Include="..\shared\menu_ipc.h">
+      <Filter>Shared</Filter>
+    </ClInclude>
+    <ClInclude Include="..\shared\menu_ipc_client.h">
+      <Filter>Shared</Filter>
+    </ClInclude>
+    <ClInclude Include="menu_handler.h">
       <Filter>Header Files</Filter>
     </ClInclude>
   </ItemGroup>
@@ -145,9 +163,6 @@
     <ClCompile Include="..\external\lodepng\lodepng.cpp">
       <Filter>Libraries</Filter>
     </ClCompile>
-    <ClCompile Include="openvr_manager.cpp">
-      <Filter>Source Files</Filter>
-    </ClCompile>
     <ClCompile Include="passthrough_renderer_vulkan.cpp">
       <Filter>Source Files</Filter>
     </ClCompile>
@@ -164,6 +179,18 @@
       <Filter>Source Files</Filter>
     </ClCompile>
     <ClCompile Include="camera_enumerator.cpp">
+      <Filter>Source Files</Filter>
+    </ClCompile>
+    <ClCompile Include="openvr_manager.cpp">
+      <Filter>Source Files</Filter>
+    </ClCompile>
+    <ClCompile Include="..\shared\menu_ipc.cpp">
+      <Filter>Shared</Filter>
+    </ClCompile>
+    <ClCompile Include="..\shared\menu_ipc_client.cpp">
+      <Filter>Shared</Filter>
+    </ClCompile>
+    <ClCompile Include="menu_handler.cpp">
       <Filter>Source Files</Filter>
     </ClCompile>
   </ItemGroup>

@@ -30,7 +30,7 @@ namespace {
     std::shared_timed_mutex g_logBufferMutex;
 } // namespace
 
-namespace LAYER_NAMESPACE::log {
+namespace LAYER_NAMESPACE::logging {
     extern std::ofstream logStream;
 
 #if USE_TRACELOGGING
@@ -66,7 +66,9 @@ namespace LAYER_NAMESPACE::log {
             const std::time_t now = std::time(nullptr);
 
             char buf[1024];
+#pragma warning(disable: 4996) // for std::localtime
             size_t offset = std::strftime(buf, sizeof(buf), "%Y-%m-%d %H:%M:%S %z: ", std::localtime(&now));
+#pragma warning(default: 4996)
             vsnprintf_s(buf + offset, sizeof(buf) - offset, _TRUNCATE, fmt, va);
 
             BufferLog(buf);
@@ -118,4 +120,4 @@ namespace LAYER_NAMESPACE::log {
         printFunc(g_logBuffer);
     }
 
-} // namespace LAYER_NAMESPACE::log
+} // namespace LAYER_NAMESPACE::logging

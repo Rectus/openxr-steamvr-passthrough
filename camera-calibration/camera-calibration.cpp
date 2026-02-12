@@ -204,6 +204,8 @@ int APIENTRY wWinMain(_In_ HINSTANCE hInstance, _In_opt_ HINSTANCE hPrevInstance
 
         SHGetKnownFolderPath(FOLDERID_RoamingAppData, 0, NULL, &path);
         lstrcpyW((PWSTR)g_configFilePath.c_str(), path);
+        CoTaskMemFree(path);
+
         PathCchAppend((PWSTR)g_configFilePath.data(), PATHCCH_MAX_CCH, CONFIG_FILE_DIR);
         CreateDirectoryW((PWSTR)g_configFilePath.data(), NULL);
         PathCchAppend((PWSTR)g_configFilePath.data(), PATHCCH_MAX_CCH, CONFIG_FILE_NAME);

@@ -31,7 +31,7 @@
 #error Must define LAYER_NAMESPACE
 #endif
 
-using namespace LAYER_NAMESPACE::log;
+using namespace LAYER_NAMESPACE::logging;
 
 namespace LAYER_NAMESPACE {
 

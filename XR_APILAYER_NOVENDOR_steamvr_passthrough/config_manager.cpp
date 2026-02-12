@@ -1,13 +1,11 @@
 #include "pch.h"
 #include "config_manager.h"
-#include <log.h>
 
-using namespace steamvr_passthrough;
-using namespace steamvr_passthrough::log;
 
-ConfigManager::ConfigManager(std::wstring configFile)
+ConfigManager::ConfigManager(std::wstring configFile, bool bAllowWrite)
 	: m_configFile(configFile)
 	, m_bConfigUpdated(false)
+	, m_bAllowWrite(bAllowWrite)
 	, m_iniData()
 	, m_debugTexture()
 {
@@ -48,17 +46,20 @@ bool ConfigManager::ReadConfigFile()
 
 void ConfigManager::UpdateConfigFile()
 {
-	m_configMain.UpdateConfig(m_iniData, "Main");
-	m_configCamera.UpdateConfig(m_iniData, "Camera");
-	m_configCore.UpdateConfig(m_iniData, "Core");
-	m_configExtensions.UpdateConfig(m_iniData, "Extensions");
-	m_configCustomStereo.UpdateConfig(m_iniData, "StereoCustom");
-	m_configDepth.UpdateConfig(m_iniData, "Depth");
-
-	SI_Error result = m_iniData.SaveFile(m_configFile.c_str());
-	if (result < 0)
+	if (m_bAllowWrite)
 	{
-		ErrorLog("Failed to save config file, %i \n", errno);
+		m_configMain.UpdateConfig(m_iniData, "Main");
+		m_configCamera.UpdateConfig(m_iniData, "Camera");
+		m_configCore.UpdateConfig(m_iniData, "Core");
+		m_configExtensions.UpdateConfig(m_iniData, "Extensions");
+		m_configCustomStereo.UpdateConfig(m_iniData, "StereoCustom");
+		m_configDepth.UpdateConfig(m_iniData, "Depth");
+
+		SI_Error result = m_iniData.SaveFile(m_configFile.c_str());
+		if (result < 0)
+		{
+			ErrorLog("Failed to save config file, %i \n", errno);
+		}
 	}
 
 	m_bConfigUpdated = false;

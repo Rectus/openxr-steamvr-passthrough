@@ -1,21 +1,17 @@
 #pragma once
 
-#include <thread>
-#include <condition_variable>
 
-#include "layer.h"
 #include "config_manager.h"
 #include "openvr_manager.h"
+#include "vulkan_menu_renderer.h"
+#include "menu_ipc_server.h"
+
 #include "imgui.h"
+#include <openxr/openxr.h>
 
-using Microsoft::WRL::ComPtr;
+class DesktopWindowWin32;
+class DashboardOverlay;
 
-#define DASHBOARD_OVERLAY_KEY "XR_APILAYER_NOVENDOR_steamvr_passthrough.{}.dashboard"
-
-#define OVERLAY_RES_WIDTH 1200
-#define OVERLAY_RES_HEIGHT 700
-
-class MenuIPCClient;
 
 enum EMenuTab
 {
@@ -68,49 +64,43 @@ struct MenuDisplayValues
 };
 
 
-class DashboardMenu
+class SettingsMenu : public IMenuIPCReader
 {
 public:
+	SettingsMenu(std::shared_ptr<ConfigManager> configManager, std::shared_ptr<OpenVRManager> openVRManager, std::shared_ptr<DesktopWindowWin32> window, std::shared_ptr<MenuIPCServer> IPCServer);
 
-	DashboardMenu(HMODULE dllModule, std::shared_ptr<ConfigManager> configManager, std::shared_ptr<OpenVRManager> openVRManager);
-
-	~DashboardMenu();
+	~SettingsMenu();
 	
 	MenuDisplayValues& GetDisplayValues() { return m_displayValues; }
 
-private:
-
-	void CreateOverlay();
-	void DestroyOverlay();
-	void CreateThumbnail();
-
-	void RunThread();
-	void HandleEvents();
+	bool InitMenu();
+	void DeinitMenu();
 	void TickMenu();
+	
+	LRESULT HandleWin32Events(HWND hWnd, UINT msg, WPARAM wParam, LPARAM lParam);
 
-	void SetupDX11();
+	virtual void MenuIPCMessageReceived(MenuIPCMessage& message, int clientIndex) override;
 
+private:
 	void TextDescription(const char* fmt, ...);
 	void TextDescriptionSpaced(const char* fmt, ...);
+	void DrawMenu();
 
 	std::shared_ptr<ConfigManager> m_configManager;
 	std::shared_ptr<OpenVRManager> m_openVRManager;
-	HMODULE m_dllModule;
+	std::shared_ptr<DesktopWindowWin32> m_window; 
+	std::shared_ptr<DashboardOverlay> m_overlay;
+	std::shared_ptr<MenuIPCServer> m_IPCServer;
 
-	vr::VROverlayHandle_t m_overlayHandle;
-	vr::VROverlayHandle_t m_thumbnailHandle;
+	VulkanMenuRenderer m_renderer;
 
-	std::thread m_menuThread;
-	bool m_bRunThread;
+	bool m_bHasWindow = false;
+	bool m_bHasOverlay = false;
 
-	ComPtr<ID3D11Device5> m_d3d11Device;
-	ComPtr<ID3D11DeviceContext4> m_d3d11DeviceContext;
-	ComPtr<ID3D11Texture2D> m_d3d11Texture[2];
-	ComPtr<ID3D11RenderTargetView> m_d3d11RTV[2];
-	ComPtr<ID3D11Fence> m_d3d11Fence;
-	HANDLE m_d3d11FenceEvent;
-	int m_frameIndex = 0;
-	uint64_t m_syncCounter = 0;
+	
+
+	//int m_frameIndex = 0;
+	//uint64_t m_syncCounter = 0;
 	LARGE_INTEGER m_lastFrameStart;
 
 	bool m_bMenuIsVisible;
@@ -129,9 +119,12 @@ private:
 
 	std::vector<std::string> m_cameraDevices;
 
+	std::mutex m_menuWriteMutex;
+
 	bool m_cameraTabBeenOpened = false;
 	bool m_debugTabBeenOpened = false;
 
 	bool m_bIsKeyboardOpen = false;
+	bool m_bElementActiveLastFrame = false;
 };
 

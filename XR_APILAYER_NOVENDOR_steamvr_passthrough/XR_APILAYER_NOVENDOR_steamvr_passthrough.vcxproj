@@ -60,11 +60,11 @@
     <ClCompile>
       <WarningLevel>Level3</WarningLevel>
       <SDLCheck>true</SDLCheck>
-      <PreprocessorDefinitions>LAYER_NAMESPACE=steamvr_passthrough;_DEBUG;_WINDOWS;_USRDLL;_CRT_SECURE_NO_WARNINGS;%(PreprocessorDefinitions)</PreprocessorDefinitions>
+      <PreprocessorDefinitions>LAYER_NAMESPACE=steamvr_passthrough;_DEBUG;_WINDOWS;_USRDLL;%(PreprocessorDefinitions)</PreprocessorDefinitions>
       <ConformanceMode>true</ConformanceMode>
       <PrecompiledHeader>Use</PrecompiledHeader>
       <PrecompiledHeaderFile>pch.h</PrecompiledHeaderFile>
-      <AdditionalIncludeDirectories>$(ProjectDir);$(ProjectDir)framework;$(SolutionDir)\external\OpenXR-SDK\include;$(SolutionDir)\external\OpenXR-SDK\src\common;$(SolutionDir)\external\openvr\headers;$(SolutionDir)\external\lodepng;$(SolutionDir)\external\imgui;$(SolutionDir)\external\imgui\backends;$(SolutionDir)\external\simpleini;$(SolutionDir)\external\opencv\build\include;$(VULKAN_SDK)\Include</AdditionalIncludeDirectories>
+      <AdditionalIncludeDirectories>$(ProjectDir);$(SolutionDir)shared;$(ProjectDir)framework;$(SolutionDir)\external\OpenXR-SDK\include;$(SolutionDir)\external\OpenXR-SDK\src\common;$(SolutionDir)\external\openvr\headers;$(SolutionDir)\external\lodepng;$(SolutionDir)\external\imgui;$(SolutionDir)\external\imgui\backends;$(SolutionDir)\external\simpleini;$(SolutionDir)\external\opencv\build\include;$(VULKAN_SDK)\Include</AdditionalIncludeDirectories>
       <LanguageStandard>stdcpp20</LanguageStandard>
       <AdditionalModuleDependencies>
       </AdditionalModuleDependencies>
@@ -129,11 +129,11 @@ copy $(SolutionDir)\readme.md $(OutDir)
       <FunctionLevelLinking>true</FunctionLevelLinking>
       <IntrinsicFunctions>true</IntrinsicFunctions>
       <SDLCheck>true</SDLCheck>
-      <PreprocessorDefinitions>LAYER_NAMESPACE=steamvr_passthrough;NDEBUG;_WINDOWS;_USRDLL;_CRT_SECURE_NO_WARNINGS;_DISABLE_CONSTEXPR_MUTEX_CONSTRUCTOR;%(PreprocessorDefinitions)</PreprocessorDefinitions>
+      <PreprocessorDefinitions>LAYER_NAMESPACE=steamvr_passthrough;NDEBUG;_WINDOWS;_USRDLL;_DISABLE_CONSTEXPR_MUTEX_CONSTRUCTOR;%(PreprocessorDefinitions)</PreprocessorDefinitions>
       <ConformanceMode>true</ConformanceMode>
       <PrecompiledHeader>Use</PrecompiledHeader>
       <PrecompiledHeaderFile>pch.h</PrecompiledHeaderFile>
-      <AdditionalIncludeDirectories>$(ProjectDir);$(ProjectDir)shaders;$(ProjectDir)framework;$(SolutionDir)\external\OpenXR-SDK\include;$(SolutionDir)\external\OpenXR-SDK\src\common;$(SolutionDir)\external\openvr\headers;$(SolutionDir)\external\lodepng;$(SolutionDir)\external\imgui;$(SolutionDir)\external\imgui\backends;$(SolutionDir)\external\simpleini;$(SolutionDir)\external\opencv\build\include;$(VULKAN_SDK)\Include</AdditionalIncludeDirectories>
+      <AdditionalIncludeDirectories>$(ProjectDir);$(SolutionDir)shared;$(ProjectDir)shaders;$(ProjectDir)framework;$(SolutionDir)\external\OpenXR-SDK\include;$(SolutionDir)\external\OpenXR-SDK\src\common;$(SolutionDir)\external\openvr\headers;$(SolutionDir)\external\lodepng;$(SolutionDir)\external\imgui;$(SolutionDir)\external\imgui\backends;$(SolutionDir)\external\simpleini;$(SolutionDir)\external\opencv\build\include;$(VULKAN_SDK)\Include</AdditionalIncludeDirectories>
       <LanguageStandard>stdcpp20</LanguageStandard>
       <InlineFunctionExpansion>AnySuitable</InlineFunctionExpansion>
       <FavorSizeOrSpeed>Speed</FavorSizeOrSpeed>
@@ -187,6 +187,8 @@ copy $(SolutionDir)THIRD_PARTY $(OutDir)THIRD_PARTY.txt</Command>
     <ClInclude Include="..\external\imgui\imgui.h" />
     <ClInclude Include="..\external\imgui\imgui_internal.h" />
     <ClInclude Include="..\external\lodepng\lodepng.h" />
+    <ClInclude Include="..\shared\menu_ipc.h" />
+    <ClInclude Include="..\shared\menu_ipc_client.h" />
     <ClInclude Include="camera_enumerator.h" />
     <ClInclude Include="camera_manager.h" />
     <ClInclude Include="check.h" />
@@ -198,12 +200,15 @@ copy $(SolutionDir)THIRD_PARTY $(OutDir)THIRD_PARTY.txt</Command>
     <ClInclude Include="framework\log.h" />
     <ClInclude Include="framework\util.h" />
     <ClInclude Include="mathutil.h" />
+    <ClInclude Include="menu_handler.h" />
     <ClInclude Include="mesh.h" />
     <ClInclude Include="openvr_manager.h" />
     <ClInclude Include="passthrough_renderer.h" />
     <ClInclude Include="layer.h" />
     <ClInclude Include="pch.h" />
     <ClInclude Include="resource.h" />
+    <ClInclude Include="shared_structs.h" />
+    <ClInclude Include="version.h" />
   </ItemGroup>
   <ItemGroup>
     <ClCompile Include="..\external\imgui\backends\imgui_impl_dx11.cpp">
@@ -234,6 +239,8 @@ copy $(SolutionDir)THIRD_PARTY $(OutDir)THIRD_PARTY.txt</Command>
       <PrecompiledHeader Condition="'$(Configuration)|$(Platform)'=='Debug|x64'">NotUsing</PrecompiledHeader>
       <PrecompiledHeader Condition="'$(Configuration)|$(Platform)'=='Release|x64'">NotUsing</PrecompiledHeader>
     </ClCompile>
+    <ClCompile Include="..\shared\menu_ipc.cpp" />
+    <ClCompile Include="..\shared\menu_ipc_client.cpp" />
     <ClCompile Include="camera_enumerator.cpp" />
     <ClCompile Include="camera_manager_opencv.cpp" />
     <ClCompile Include="camera_manager_openvr.cpp" />
@@ -244,6 +251,7 @@ copy $(SolutionDir)THIRD_PARTY $(OutDir)THIRD_PARTY.txt</Command>
     <ClCompile Include="framework\dispatch.gen.cpp" />
     <ClCompile Include="framework\entry.cpp" />
     <ClCompile Include="framework\log.cpp" />
+    <ClCompile Include="menu_handler.cpp" />
     <ClCompile Include="mesh.cpp" />
     <ClCompile Include="openvr_manager.cpp" />
     <ClCompile Include="passthrough_renderer_dx11.cpp" />

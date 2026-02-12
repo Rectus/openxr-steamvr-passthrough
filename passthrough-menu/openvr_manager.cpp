@@ -1,6 +1,6 @@
 #include "pch.h"
 #include "openvr_manager.h"
-#include "layer.h"
+
 
 
 
@@ -38,7 +38,23 @@ bool OpenVRManager::InitRuntime()
     }
 
     vr::EVRInitError error;
-    vr::IVRSystem* system = vr::VR_Init(&error, vr::EVRApplicationType::VRApplication_Overlay);
+
+    vr::IVRSystem* system = vr::VR_Init(&error, vr::EVRApplicationType::VRApplication_Background);
+
+    if (error == vr::EVRInitError::VRInitError_Init_NoServerForBackgroundApp)
+    {
+        Log("SteamVR not running. Not starting overlay.\n");
+        return false;
+    }
+    else if (error != vr::EVRInitError::VRInitError_None)
+    {
+        ErrorLog("Failed to initialize SteamVR runtime, error %i\n", error);
+        return false;
+    }
+
+    vr::VR_Shutdown();
+
+    system = vr::VR_Init(&error, vr::EVRApplicationType::VRApplication_Overlay);
 
     if (error != vr::EVRInitError::VRInitError_None)
     {
