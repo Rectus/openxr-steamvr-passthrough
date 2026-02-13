@@ -321,7 +321,5 @@ bool MenuIPCClient::ClosePipe()
 
 		return true;
 	}
-
-	ErrorLog("IPC client: Failed to close pipe!\n");
 	return false;
 }

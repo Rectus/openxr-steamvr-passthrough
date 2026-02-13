@@ -8,10 +8,10 @@
 class DesktopWindowWin32
 {
 public:
-	DesktopWindowWin32(HINSTANCE hInstance, bool bExitOnClose);
+	DesktopWindowWin32(HINSTANCE hInstance, bool bExitOnClose, bool bExitOnNoClients);
 	~DesktopWindowWin32();
 
-	static void RestoreExistingWindow(HINSTANCE hInstance);
+	static void HandleOldAppInstance(HINSTANCE hInstance, bool bRestoreWindow, bool bPreventExitNoClients, bool bPreventExitOnClose);
 
 	bool InitWindow(bool bStartOpen, int cmdShow);
 	void DeinitWindow();
@@ -22,6 +22,9 @@ public:
 	HWND GetWindowHandle() { return m_hSettingsWindow; }
 	bool GetWindowDimensions(uint32_t& width, uint32_t& height);
 	bool CreateVulkanSurface(VkInstance instance, VkSurfaceKHR& surface);
+	void OnClientConnected();
+	void OnAllClientsDisconnected();
+	bool OnMessagesHandled();
 
 protected:
 	bool AddTrayIcon();
@@ -29,8 +32,8 @@ protected:
 	void RemoveTrayIcon();
 	void TrayShowMenu();
 
-	static void TrayClickTimerCallback(HWND hWnd, UINT message, UINT_PTR event, DWORD time);
-	void TrayClickTimerCallbackImpl(HWND hWnd, UINT message, UINT_PTR event, DWORD time);
+	static void TimerCallback(HWND hWnd, UINT message, UINT_PTR event, DWORD time);
+	void TimerCallbackImpl(HWND hWnd, UINT message, UINT_PTR event, DWORD time);
 
 	static LRESULT WndProc(HWND hWnd, UINT message, WPARAM wParam, LPARAM lParam);
 	LRESULT WndProcImpl(HWND hWnd, UINT message, WPARAM wParam, LPARAM lParam);
@@ -48,11 +51,15 @@ protected:
 	std::atomic_bool m_bIsPainting = false;
 	POINT m_trayCursorPos = { 0 };
 	INT_PTR m_trayClickTimer = NULL;
+	INT_PTR m_shutdownDelayTimer = NULL;
 	WCHAR m_titleString[MAX_LOADSTRING] = { 0 };
 	WCHAR m_windowClass[MAX_LOADSTRING] = { 0 };
 	bool m_windowInitialized = false;
 	bool m_runWindow = true;
 	bool m_bExitOnClose = false;
+	bool m_bExitOnNoClients = false;
+	bool m_bExitChangedByClients = false;
+	bool m_bDrawPending = false;
 	std::shared_ptr<SettingsMenu> m_settingsMenu = nullptr;
 };
 

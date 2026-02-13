@@ -156,7 +156,6 @@
     <ClInclude Include="..\external\imgui\imgui_internal.h" />
     <ClInclude Include="..\external\lodepng\lodepng.h" />
     <ClInclude Include="..\shared\menu_ipc.h" />
-    <ClInclude Include="..\shared\menu_ipc_client.h" />
     <ClInclude Include="..\shared\menu_ipc_server.h" />
     <ClInclude Include="..\XR_APILAYER_NOVENDOR_steamvr_passthrough\camera_enumerator.h" />
     <ClInclude Include="..\XR_APILAYER_NOVENDOR_steamvr_passthrough\config_manager.h" />
@@ -212,7 +211,6 @@
       <PrecompiledHeader Condition="'$(Configuration)|$(Platform)'=='Release|x64'">NotUsing</PrecompiledHeader>
     </ClCompile>
     <ClCompile Include="..\shared\menu_ipc.cpp" />
-    <ClCompile Include="..\shared\menu_ipc_client.cpp" />
     <ClCompile Include="..\shared\menu_ipc_server.cpp" />
     <ClCompile Include="..\XR_APILAYER_NOVENDOR_steamvr_passthrough\camera_enumerator.cpp" />
     <ClCompile Include="..\XR_APILAYER_NOVENDOR_steamvr_passthrough\config_manager.cpp" />

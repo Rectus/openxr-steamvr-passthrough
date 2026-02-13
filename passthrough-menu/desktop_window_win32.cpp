@@ -16,9 +16,10 @@
 #define WINDOW_HEIGHT 768
 
 
-DesktopWindowWin32::DesktopWindowWin32(HINSTANCE hInstance, bool bExitOnClose)
+DesktopWindowWin32::DesktopWindowWin32(HINSTANCE hInstance, bool bExitOnClose, bool bExitOnNoClients)
     : m_hInstance(hInstance)
     , m_bExitOnClose(bExitOnClose)
+    , m_bExitOnNoClients(bExitOnNoClients)
 {
     m_runWindow = true;
 }
@@ -145,7 +146,7 @@ void DesktopWindowWin32::SetMenu(std::shared_ptr<SettingsMenu> menu)
     m_settingsMenu = menu;
 }
 
-void DesktopWindowWin32::RestoreExistingWindow(HINSTANCE hInstance)
+void DesktopWindowWin32::HandleOldAppInstance(HINSTANCE hInstance, bool bRestoreWindow, bool bPreventExitNoClients, bool bPreventExitOnClose)
 {
     WCHAR titleString[MAX_LOADSTRING];
     LoadStringW(hInstance, IDS_APP_TITLE, titleString, MAX_LOADSTRING);
@@ -153,9 +154,19 @@ void DesktopWindowWin32::RestoreExistingWindow(HINSTANCE hInstance)
     HWND window = FindWindow(NULL, titleString);
     if (window != NULL)
     {
-        SendMessage(window, WM_COMMAND, IDM_TRAYOPEN, 0);
-        SetForegroundWindow(window);
-        ShowWindow(window, SW_RESTORE);
+        if (bPreventExitNoClients || bPreventExitOnClose)
+        {
+            int flags = bPreventExitNoClients ? 1 : 0;
+            flags |= bPreventExitOnClose ? 2 : 0;
+            SendMessage(window, WM_COMMAND, IDM_NEWAPPLAUNCH, flags);
+        }
+
+        if (bRestoreWindow)
+        {
+            SendMessage(window, WM_COMMAND, IDM_TRAYOPEN, 0);
+            SetForegroundWindow(window);
+            ShowWindow(window, SW_RESTORE);
+        }
     }
 }
 
@@ -187,7 +198,7 @@ bool DesktopWindowWin32::HandleMessages(MSG& quitMessage)
 
 bool DesktopWindowWin32::IsVisible()
 {
-    return IsWindowVisible(m_hSettingsWindow);
+    return IsWindowVisible(m_hSettingsWindow) && !IsIconic(m_hSettingsWindow);
 }
 
 bool DesktopWindowWin32::GetWindowDimensions(uint32_t& width, uint32_t& height)
@@ -214,6 +225,25 @@ bool DesktopWindowWin32::CreateVulkanSurface(VkInstance instance, VkSurfaceKHR& 
     }
 
     return true;
+}
+
+void DesktopWindowWin32::OnClientConnected()
+{
+    KillTimer(m_hSettingsWindow, m_shutdownDelayTimer);
+    m_shutdownDelayTimer = NULL;
+}
+
+void DesktopWindowWin32::OnAllClientsDisconnected()
+{
+    if (m_bExitOnNoClients && !m_bIsSettingsWindowShown)
+    {
+        m_shutdownDelayTimer = SetTimer(m_hSettingsWindow, IDT_TIMER_EXITDELAY, 1000, DesktopWindowWin32::TimerCallback);
+    }
+
+    if (m_bExitChangedByClients)
+    {
+        m_bExitOnClose = true;
+    }
 }
 
 
@@ -284,19 +314,31 @@ void DesktopWindowWin32::TrayShowMenu()
     TrackPopupMenu(menu, TPM_LEFTALIGN, m_trayCursorPos.x, m_trayCursorPos.y, 0, m_hSettingsWindow, NULL);
 }
 
-void CALLBACK DesktopWindowWin32::TrayClickTimerCallback(HWND hWnd, UINT message, UINT_PTR event, DWORD time)
+void CALLBACK DesktopWindowWin32::TimerCallback(HWND hWnd, UINT message, UINT_PTR event, DWORD time)
 {
     DesktopWindowWin32* inst = reinterpret_cast<DesktopWindowWin32*>(GetWindowLongPtr(hWnd, GWLP_USERDATA));
     if (inst)
     {
-        inst->TrayClickTimerCallbackImpl(hWnd, message, event, time);
+        inst->TimerCallbackImpl(hWnd, message, event, time);
     }
 }
 
-void CALLBACK DesktopWindowWin32::TrayClickTimerCallbackImpl(HWND hWnd, UINT message, UINT_PTR event, DWORD time)
+void CALLBACK DesktopWindowWin32::TimerCallbackImpl(HWND hWnd, UINT message, UINT_PTR event, DWORD time)
 {
-    KillTimer(m_hSettingsWindow, m_trayClickTimer);
-    TrayShowMenu();
+    if (event == IDT_TIMER_EXITDELAY)
+    {
+        KillTimer(m_hSettingsWindow, m_shutdownDelayTimer);
+        m_shutdownDelayTimer = NULL;
+        if (m_bExitOnNoClients && !m_bIsSettingsWindowShown)
+        {
+            m_runWindow = false;
+        }
+    }
+    else if (event == IDT_TIMER_TRAYCLICK)
+    {
+        KillTimer(m_hSettingsWindow, m_trayClickTimer);
+        TrayShowMenu();
+    }
 }
 
 
@@ -337,6 +379,19 @@ LRESULT CALLBACK DesktopWindowWin32::WndProcImpl(HWND hWnd, UINT message, WPARAM
             m_runWindow = false;
             break;
 
+        case IDM_NEWAPPLAUNCH:
+            
+            if (lParam & 1)
+            {
+                m_bExitOnNoClients = false;
+            }
+            if (lParam & 2)
+            {
+                m_bExitOnClose = false;
+                m_bExitChangedByClients = !(lParam & 1);
+            }
+            break;
+
         default:
             return DefWindowProc(hWnd, message, wParam, lParam);
         }
@@ -344,13 +399,17 @@ LRESULT CALLBACK DesktopWindowWin32::WndProcImpl(HWND hWnd, UINT message, WPARAM
     break;
 
     case WM_PAINT:
-    case WM_MOVE: // Paint on move to prevent the window from blanking out (only works partially).
+    case WM_MOVE:
 
-        if (m_bIsSettingsWindowShown && !m_bIsPainting && m_settingsMenu.get())
+        if (m_bIsSettingsWindowShown && IsVisible() && !m_bIsPainting && m_settingsMenu.get())
         {
             m_bIsPainting = true;
             m_settingsMenu->TickMenu();
             m_bIsPainting = false;
+        }
+        else if(!IsVisible() || !m_bIsSettingsWindowShown)
+        {
+            return DefWindowProc(hWnd, message, wParam, lParam);
         }
 
         break;
@@ -385,7 +444,7 @@ LRESULT CALLBACK DesktopWindowWin32::WndProcImpl(HWND hWnd, UINT message, WPARAM
 
         case WM_LBUTTONDOWN:
 
-            m_trayClickTimer = SetTimer(m_hSettingsWindow, 100, GetDoubleClickTime(), TrayClickTimerCallback);
+            m_trayClickTimer = SetTimer(m_hSettingsWindow, IDT_TIMER_TRAYCLICK, GetDoubleClickTime(), TimerCallback);
             GetCursorPos(&m_trayCursorPos);
 
             break;

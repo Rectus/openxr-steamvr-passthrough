@@ -85,10 +85,7 @@ int APIENTRY wWinMain(_In_ HINSTANCE hInstance, _In_opt_ HINSTANCE hPrevInstance
     HANDLE hInstanceMutex = CreateMutexW(NULL, TRUE, MUTEX_APP_KEY);
     if (GetLastError() == ERROR_ALREADY_EXISTS)
     {
-        if (bOpenWindow && !bOpenedByLayer)
-        {
-            DesktopWindowWin32::RestoreExistingWindow(hInstance);
-        }
+        DesktopWindowWin32::HandleOldAppInstance(hInstance, bOpenWindow, !bOpenedByLayer, !bExitOnClose);
         return 1;
     }
 
@@ -121,7 +118,7 @@ int APIENTRY wWinMain(_In_ HINSTANCE hInstance, _In_opt_ HINSTANCE hPrevInstance
     }
 
 
-    std::shared_ptr<DesktopWindowWin32> window = std::make_shared<DesktopWindowWin32>(hInstance, bExitOnClose);
+    std::shared_ptr<DesktopWindowWin32> window = std::make_shared<DesktopWindowWin32>(hInstance, bExitOnClose, bOpenedByLayer);
 
     if (!window->InitWindow(bOpenWindow, nCmdShow))
     {
@@ -153,6 +150,7 @@ int APIENTRY wWinMain(_In_ HINSTANCE hInstance, _In_opt_ HINSTANCE hPrevInstance
     Log("Menu started.\n");
 
     MSG quitMessage = {};
+  
 
     // Main message loop:
     while (window->IsWindowRunning())
@@ -172,11 +170,11 @@ int APIENTRY wWinMain(_In_ HINSTANCE hInstance, _In_opt_ HINSTANCE hPrevInstance
             if (window->IsVisible())
             {
                 std::this_thread::yield();
-
+                //std::this_thread::sleep_for(std::chrono::milliseconds(1));
             }
             else
             {
-                std::this_thread::sleep_for(std::chrono::milliseconds(1));
+                std::this_thread::sleep_for(std::chrono::milliseconds(10));
             }
         }
     }

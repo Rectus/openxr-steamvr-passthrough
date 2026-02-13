@@ -27,7 +27,7 @@ void MenuHandler::DispatchDisplayValues()
 	m_bHasDisplayValues = true;
 	MenuIPCMessage message = {};
 	message.Header.Type = MessageType_SetDisplayValues;
-	message.Header.PayloadSize = sizeof(MenuDisplayValues);
+	message.Header.PayloadSize = sizeof(MenuDisplayValues); 
 	memcpy(message.Payload, &m_displayValues, sizeof(MenuDisplayValues));
 	reinterpret_cast<MenuDisplayValues*>(&message.Payload)->currentApplication = {};
 	m_IPCClient->WriteMessage(message, false);
@@ -35,7 +35,6 @@ void MenuHandler::DispatchDisplayValues()
 
 void MenuHandler::DispatchApplicationName()
 {
-	Log("aaaaaaaaaa\n");
 	m_bHasApplicationName = true;
 	MenuIPCMessage message = {};
 	message.Header.Type = MessageType_SetAppName;

@@ -28,6 +28,7 @@ struct MenuDisplayValues
 	float renderTimeMS = 0.0f;
 	float stereoReconstructionTimeMS = 0.0f;
 	float frameRetrievalTimeMS = 0.0f;
+	uint64_t lastFrameTimestamp = 0;
 
 	bool bCorePassthroughActive = false;
 	bool bFBPassthroughActive = false;

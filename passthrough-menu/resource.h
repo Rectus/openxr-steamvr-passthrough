@@ -12,6 +12,9 @@
 #define IDI_PASSTHROUGHMENU             107
 #define IDC_PASSTHROUGHMENU             109
 #define IDM_TRAYOPEN                    110
+#define IDM_NEWAPPLAUNCH                111
+#define IDT_TIMER_TRAYCLICK             112
+#define IDT_TIMER_EXITDELAY             113
 #define IDR_MAINFRAME                   128
 #define ID_FILE_OPEN                    32771
 #define IDC_STATIC                      -1
@@ -24,6 +27,6 @@
 #define _APS_NEXT_RESOURCE_VALUE        131
 #define _APS_NEXT_COMMAND_VALUE         32772
 #define _APS_NEXT_CONTROL_VALUE         1000
-#define _APS_NEXT_SYMED_VALUE           111
+#define _APS_NEXT_SYMED_VALUE           114
 #endif
 #endif

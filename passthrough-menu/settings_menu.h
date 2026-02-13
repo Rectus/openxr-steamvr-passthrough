@@ -45,6 +45,7 @@ struct MenuDisplayValues
 	float renderTimeMS = 0.0f;
 	float stereoReconstructionTimeMS = 0.0f;
 	float frameRetrievalTimeMS = 0.0f;
+	uint64_t lastFrameTimestamp = 0;
 
 	bool bCorePassthroughActive = false;
 	bool bFBPassthroughActive = false;
@@ -61,6 +62,8 @@ struct MenuDisplayValues
 	uint32_t CameraFrameHeight = 0;
 	float CameraFrameRate = 0.0f;
 	std::string CameraAPI;
+
+	MenuDisplayValues() {}
 };
 
 
@@ -70,8 +73,6 @@ public:
 	SettingsMenu(std::shared_ptr<ConfigManager> configManager, std::shared_ptr<OpenVRManager> openVRManager, std::shared_ptr<DesktopWindowWin32> window, std::shared_ptr<MenuIPCServer> IPCServer);
 
 	~SettingsMenu();
-	
-	MenuDisplayValues& GetDisplayValues() { return m_displayValues; }
 
 	bool InitMenu();
 	void DeinitMenu();
@@ -79,6 +80,8 @@ public:
 	
 	LRESULT HandleWin32Events(HWND hWnd, UINT msg, WPARAM wParam, LPARAM lParam);
 
+	virtual void MenuIPCClientConnected(int clientIndex) override;
+	virtual void MenuIPCClientDisconnected(int clientIndex) override;
 	virtual void MenuIPCMessageReceived(MenuIPCMessage& message, int clientIndex) override;
 
 private:
@@ -97,15 +100,13 @@ private:
 	bool m_bHasWindow = false;
 	bool m_bHasOverlay = false;
 
-	
-
-	//int m_frameIndex = 0;
-	//uint64_t m_syncCounter = 0;
 	LARGE_INTEGER m_lastFrameStart;
 
 	bool m_bMenuIsVisible;
-	MenuDisplayValues m_displayValues;
 	EMenuTab m_activeTab;
+	int m_activeClient = -1;
+	std::vector< std::unique_ptr<MenuDisplayValues>> m_displayValues;
+	MenuDisplayValues m_defualtDisplayValues = {};
 
 	ImFont* m_mainFont;
 	ImFont* m_smallFont;
@@ -126,5 +127,6 @@ private:
 
 	bool m_bIsKeyboardOpen = false;
 	bool m_bElementActiveLastFrame = false;
+	bool m_bSettingsUpdatedThisSession = false;
 };
 

@@ -45,7 +45,8 @@ HMODULE g_dllModule = NULL;
 // Directory under AppData to write config.
 #define CONFIG_FILE_DIR L"\\OpenXR SteamVR Passthrough\\"
 #define CONFIG_FILE_NAME L"config.ini"
-
+#define MENU_EXE_FILE_NAME L"\\passthrough-menu.exe"
+#define MENU_EXE_ARGUMENTS L" --fromlayer"
 
 
 namespace
@@ -161,14 +162,14 @@ namespace
 			Log("Using OpenXR runtime: %s\n", runtimeName.c_str());
 #endif
 
-#ifndef OPENVR_BUILD_STATIC
-			// Try to load the OpenVR DLL from the same directory the current DLL is in.
 			std::wstring dllPath(MAX_PATH, L'\0');
 			if (FAILED(GetModuleFileNameW(g_dllModule, (LPWSTR)dllPath.c_str(), (DWORD)dllPath.size())))
 			{
 				ErrorLog("Error retreiving DLL path.\n");
 			}
 
+#ifndef OPENVR_BUILD_STATIC
+			// Try to load the OpenVR DLL from the same directory the current DLL is in.
 			std::wstring openVRPath = dllPath.substr(0, dllPath.find_last_of(L"/\\")) + L"\\openvr_api.dll";
 
 			// If loading fails without error, hopefully it means the library is already loaded.
@@ -205,6 +206,22 @@ namespace
 					ErrorLog("The active OpenXR runtime is %s, not SteamVR, passthrough layer not enabled\n", instanceProperties.runtimeName);
 					return result;
 				}
+			}
+
+			// Launch settings menu to the systray and dashboard.
+			std::wstring menuEXEPath = dllPath.substr(0, dllPath.find_last_of(L"/\\")) + MENU_EXE_FILE_NAME;
+			std::wstring menuEXECmdLine = menuEXEPath + MENU_EXE_ARGUMENTS;
+			STARTUPINFOW startupInfo = { sizeof(STARTUPINFOW) };
+			PROCESS_INFORMATION processInfo;
+
+			if (CreateProcessW(menuEXEPath.data(), menuEXECmdLine.data(), NULL, NULL, false, 0, NULL, NULL, &startupInfo, &processInfo))
+			{
+				CloseHandle(processInfo.hProcess);
+				CloseHandle(processInfo.hThread);
+			}
+			else
+			{
+				ErrorLog("Failed to launch settings menu process: %d\n", GetLastError());
 			}
 
 			m_openVRManager = std::make_shared<OpenVRManager>();
@@ -1823,6 +1840,7 @@ namespace
 			else if (bDidRender)
 			{
 				m_lastRenderTime = StartPerfTimer();
+				m_menuHandler->GetDisplayValues().lastFrameTimestamp = m_lastRenderTime.QuadPart;
 				m_menuHandler->DispatchDisplayValues();
 			}
 			else
@@ -2305,7 +2323,7 @@ namespace
 		std::deque<float> m_frameToPhotonTimes;
 		std::deque<float> m_passthroughRenderTimes;
 
-		LARGE_INTEGER m_lastRenderTime;
+		LARGE_INTEGER m_lastRenderTime = {};
 		bool m_bIsPaused = false;
 		bool m_bCamerasInitialized = false;
 

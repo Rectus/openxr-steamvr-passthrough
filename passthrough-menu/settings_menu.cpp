@@ -35,6 +35,7 @@ SettingsMenu::SettingsMenu(std::shared_ptr<ConfigManager> configManager, std::sh
 	, m_activeTab(TabMain)
 {
 	m_renderer = VulkanMenuRenderer();
+	m_defualtDisplayValues.currentApplication = "No application";
 }
 
 
@@ -340,6 +341,9 @@ void SettingsMenu::DrawMenu()
 	Config_Depth& depthConfig = m_configManager->GetConfig_Depth();
 	Config_Camera& cameraConfig = m_configManager->GetConfig_Camera();
 
+	bool hasClient = m_activeClient >= 0 && m_activeClient < m_displayValues.size();
+	MenuDisplayValues& displayValues = hasClient ? *m_displayValues[m_activeClient] : m_defualtDisplayValues;
+
 	ImVec4 colorTextGreen(0.2f, 0.8f, 0.2f, 1.0f);
 	ImVec4 colorTextRed(0.8f, 0.2f, 0.2f, 1.0f);
 	ImVec4 colorTextOrange(0.85f, 0.7f, 0.2f, 1.0f);
@@ -394,29 +398,29 @@ if (bIsActiveTab) { ImGui::PopStyleColor(1); bIsActiveTab = false; }
 	ImGui::PushFont(m_smallFont);
 	ImGui::Indent();
 	ImGui::Text("Application:");
-	ImGui::Text("%s", m_displayValues.currentApplication.c_str());
+	ImGui::Text("%s", displayValues.currentApplication.c_str());
 
 	ImGui::Separator();
 	ImGui::Text("Session:");
-	m_displayValues.bSessionActive ? ImGui::TextColored(colorTextGreen, "Active") : ImGui::TextColored(colorTextRed, "Inactive");
+	displayValues.bSessionActive ? ImGui::TextColored(colorTextGreen, "Active") : ImGui::TextColored(colorTextRed, "Inactive");
 
-	bool bPassthoughActive = (m_displayValues.bCorePassthroughActive || m_displayValues.bFBPassthroughActive);
+	bool bPassthoughActive = (displayValues.bCorePassthroughActive || displayValues.bFBPassthroughActive);
 
 	ImGui::Separator();
 	ImGui::Text("Passthrough:");
 	bPassthoughActive ? ImGui::TextColored(colorTextGreen, "Active") : ImGui::TextColored(colorTextRed, "Inactive");
 
-	if (mainConfig.EnablePassthrough && !bPassthoughActive && m_displayValues.CoreCurrentMode == 1)
+	if (mainConfig.EnablePassthrough && !bPassthoughActive && displayValues.CoreCurrentMode == 1)
 	{
 		ImGui::TextColored(colorTextRed, "Opaque");
 	}
 
-	if (mainConfig.EnablePassthrough && !bPassthoughActive && m_displayValues.CoreCurrentMode == 3 && !(m_displayValues.frameBufferFlags & XR_COMPOSITION_LAYER_BLEND_TEXTURE_SOURCE_ALPHA_BIT))
+	if (mainConfig.EnablePassthrough && !bPassthoughActive && displayValues.CoreCurrentMode == 3 && !(displayValues.frameBufferFlags & XR_COMPOSITION_LAYER_BLEND_TEXTURE_SOURCE_ALPHA_BIT))
 	{
 		ImGui::TextColored(colorTextRed, "No Alpha");
 	}
 
-	if (bPassthoughActive && m_displayValues.bDepthBlendingActive)
+	if (bPassthoughActive && displayValues.bDepthBlendingActive)
 	{
 		ImGui::TextColored(colorTextGreen, "Depth Blending");
 	}
@@ -613,7 +617,7 @@ if (bIsActiveTab) { ImGui::PopStyleColor(1); bIsActiveTab = false; }
 			ImGui::PushFont(m_fixedFont);
 			ImGui::Text("Core passthrough:");
 			ImGui::SameLine();
-			if (m_displayValues.bCorePassthroughActive)
+			if (displayValues.bCorePassthroughActive)
 			{
 				ImGui::TextColored(colorTextGreen, "Active");
 			}
@@ -624,12 +628,12 @@ if (bIsActiveTab) { ImGui::PopStyleColor(1); bIsActiveTab = false; }
 
 			ImGui::Text("Application requested mode:");
 			ImGui::SameLine();
-			if (m_displayValues.CoreCurrentMode == 3) { ImGui::Text("Alpha Blend"); }
-			else if (m_displayValues.CoreCurrentMode == 2) { ImGui::Text("Additive"); }
-			else if (m_displayValues.CoreCurrentMode == 1) { ImGui::Text("Opaque"); }
+			if (displayValues.CoreCurrentMode == 3) { ImGui::Text("Alpha Blend"); }
+			else if (displayValues.CoreCurrentMode == 2) { ImGui::Text("Additive"); }
+			else if (displayValues.CoreCurrentMode == 1) { ImGui::Text("Opaque"); }
 			else { ImGui::Text("Unknown"); }
 
-			if(mainConfig.EnablePassthrough && !m_displayValues.bCorePassthroughActive && m_displayValues.CoreCurrentMode == 3 && !(m_displayValues.frameBufferFlags& XR_COMPOSITION_LAYER_BLEND_TEXTURE_SOURCE_ALPHA_BIT))
+			if(mainConfig.EnablePassthrough && !displayValues.bCorePassthroughActive && displayValues.CoreCurrentMode == 3 && !(displayValues.frameBufferFlags& XR_COMPOSITION_LAYER_BLEND_TEXTURE_SOURCE_ALPHA_BIT))
 			{ ImGui::TextColored(colorTextRed, "No alpha channel provided!"); }
 
 			ImGui::PopFont();
@@ -680,7 +684,7 @@ if (bIsActiveTab) { ImGui::PopStyleColor(1); bIsActiveTab = false; }
 				ImGui::PushFont(m_fixedFont);
 				ImGui::Text("Composition Layer Inverted Alpha extension:");
 				ImGui::SameLine();
-				if (m_displayValues.bExtInvertedAlphaActive)
+				if (displayValues.bExtInvertedAlphaActive)
 				{
 					ImGui::TextColored(colorTextGreen, "Active");
 				}
@@ -700,7 +704,7 @@ if (bIsActiveTab) { ImGui::PopStyleColor(1); bIsActiveTab = false; }
 				ImGui::PushFont(m_fixedFont);
 				ImGui::Text("Android Passthrough Camera State extension:");
 				ImGui::SameLine();
-				if (m_displayValues.bAndroidPassthroughStateActive)
+				if (displayValues.bAndroidPassthroughStateActive)
 				{
 					ImGui::TextColored(colorTextGreen, "Active");
 				}
@@ -720,7 +724,7 @@ if (bIsActiveTab) { ImGui::PopStyleColor(1); bIsActiveTab = false; }
 				ImGui::PushFont(m_fixedFont);
 				ImGui::Text("Facebook Passthrough extension:");
 				ImGui::SameLine();
-				if (m_displayValues.bFBPassthroughExtensionActive)
+				if (displayValues.bFBPassthroughExtensionActive)
 				{
 					ImGui::TextColored(colorTextGreen, "Active");
 				}
@@ -731,7 +735,7 @@ if (bIsActiveTab) { ImGui::PopStyleColor(1); bIsActiveTab = false; }
 
 				ImGui::Text("Facebook Passthrough:");
 				ImGui::SameLine();
-				if (m_displayValues.bFBPassthroughActive)
+				if (displayValues.bFBPassthroughActive)
 				{
 					ImGui::TextColored(colorTextGreen, "Active");
 				}
@@ -742,7 +746,7 @@ if (bIsActiveTab) { ImGui::PopStyleColor(1); bIsActiveTab = false; }
 
 				ImGui::Text("Facebook Passthrough Depth:");
 				ImGui::SameLine();
-				if (m_displayValues.bFBPassthroughDepthActive)
+				if (displayValues.bFBPassthroughDepthActive)
 				{
 					ImGui::TextColored(colorTextGreen, "Active");
 				}
@@ -774,7 +778,7 @@ if (bIsActiveTab) { ImGui::PopStyleColor(1); bIsActiveTab = false; }
 				ImGui::PushFont(m_fixedFont);
 				ImGui::Text("Varjo Depth Estimation extension:");
 				ImGui::SameLine();
-				if (m_displayValues.bVarjoDepthEstimationExtensionActive)
+				if (displayValues.bVarjoDepthEstimationExtensionActive)
 				{
 					ImGui::TextColored(colorTextGreen, "Active");
 				}
@@ -785,7 +789,7 @@ if (bIsActiveTab) { ImGui::PopStyleColor(1); bIsActiveTab = false; }
 
 				ImGui::Text("Varjo Depth Composition extension:");
 				ImGui::SameLine();
-				if (m_displayValues.bVarjoDepthCompositionExtensionActive)
+				if (displayValues.bVarjoDepthCompositionExtensionActive)
 				{
 					ImGui::TextColored(colorTextGreen, "Active");
 				}
@@ -820,7 +824,7 @@ if (bIsActiveTab) { ImGui::PopStyleColor(1); bIsActiveTab = false; }
 		{
 			ImGui::PushFont(m_fixedFont);
 
-			if (m_displayValues.renderAPI == Vulkan)
+			if (displayValues.renderAPI == Vulkan)
 			{
 				ImGui::TextColored(colorTextRed, "Stereo reconstruction not supported under Vulkan!");
 			}
@@ -832,10 +836,10 @@ if (bIsActiveTab) { ImGui::PopStyleColor(1); bIsActiveTab = false; }
 			{
 				ImGui::TextColored(colorTextRed, "Stereo reconstruction disabled");
 			}			
-			ImGui::Text("Exposure to render latency: %.1fms", m_displayValues.frameToRenderLatencyMS);
-			ImGui::Text("Exposure to photons latency: %.1fms", m_displayValues.frameToPhotonsLatencyMS);
-			ImGui::Text("Passthrough CPU render duration: %.2fms", m_displayValues.renderTimeMS);
-			ImGui::Text("Stereo reconstruction duration: %.2fms", m_displayValues.stereoReconstructionTimeMS);
+			ImGui::Text("Exposure to render latency: %.1fms", displayValues.frameToRenderLatencyMS);
+			ImGui::Text("Exposure to photons latency: %.1fms", displayValues.frameToPhotonsLatencyMS);
+			ImGui::Text("Passthrough CPU render duration: %.2fms", displayValues.renderTimeMS);
+			ImGui::Text("Stereo reconstruction duration: %.2fms", displayValues.stereoReconstructionTimeMS);
 			ImGui::PopFont();
 		}
 
@@ -1347,7 +1351,7 @@ if (bIsActiveTab) { ImGui::PopStyleColor(1); bIsActiveTab = false; }
 		if (ImGui::CollapsingHeader("Status###CameraStatus"))
 		{
 			ImGui::PushFont(m_fixedFont);
-			ImGui::Text("Current Camera API: %s, %u x %u @ %.0f fps", m_displayValues.CameraAPI, m_displayValues.CameraFrameWidth, m_displayValues.CameraFrameHeight, m_displayValues.CameraFrameRate);
+			ImGui::Text("Current Camera API: %s, %u x %u @ %.0f fps", displayValues.CameraAPI, displayValues.CameraFrameWidth, displayValues.CameraFrameHeight, displayValues.CameraFrameRate);
 			IMGUI_BIG_SPACING;
 			ImGui::PopFont();
 		}
@@ -1749,7 +1753,7 @@ if (bIsActiveTab) { ImGui::PopStyleColor(1); bIsActiveTab = false; }
 			ImGui::PushFont(m_fixedFont);
 			ImGui::Text("Layer Version: %s", steamvr_passthrough::VersionString.c_str());
 
-			switch (m_displayValues.appRenderAPI)
+			switch (displayValues.appRenderAPI)
 			{
 			case DirectX11:
 				ImGui::Text("Application Render API: DirectX 11");
@@ -1767,7 +1771,7 @@ if (bIsActiveTab) { ImGui::PopStyleColor(1); bIsActiveTab = false; }
 				ImGui::Text("Application Render API: None");
 			}
 
-			switch (m_displayValues.renderAPI)
+			switch (displayValues.renderAPI)
 			{
 			case DirectX11:
 				ImGui::Text("Layer Render API: DirectX 11");
@@ -1782,58 +1786,75 @@ if (bIsActiveTab) { ImGui::PopStyleColor(1); bIsActiveTab = false; }
 				ImGui::Text("Layer Render API: None");
 			}
 
-			ImGui::Text("Application: %s", m_displayValues.currentApplication.c_str());
-			ImGui::Text("Submitting %i composition layers, %s", m_displayValues.numCompositionLayers, m_displayValues.bDepthLayerSubmitted ? "depth submitted" : "depth NOT submitted");
-			ImGui::Text("Resolution: %i x %i", m_displayValues.frameBufferWidth, m_displayValues.frameBufferHeight);
-			ImGui::Text("Framebuffer Flags: 0x%x", m_displayValues.frameBufferFlags);
+			ImGui::Text("Application: %s", displayValues.currentApplication.c_str());
 
-			ImGui::Indent();
-			if (ImGui::BeginTable("FrameBufferValsTable", 2, ImGuiTableFlags_BordersInnerV |ImGuiTableFlags_NoHostExtendX |ImGuiTableFlags_SizingFixedFit))
+			if (displayValues.lastFrameTimestamp != 0)
 			{
-				ImGui::TableNextColumn();
-				ImGui::Text("Chromatic Abberation Correction");
-				ImGui::TableNextColumn();
-				m_displayValues.frameBufferFlags& XR_COMPOSITION_LAYER_CORRECT_CHROMATIC_ABERRATION_BIT ?
-					ImGui::TextColored(colorTextOrange, "Forced (1) (Deprecated)") :
-					ImGui::TextColored(colorTextGreen, "Runtime Controlled (0)");
+				float timeSinceFrame = ((float)(frameStart.QuadPart - displayValues.lastFrameTimestamp)) / perfFrequency.QuadPart;
+				if (timeSinceFrame > 1.0f)
+				{
+					ImGui::Text("Last frame submitted %.0f s ago", timeSinceFrame);
+				}
+				else
+				{
+					ImGui::Text("Last frame submitted %04.0f ms ago", timeSinceFrame * 1000.0f);
+				}
+				ImGui::Text("Submitted %i composition layers, %s", displayValues.numCompositionLayers, displayValues.bDepthLayerSubmitted ? "depth submitted" : "depth NOT submitted");
+				ImGui::Text("Resolution: %i x %i", displayValues.frameBufferWidth, displayValues.frameBufferHeight);
+				ImGui::Text("Framebuffer Flags: 0x%x", displayValues.frameBufferFlags);
 
-				ImGui::TableNextColumn();
-				ImGui::Text("Alpha Channel");
-				ImGui::TableNextColumn();
-				m_displayValues.frameBufferFlags& XR_COMPOSITION_LAYER_BLEND_TEXTURE_SOURCE_ALPHA_BIT ?
-					ImGui::TextColored(colorTextGreen, "Enabled (1)") :
-					ImGui::TextColored(colorTextRed, "Disabled (0)");
+				ImGui::Indent();
+				if (ImGui::BeginTable("FrameBufferValsTable", 2, ImGuiTableFlags_BordersInnerV | ImGuiTableFlags_NoHostExtendX | ImGuiTableFlags_SizingFixedFit))
+				{
+					ImGui::TableNextColumn();
+					ImGui::Text("Chromatic Abberation Correction");
+					ImGui::TableNextColumn();
+					displayValues.frameBufferFlags& XR_COMPOSITION_LAYER_CORRECT_CHROMATIC_ABERRATION_BIT ?
+						ImGui::TextColored(colorTextOrange, "Forced (1) (Deprecated)") :
+						ImGui::TextColored(colorTextGreen, "Runtime Controlled (0)");
 
-				ImGui::TableNextColumn();
-				ImGui::Text("Alpha Premultiplication");
-				ImGui::TableNextColumn();
-				m_displayValues.frameBufferFlags& XR_COMPOSITION_LAYER_UNPREMULTIPLIED_ALPHA_BIT ?
-					ImGui::TextColored(colorTextRed, "Not Premultipled (1)") :
-					ImGui::TextColored(colorTextGreen, "Premultipled by Application (0)");
-
-				ImGui::TableNextColumn();
-				ImGui::Text("Inverted Alpha");
-				ImGui::TableNextColumn();
-				m_displayValues.frameBufferFlags& XR_COMPOSITION_LAYER_INVERTED_ALPHA_BIT_EXT ?
-					(m_displayValues.bExtInvertedAlphaActive ?
+					ImGui::TableNextColumn();
+					ImGui::Text("Alpha Channel");
+					ImGui::TableNextColumn();
+					displayValues.frameBufferFlags& XR_COMPOSITION_LAYER_BLEND_TEXTURE_SOURCE_ALPHA_BIT ?
 						ImGui::TextColored(colorTextGreen, "Enabled (1)") :
-						ImGui::TextColored(colorTextOrange, "Enabled (1) (Without extension!)")) :
-					ImGui::TextColored(colorTextRed, "Disabled (0)");
-				ImGui::EndTable();
+						ImGui::TextColored(colorTextRed, "Disabled (0)");
+
+					ImGui::TableNextColumn();
+					ImGui::Text("Alpha Premultiplication");
+					ImGui::TableNextColumn();
+					displayValues.frameBufferFlags& XR_COMPOSITION_LAYER_UNPREMULTIPLIED_ALPHA_BIT ?
+						ImGui::TextColored(colorTextRed, "Not Premultipled (1)") :
+						ImGui::TextColored(colorTextGreen, "Premultipled by Application (0)");
+
+					ImGui::TableNextColumn();
+					ImGui::Text("Inverted Alpha");
+					ImGui::TableNextColumn();
+					displayValues.frameBufferFlags& XR_COMPOSITION_LAYER_INVERTED_ALPHA_BIT_EXT ?
+						(displayValues.bExtInvertedAlphaActive ?
+							ImGui::TextColored(colorTextGreen, "Enabled (1)") :
+							ImGui::TextColored(colorTextOrange, "Enabled (1) (Without extension!)")) :
+						ImGui::TextColored(colorTextRed, "Disabled (0)");
+					ImGui::EndTable();
+				}
+				ImGui::Unindent();
 			}
-			ImGui::Unindent();
+			else
+			{
+				ImGui::Text("No frames submitted");
+			}
 
-			ImGui::Text("Framebuffer format: %s (%li)", GetImageFormatName(m_displayValues.appRenderAPI, m_displayValues.frameBufferFormat).c_str(), m_displayValues.frameBufferFormat);
-			ImGui::Text("Depthbuffer format: %s (%li)", GetImageFormatName(m_displayValues.appRenderAPI, m_displayValues.depthBufferFormat).c_str(), m_displayValues.depthBufferFormat);
-			std::isinf(m_displayValues.nearZ) ? ImGui::Text("Near Z: Infinity") : ImGui::Text("Near Z: %.3f", m_displayValues.nearZ);
-			std::isinf(m_displayValues.farZ) ? ImGui::Text("Far Z: Infinity") : ImGui::Text("Far Z: %.3f", m_displayValues.farZ);
+			ImGui::Text("Framebuffer format: %s (%li)", GetImageFormatName(displayValues.appRenderAPI, displayValues.frameBufferFormat).c_str(), displayValues.frameBufferFormat);
+			ImGui::Text("Depthbuffer format: %s (%li)", GetImageFormatName(displayValues.appRenderAPI, displayValues.depthBufferFormat).c_str(), displayValues.depthBufferFormat);
+			std::isinf(displayValues.nearZ) ? ImGui::Text("Near Z: Infinity") : ImGui::Text("Near Z: %.3f", displayValues.nearZ);
+			std::isinf(displayValues.farZ) ? ImGui::Text("Far Z: Infinity") : ImGui::Text("Far Z: %.3f", displayValues.farZ);
 
 
-			ImGui::Text("Exposure to render latency: %.1fms", m_displayValues.frameToRenderLatencyMS);
-			ImGui::Text("Exposure to photons latency: %.1fms", m_displayValues.frameToPhotonsLatencyMS);
-			ImGui::Text("Passthrough CPU render duration: %.2fms", m_displayValues.renderTimeMS);
-			ImGui::Text("Stereo reconstruction duration: %.2fms", m_displayValues.stereoReconstructionTimeMS);
-			ImGui::Text("Camera frame retrieval duration: %.2fms", m_displayValues.frameRetrievalTimeMS);
+			ImGui::Text("Exposure to render latency: %.1fms", displayValues.frameToRenderLatencyMS);
+			ImGui::Text("Exposure to photons latency: %.1fms", displayValues.frameToPhotonsLatencyMS);
+			ImGui::Text("Passthrough CPU render duration: %.2fms", displayValues.renderTimeMS);
+			ImGui::Text("Stereo reconstruction duration: %.2fms", displayValues.stereoReconstructionTimeMS);
+			ImGui::Text("Camera frame retrieval duration: %.2fms", displayValues.frameRetrievalTimeMS);
 			ImGui::Text("Menu framerate: %.1fHz", io.Framerate);
 			ImGui::PopFont();
 
@@ -2140,6 +2161,8 @@ if (bIsActiveTab) { ImGui::PopStyleColor(1); bIsActiveTab = false; }
 	bool bInteractionEnded = !ImGui::IsAnyItemActive() && m_bElementActiveLastFrame;
 	m_bElementActiveLastFrame = ImGui::IsAnyItemActive();	
 
+	if (bInteractionEnded) { m_bSettingsUpdatedThisSession = true; }
+
 	if (bInteractionEnded)
 	{
 		m_configManager->ConfigUpdated();
@@ -2194,8 +2217,7 @@ if (bIsActiveTab) { ImGui::PopStyleColor(1); bIsActiveTab = false; }
 
 			message.Header.Type = MessageType_SendConfig_Stereo;
 			message.Header.PayloadSize = sizeof(Config_Stereo);
-			Config_Stereo& usedStereoPreset = m_configManager->GetConfig_Stereo();
-			memcpy(message.Payload, &usedStereoPreset, sizeof(Config_Stereo));
+			memcpy(message.Payload, &stereoConfig, sizeof(Config_Stereo));
 			m_IPCServer->BroadcastMessage(message);
 
 			break;
@@ -2288,8 +2310,83 @@ LRESULT SettingsMenu::HandleWin32Events(HWND hWnd, UINT msg, WPARAM wParam, LPAR
 	return 0;
 }
 
+void SettingsMenu::MenuIPCClientConnected(int clientIndex)
+{
+	if (m_displayValues.size() != clientIndex)
+	{
+		ErrorLog("Client count desynced: %d != %d\n", clientIndex, m_displayValues.size());
+	}
+
+	while (m_displayValues.size() <= clientIndex)
+	{
+		m_displayValues.push_back(std::make_unique<MenuDisplayValues>());
+	}
+
+	if (m_activeClient < 0) { m_activeClient = clientIndex; }
+
+	m_window->OnClientConnected();
+
+	if (m_bSettingsUpdatedThisSession)
+	{
+		MenuIPCMessage message = {};
+
+		message.Header.Type = MessageType_SendConfig_Main;
+		message.Header.PayloadSize = sizeof(Config_Main);
+		memcpy(message.Payload, &m_configManager->GetConfig_Main(), sizeof(Config_Main));
+		m_IPCServer->WriteMessage(message, clientIndex);
+
+		message.Header.Type = MessageType_SendConfig_Core;
+		message.Header.PayloadSize = sizeof(Config_Core);
+		memcpy(message.Payload, &m_configManager->GetConfig_Core(), sizeof(Config_Core));
+		m_IPCServer->WriteMessage(message, clientIndex);
+
+		message.Header.Type = MessageType_SendConfig_Extensions;
+		message.Header.PayloadSize = sizeof(Config_Extensions);
+		memcpy(message.Payload, &m_configManager->GetConfig_Extensions(), sizeof(Config_Extensions));
+		m_IPCServer->WriteMessage(message, clientIndex);
+
+		message.Header.Type = MessageType_SendConfig_Camera;
+		message.Header.PayloadSize = sizeof(Config_Camera);
+		memcpy(message.Payload, &m_configManager->GetConfig_Camera(), sizeof(Config_Camera));
+		m_IPCServer->WriteMessage(message, clientIndex);
+
+		message.Header.Type = MessageType_SendConfig_Stereo;
+		message.Header.PayloadSize = sizeof(Config_Stereo);
+		memcpy(message.Payload, &m_configManager->GetConfig_Stereo(), sizeof(Config_Stereo));
+		m_IPCServer->WriteMessage(message, clientIndex);
+
+		message.Header.Type = MessageType_SendConfig_Depth;
+		message.Header.PayloadSize = sizeof(Config_Depth);
+		memcpy(message.Payload, &m_configManager->GetConfig_Depth(), sizeof(Config_Depth));
+		m_IPCServer->WriteMessage(message, clientIndex);
+	}
+}
+
+void SettingsMenu::MenuIPCClientDisconnected(int clientIndex)
+{
+	if (clientIndex < m_displayValues.size())
+	{
+		m_displayValues.erase(m_displayValues.begin() + clientIndex);
+	}
+	else
+	{
+		ErrorLog("Client count desynced: %d >= %d\n", clientIndex, m_displayValues.size());
+	}
+
+	if (m_IPCServer->GetNumClients() == 0)
+	{
+		m_window->OnAllClientsDisconnected();
+	}
+}
+
 void SettingsMenu::MenuIPCMessageReceived(MenuIPCMessage& message, int clientIndex)
 {
+	if (clientIndex >= m_displayValues.size())
+	{
+		ErrorLog("Invalid client message: %d >= %d\n", clientIndex, m_displayValues.size());
+		return;
+	}
+
 	switch (message.Header.Type)
 	{
 	case MessageType_SetDisplayValues:
@@ -2298,10 +2395,10 @@ void SettingsMenu::MenuIPCMessageReceived(MenuIPCMessage& message, int clientInd
 		{
 			std::lock_guard<std::mutex> lock(m_menuWriteMutex);
 
-			std::string appname = std::move(m_displayValues.currentApplication);
+			std::string appname = std::move(m_displayValues[clientIndex]->currentApplication);
 
-			m_displayValues = *reinterpret_cast<MenuDisplayValues*>(message.Payload);
-			m_displayValues.currentApplication = std::move(appname);
+			*m_displayValues[clientIndex] = *reinterpret_cast<MenuDisplayValues*>(message.Payload);
+			m_displayValues[clientIndex]->currentApplication = std::move(appname);
 		}
 		else
 		{
@@ -2316,7 +2413,7 @@ void SettingsMenu::MenuIPCMessageReceived(MenuIPCMessage& message, int clientInd
 		{
 			std::lock_guard<std::mutex> lock(m_menuWriteMutex);
 
-			m_displayValues.currentApplication = std::string(reinterpret_cast<const char*>(message.Payload));
+			m_displayValues[clientIndex]->currentApplication = std::string(reinterpret_cast<const char*>(message.Payload));
 		}
 		else
 		{

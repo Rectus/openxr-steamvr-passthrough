@@ -81,9 +81,6 @@
     <ClInclude Include="targetver.h">
       <Filter>Header Files</Filter>
     </ClInclude>
-    <ClInclude Include="..\shared\menu_ipc_client.h">
-      <Filter>Shared</Filter>
-    </ClInclude>
     <ClInclude Include="..\shared\menu_ipc_server.h">
       <Filter>Shared</Filter>
     </ClInclude>
@@ -142,9 +139,6 @@
     </ClCompile>
     <ClCompile Include="vulkan_menu_renderer.cpp">
       <Filter>Source Files</Filter>
-    </ClCompile>
-    <ClCompile Include="..\shared\menu_ipc_client.cpp">
-      <Filter>Shared</Filter>
     </ClCompile>
     <ClCompile Include="..\shared\menu_ipc_server.cpp">
       <Filter>Shared</Filter>

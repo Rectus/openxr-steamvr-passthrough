@@ -30,6 +30,7 @@ public:
 	MenuIPCServer();
 	~MenuIPCServer();
 
+	int GetNumClients() { return max((int)m_clientConnections.size() - 1, 0); }
 	bool RegisterReader(std::weak_ptr<IMenuIPCReader> callback);
 	bool WriteMessage(MenuIPCMessage& message, int clientIndex);
 	bool BroadcastMessage(MenuIPCMessage& message);

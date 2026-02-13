@@ -102,6 +102,7 @@ bool MenuIPCServer::WriteMessage(MenuIPCMessage& message, int clientIndex)
 		Log("IPC Client %d disconnected.\n", clientIndex);
 		connection->bConnected = false;
 		connection->bShuttingDown = true;
+		SetEvent(connection->ReadOverlap.hEvent);
 		return false;
 	}
 	else if (error == ERROR_IO_PENDING)
@@ -184,6 +185,7 @@ bool MenuIPCServer::BroadcastMessage(MenuIPCMessage& message)
 			Log("IPC Client %d disconnected\n", clIdx);
 			connection->bConnected = false;
 			connection->bShuttingDown = true;
+			SetEvent(connection->ReadOverlap.hEvent);
 		}
 		else
 		{
@@ -232,6 +234,7 @@ void MenuIPCServer::Listen()
 			{
 				AddPipe();
 			}
+
 			continue;
 		}
 
@@ -247,6 +250,11 @@ void MenuIPCServer::Listen()
 
 				// Add another pipe to wait for new connections
 				AddPipe();
+
+				if (auto callback = m_callback.lock())
+				{
+					callback->MenuIPCClientConnected(clIdx);
+				}
 			}
 			else if (GetLastError() != ERROR_IO_PENDING)
 			{
@@ -443,5 +451,10 @@ void MenuIPCServer::RemovePipe(int index)
 
 	m_clientConnections.erase(m_clientConnections.begin() + index);
 	m_events.erase(m_events.begin() + index + 1);
+
+	if (auto callback = m_callback.lock())
+	{
+		callback->MenuIPCClientDisconnected(index);
+	}
 }
 
