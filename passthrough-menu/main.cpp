@@ -125,10 +125,10 @@ int APIENTRY wWinMain(_In_ HINSTANCE hInstance, _In_opt_ HINSTANCE hPrevInstance
         return 1;
     }
 
-    std::shared_ptr<OpenVRManager> openVRManager = std::make_shared<OpenVRManager>();
+    std::shared_ptr<DashboardOverlay> overlay = std::make_shared<DashboardOverlay>();
     std::shared_ptr<MenuIPCServer> IPCServer = std::make_shared<MenuIPCServer>();
 
-    std::shared_ptr<SettingsMenu> menu = std::make_shared<SettingsMenu>(configManager, openVRManager, window, IPCServer);
+    std::shared_ptr<SettingsMenu> menu = std::make_shared<SettingsMenu>(configManager, overlay, window, IPCServer);
     IPCServer->RegisterReader(menu);
 
     if (!menu->InitMenu())
@@ -139,13 +139,6 @@ int APIENTRY wWinMain(_In_ HINSTANCE hInstance, _In_opt_ HINSTANCE hPrevInstance
     }
 
     window->SetMenu(menu);
-
-    std::shared_ptr<DashboardOverlay> overlay = nullptr;
-
-    if (openVRManager->IsRuntimeIntialized())
-    {
-        overlay = std::make_shared<DashboardOverlay>(configManager, openVRManager);
-    }
 
     Log("Menu started.\n");
 
@@ -164,13 +157,18 @@ int APIENTRY wWinMain(_In_ HINSTANCE hInstance, _In_opt_ HINSTANCE hPrevInstance
 
         if (!window->IsWindowRunning()) { break; }
         
+        bool bOverlayDrawn = false;
+        if (!window->IsVisible())
+        {
+            // Menu updated from the mesage handler when the window is open, otherwise from here for the overlay.
+            bOverlayDrawn = menu->TickMenu();
+        }
 
-        if (!bHandledMessages)
+        if (!bHandledMessages && !bOverlayDrawn)
         {
             if (window->IsVisible())
             {
                 std::this_thread::yield();
-                //std::this_thread::sleep_for(std::chrono::milliseconds(1));
             }
             else
             {
@@ -181,8 +179,8 @@ int APIENTRY wWinMain(_In_ HINSTANCE hInstance, _In_opt_ HINSTANCE hPrevInstance
 
     Log("Shutting down...\n");
 
-    menu->DeinitMenu();
     menu.reset();
+    overlay.reset();
 
     window->DeinitWindow();
     window.reset();

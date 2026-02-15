@@ -167,7 +167,8 @@ bool VulkanMenuRenderer::SetupRenderer(std::shared_ptr<DesktopWindowWin32> windo
 
 	// Dear ImGUI renders in gamma space, and requires (incorrect) linear textures to not autoconvert to gamma on write.
 	const VkFormat requestSurfaceImageFormat[] =
-	{ VK_FORMAT_B8G8R8A8_UNORM, VK_FORMAT_R8G8B8A8_UNORM, VK_FORMAT_B8G8R8_UNORM, VK_FORMAT_R8G8B8_UNORM };
+	//{ VK_FORMAT_B8G8R8A8_UNORM, VK_FORMAT_R8G8B8A8_UNORM, VK_FORMAT_B8G8R8_UNORM, VK_FORMAT_R8G8B8_UNORM };
+	{ VK_FORMAT_R8G8B8A8_UNORM };
 
 	m_windowData.Surface = m_surface;
 	m_windowData.SurfaceFormat = ImGui_ImplVulkanH_SelectSurfaceFormat(m_physicalDevice, m_surface, requestSurfaceImageFormat, 4, VK_COLOR_SPACE_SRGB_NONLINEAR_KHR);
@@ -183,6 +184,17 @@ bool VulkanMenuRenderer::SetupRenderer(std::shared_ptr<DesktopWindowWin32> windo
 	uint32_t width, height = 0;
 	window->GetWindowDimensions(width, height);
 	ImGui_ImplVulkanH_CreateOrResizeWindow(m_instance, m_physicalDevice, m_device, &m_windowData, m_queueFamily, nullptr, width, height, 2, 0);
+
+	
+	m_textureData.m_pDevice = m_device;
+	m_textureData.m_pPhysicalDevice = m_physicalDevice;
+	m_textureData.m_pInstance = m_instance;
+	m_textureData.m_pQueue = m_queue;
+	m_textureData.m_nQueueFamilyIndex = m_queueFamily;
+	m_textureData.m_nWidth = width;
+	m_textureData.m_nHeight = height;
+	m_textureData.m_nFormat = VK_FORMAT_R8G8B8A8_SRGB;
+	m_textureData.m_nSampleCount = 1;
 
 	return true;
 }
@@ -216,140 +228,177 @@ void VulkanMenuRenderer::ResizeWindow(uint32_t width, uint32_t height)
 		ImGui_ImplVulkanH_CreateOrResizeWindow(m_instance, m_physicalDevice, m_device, &m_windowData, m_queueFamily, nullptr, width, height, 2, 0);
 		m_windowData.FrameIndex = 0;
 		m_swapChainRebuild = false;
+
+		m_textureData.m_nWidth = width;
+		m_textureData.m_nHeight = height;
 	}
 }
 
-void VulkanMenuRenderer::RenderMenu()
+bool VulkanMenuRenderer::RenderMenu(bool bRenderOffscreen)
 {
 	ImGui::Render();
 
 	VkSemaphore imageSemaphore = m_windowData.FrameSemaphores[m_windowData.SemaphoreIndex].ImageAcquiredSemaphore;
 	VkSemaphore renderSemaphore = m_windowData.FrameSemaphores[m_windowData.SemaphoreIndex].RenderCompleteSemaphore;
 
-	VkResult result = vkAcquireNextImageKHR(m_device, m_windowData.Swapchain, UINT64_MAX, imageSemaphore, VK_NULL_HANDLE, &m_windowData.FrameIndex);
-	if (result == VK_ERROR_OUT_OF_DATE_KHR)
+	VkResult result;
+
+	if (bRenderOffscreen)
 	{
-		m_swapChainRebuild = true;
-		return;
+		m_windowData.FrameIndex = (m_windowData.FrameIndex + 1) % m_windowData.Frames.size();
 	}
-	else if (result == VK_SUBOPTIMAL_KHR)
+	else
 	{
-		m_swapChainRebuild = true;
-	}
-	else if (result != VK_SUCCESS)
-	{
-		ErrorLog("vkAcquireNextImageKHR failed: %d\n", result);
-		return;
+		result = vkAcquireNextImageKHR(m_device, m_windowData.Swapchain, UINT64_MAX, imageSemaphore, VK_NULL_HANDLE, &m_windowData.FrameIndex);
+		if (result == VK_ERROR_OUT_OF_DATE_KHR)
+		{
+			ErrorLog("VK_ERROR_OUT_OF_DATE_KHR: %d\n", m_windowData.FrameIndex);
+			m_swapChainRebuild = true;
+			return false;
+		}
+		else if (result == VK_SUBOPTIMAL_KHR)
+		{
+			ErrorLog("VK_SUBOPTIMAL_KHR: %d\n", m_windowData.FrameIndex);
+			m_swapChainRebuild = true;
+		}
+		else if (result == VK_NOT_READY)
+		{
+			ErrorLog("Semaphore not ready: %d\n", m_windowData.SemaphoreIndex);
+		}
+		else if (result != VK_SUCCESS)
+		{
+			ErrorLog("vkAcquireNextImageKHR failed: %d\n", result);
+			return false;
+		}
 	}
 
-	ImGui_ImplVulkanH_Frame* fd = &m_windowData.Frames[m_windowData.FrameIndex];
+	ImGui_ImplVulkanH_Frame* frameData = &m_windowData.Frames[m_windowData.FrameIndex];
 
-
-	result = vkWaitForFences(m_device, 1, &fd->Fence, VK_TRUE, UINT64_MAX);
+	result = vkWaitForFences(m_device, 1, &frameData->Fence, VK_TRUE, UINT64_MAX);
 	if (result != VK_SUCCESS)
 	{
 		ErrorLog("vkWaitForFences failed: %d\n", result);
-		return;
+		return false;
 	}
 
-	result = vkResetFences(m_device, 1, &fd->Fence);
+	result = vkResetFences(m_device, 1, &frameData->Fence);
 	if (result != VK_SUCCESS)
 	{
 		ErrorLog("vkResetFences failed: %d\n", result);
-		return;
+		return false;
 	}
 
-	result = vkResetCommandPool(m_device, fd->CommandPool, 0);
+	result = vkResetCommandPool(m_device, frameData->CommandPool, 0);
 	if (result != VK_SUCCESS)
 	{
 		ErrorLog("vkResetCommandPool failed: %d\n", result);
-		return;
+		return false;
 	}
 
 	VkCommandBufferBeginInfo bufferInfo = {};
 	bufferInfo.sType = VK_STRUCTURE_TYPE_COMMAND_BUFFER_BEGIN_INFO;
 	bufferInfo.flags |= VK_COMMAND_BUFFER_USAGE_ONE_TIME_SUBMIT_BIT;
 
-	result = vkBeginCommandBuffer(fd->CommandBuffer, &bufferInfo);
+	result = vkBeginCommandBuffer(frameData->CommandBuffer, &bufferInfo);
 	if (result != VK_SUCCESS)
 	{
 		ErrorLog("vkBeginCommandBuffer failed: %d\n", result);
-		return;
+		return false;
 	}
 
 	VkRenderPassBeginInfo passInfo = {};
 	passInfo.sType = VK_STRUCTURE_TYPE_RENDER_PASS_BEGIN_INFO;
 	passInfo.renderPass = m_windowData.RenderPass;
-	passInfo.framebuffer = fd->Framebuffer;
+	passInfo.framebuffer = frameData->Framebuffer;
 	passInfo.renderArea.extent.width = m_windowData.Width;
 	passInfo.renderArea.extent.height = m_windowData.Height;
 	passInfo.clearValueCount = 1;
 	passInfo.pClearValues = &m_windowData.ClearValue;
 
-	vkCmdBeginRenderPass(fd->CommandBuffer, &passInfo, VK_SUBPASS_CONTENTS_INLINE);
+	vkCmdBeginRenderPass(frameData->CommandBuffer, &passInfo, VK_SUBPASS_CONTENTS_INLINE);
 
 
-	ImGui_ImplVulkan_RenderDrawData(ImGui::GetDrawData(), fd->CommandBuffer);
+	ImGui_ImplVulkan_RenderDrawData(ImGui::GetDrawData(), frameData->CommandBuffer);
 
 
-	vkCmdEndRenderPass(fd->CommandBuffer);
+	vkCmdEndRenderPass(frameData->CommandBuffer);
 
 	VkPipelineStageFlags wait_stage = VK_PIPELINE_STAGE_COLOR_ATTACHMENT_OUTPUT_BIT;
 	VkSubmitInfo submitInfo = {};
 	submitInfo.sType = VK_STRUCTURE_TYPE_SUBMIT_INFO;
-	submitInfo.waitSemaphoreCount = 1;
-	submitInfo.pWaitSemaphores = &imageSemaphore;
+	
 	submitInfo.pWaitDstStageMask = &wait_stage;
 	submitInfo.commandBufferCount = 1;
-	submitInfo.pCommandBuffers = &fd->CommandBuffer;
-	submitInfo.signalSemaphoreCount = 1;
-	submitInfo.pSignalSemaphores = &renderSemaphore;
+	submitInfo.pCommandBuffers = &frameData->CommandBuffer;
 
-	result = vkEndCommandBuffer(fd->CommandBuffer);
+	if (!bRenderOffscreen)
+	{
+		submitInfo.waitSemaphoreCount = 1;
+		submitInfo.pWaitSemaphores = &imageSemaphore;
+		submitInfo.signalSemaphoreCount = 1;
+		submitInfo.pSignalSemaphores = &renderSemaphore;
+	}
+
+	result = vkEndCommandBuffer(frameData->CommandBuffer);
 	if (result != VK_SUCCESS)
 	{
 		ErrorLog("vkEndCommandBuffer failed: %d\n", result);
-		return;
+		return false;
 	}
 
-	result = vkQueueSubmit(m_queue, 1, &submitInfo, fd->Fence);
+	result = vkQueueSubmit(m_queue, 1, &submitInfo, frameData->Fence);
 	if (result != VK_SUCCESS)
 	{
 		ErrorLog("vkQueueSubmit failed: %d\n", result);
-		return;
+		return false;
 	}
 
 	if (m_swapChainRebuild)
 	{
-		return;
+		return false;
 	}
 
+	if (!bRenderOffscreen)
+	{
+		VkPresentInfoKHR presentInfo = {};
+		presentInfo.sType = VK_STRUCTURE_TYPE_PRESENT_INFO_KHR;
+		presentInfo.waitSemaphoreCount = 1;
+		presentInfo.pWaitSemaphores = &renderSemaphore;
+		presentInfo.swapchainCount = 1;
+		presentInfo.pSwapchains = &m_windowData.Swapchain;
+		presentInfo.pImageIndices = &m_windowData.FrameIndex;
 
-	VkPresentInfoKHR presentInfo = {};
-	presentInfo.sType = VK_STRUCTURE_TYPE_PRESENT_INFO_KHR;
-	presentInfo.waitSemaphoreCount = 1;
-	presentInfo.pWaitSemaphores = &renderSemaphore;
-	presentInfo.swapchainCount = 1;
-	presentInfo.pSwapchains = &m_windowData.Swapchain;
-	presentInfo.pImageIndices = &m_windowData.FrameIndex;
-
-	result = vkQueuePresentKHR(m_queue, &presentInfo);
-	if (result == VK_ERROR_OUT_OF_DATE_KHR)
-	{
-		m_swapChainRebuild = true;
-		return;
+		result = vkQueuePresentKHR(m_queue, &presentInfo);
+		if (result == VK_ERROR_OUT_OF_DATE_KHR)
+		{
+			m_swapChainRebuild = true;
+			return false;
+		}
+		else if (result == VK_SUBOPTIMAL_KHR)
+		{
+			m_swapChainRebuild = true;
+		}
+		else if (result != VK_SUCCESS)
+		{
+			ErrorLog("vkQueuePresentKHR failed: %d\n", result);
+			return false;
+		}
 	}
-	else if (result == VK_SUBOPTIMAL_KHR)
+	else
 	{
-		m_swapChainRebuild = true;
-	}
-	else if (result != VK_SUCCESS)
-	{
-		ErrorLog("vkQueuePresentKHR failed: %d\n", result);
-		return;
+		result = vkWaitForFences(m_device, 1, &frameData->Fence, VK_TRUE, 1000 * 1000 * 8);
+		if (result != VK_SUCCESS)
+		{
+			ErrorLog("vkWaitForFences failed: %d\n", result);
+			return false;
+		}
 	}
 
 	m_windowData.SemaphoreIndex = (m_windowData.SemaphoreIndex + 1) % m_windowData.SemaphoreCount;
+
+	m_textureData.m_nImage = reinterpret_cast<uint64_t>(frameData->Backbuffer);
+
+	return true;
 }
 
 void VulkanMenuRenderer::WaitDeinitImGui()

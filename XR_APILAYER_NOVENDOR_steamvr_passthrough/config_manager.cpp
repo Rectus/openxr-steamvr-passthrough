@@ -24,8 +24,16 @@ bool ConfigManager::ReadConfigFile()
 	SI_Error result = m_iniData.LoadFile(m_configFile.c_str());
 	if (result < 0)
 	{
-		Log("Failed to read config file, writing default values...\n");
-		UpdateConfigFile();
+		if (m_bAllowWrite)
+		{
+			Log("Failed to read config file, writing default values...\n");
+			UpdateConfigFile();
+		}
+		else
+		{
+			Log("Failed to read config file\n");
+		}
+
 		bIsInitial = true;
 	}
 	else

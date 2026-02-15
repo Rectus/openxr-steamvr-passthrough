@@ -5,6 +5,9 @@
 #include <shared_mutex>
 #include "layer.h"
 
+namespace vr {
+	class IVRClientCore;
+};
 
 class OpenVRManager
 {
@@ -70,10 +73,11 @@ private:
 
 	std::mutex m_runtimeMutex;
 
-	vr::IVRSystem* m_vrSystem;
-	vr::IVRCompositor* m_vrCompositor;
-	vr::IVRTrackedCamera* m_vrTrackedCamera;
-	vr::IVROverlay* m_vrOverlay;
-	vr::IVRRenderModels* m_vrRenderModels;
+	vr::IVRClientCore* m_vrClientCore = nullptr;
+	vr::IVRSystem* m_vrSystem = nullptr;
+	vr::IVRCompositor* m_vrCompositor= nullptr;
+	vr::IVRTrackedCamera* m_vrTrackedCamera = nullptr;
+	vr::IVROverlay* m_vrOverlay = nullptr;
+	vr::IVRRenderModels* m_vrRenderModels = nullptr;
 };
 

@@ -1,7 +1,7 @@
 #pragma once
 
 #include "config_manager.h"
-#include "openvr_manager.h"
+#include "shared_structs.h"
 #include <imgui.h>
 
 #define OPENVR_APP_KEY "no_vendor.openxr_steamvr_passthrough_menu"
@@ -9,32 +9,45 @@
 
 #define DASHBOARD_OVERLAY_KEY "XR_APILAYER_NOVENDOR_steamvr_passthrough.menu.dashboard"
 
-#define OVERLAY_RES_WIDTH 1200
-#define OVERLAY_RES_HEIGHT 700
-
 class DashboardOverlay
 {
 public:
-	DashboardOverlay(std::shared_ptr<ConfigManager> configManager, std::shared_ptr<OpenVRManager> openVRManager);
+	DashboardOverlay();
 	~DashboardOverlay();
 
-	void CreateOverlay();
+	bool IsRuntimeInitialized() 
+	{
+		std::lock_guard<std::mutex> lock(m_runtimeMutex);
+		return m_bRuntimeInitialized;
+	}
+	bool HasOverlay() { return m_bHasOverlay; }
+	bool IsOverlayVisible() { return m_bOverlayVisible; }
+	bool HasFocus() { return m_bOverlayVisible && m_bHasFocus; }
+	bool InitRuntime();
+	bool CreateOverlay(uint32_t width, uint32_t height);
 	void DestroyOverlay();
 	void CreateThumbnail();
 
+	void OverlayFrameSync();
 	void HandleOverlayEvents(ImGuiIO& io);
+	void UpdateOverlay(vr::VRVulkanTextureData_t* textureData, ImGuiIO& io);
 
-	void UpdateOverlay();
+	void GetCameraDebugProperties(std::vector<DeviceDebugProperties>& properties);
+	void GetDeviceIdentProperties(std::vector<DeviceIdentProperties>& properties);
 
 protected:
 
-	std::shared_ptr<ConfigManager> m_configManager;
-	std::shared_ptr<OpenVRManager> m_openVRManager;
+	std::mutex m_runtimeMutex;
 
 	vr::VROverlayHandle_t m_overlayHandle;
 	vr::VROverlayHandle_t m_thumbnailHandle;
 
+	std::atomic<bool> m_bRuntimeInitialized = false;
+	bool m_bHasOverlay = false;
 	bool m_bOverlayVisible = false;
+	bool m_bHasFocus = false;
 	bool m_bIsKeyboardOpen = false;
+	int m_overlayWidth = 0;
+	int m_overlayHeight = 0;
 };
 

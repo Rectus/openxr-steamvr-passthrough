@@ -700,10 +700,10 @@ namespace
 
 					// Default to stereo mode if we have a compatible headset.
 					// TODO: Just checks for the fisheye model at the moment, whitelist of known models would be better.
-					if (m_cameraManager->GetFrameLayout() != Mono && m_cameraManager->IsUsingFisheyeModel())
+					/*if (m_cameraManager->GetFrameLayout() != Mono && m_cameraManager->IsUsingFisheyeModel())
 					{
 						m_configManager->GetConfig_Main().ProjectionMode = Projection_StereoReconstruction;
-					}
+					}*/
 				}
 
 				//MenuDisplayValues& vals = m_dashboardMenu->GetDisplayValues();

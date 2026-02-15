@@ -70,13 +70,13 @@ struct MenuDisplayValues
 class SettingsMenu : public IMenuIPCReader
 {
 public:
-	SettingsMenu(std::shared_ptr<ConfigManager> configManager, std::shared_ptr<OpenVRManager> openVRManager, std::shared_ptr<DesktopWindowWin32> window, std::shared_ptr<MenuIPCServer> IPCServer);
+	SettingsMenu(std::shared_ptr<ConfigManager> configManager, std::shared_ptr<DashboardOverlay> dashboardOverlay, std::shared_ptr<DesktopWindowWin32> window, std::shared_ptr<MenuIPCServer> IPCServer);
 
 	~SettingsMenu();
 
 	bool InitMenu();
-	void DeinitMenu();
-	void TickMenu();
+
+	bool TickMenu();
 	
 	LRESULT HandleWin32Events(HWND hWnd, UINT msg, WPARAM wParam, LPARAM lParam);
 
@@ -90,9 +90,8 @@ private:
 	void DrawMenu();
 
 	std::shared_ptr<ConfigManager> m_configManager;
-	std::shared_ptr<OpenVRManager> m_openVRManager;
+	std::shared_ptr<DashboardOverlay> m_dashboardOverlay;
 	std::shared_ptr<DesktopWindowWin32> m_window; 
-	std::shared_ptr<DashboardOverlay> m_overlay;
 	std::shared_ptr<MenuIPCServer> m_IPCServer;
 
 	VulkanMenuRenderer m_renderer;
@@ -102,8 +101,8 @@ private:
 
 	LARGE_INTEGER m_lastFrameStart;
 
-	bool m_bMenuIsVisible;
-	EMenuTab m_activeTab;
+	bool m_bMenuIsVisible = false;
+	EMenuTab m_activeTab = TabMain;
 	int m_activeClient = -1;
 	std::vector< std::unique_ptr<MenuDisplayValues>> m_displayValues;
 	MenuDisplayValues m_defualtDisplayValues = {};
@@ -128,5 +127,8 @@ private:
 	bool m_bIsKeyboardOpen = false;
 	bool m_bElementActiveLastFrame = false;
 	bool m_bSettingsUpdatedThisSession = false;
+	std::atomic<bool> m_bIsRendering = false;
+	uint32_t m_menuWidth = 0;
+	uint32_t m_menuHeight = 0;
 };
 

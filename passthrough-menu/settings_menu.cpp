@@ -25,14 +25,12 @@
 
 
 
-SettingsMenu::SettingsMenu(std::shared_ptr<ConfigManager> configManager, std::shared_ptr<OpenVRManager> openVRManager, std::shared_ptr<DesktopWindowWin32> window, std::shared_ptr<MenuIPCServer> IPCServer)
+SettingsMenu::SettingsMenu(std::shared_ptr<ConfigManager> configManager, std::shared_ptr<DashboardOverlay> dashboardOverlay, std::shared_ptr<DesktopWindowWin32> window, std::shared_ptr<MenuIPCServer> IPCServer)
 	: m_configManager(configManager)
-	, m_openVRManager(openVRManager)
+	, m_dashboardOverlay(dashboardOverlay)
 	, m_window(window)
 	, m_IPCServer(IPCServer)
-	, m_bMenuIsVisible(false)
-	, m_displayValues()
-	, m_activeTab(TabMain)
+	, m_defualtDisplayValues()
 {
 	m_renderer = VulkanMenuRenderer();
 	m_defualtDisplayValues.currentApplication = "No application";
@@ -41,6 +39,17 @@ SettingsMenu::SettingsMenu(std::shared_ptr<ConfigManager> configManager, std::sh
 
 SettingsMenu::~SettingsMenu()
 {
+	if (m_dashboardOverlay->HasOverlay())
+	{
+		m_dashboardOverlay->DestroyOverlay();
+	}
+
+	m_renderer.WaitDeinitImGui();
+
+	ImGui_ImplWin32_Shutdown();
+	ImGui::DestroyContext();
+
+	m_renderer.CleanupRenderer();
 }
 
 
@@ -49,7 +58,10 @@ bool SettingsMenu::InitMenu()
 	IMGUI_CHECKVERSION();
 	ImGui::CreateContext();
 	ImGuiIO& io = ImGui::GetIO();
-	io.DisplaySize = ImVec2(OVERLAY_RES_WIDTH, OVERLAY_RES_HEIGHT);
+
+	m_window->GetWindowDimensions(m_menuWidth, m_menuHeight);
+	io.DisplaySize = ImVec2((float)m_menuWidth, (float)m_menuHeight);
+
 	io.IniFilename = nullptr;
 	io.LogFilename = nullptr;
 	m_mainFont = io.Fonts->AddFontFromMemoryCompressedTTF(roboto_medium_compressed_data, roboto_medium_compressed_size, 24);
@@ -57,14 +69,14 @@ bool SettingsMenu::InitMenu()
 	m_fixedFont = io.Fonts->AddFontFromMemoryCompressedTTF(cousine_regular_compressed_data, cousine_regular_compressed_size, 18);
 	ImGui::StyleColorsDark();
 
-	// TODO: Using single clicks since double clicks don't seem to be working (timing issue?)
-	//io.ConfigDragClickToInputText = true;
-
 	m_renderer.SetupRenderer(m_window);
 	ImGui_ImplWin32_Init(m_window->GetWindowHandle());
 	m_renderer.InitImGui();
 
-	//CreateOverlay();
+	if (m_dashboardOverlay->IsRuntimeInitialized())
+	{
+		m_dashboardOverlay->CreateOverlay(m_menuWidth, m_menuHeight);
+	}
 
 	// Hack to fix Dear ImGui not rendering (mostly) correctly to sRGB target
 	// From: https://github.com/ocornut/imgui/issues/8271#issuecomment-2564954070
@@ -85,26 +97,6 @@ bool SettingsMenu::InitMenu()
 
 	return true;
 }
-
-void SettingsMenu::DeinitMenu()
-{
-	m_renderer.WaitDeinitImGui();
-
-	ImGui_ImplWin32_Shutdown();
-	ImGui::DestroyContext();
-
-	m_renderer.CleanupRenderer();
-
-	/*if (vrOverlay)
-	{
-		if (m_bIsKeyboardOpen)
-		{
-			vrOverlay->HideKeyboard();
-		}
-		vrOverlay->DestroyOverlay(m_overlayHandle);
-	}*/
-}
-
 
 std::string GetImageFormatName(ERenderAPI api, int64_t format)
 {
@@ -209,9 +201,9 @@ std::string GetImageFormatName(ERenderAPI api, int64_t format)
 }
 
 
-inline void ScrollableSlider(const char* label, float* v, float v_min, float v_max, const char* format, float scrollFactor)
+inline bool ScrollableSlider(const char* label, float* v, float v_min, float v_max, const char* format, float scrollFactor)
 {
-	ImGui::SliderFloat(label, v, v_min, v_max, format, ImGuiSliderFlags_None);
+	bool bUpdated = ImGui::SliderFloat(label, v, v_min, v_max, format, ImGuiSliderFlags_None);
 	ImGui::SetItemKeyOwner(ImGuiKey_MouseWheelY);
 	if (ImGui::IsItemHovered())
 	{
@@ -224,18 +216,20 @@ inline void ScrollableSlider(const char* label, float* v, float v_min, float v_m
 			}
 			else
 			{
+				bUpdated = true;
 				*v += wheel * scrollFactor;
 				if (*v < v_min) { *v = v_min; }
 				else if (*v > v_max) { *v = v_max; }
 			}
 		}
 	}
+	return bUpdated;
 }
 
 
-inline void ScrollableSliderInt(const char* label, int* v, int v_min, int v_max, const char* format, int scrollFactor)
+inline bool ScrollableSliderInt(const char* label, int* v, int v_min, int v_max, const char* format, int scrollFactor)
 {
-	ImGui::SliderInt(label, v, v_min, v_max, format, ImGuiSliderFlags_None);
+	bool bUpdated = ImGui::SliderInt(label, v, v_min, v_max, format, ImGuiSliderFlags_None);
 	ImGui::SetItemKeyOwner(ImGuiKey_MouseWheelY);
 	if (ImGui::IsItemHovered())
 	{
@@ -248,12 +242,14 @@ inline void ScrollableSliderInt(const char* label, int* v, int v_min, int v_max,
 			}
 			else
 			{
+				bUpdated = true;
 				*v += (int)wheel * scrollFactor;
 				if (*v < v_min) { *v = v_min; }
 				else if (*v > v_max) { *v = v_max; }
 			}
 		}
 	}
+	return bUpdated;
 }
 
 #define IMGUI_BIG_SPACING ImGui::Dummy(ImVec2(0.0f, 20.0f))
@@ -310,19 +306,69 @@ inline void EndSoftDisabled(bool bIsDisabled)
 }
 
 
-void SettingsMenu::TickMenu()
+bool SettingsMenu::TickMenu()
 {
-	//HandleEvents();
-
-
-	if (!m_window->IsVisible())
+	// Function not reentrant from the same thread, return if we get recusive draws from windows messages.
+	if (m_bIsRendering)
 	{
-		return;
+		return false;
 	}
 
-	DrawMenu();
+	bool bHasOverlay = m_dashboardOverlay->HasOverlay();
+	if (m_dashboardOverlay->IsRuntimeInitialized() && !bHasOverlay)
+	{
+		uint32_t width, height;
+		m_window->GetWindowDimensions(width, height);
 
-	m_renderer.RenderMenu();
+		bHasOverlay = m_dashboardOverlay->CreateOverlay(width, height);
+	}
+
+	if (bHasOverlay)
+	{
+		m_dashboardOverlay->HandleOverlayEvents(ImGui::GetIO());
+	}
+
+	bool bIsWindowVisible = m_window->IsVisible();
+	bool bIsOverlayVisible = m_dashboardOverlay->IsOverlayVisible();
+
+	if (m_bMenuIsVisible && !(bIsWindowVisible || bIsOverlayVisible))
+	{
+		m_configManager->DispatchUpdate();
+	}
+	m_bMenuIsVisible = (bIsWindowVisible || bIsOverlayVisible);
+
+	if (bIsWindowVisible && bIsOverlayVisible)
+	{
+		m_bIsRendering = true;
+		DrawMenu();
+		m_renderer.RenderMenu(false);
+		vr::VRVulkanTextureData_t* textureData = m_renderer.GetOverlayTextureData();
+		m_dashboardOverlay->UpdateOverlay(textureData, ImGui::GetIO());
+		m_dashboardOverlay->OverlayFrameSync();
+		m_bIsRendering = false;
+		return true;
+	}
+	else if (bIsWindowVisible)
+	{
+		m_bIsRendering = true;
+		DrawMenu();
+		m_renderer.RenderMenu(false);
+		m_bIsRendering = false;
+		return true;
+	}
+	else if(bIsOverlayVisible)
+	{
+		m_bIsRendering = true;
+		DrawMenu();
+		m_renderer.RenderMenu(true);
+		vr::VRVulkanTextureData_t* textureData = m_renderer.GetOverlayTextureData();
+		m_dashboardOverlay->UpdateOverlay(textureData, ImGui::GetIO());
+		m_dashboardOverlay->OverlayFrameSync();
+		m_bIsRendering = false;
+		return true;
+	}
+
+	return false;
 }
 
 void SettingsMenu::DrawMenu()
@@ -332,6 +378,7 @@ void SettingsMenu::DrawMenu()
 	bool rendererResetPending = false;
 	bool cameraParamChangesPending = false;
 	bool frameDumpPending = false;
+	bool bImmediateUpdate = false;
 
 	Config_Main& mainConfig = m_configManager->GetConfig_Main();
 	Config_Core& coreConfig = m_configManager->GetConfig_Core();
@@ -360,6 +407,14 @@ void SettingsMenu::DrawMenu()
 	ImGui_ImplVulkan_NewFrame();
 	ImGui_ImplWin32_NewFrame();
 
+	// Fix for the ImGui win32 implementation drawing an 0x0 window when minimized.
+	if(!m_window->IsVisible())
+	{
+		if (io.DisplaySize.x == 0.0f || io.DisplaySize.y == 0.0f)
+		{
+			io.DisplaySize = ImVec2((float)m_menuWidth, (float)m_menuHeight);
+		}
+	}
 	ImGui::NewFrame();
 
 	ImGui::SetNextWindowPos(ImVec2(0.0f, 0.0f));
@@ -374,9 +429,9 @@ void SettingsMenu::DrawMenu()
 
 	
 
-	ImGui::BeginChild("Tab buttons", ImVec2(OVERLAY_RES_WIDTH * 0.18f, 0));
+	ImGui::BeginChild("Tab buttons", ImVec2(1200.0f * 0.18f, 0));
 
-	ImVec2 tabButtonSize(OVERLAY_RES_WIDTH * 0.17f, 55);
+	ImVec2 tabButtonSize(1200.0f * 0.17f, 55);
 	ImVec4 colorActiveTab(0.25f, 0.52f, 0.88f, 1.0f);
 	bool bIsActiveTab = false;
 
@@ -510,11 +565,11 @@ if (bIsActiveTab) { ImGui::PopStyleColor(1); bIsActiveTab = false; }
 			if (ImGui::TreeNode("Image Controls"))
 			{
 				ImGui::PushItemWidth(ImGui::GetContentRegionAvail().x * 0.45f);
-				ScrollableSlider("Opacity", &mainConfig.PassthroughOpacity, 0.0f, 1.0f, "%.1f", 0.1f);
-				ScrollableSlider("Brightness", &mainConfig.Brightness, -50.0f, 50.0f, "%.0f", 1.0f);
-				ScrollableSlider("Contrast", &mainConfig.Contrast, 0.0f, 2.0f, "%.1f", 0.1f);
-				ScrollableSlider("Saturation", &mainConfig.Saturation, 0.0f, 2.0f, "%.1f", 0.1f);
-				ScrollableSlider("Sharpness", &mainConfig.Sharpness, -1.0f, 1.0f, "%.1f", 0.1f);
+				bImmediateUpdate |= ScrollableSlider("Opacity", &mainConfig.PassthroughOpacity, 0.0f, 1.0f, "%.1f", 0.1f);
+				bImmediateUpdate |= ScrollableSlider("Brightness", &mainConfig.Brightness, -50.0f, 50.0f, "%.0f", 1.0f);
+				bImmediateUpdate |= ScrollableSlider("Contrast", &mainConfig.Contrast, 0.0f, 2.0f, "%.1f", 0.1f);
+				bImmediateUpdate |= ScrollableSlider("Saturation", &mainConfig.Saturation, 0.0f, 2.0f, "%.1f", 0.1f);
+				bImmediateUpdate |= ScrollableSlider("Sharpness", &mainConfig.Sharpness, -1.0f, 1.0f, "%.1f", 0.1f);
 				if (fabsf(mainConfig.Sharpness) < 0.1) { mainConfig.Sharpness = 0.0f; }
 				ImGui::PopItemWidth();
 
@@ -526,8 +581,8 @@ if (bIsActiveTab) { ImGui::PopStyleColor(1); bIsActiveTab = false; }
 				if (ImGui::CollapsingHeader("Advanced"))
 				{
 					ImGui::PushItemWidth(ImGui::GetContentRegionAvail().x * 0.45f);
-					ScrollableSlider("Temporal Filter Factor", &mainConfig.TemporalFilteringFactor, 0.0f, 1.0f, "%.2f", 0.01f);
-					ScrollableSlider("Temporal Filter Rejection Offset", &mainConfig.TemporalFilteringRejectionOffset, -0.2f, 0.2f, "%.2f", 0.01f);
+					bImmediateUpdate |= ScrollableSlider("Temporal Filter Factor", &mainConfig.TemporalFilteringFactor, 0.0f, 1.0f, "%.2f", 0.01f);
+					bImmediateUpdate |= ScrollableSlider("Temporal Filter Rejection Offset", &mainConfig.TemporalFilteringRejectionOffset, -0.2f, 0.2f, "%.2f", 0.01f);
 					ImGui::PopItemWidth();
 
 					ImGui::Text("Temporal Filter Sampling");
@@ -564,15 +619,15 @@ if (bIsActiveTab) { ImGui::PopStyleColor(1); bIsActiveTab = false; }
 			IMGUI_BIG_SPACING;
 
 			ImGui::SetNextItemWidth(ImGui::GetContentRegionAvail().x * 0.45f);
-			ScrollableSlider("Depth Offset Calibration", &mainConfig.DepthOffsetCalibration, 0.5f, 1.5f, "%.2f", 0.01f);
+			bImmediateUpdate |= ScrollableSlider("Depth Offset Calibration", &mainConfig.DepthOffsetCalibration, 0.5f, 1.5f, "%.2f", 0.01f);
 			TextDescriptionSpaced("Calibration to compensate for incorrect distance between stereo cameras.");
 
 			ImGui::SetNextItemWidth(ImGui::GetContentRegionAvail().x * 0.45f);
-			ScrollableSlider("Projection Distance (m)", &mainConfig.ProjectionDistanceFar, 0.5f, 20.0f, "%.1f", 0.1f);
+			bImmediateUpdate |= ScrollableSlider("Projection Distance (m)", &mainConfig.ProjectionDistanceFar, 0.5f, 20.0f, "%.1f", 0.1f);
 			TextDescriptionSpaced("The horizontal projection distance in 2D modes, and maximum projection distance in the 3D mode.");
 
 			ImGui::SetNextItemWidth(ImGui::GetContentRegionAvail().x * 0.45f);
-			ScrollableSlider("Floor Height Offset (m)", &mainConfig.FloorHeightOffset, 0.0f, 2.0f, "%.2f", 0.01f);
+			bImmediateUpdate |= ScrollableSlider("Floor Height Offset (m)", &mainConfig.FloorHeightOffset, 0.0f, 2.0f, "%.2f", 0.01f);
 			TextDescriptionSpaced("Allows setting the floor height higher in the 2D modes,\nfor example to have correct projection on a table surface.");
 
 			IMGUI_BIG_SPACING;
@@ -1207,8 +1262,8 @@ if (bIsActiveTab) { ImGui::PopStyleColor(1); bIsActiveTab = false; }
 				TextDescription("Force passthrough to only render in a certain depth range.");
 
 				ImGui::PushItemWidth(ImGui::GetContentRegionAvail().x * 0.45f);
-				ScrollableSlider("Depth Range Min", &depthConfig.DepthForceRangeTestMin, 0.0f, 10.0f, "%.1f", 0.1f);
-				ScrollableSlider("Depth Range Max", &depthConfig.DepthForceRangeTestMax, 0.0f, 10.0f, "%.1f", 0.1f);
+				bImmediateUpdate |= ScrollableSlider("Depth Range Min", &depthConfig.DepthForceRangeTestMin, 0.0f, 10.0f, "%.1f", 0.1f);
+				bImmediateUpdate |= ScrollableSlider("Depth Range Max", &depthConfig.DepthForceRangeTestMax, 0.0f, 10.0f, "%.1f", 0.1f);
 				ImGui::PopItemWidth();
 
 				ImGui::TreePop();
@@ -1293,10 +1348,10 @@ if (bIsActiveTab) { ImGui::PopStyleColor(1); bIsActiveTab = false; }
 		if (ImGui::CollapsingHeader("Masked Croma Key Settings"))
 		{
 			ImGui::BeginGroup();
-			ImGui::PushItemWidth(ImGui::GetContentRegionAvail().x * 0.35f);
-			ScrollableSlider("Chroma Range", &coreConfig.CoreForceMaskedFractionChroma, 0.0f, 1.0f, "%.2f", 0.01f);
-			ScrollableSlider("Luma Range", &coreConfig.CoreForceMaskedFractionLuma, 0.0f, 1.0f, "%.2f", 0.01f);
-			ScrollableSlider("Smoothing", &coreConfig.CoreForceMaskedSmoothing, 0.01f, 0.2f, "%.3f", 0.005f);
+			ImGui::PushItemWidth(min(ImGui::GetContentRegionAvail().x * 0.35f, 200.0f));
+			bImmediateUpdate |= ScrollableSlider("Chroma Range", &coreConfig.CoreForceMaskedFractionChroma, 0.0f, 1.0f, "%.2f", 0.01f);
+			bImmediateUpdate |= ScrollableSlider("Luma Range", &coreConfig.CoreForceMaskedFractionLuma, 0.0f, 1.0f, "%.2f", 0.01f);
+			bImmediateUpdate |= ScrollableSlider("Smoothing", &coreConfig.CoreForceMaskedSmoothing, 0.01f, 0.2f, "%.3f", 0.005f);
 			ImGui::Checkbox("Invert mask", &coreConfig.CoreForceMaskedInvertMask);
 			ImGui::Checkbox("Combine With Application Alpha", &coreConfig.CoreForceMaskedUseAppAlpha);
 
@@ -1318,8 +1373,8 @@ if (bIsActiveTab) { ImGui::PopStyleColor(1); bIsActiveTab = false; }
 			ImGui::SameLine();
 
 			ImGui::BeginGroup();
-			ImGui::SetNextItemWidth(ImGui::GetContentRegionAvail().x * 0.75f);
-			ImGui::ColorPicker3("Key", coreConfig.CoreForceMaskedKeyColor, ImGuiColorEditFlags_Uint8 | ImGuiColorEditFlags_DisplayRGB | ImGuiColorEditFlags_DisplayHSV | ImGuiColorEditFlags_PickerHueBar);
+			ImGui::SetNextItemWidth(min(ImGui::GetContentRegionAvail().x * 0.75f, 300.0f));
+			bImmediateUpdate |= ImGui::ColorPicker3("Key", coreConfig.CoreForceMaskedKeyColor, ImGuiColorEditFlags_Uint8 | ImGuiColorEditFlags_DisplayRGB | ImGuiColorEditFlags_DisplayHSV | ImGuiColorEditFlags_PickerHueBar);
 			ImGui::EndGroup();
 		}
 
@@ -1335,9 +1390,9 @@ if (bIsActiveTab) { ImGui::PopStyleColor(1); bIsActiveTab = false; }
 		if (!m_cameraTabBeenOpened)
 		{
 			CameraEnumerator::EnumerateCameras(m_cameraDevices);
-			if (m_openVRManager->IsRuntimeIntialized())
+			if (m_dashboardOverlay->IsRuntimeInitialized())
 			{
-				m_openVRManager->GetDeviceIdentProperties(m_deviceIdentProps);
+				m_dashboardOverlay->GetDeviceIdentProperties(m_deviceIdentProps);
 			}
 			m_cameraTabBeenOpened = true;
 		}
@@ -1397,7 +1452,7 @@ if (bIsActiveTab) { ImGui::PopStyleColor(1); bIsActiveTab = false; }
 			TextDescription("Only draws passthrough in the actual frame area. When turned off the edge pixels are extended past the frame into a 360 degree view.");
 
 			ImGui::SetNextItemWidth(ImGui::GetContentRegionAvail().x * 0.45f);
-			ScrollableSlider("Field of View Scale", &mainConfig.FieldOfViewScale, 0.1f, 2.0f, "%.2f", 0.01f);
+			bImmediateUpdate |= ScrollableSlider("Field of View Scale", &mainConfig.FieldOfViewScale, 0.1f, 2.0f, "%.2f", 0.01f);
 			TextDescription("Sets the size of the rendered area in the Custom 2D and Stereo 3D projection modes.");
 
 			IMGUI_BIG_SPACING;
@@ -1469,12 +1524,12 @@ if (bIsActiveTab) { ImGui::PopStyleColor(1); bIsActiveTab = false; }
 
 			BeginSoftDisabled(!cameraConfig.UseTrackedDevice);
 
-			ImGui::BeginDisabled(m_openVRManager->IsRuntimeIntialized());
+			ImGui::BeginDisabled(m_dashboardOverlay->IsRuntimeInitialized());
 			if (ImGui::Button("Refresh"))
 			{
-				if (m_openVRManager->IsRuntimeIntialized())
+				if (m_dashboardOverlay->IsRuntimeInitialized())
 				{
-					m_openVRManager->GetDeviceIdentProperties(m_deviceIdentProps);
+					m_dashboardOverlay->GetDeviceIdentProperties(m_deviceIdentProps);
 				}
 			}
 			ImGui::EndDisabled();
@@ -1659,9 +1714,9 @@ if (bIsActiveTab) { ImGui::PopStyleColor(1); bIsActiveTab = false; }
 	{
 		if (!m_debugTabBeenOpened)
 		{
-			if (m_openVRManager->IsRuntimeIntialized())
+			if (m_dashboardOverlay->IsRuntimeInitialized())
 			{
-				m_openVRManager->GetCameraDebugProperties(m_deviceDebugProps);
+				m_dashboardOverlay->GetCameraDebugProperties(m_deviceDebugProps);
 			}
 			m_debugTabBeenOpened = true;
 		}
@@ -1793,11 +1848,11 @@ if (bIsActiveTab) { ImGui::PopStyleColor(1); bIsActiveTab = false; }
 				float timeSinceFrame = ((float)(frameStart.QuadPart - displayValues.lastFrameTimestamp)) / perfFrequency.QuadPart;
 				if (timeSinceFrame > 1.0f)
 				{
-					ImGui::Text("Last frame submitted %.0f s ago", timeSinceFrame);
+					ImGui::Text("Last frame submitted %.0fs ago", timeSinceFrame);
 				}
 				else
 				{
-					ImGui::Text("Last frame submitted %04.0f ms ago", timeSinceFrame * 1000.0f);
+					ImGui::Text("Last frame submitted %.0fms ago", timeSinceFrame * 1000.0f);
 				}
 				ImGui::Text("Submitted %i composition layers, %s", displayValues.numCompositionLayers, displayValues.bDepthLayerSubmitted ? "depth submitted" : "depth NOT submitted");
 				ImGui::Text("Resolution: %i x %i", displayValues.frameBufferWidth, displayValues.frameBufferHeight);
@@ -1856,6 +1911,18 @@ if (bIsActiveTab) { ImGui::PopStyleColor(1); bIsActiveTab = false; }
 			ImGui::Text("Stereo reconstruction duration: %.2fms", displayValues.stereoReconstructionTimeMS);
 			ImGui::Text("Camera frame retrieval duration: %.2fms", displayValues.frameRetrievalTimeMS);
 			ImGui::Text("Menu framerate: %.1fHz", io.Framerate);
+
+			static int frameIdx = 0;
+			if (frameIdx == 0)		{ ImGui::Text("Frame Index: 1       "); }
+			else if (frameIdx == 1) { ImGui::Text("Frame Index:  2      "); }
+			else if (frameIdx == 2) { ImGui::Text("Frame Index:   3     "); }
+			else if (frameIdx == 3) { ImGui::Text("Frame Index:    4    "); }
+			else if (frameIdx == 4) { ImGui::Text("Frame Index:     5   "); }
+			else if (frameIdx == 5) { ImGui::Text("Frame Index:      6  "); }
+			else if (frameIdx == 6) { ImGui::Text("Frame Index:       7 "); }
+			else if (frameIdx == 7) { ImGui::Text("Frame Index:        8"); }
+			frameIdx = (frameIdx + 1) % 8;
+
 			ImGui::PopFont();
 
 			IMGUI_BIG_SPACING;
@@ -1872,12 +1939,12 @@ if (bIsActiveTab) { ImGui::PopStyleColor(1); bIsActiveTab = false; }
 		if (ImGui::CollapsingHeader("Device Properties"))
 		{
 
-			ImGui::BeginDisabled(m_openVRManager->IsRuntimeIntialized());
+			ImGui::BeginDisabled(m_dashboardOverlay->IsRuntimeInitialized());
 			if (ImGui::Button("Refresh"))
 			{
-				if (m_openVRManager->IsRuntimeIntialized())
+				if (m_dashboardOverlay->IsRuntimeInitialized())
 				{
-					m_openVRManager->GetCameraDebugProperties(m_deviceDebugProps);
+					m_dashboardOverlay->GetCameraDebugProperties(m_deviceDebugProps);
 				}
 			}
 			ImGui::EndDisabled();
@@ -2161,9 +2228,9 @@ if (bIsActiveTab) { ImGui::PopStyleColor(1); bIsActiveTab = false; }
 	bool bInteractionEnded = !ImGui::IsAnyItemActive() && m_bElementActiveLastFrame;
 	m_bElementActiveLastFrame = ImGui::IsAnyItemActive();	
 
-	if (bInteractionEnded) { m_bSettingsUpdatedThisSession = true; }
+	if (bInteractionEnded || bImmediateUpdate) { m_bSettingsUpdatedThisSession = true; }
 
-	if (bInteractionEnded)
+	if (bInteractionEnded || bImmediateUpdate)
 	{
 		m_configManager->ConfigUpdated();
 
@@ -2217,7 +2284,7 @@ if (bIsActiveTab) { ImGui::PopStyleColor(1); bIsActiveTab = false; }
 
 			message.Header.Type = MessageType_SendConfig_Stereo;
 			message.Header.PayloadSize = sizeof(Config_Stereo);
-			memcpy(message.Payload, &stereoConfig, sizeof(Config_Stereo));
+			memcpy(message.Payload, &stereoCustomConfig, sizeof(Config_Stereo));
 			m_IPCServer->BroadcastMessage(message);
 
 			break;
@@ -2286,23 +2353,26 @@ extern IMGUI_IMPL_API LRESULT ImGui_ImplWin32_WndProcHandler(HWND hWnd, UINT msg
 
 LRESULT SettingsMenu::HandleWin32Events(HWND hWnd, UINT msg, WPARAM wParam, LPARAM lParam)
 {
-	if (ImGui_ImplWin32_WndProcHandler(hWnd, msg, wParam, lParam))
+	if (m_window->IsVisible() && !m_dashboardOverlay->HasFocus())
 	{
-		return true;
+		if (ImGui_ImplWin32_WndProcHandler(hWnd, msg, wParam, lParam))
+		{
+			return true;
+		}
 	}
 
 	switch (msg)
 	{
 	case WM_SIZE:
-		if (wParam == SIZE_MINIMIZED)
-		{
-			return 0;
-		}
+		
 		uint32_t resizeWidth = (UINT)LOWORD(lParam);
 		uint32_t resizeHeight = (UINT)HIWORD(lParam);
-
-		m_renderer.ResizeWindow(resizeWidth, resizeHeight);
-
+		if (resizeWidth > 0 && resizeHeight > 0)
+		{
+			m_menuWidth = resizeWidth;
+			m_menuHeight = resizeHeight;
+			m_renderer.ResizeWindow(resizeWidth, resizeHeight);
+		}
 		return 0;
 
 
@@ -2325,6 +2395,11 @@ void SettingsMenu::MenuIPCClientConnected(int clientIndex)
 	if (m_activeClient < 0) { m_activeClient = clientIndex; }
 
 	m_window->OnClientConnected();
+
+	if (!m_dashboardOverlay->IsRuntimeInitialized())
+	{
+		m_dashboardOverlay->InitRuntime();
+	}
 
 	if (m_bSettingsUpdatedThisSession)
 	{

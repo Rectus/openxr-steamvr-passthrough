@@ -24,7 +24,6 @@ public:
 	bool CreateVulkanSurface(VkInstance instance, VkSurfaceKHR& surface);
 	void OnClientConnected();
 	void OnAllClientsDisconnected();
-	bool OnMessagesHandled();
 
 protected:
 	bool AddTrayIcon();
@@ -48,7 +47,6 @@ protected:
 	HICON m_iconOff = NULL;
 	bool m_bIsSettingsWindowShown = false;
 	bool m_bIsDoubleClicking = false;
-	std::atomic_bool m_bIsPainting = false;
 	POINT m_trayCursorPos = { 0 };
 	INT_PTR m_trayClickTimer = NULL;
 	INT_PTR m_shutdownDelayTimer = NULL;
@@ -59,7 +57,6 @@ protected:
 	bool m_bExitOnClose = false;
 	bool m_bExitOnNoClients = false;
 	bool m_bExitChangedByClients = false;
-	bool m_bDrawPending = false;
 	std::shared_ptr<SettingsMenu> m_settingsMenu = nullptr;
 };
 

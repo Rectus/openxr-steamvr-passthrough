@@ -12,8 +12,8 @@
 #include <shellapi.h>
 #include <shlobj_core.h>
 
-#define WINDOW_WIDTH 1024
-#define WINDOW_HEIGHT 768
+#define WINDOW_WIDTH 1200
+#define WINDOW_HEIGHT 700
 
 
 DesktopWindowWin32::DesktopWindowWin32(HINSTANCE hInstance, bool bExitOnClose, bool bExitOnNoClients)
@@ -51,7 +51,17 @@ bool DesktopWindowWin32::InitWindow(bool bStartOpen, int cmdShow)
     wcex.hIconSm = m_iconOn;
     RegisterClassExW(&wcex);
 
-    m_hSettingsWindow = CreateWindowW(m_windowClass, m_titleString, WS_OVERLAPPEDWINDOW, CW_USEDEFAULT, 0, WINDOW_WIDTH, WINDOW_HEIGHT, nullptr, nullptr, m_hInstance, nullptr);
+    RECT windowSize;
+    windowSize.left = 0;
+    windowSize.right = WINDOW_WIDTH;
+    windowSize.top = 0;
+    windowSize.bottom = WINDOW_HEIGHT;
+
+    AdjustWindowRect(&windowSize, false, WS_OVERLAPPEDWINDOW);
+    LONG width = windowSize.right - windowSize.left;
+    LONG height = windowSize.bottom - windowSize.top;
+
+    m_hSettingsWindow = CreateWindowW(m_windowClass, m_titleString, WS_OVERLAPPEDWINDOW, CW_USEDEFAULT, 0, width, height, nullptr, nullptr, m_hInstance, nullptr);
 
     if (!m_hSettingsWindow)
     {
@@ -120,7 +130,7 @@ bool DesktopWindowWin32::InitWindow(bool bStartOpen, int cmdShow)
     {
         m_bIsSettingsWindowShown = true;
         ShowWindow(m_hSettingsWindow, cmdShow);
-        UpdateWindow(m_hSettingsWindow);
+        InvalidateRect(m_hSettingsWindow, NULL, NULL);
     }
 
     HACCEL hAccelTable = LoadAccelerators(m_hInstance, MAKEINTRESOURCE(IDC_PASSTHROUGHMENU));
@@ -198,13 +208,13 @@ bool DesktopWindowWin32::HandleMessages(MSG& quitMessage)
 
 bool DesktopWindowWin32::IsVisible()
 {
-    return IsWindowVisible(m_hSettingsWindow) && !IsIconic(m_hSettingsWindow);
+    return m_bIsSettingsWindowShown && IsWindowVisible(m_hSettingsWindow) && !IsIconic(m_hSettingsWindow);
 }
 
 bool DesktopWindowWin32::GetWindowDimensions(uint32_t& width, uint32_t& height)
 {
     RECT dimensions = {};
-    if (GetWindowRect(m_hSettingsWindow, &dimensions))
+    if (GetClientRect(m_hSettingsWindow, &dimensions))
     {
         width = dimensions.right - dimensions.left;
         height = dimensions.bottom - dimensions.top;
@@ -368,6 +378,7 @@ LRESULT CALLBACK DesktopWindowWin32::WndProcImpl(HWND hWnd, UINT message, WPARAM
         case IDM_TRAYOPEN:
             m_bIsSettingsWindowShown = true;
             ShowWindow(m_hSettingsWindow, SW_SHOW);
+            InvalidateRect(m_hSettingsWindow, NULL, NULL);
             break;
 
         case IDM_ABOUT:
@@ -401,13 +412,7 @@ LRESULT CALLBACK DesktopWindowWin32::WndProcImpl(HWND hWnd, UINT message, WPARAM
     case WM_PAINT:
     case WM_MOVE:
 
-        if (m_bIsSettingsWindowShown && IsVisible() && !m_bIsPainting && m_settingsMenu.get())
-        {
-            m_bIsPainting = true;
-            m_settingsMenu->TickMenu();
-            m_bIsPainting = false;
-        }
-        else if(!IsVisible() || !m_bIsSettingsWindowShown)
+        if (!m_settingsMenu.get() || !m_settingsMenu->TickMenu())
         {
             return DefWindowProc(hWnd, message, wParam, lParam);
         }
@@ -457,6 +462,10 @@ LRESULT CALLBACK DesktopWindowWin32::WndProcImpl(HWND hWnd, UINT message, WPARAM
                 ShowWindow(m_hSettingsWindow, m_bIsSettingsWindowShown ? SW_HIDE : SW_SHOW);
                 SetForegroundWindow(m_hSettingsWindow);
                 m_bIsSettingsWindowShown = !m_bIsSettingsWindowShown;
+                if (m_bIsSettingsWindowShown) 
+                { 
+                    InvalidateRect(m_hSettingsWindow, NULL, NULL); 
+                }
             }
 
             break;
@@ -486,7 +495,19 @@ LRESULT CALLBACK DesktopWindowWin32::WndProcImpl(HWND hWnd, UINT message, WPARAM
 
     default:
 
-        if (!m_settingsMenu.get() || !m_settingsMenu->HandleWin32Events(hWnd, message, wParam, lParam))
+        if (m_bIsSettingsWindowShown && m_settingsMenu.get())
+        {
+            LRESULT result = m_settingsMenu->HandleWin32Events(hWnd, message, wParam, lParam);
+            if (result != 0)
+            {
+                return result;
+            }
+            else
+            {
+                return DefWindowProc(hWnd, message, wParam, lParam);
+            }
+        }
+        else
         {
             return DefWindowProc(hWnd, message, wParam, lParam);
         }

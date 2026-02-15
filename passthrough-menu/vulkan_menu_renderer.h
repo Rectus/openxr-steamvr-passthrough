@@ -12,7 +12,8 @@ public:
 	void InitImGui();
 
 	void ResizeWindow(uint32_t width, uint32_t height);
-	void RenderMenu();
+	bool RenderMenu(bool bRenderOffscreen);
+	vr::VRVulkanTextureData_t* GetOverlayTextureData() { return &m_textureData; };
 
 	void WaitDeinitImGui();
 	void CleanupRenderer();
@@ -28,6 +29,7 @@ private:
 	VkDescriptorPool m_descriptorPool = VK_NULL_HANDLE;
 	VkSurfaceKHR m_surface = VK_NULL_HANDLE;
 	ImGui_ImplVulkanH_Window m_windowData = {};
+	vr::VRVulkanTextureData_t m_textureData = {};
 	bool m_swapChainRebuild = false;
 
 };

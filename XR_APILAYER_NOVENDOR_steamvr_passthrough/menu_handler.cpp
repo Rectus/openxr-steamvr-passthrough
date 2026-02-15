@@ -38,7 +38,7 @@ void MenuHandler::DispatchApplicationName()
 	m_bHasApplicationName = true;
 	MenuIPCMessage message = {};
 	message.Header.Type = MessageType_SetAppName;
-	size_t length = min(m_displayValues.currentApplication.length(), IPC_PAYLOAD_SIZE - 1);
+	int length = static_cast<int>(min(m_displayValues.currentApplication.length(), IPC_PAYLOAD_SIZE - 1));
 	message.Header.PayloadSize = length;
 	memcpy(message.Payload, &m_displayValues.currentApplication, length);
 	m_IPCClient->WriteMessage(message, true);
@@ -94,30 +94,35 @@ void MenuHandler::MenuIPCMessageReceived(MenuIPCMessage& message, int clientInde
 	case MessageType_SendConfig_Main:
 
 		CopyConfig(&m_configManager->GetConfig_Main(), message, sizeof(Config_Main));
+		m_configManager->ConfigUpdated();
 		
 		break;
 
 	case MessageType_SendConfig_Core:
 
 		CopyConfig(&m_configManager->GetConfig_Core(), message, sizeof(Config_Core));
+		m_configManager->ConfigUpdated();
 
 		break;
 
 	case MessageType_SendConfig_Extensions:
 
 		CopyConfig(&m_configManager->GetConfig_Extensions(), message, sizeof(Config_Extensions));
+		m_configManager->ConfigUpdated();
 
 		break;
 
 	case MessageType_SendConfig_Stereo:
 
 		CopyConfig(&m_configManager->GetConfig_CustomStereo(), message, sizeof(Config_Stereo));
+		m_configManager->ConfigUpdated();
 
 		break;
 
 	case MessageType_SendConfig_Depth:
 
 		CopyConfig(&m_configManager->GetConfig_Depth(), message, sizeof(Config_Depth));
+		m_configManager->ConfigUpdated();
 
 		break;
 
