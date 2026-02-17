@@ -160,6 +160,7 @@
     <ClInclude Include="..\XR_APILAYER_NOVENDOR_steamvr_passthrough\camera_enumerator.h" />
     <ClInclude Include="..\XR_APILAYER_NOVENDOR_steamvr_passthrough\config_manager.h" />
     <ClInclude Include="..\XR_APILAYER_NOVENDOR_steamvr_passthrough\framework\log.h" />
+    <ClInclude Include="..\XR_APILAYER_NOVENDOR_steamvr_passthrough\mathutil.h" />
     <ClInclude Include="..\XR_APILAYER_NOVENDOR_steamvr_passthrough\shared_structs.h" />
     <ClInclude Include="dashboard_overlay.h" />
     <ClInclude Include="settings_menu.h" />

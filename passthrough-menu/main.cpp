@@ -21,6 +21,7 @@
 // Directory under AppData to write config.
 #define CONFIG_FILE_DIR L"\\OpenXR SteamVR Passthrough\\"
 #define CONFIG_FILE_NAME L"config.ini"
+#define WINDOW_CONFIG_FILE_NAME L"imgui.ini"
 
 #define LOG_FILE_NAME "XR_APILAYER_NOVENDOR_steamvr_passthrough_menu.txt"
 
@@ -134,6 +135,7 @@ int APIENTRY wWinMain(_In_ HINSTANCE hInstance, _In_opt_ HINSTANCE hPrevInstance
     if (!menu->InitMenu())
     {
         window.reset();
+        overlay.reset();
         IPCServer.reset();
         return 1;
     }

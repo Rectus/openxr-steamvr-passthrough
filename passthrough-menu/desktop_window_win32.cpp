@@ -411,13 +411,15 @@ LRESULT CALLBACK DesktopWindowWin32::WndProcImpl(HWND hWnd, UINT message, WPARAM
 
     case WM_PAINT:
     case WM_MOVE:
-
-        if (!m_settingsMenu.get() || !m_settingsMenu->TickMenu())
+    {
+        auto menu = m_settingsMenu.lock();
+        if (m_settingsMenu.expired() || !menu->TickMenu())
         {
             return DefWindowProc(hWnd, message, wParam, lParam);
         }
-
         break;
+    }
+        
 
     case WM_CLOSE:
         if (m_bExitOnClose)
@@ -495,9 +497,10 @@ LRESULT CALLBACK DesktopWindowWin32::WndProcImpl(HWND hWnd, UINT message, WPARAM
 
     default:
 
-        if (m_bIsSettingsWindowShown && m_settingsMenu.get())
+        if (m_bIsSettingsWindowShown && !m_settingsMenu.expired())
         {
-            LRESULT result = m_settingsMenu->HandleWin32Events(hWnd, message, wParam, lParam);
+            auto menu = m_settingsMenu.lock();
+            LRESULT result = menu->HandleWin32Events(hWnd, message, wParam, lParam);
             if (result != 0)
             {
                 return result;

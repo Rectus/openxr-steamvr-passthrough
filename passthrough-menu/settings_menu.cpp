@@ -20,8 +20,7 @@
 #include "fonts/cousine_regular.cpp"
 
 
-#define max(a,b) (((a) > (b)) ? (a) : (b))
-#define min(a,b) (((a) < (b)) ? (a) : (b))
+
 
 
 
@@ -43,13 +42,58 @@ SettingsMenu::~SettingsMenu()
 	{
 		m_dashboardOverlay->DestroyOverlay();
 	}
+	m_dashboardOverlay.reset();
 
+	ImGui::SaveIniSettingsToDisk(ImGui::GetIO().IniFilename);
 	m_renderer.WaitDeinitImGui();
 
 	ImGui_ImplWin32_Shutdown();
 	ImGui::DestroyContext();
 
 	m_renderer.CleanupRenderer();
+	m_configManager.reset();
+	m_window.reset();
+	m_IPCServer.reset();
+}
+
+
+static void* TreeNodeHandler_ReadOpen(ImGuiContext*, ImGuiSettingsHandler* handler, const char* name)
+{
+	auto treeNodeData = reinterpret_cast<std::map<ImGuiID, bool>*>(handler->UserData);
+	ImGuiID id = (uint32_t)atoi(name);
+
+	std::pair<ImGuiID, bool>* entry = nullptr;
+
+	if (treeNodeData->find(id) == treeNodeData->end())
+	{
+		treeNodeData->emplace(id, false);
+	}
+	return (void*)id;
+}
+
+static void TreeNodeHandler_ReadLine(ImGuiContext*, ImGuiSettingsHandler* handler, void* entry, const char* line)
+{
+	ImGuiID id = (ImGuiID)entry;
+	auto treeNodeData = reinterpret_cast<std::map<ImGuiID, bool>*>(handler->UserData);
+
+	int i;
+	if (sscanf_s(line, "Collapsed=%d", &i) == 1)
+	{
+		(*treeNodeData)[id] = (i == 0);
+	}
+
+}
+
+static void TreeNodeHandler_WriteAll(ImGuiContext* ctx, ImGuiSettingsHandler* handler, ImGuiTextBuffer* buf)
+{
+	auto treeNodeData = reinterpret_cast<std::map<ImGuiID, bool>*>(handler->UserData);
+
+	for (auto const& [id, value] : *treeNodeData)
+	{
+		buf->appendf("[%s][%d]\n", handler->TypeName, id);
+		buf->appendf("Collapsed=%d\n", value ? 0 : 1);
+		buf->append("\n");
+	}
 }
 
 
@@ -59,11 +103,26 @@ bool SettingsMenu::InitMenu()
 	ImGui::CreateContext();
 	ImGuiIO& io = ImGui::GetIO();
 
+	// Handler for saving tree node state to disk
+	ImGuiSettingsHandler treeNodeHandler = {};
+	treeNodeHandler.TypeName = "TreeNode";
+	treeNodeHandler.TypeHash = ImHashStr("TreeNode");
+	treeNodeHandler.ReadOpenFn = TreeNodeHandler_ReadOpen;
+	treeNodeHandler.ReadLineFn = TreeNodeHandler_ReadLine;
+	treeNodeHandler.WriteAllFn = TreeNodeHandler_WriteAll;
+	treeNodeHandler.UserData = &m_treeNodeData;
+	ImGui::AddSettingsHandler(&treeNodeHandler);
+
+#pragma warning(disable: 4996) // for getenv
+	std::string settingsFile = (std::filesystem::path(getenv("APPDATA")) / "OpenXR SteamVR Passthrough" / "imgui.ini").string();
+#pragma warning(default: 4996)
+
+	io.IniFilename = settingsFile.data();
+	io.LogFilename = nullptr;
+
 	m_window->GetWindowDimensions(m_menuWidth, m_menuHeight);
 	io.DisplaySize = ImVec2((float)m_menuWidth, (float)m_menuHeight);
 
-	io.IniFilename = nullptr;
-	io.LogFilename = nullptr;
 	m_mainFont = io.Fonts->AddFontFromMemoryCompressedTTF(roboto_medium_compressed_data, roboto_medium_compressed_size, 24);
 	m_smallFont = io.Fonts->AddFontFromMemoryCompressedTTF(roboto_medium_compressed_data, roboto_medium_compressed_size, 22);
 	m_fixedFont = io.Fonts->AddFontFromMemoryCompressedTTF(cousine_regular_compressed_data, cousine_regular_compressed_size, 18);
@@ -289,6 +348,36 @@ inline void SettingsMenu::TextDescriptionSpaced(const char* fmt, ...)
 	}
 }
 
+bool SettingsMenu::TreeNodePersistent(const char* label, ImGuiTreeNodeFlags flags)
+{
+	ImGuiWindow* window = ImGui::GetCurrentWindow();
+	if (window->SkipItems) { return false; }
+
+	ImGuiID id = window->GetID(label);
+
+	if (m_treeNodeData.contains(id))
+	{
+		flags = m_treeNodeData[id] ? 
+			flags | ImGuiTreeNodeFlags_DefaultOpen : 
+			flags & ~ImGuiTreeNodeFlags_DefaultOpen;
+	}
+
+	bool isOpen = ImGui::TreeNodeBehavior(id, flags, label);
+
+	if (GImGui->LastItemData.StatusFlags & ImGuiItemStatusFlags_ToggledOpen)
+	{
+		m_treeNodeData[id] = isOpen;
+		ImGui::MarkIniSettingsDirty();
+	}
+
+	return isOpen;
+}
+
+bool SettingsMenu::CollapsingHeaderPersistent(const char* label, ImGuiTreeNodeFlags flags)
+{
+	return TreeNodePersistent(label, flags | ImGuiTreeNodeFlags_CollapsingHeader);
+}
+
 inline void BeginSoftDisabled(bool bIsDisabled)
 {
 	if (bIsDisabled)
@@ -393,7 +482,9 @@ void SettingsMenu::DrawMenu()
 
 	ImVec4 colorTextGreen(0.2f, 0.8f, 0.2f, 1.0f);
 	ImVec4 colorTextRed(0.8f, 0.2f, 0.2f, 1.0f);
-	ImVec4 colorTextOrange(0.85f, 0.7f, 0.2f, 1.0f);
+	ImVec4 colorTextOrange(0.9f, 0.7f, 0.2f, 1.0f);
+	ImVec4 colorTextBlue(0.55f, 0.6f, 1.0f, 1.0f);
+	ImVec4 colorTextGrey(0.5f, 0.5f, 0.5f, 1.0f);
 
 	ImGuiIO& io = ImGui::GetIO();
 
@@ -427,8 +518,6 @@ void SettingsMenu::DrawMenu()
 
 	ImGui::Begin("OpenXR Passthrough", NULL, ImGuiWindowFlags_NoDecoration | ImGuiWindowFlags_NoResize);
 
-	
-
 	ImGui::BeginChild("Tab buttons", ImVec2(1200.0f * 0.18f, 0));
 
 	ImVec2 tabButtonSize(1200.0f * 0.17f, 55);
@@ -446,56 +535,110 @@ if (bIsActiveTab) { ImGui::PopStyleColor(1); bIsActiveTab = false; }
 	TAB_BUTTON("Camera", TabCamera);
 	TAB_BUTTON("Debug", TabDebug);
 
-
-	ImGui::BeginChild("Sep1", ImVec2(0, 20));
-	ImGui::EndChild();
-
 	ImGui::PushFont(m_smallFont);
-	ImGui::Indent();
-	ImGui::Text("Application:");
-	ImGui::Text("%s", displayValues.currentApplication.c_str());
-
-	ImGui::Separator();
-	ImGui::Text("Session:");
-	displayValues.bSessionActive ? ImGui::TextColored(colorTextGreen, "Active") : ImGui::TextColored(colorTextRed, "Inactive");
-
-	bool bPassthoughActive = (displayValues.bCorePassthroughActive || displayValues.bFBPassthroughActive);
-
-	ImGui::Separator();
-	ImGui::Text("Passthrough:");
-	bPassthoughActive ? ImGui::TextColored(colorTextGreen, "Active") : ImGui::TextColored(colorTextRed, "Inactive");
-
-	if (mainConfig.EnablePassthrough && !bPassthoughActive && displayValues.CoreCurrentMode == 1)
-	{
-		ImGui::TextColored(colorTextRed, "Opaque");
-	}
-
-	if (mainConfig.EnablePassthrough && !bPassthoughActive && displayValues.CoreCurrentMode == 3 && !(displayValues.frameBufferFlags & XR_COMPOSITION_LAYER_BLEND_TEXTURE_SOURCE_ALPHA_BIT))
-	{
-		ImGui::TextColored(colorTextRed, "No Alpha");
-	}
-
-	if (bPassthoughActive && displayValues.bDepthBlendingActive)
-	{
-		ImGui::TextColored(colorTextGreen, "Depth Blending");
-	}
 
 	if (coreConfig.CoreForcePassthrough || depthConfig.DepthForceComposition || depthConfig.DepthForceRangeTest)
 	{
-		ImGui::Separator();
+		ImGui::Indent();
 		ImGui::Text("Override:");
 		if (depthConfig.DepthForceComposition) { ImGui::TextColored(colorTextOrange, "Depth Composition"); }
 		if (depthConfig.DepthForceRangeTest) { ImGui::TextColored(colorTextOrange, "Depth Range"); }
-		if (coreConfig.CoreForcePassthrough) { ImGui::TextColored(colorTextOrange, "Passthrough Mode"); }	
-		
+		if (coreConfig.CoreForcePassthrough) { ImGui::TextColored(colorTextOrange, "Passthrough Mode"); }
+		ImGui::Unindent();
+	}
+	else
+	{
+		ImGui::BeginChild("Sep1", ImVec2(0, 20));
+		ImGui::EndChild();
 	}
 
-	ImGui::Unindent();
+	if (hasClient && ImGui::BeginListBox("##Clients", ImVec2(1200.0f * 0.17f, ImGui::GetContentRegionAvail().y)))
+	{
+		float labelStart = ImGui::GetCursorPosY();
+
+		for (int i = 0; i < m_displayValues.size(); i++)
+		{
+			MenuDisplayValues& vals = *m_displayValues[i];
+
+			ImGui::PushID(i);
+
+			const char* label = vals.currentApplication.empty() ? "Unnamed" : vals.currentApplication.data();
+
+			ImGui::SetCursorPosY(labelStart);
+
+			if (ImGui::Selectable(label, m_activeClient == i, 0, ImVec2(0, 50)))
+			{
+				m_activeClient = i;
+			}
+
+			ImGui::SetNextItemAllowOverlap();
+			ImGui::SetCursorPosY(labelStart + 25);
+	
+			float timeSinceFrame = ((float)(frameStart.QuadPart - vals.lastFrameTimestamp)) / perfFrequency.QuadPart;
+			bool bPassthoughActive = (vals.bCorePassthroughActive || vals.bFBPassthroughActive);
+
+			if (!vals.bSessionActive)
+			{
+				ImGui::TextColored(colorTextGrey, "Idle");
+			}
+			else if (vals.lastFrameTimestamp == 0 || timeSinceFrame > 1.0f)
+			{
+				ImGui::TextColored(colorTextRed, "Not Drawing");
+			}
+			else if (bPassthoughActive)
+			{
+				ImGui::TextColored(colorTextGreen, "AR");
+			}
+			else
+			{
+				ImGui::TextColored(colorTextBlue, "VR");
+			}
+
+			if (mainConfig.EnablePassthrough && !bPassthoughActive && vals.CoreCurrentMode == 1)
+			{
+				ImGui::SameLine();
+				ImGui::TextColored(colorTextRed, "Opaque");
+			}
+
+			if (mainConfig.EnablePassthrough && !bPassthoughActive && vals.CoreCurrentMode == 3 && !(vals.frameBufferFlags & XR_COMPOSITION_LAYER_BLEND_TEXTURE_SOURCE_ALPHA_BIT))
+			{
+				ImGui::SameLine();
+				ImGui::TextColored(colorTextRed, "No Alpha");
+			}
+
+			if (bPassthoughActive && vals.bDepthBlendingActive)
+			{
+				ImGui::SameLine();
+				ImGui::TextColored(colorTextGreen, "Depth Blending");
+			}
+
+			labelStart += 54;
+
+			ImGui::PopID();
+		}
+		ImGui::EndListBox();
+
+		
+	}
+	else
+	{
+		ImGui::BeginChild("Sep2", ImVec2(0, 20));
+		ImGui::EndChild();
+		ImGui::Indent();
+		ImGui::Text("No applications");
+		ImGui::Unindent();
+	}
 	ImGui::PopFont();
 
-	ImGui::BeginChild("Sep2", ImVec2(0, -ImGui::GetFrameHeightWithSpacing() - 30));
-	ImGui::EndChild();
-	if (ImGui::Button("Reset To Defaults", tabButtonSize))
+	
+	
+	
+
+	//ImGui::BeginChild("Sep2", ImVec2(0, -ImGui::GetFrameHeightWithSpacing() - 30));
+	//ImGui::EndChild();
+
+
+	/*if (ImGui::Button("Reset To Defaults", tabButtonSize))
 	{
 		EProjectionMode mode = mainConfig.ProjectionMode;
 		ECameraProvider cam = mainConfig.CameraProvider;
@@ -506,7 +649,7 @@ if (bIsActiveTab) { ImGui::PopStyleColor(1); bIsActiveTab = false; }
 		{
 			rendererResetPending = true;
 		}
-	}
+	}*/
 
 	ImGui::EndChild();
 	ImGui::SameLine();
@@ -518,9 +661,7 @@ if (bIsActiveTab) { ImGui::PopStyleColor(1); bIsActiveTab = false; }
 	{
 		ImGui::BeginChild("Main#TabMain");
 
-
-		ImGui::SetNextItemOpen(true, ImGuiCond_Once);
-		if (ImGui::CollapsingHeader("Main Settings"))
+		if (CollapsingHeaderPersistent("Main Settings", ImGuiTreeNodeFlags_DefaultOpen))
 		{
 			ImGui::Checkbox("Enable Passthrough", &mainConfig.EnablePassthrough);
 
@@ -561,8 +702,8 @@ if (bIsActiveTab) { ImGui::PopStyleColor(1); bIsActiveTab = false; }
 			ImGui::Checkbox("Project onto Render Models", &mainConfig.ProjectToRenderModels);
 			TextDescriptionSpaced("Project the passthrough view to the correct distance on render models, such as controllers. Requires good camera calibration.");
 
-			ImGui::SetNextItemOpen(true, ImGuiCond_Once);
-			if (ImGui::TreeNode("Image Controls"))
+
+			if (TreeNodePersistent("Image Controls", ImGuiTreeNodeFlags_DefaultOpen))
 			{
 				ImGui::PushItemWidth(ImGui::GetContentRegionAvail().x * 0.45f);
 				bImmediateUpdate |= ScrollableSlider("Opacity", &mainConfig.PassthroughOpacity, 0.0f, 1.0f, "%.1f", 0.1f);
@@ -578,7 +719,7 @@ if (bIsActiveTab) { ImGui::PopStyleColor(1); bIsActiveTab = false; }
 				ImGui::Checkbox("Enable Temporal Filter", &mainConfig.EnableTemporalFiltering);
 				TextDescriptionSpaced("Improves image quality by removing noise and flickering, and sharpening it. Possibly slightly increases image resolution. Expensive on the GPU.");
 
-				if (ImGui::CollapsingHeader("Advanced"))
+				if (TreeNodePersistent("Advanced"))
 				{
 					ImGui::PushItemWidth(ImGui::GetContentRegionAvail().x * 0.45f);
 					bImmediateUpdate |= ScrollableSlider("Temporal Filter Factor", &mainConfig.TemporalFilteringFactor, 0.0f, 1.0f, "%.2f", 0.01f);
@@ -606,6 +747,8 @@ if (bIsActiveTab) { ImGui::PopStyleColor(1); bIsActiveTab = false; }
 					{
 						mainConfig.TemporalFilteringSampling = 4;
 					}
+
+					ImGui::TreePop();
 				}
 				IMGUI_BIG_SPACING;
 
@@ -613,8 +756,7 @@ if (bIsActiveTab) { ImGui::PopStyleColor(1); bIsActiveTab = false; }
 			}
 		}
 
-		ImGui::SetNextItemOpen(true, ImGuiCond_Once);
-		if (ImGui::CollapsingHeader("Projection Settings"))
+		if (CollapsingHeaderPersistent("Projection Settings", ImGuiTreeNodeFlags_DefaultOpen))
 		{
 			IMGUI_BIG_SPACING;
 
@@ -633,8 +775,7 @@ if (bIsActiveTab) { ImGui::PopStyleColor(1); bIsActiveTab = false; }
 			IMGUI_BIG_SPACING;
 		}
 
-		ImGui::SetNextItemOpen(true, ImGuiCond_Once);
-		if (ImGui::CollapsingHeader("Misc."))
+		if (CollapsingHeaderPersistent("Misc.", ImGuiTreeNodeFlags_DefaultOpen))
 		{
 			ImGui::Checkbox("Show Descriptions", &mainConfig.ShowSettingDescriptions);
 
@@ -664,8 +805,7 @@ if (bIsActiveTab) { ImGui::PopStyleColor(1); bIsActiveTab = false; }
 	{
 		ImGui::BeginChild("Setup#Tabsetup");
 
-		ImGui::SetNextItemOpen(true, ImGuiCond_Once);
-		if (ImGui::CollapsingHeader("OpenXR Core"))
+		if (CollapsingHeaderPersistent("OpenXR Core", ImGuiTreeNodeFlags_DefaultOpen))
 		{
 			TextDescriptionSpaced("Options for application controlled passthrough features built into the OpenXR core specification. Allows using the environment blend modes for passthrough.");
 
@@ -730,11 +870,9 @@ if (bIsActiveTab) { ImGui::PopStyleColor(1); bIsActiveTab = false; }
 			IMGUI_BIG_SPACING;
 		}
 
-		ImGui::SetNextItemOpen(true, ImGuiCond_Once);
-		if (ImGui::CollapsingHeader("OpenXR Extensions"))
+		if (CollapsingHeaderPersistent("OpenXR Extensions", ImGuiTreeNodeFlags_DefaultOpen))
 		{
-			ImGui::SetNextItemOpen(true, ImGuiCond_Once);
-			if (ImGui::TreeNode("Multivendor"))
+			if (TreeNodePersistent("Multivendor", ImGuiTreeNodeFlags_DefaultOpen))
 			{
 				ImGui::PushFont(m_fixedFont);
 				ImGui::Text("Composition Layer Inverted Alpha extension:");
@@ -753,8 +891,7 @@ if (bIsActiveTab) { ImGui::PopStyleColor(1); bIsActiveTab = false; }
 				ImGui::TreePop();
 			}
 
-			ImGui::SetNextItemOpen(true, ImGuiCond_Once);
-			if (ImGui::TreeNode("Android"))
+			if (TreeNodePersistent("Android", ImGuiTreeNodeFlags_DefaultOpen))
 			{
 				ImGui::PushFont(m_fixedFont);
 				ImGui::Text("Android Passthrough Camera State extension:");
@@ -773,8 +910,7 @@ if (bIsActiveTab) { ImGui::PopStyleColor(1); bIsActiveTab = false; }
 				ImGui::TreePop();
 			}
 
-			ImGui::SetNextItemOpen(true, ImGuiCond_Once);
-			if (ImGui::TreeNode("Facebook"))
+			if (TreeNodePersistent("Facebook", ImGuiTreeNodeFlags_DefaultOpen))
 			{
 				ImGui::PushFont(m_fixedFont);
 				ImGui::Text("Facebook Passthrough extension:");
@@ -827,8 +963,7 @@ if (bIsActiveTab) { ImGui::PopStyleColor(1); bIsActiveTab = false; }
 				ImGui::TreePop();
 			}
 
-			ImGui::SetNextItemOpen(true, ImGuiCond_Once);
-			if (ImGui::TreeNode("Varjo"))
+			if (TreeNodePersistent("Varjo", ImGuiTreeNodeFlags_DefaultOpen))
 			{
 				ImGui::PushFont(m_fixedFont);
 				ImGui::Text("Varjo Depth Estimation extension:");
@@ -874,8 +1009,7 @@ if (bIsActiveTab) { ImGui::PopStyleColor(1); bIsActiveTab = false; }
 	{
 		ImGui::BeginChild("Stereo#TabStereo");
 
-		ImGui::SetNextItemOpen(true, ImGuiCond_Once);
-		if (ImGui::CollapsingHeader("Status"))
+		if (CollapsingHeaderPersistent("Status", ImGuiTreeNodeFlags_DefaultOpen))
 		{
 			ImGui::PushFont(m_fixedFont);
 
@@ -898,8 +1032,7 @@ if (bIsActiveTab) { ImGui::PopStyleColor(1); bIsActiveTab = false; }
 			ImGui::PopFont();
 		}
 
-		ImGui::SetNextItemOpen(true, ImGuiCond_Once);
-		if (ImGui::CollapsingHeader("Stereo Presets"))
+		if (CollapsingHeaderPersistent("Stereo Presets", ImGuiTreeNodeFlags_DefaultOpen))
 		{
 			ImGui::BeginGroup();
 			if (ImGui::RadioButton("Very Low", mainConfig.StereoPreset == StereoPreset_VeryLow))
@@ -944,8 +1077,7 @@ if (bIsActiveTab) { ImGui::PopStyleColor(1); bIsActiveTab = false; }
 
 		BeginSoftDisabled(mainConfig.StereoPreset != StereoPreset_Custom);
 
-		ImGui::SetNextItemOpen(true, ImGuiCond_Once);
-		if (ImGui::CollapsingHeader("Main Settings"))
+		if (CollapsingHeaderPersistent("Main Settings", ImGuiTreeNodeFlags_DefaultOpen))
 		{
 			ImGui::SetNextItemWidth(ImGui::GetContentRegionAvail().x * 0.45f);
 			ScrollableSliderInt("Image Downscale Factor", &stereoCustomConfig.StereoDownscaleFactor, 1, 16, "%d", 1);
@@ -966,8 +1098,7 @@ if (bIsActiveTab) { ImGui::PopStyleColor(1); bIsActiveTab = false; }
 
 			IMGUI_BIG_SPACING;
 
-			ImGui::SetNextItemOpen(true, ImGuiCond_Once);
-			if (ImGui::TreeNode("Performance"))
+			if (TreeNodePersistent("Performance", ImGuiTreeNodeFlags_DefaultOpen))
 			{
 				ImGui::Checkbox("Use Multiple Cores", &stereoCustomConfig.StereoUseMulticore);
 				TextDescriptionSpaced("Allows the stereo calculations to use multiple CPU cores. This can be turned off for CPU limited applications.");
@@ -984,12 +1115,9 @@ if (bIsActiveTab) { ImGui::PopStyleColor(1); bIsActiveTab = false; }
 		}
 
 
-		ImGui::SetNextItemOpen(true, ImGuiCond_Once);
-		if (ImGui::CollapsingHeader("Advanced GPU Settings"))
+		if (CollapsingHeaderPersistent("Advanced GPU Settings", ImGuiTreeNodeFlags_DefaultOpen))
 		{
-
-			ImGui::SetNextItemOpen(true, ImGuiCond_Once);
-			if (ImGui::TreeNode("Projection"))
+			if (TreeNodePersistent("Projection", ImGuiTreeNodeFlags_DefaultOpen))
 			{
 				ImGui::Spacing();
 				ImGui::BeginGroup();
@@ -1041,8 +1169,7 @@ if (bIsActiveTab) { ImGui::PopStyleColor(1); bIsActiveTab = false; }
 				ImGui::TreePop();
 			}
 
-			ImGui::SetNextItemOpen(true, ImGuiCond_Once);
-			if (ImGui::TreeNode("Camera Composition"))
+			if (TreeNodePersistent("Camera Composition", ImGuiTreeNodeFlags_DefaultOpen))
 			{
 				ImGui::PushItemWidth(ImGui::GetContentRegionAvail().x * 0.45f);
 				BeginSoftDisabled(!stereoCustomConfig.StereoCutoutEnabled);
@@ -1060,8 +1187,8 @@ if (bIsActiveTab) { ImGui::PopStyleColor(1); bIsActiveTab = false; }
 				ImGui::TreePop();
 			}
 
-			ImGui::SetNextItemOpen(true, ImGuiCond_Once);
-			if (ImGui::TreeNode("Depth Fold"))
+
+			if (TreeNodePersistent("Depth Fold", ImGuiTreeNodeFlags_DefaultOpen))
 			{
 				TextDescription("Adjusts depth mesh vertices to smooth out contours in areas with large depth discontinuities.\nThis helps with depth aliasing. Not used in fullscreen mode");
 				ImGui::PushItemWidth(ImGui::GetContentRegionAvail().x * 0.45f);
@@ -1077,8 +1204,7 @@ if (bIsActiveTab) { ImGui::PopStyleColor(1); bIsActiveTab = false; }
 				ImGui::TreePop();
 			}
 
-			ImGui::SetNextItemOpen(true, ImGuiCond_Once);
-			if (ImGui::TreeNode("Fullscreen Contour"))
+			if (TreeNodePersistent("Fullscreen Contour", ImGuiTreeNodeFlags_DefaultOpen))
 			{
 				TextDescription("Detects edges in the depth map and moves pixels toward the front or back to provide sharp contours.\nThis reduces interpolation artifacts from low resolution depth maps.");
 
@@ -1098,8 +1224,7 @@ if (bIsActiveTab) { ImGui::PopStyleColor(1); bIsActiveTab = false; }
 				ImGui::TreePop();
 			}
 
-			ImGui::SetNextItemOpen(true, ImGuiCond_Once);
-			if (ImGui::TreeNode("Projection Temporal Filtering"))
+			if (TreeNodePersistent("Projection Temporal Filtering", ImGuiTreeNodeFlags_DefaultOpen))
 			{
 				ImGui::PushItemWidth(ImGui::GetContentRegionAvail().x * 0.45f);
 				BeginSoftDisabled(!stereoCustomConfig.StereoUseDisparityTemporalFiltering);
@@ -1113,11 +1238,9 @@ if (bIsActiveTab) { ImGui::PopStyleColor(1); bIsActiveTab = false; }
 			IMGUI_BIG_SPACING;
 		}
 
-		ImGui::SetNextItemOpen(true, ImGuiCond_Once);
-		if (ImGui::CollapsingHeader("Advanced CPU Settings"))
+		if (CollapsingHeaderPersistent("Advanced CPU Settings", ImGuiTreeNodeFlags_DefaultOpen))
 		{
-			ImGui::SetNextItemOpen(true, ImGuiCond_Once);
-			if (ImGui::TreeNode("Block Matching"))
+			if (TreeNodePersistent("Block Matching", ImGuiTreeNodeFlags_DefaultOpen))
 			{
 				ImGui::Spacing();
 
@@ -1176,8 +1299,7 @@ if (bIsActiveTab) { ImGui::PopStyleColor(1); bIsActiveTab = false; }
 				ImGui::TreePop();
 			}
 
-			ImGui::SetNextItemOpen(true, ImGuiCond_Once);
-			if (ImGui::TreeNode("Disparity Filtering"))
+			if (TreeNodePersistent("Disparity Filtering", ImGuiTreeNodeFlags_DefaultOpen))
 			{
 				ImGui::Text("Filtering Passes");
 				ImGui::BeginGroup();
@@ -1247,16 +1369,14 @@ if (bIsActiveTab) { ImGui::PopStyleColor(1); bIsActiveTab = false; }
 	{
 		ImGui::BeginChild("Overrides Pane");
 
-		ImGui::SetNextItemOpen(true, ImGuiCond_Once);
-		if (ImGui::CollapsingHeader("Depth"))
+		if (CollapsingHeaderPersistent("Depth", ImGuiTreeNodeFlags_DefaultOpen))
 		{
 			BeginSoftDisabled(!depthConfig.DepthReadFromApplication);
 			ImGui::Checkbox("Force Depth Composition", &depthConfig.DepthForceComposition);
 			TextDescription("Enables composing the passthrough by depth for applications that submit a depth buffer.");
 			EndSoftDisabled(!depthConfig.DepthReadFromApplication);
 
-			ImGui::SetNextItemOpen(true, ImGuiCond_Once);
-			if (ImGui::TreeNode("Depth Range"))
+			if (TreeNodePersistent("Depth Range", ImGuiTreeNodeFlags_DefaultOpen))
 			{
 				ImGui::Checkbox("Force Depth Range testing", &depthConfig.DepthForceRangeTest);
 				TextDescription("Force passthrough to only render in a certain depth range.");
@@ -1269,8 +1389,7 @@ if (bIsActiveTab) { ImGui::PopStyleColor(1); bIsActiveTab = false; }
 				ImGui::TreePop();
 			}
 
-			//ImGui::SetNextItemOpen(true, ImGuiCond_Once);
-			if (ImGui::TreeNode("Advanced"))
+			if (TreeNodePersistent("Advanced"))
 			{
 				ImGui::Checkbox("Read Depth Buffers", &depthConfig.DepthReadFromApplication);
 				TextDescription("Allow reading depth buffers submitted by the application.");
@@ -1285,8 +1404,7 @@ if (bIsActiveTab) { ImGui::PopStyleColor(1); bIsActiveTab = false; }
 			IMGUI_BIG_SPACING;
 		}
 
-		ImGui::SetNextItemOpen(true, ImGuiCond_Once);
-		if (ImGui::CollapsingHeader("Mode"))
+		if (CollapsingHeaderPersistent("Mode", ImGuiTreeNodeFlags_DefaultOpen))
 		{
 			ImGui::Checkbox("Force Passthrough Mode", &coreConfig.CoreForcePassthrough);
 			TextDescription("Forces passthrough on even if the application does not support it.");
@@ -1344,8 +1462,7 @@ if (bIsActiveTab) { ImGui::PopStyleColor(1); bIsActiveTab = false; }
 
 		BeginSoftDisabled(!coreConfig.CoreForcePassthrough);
 
-		ImGui::SetNextItemOpen(true, ImGuiCond_Once);
-		if (ImGui::CollapsingHeader("Masked Croma Key Settings"))
+		if (CollapsingHeaderPersistent("Masked Croma Key Settings", ImGuiTreeNodeFlags_DefaultOpen))
 		{
 			ImGui::BeginGroup();
 			ImGui::PushItemWidth(min(ImGui::GetContentRegionAvail().x * 0.35f, 200.0f));
@@ -1402,8 +1519,7 @@ if (bIsActiveTab) { ImGui::PopStyleColor(1); bIsActiveTab = false; }
 		ImGui::BeginChild("Camera Settings", ImVec2(0, -60));
 
 
-		ImGui::SetNextItemOpen(true, ImGuiCond_Once);
-		if (ImGui::CollapsingHeader("Status###CameraStatus"))
+		if (CollapsingHeaderPersistent("Status###CameraStatus", ImGuiTreeNodeFlags_DefaultOpen))
 		{
 			ImGui::PushFont(m_fixedFont);
 			ImGui::Text("Current Camera API: %s, %u x %u @ %.0f fps", displayValues.CameraAPI, displayValues.CameraFrameWidth, displayValues.CameraFrameHeight, displayValues.CameraFrameRate);
@@ -1411,8 +1527,7 @@ if (bIsActiveTab) { ImGui::PopStyleColor(1); bIsActiveTab = false; }
 			ImGui::PopFont();
 		}
 
-		ImGui::SetNextItemOpen(true, ImGuiCond_Once);
-		if (ImGui::CollapsingHeader("Common"))
+		if (CollapsingHeaderPersistent("Common", ImGuiTreeNodeFlags_DefaultOpen))
 		{
 			ImGui::Text("Camera Provider");
 			TextDescription("Source for passthrough camera images.");
@@ -1476,8 +1591,7 @@ if (bIsActiveTab) { ImGui::PopStyleColor(1); bIsActiveTab = false; }
 			IMGUI_BIG_SPACING;
 		}
 
-		ImGui::SetNextItemOpen(true, ImGuiCond_Once);
-		if (ImGui::CollapsingHeader("Webcam Configuration"))
+		if (CollapsingHeaderPersistent("Webcam Configuration", ImGuiTreeNodeFlags_DefaultOpen))
 		{
 			TextDescription("These settings are for the experimental webcam provider only.");
 
@@ -1621,8 +1735,7 @@ if (bIsActiveTab) { ImGui::PopStyleColor(1); bIsActiveTab = false; }
 
 			IMGUI_BIG_SPACING;
 
-			ImGui::SetNextItemOpen(true, ImGuiCond_Once);
-			if (ImGui::CollapsingHeader("Left Camera"))
+			if (CollapsingHeaderPersistent("Left Camera", ImGuiTreeNodeFlags_DefaultOpen))
 			{
 				ImGui::Text("Camera Extrinsics");
 				ImGui::DragFloat3("Camera Offset (m)", cameraConfig.Camera0_Translation, 0.001f, 0.0f, 0.0f, "%.3f");
@@ -1635,8 +1748,7 @@ if (bIsActiveTab) { ImGui::PopStyleColor(1); bIsActiveTab = false; }
 
 			}
 
-			ImGui::SetNextItemOpen(true, ImGuiCond_Once);
-			if (ImGui::CollapsingHeader("Right Camera"))
+			if (CollapsingHeaderPersistent("Right Camera", ImGuiTreeNodeFlags_DefaultOpen))
 			{
 				ImGui::Text("Camera Extrinsics");
 				ImGui::DragFloat3("Camera Offset (m)###RightOffset", cameraConfig.Camera1_Translation, 0.001f, 0.0f, 0.0f, "%.3f");
@@ -1648,11 +1760,11 @@ if (bIsActiveTab) { ImGui::PopStyleColor(1); bIsActiveTab = false; }
 				ImGui::DragInt2("Sensor Pixels###RightPx", cameraConfig.Camera1_IntrinsicsSensorPixels, 1.0f, 1, 8192);
 				ImGui::DragFloat4("Distortion##RightDist", cameraConfig.Camera1_IntrinsicsDist, 0.001f, 0.0f, 0.0f, "%.5f");
 			}
-		}
-		IMGUI_BIG_SPACING;
 
-		ImGui::SetNextItemOpen(true, ImGuiCond_Once);
-		if (ImGui::CollapsingHeader("SteamVR Camera Configuration"))
+			IMGUI_BIG_SPACING;
+		}	
+
+		if (CollapsingHeaderPersistent("SteamVR Camera Configuration", ImGuiTreeNodeFlags_DefaultOpen))
 		{
 			IMGUI_BIG_SPACING;
 
@@ -1666,8 +1778,7 @@ if (bIsActiveTab) { ImGui::PopStyleColor(1); bIsActiveTab = false; }
 
 			IMGUI_BIG_SPACING;
 
-			ImGui::SetNextItemOpen(true, ImGuiCond_Once);
-			if (ImGui::CollapsingHeader("SteamVR Camera 0"))
+			if (CollapsingHeaderPersistent("SteamVR Camera 0", ImGuiTreeNodeFlags_DefaultOpen))
 			{
 				ImGui::Text("Camera Extrinsics");
 				ImGui::DragFloat3("Camera Offset (m)###OpenVROffset", cameraConfig.OpenVR_Camera0_Translation, 0.001f, 0.0f, 0.0f, "%.3f");
@@ -1679,8 +1790,7 @@ if (bIsActiveTab) { ImGui::PopStyleColor(1); bIsActiveTab = false; }
 				ImGui::DragFloat4("Distortion###OpenVRDist", cameraConfig.OpenVR_Camera0_IntrinsicsDist, 0.001f, 0.0f, 0.0f, "%.5f");
 			}
 
-			ImGui::SetNextItemOpen(true, ImGuiCond_Once);
-			if (ImGui::CollapsingHeader("SteamVR Camera 1"))
+			if (CollapsingHeaderPersistent("SteamVR Camera 1", ImGuiTreeNodeFlags_DefaultOpen))
 			{
 				ImGui::Text("Camera Extrinsics");
 				ImGui::DragFloat3("Camera Offset (m)###OpenVRRightOffset", cameraConfig.OpenVR_Camera1_Translation, 0.001f, 0.0f, 0.0f, "%.3f");
@@ -1723,8 +1833,7 @@ if (bIsActiveTab) { ImGui::PopStyleColor(1); bIsActiveTab = false; }
 
 		ImGui::BeginChild("TabDebug");
 
-		ImGui::SetNextItemOpen(true, ImGuiCond_Once);
-		if (ImGui::CollapsingHeader("Debug"))
+		if (CollapsingHeaderPersistent("Debug", ImGuiTreeNodeFlags_DefaultOpen))
 		{
 			ImGui::BeginGroup();
 			ImGui::Checkbox("Freeze Stereo Projection", &mainConfig.DebugStereoReconstructionFreeze);
@@ -1935,8 +2044,7 @@ if (bIsActiveTab) { ImGui::PopStyleColor(1); bIsActiveTab = false; }
 			ImGui::EndGroup();		
 		}
 
-		ImGui::SetNextItemOpen(true, ImGuiCond_Once);
-		if (ImGui::CollapsingHeader("Device Properties"))
+		if (CollapsingHeaderPersistent("Device Properties", ImGuiTreeNodeFlags_DefaultOpen))
 		{
 
 			ImGui::BeginDisabled(m_dashboardOverlay->IsRuntimeInitialized());
@@ -2201,8 +2309,7 @@ if (bIsActiveTab) { ImGui::PopStyleColor(1); bIsActiveTab = false; }
 			IMGUI_BIG_SPACING;
 		}
 
-		ImGui::SetNextItemOpen(true, ImGuiCond_Once);
-		if (ImGui::CollapsingHeader("Log"))
+		if (CollapsingHeaderPersistent("Log", ImGuiTreeNodeFlags_DefaultOpen))
 		{
 			//ImGui::BeginChild("Log", ImVec2(0, 0), true);
 			ImGui::PushFont(m_fixedFont);
@@ -2382,18 +2489,21 @@ LRESULT SettingsMenu::HandleWin32Events(HWND hWnd, UINT msg, WPARAM wParam, LPAR
 
 void SettingsMenu::MenuIPCClientConnected(int clientIndex)
 {
-	if (m_displayValues.size() != clientIndex)
 	{
-		ErrorLog("Client count desynced: %d != %d\n", clientIndex, m_displayValues.size());
+		std::lock_guard<std::mutex> lock(m_menuWriteMutex);
+
+		if (m_displayValues.size() != clientIndex)
+		{
+			ErrorLog("Client count desynced: %d != %d\n", clientIndex, m_displayValues.size());
+		}
+
+		while (m_displayValues.size() <= clientIndex)
+		{
+			m_displayValues.push_back(std::make_unique<MenuDisplayValues>());
+		}
+
+		if (m_activeClient < 0) { m_activeClient = clientIndex; }
 	}
-
-	while (m_displayValues.size() <= clientIndex)
-	{
-		m_displayValues.push_back(std::make_unique<MenuDisplayValues>());
-	}
-
-	if (m_activeClient < 0) { m_activeClient = clientIndex; }
-
 	m_window->OnClientConnected();
 
 	if (!m_dashboardOverlay->IsRuntimeInitialized())
@@ -2439,9 +2549,12 @@ void SettingsMenu::MenuIPCClientConnected(int clientIndex)
 
 void SettingsMenu::MenuIPCClientDisconnected(int clientIndex)
 {
+	Log("disc: %d\n", clientIndex);
+	std::lock_guard<std::mutex> lock(m_menuWriteMutex);
 	if (clientIndex < m_displayValues.size())
 	{
 		m_displayValues.erase(m_displayValues.begin() + clientIndex);
+		Log("eraase: %d\n", m_displayValues.size());
 	}
 	else
 	{

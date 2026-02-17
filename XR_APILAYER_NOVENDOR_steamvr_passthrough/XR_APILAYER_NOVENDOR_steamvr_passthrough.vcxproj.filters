@@ -86,9 +86,6 @@
     <ClInclude Include="camera_enumerator.h">
       <Filter>Header Files</Filter>
     </ClInclude>
-    <ClInclude Include="mathutil.h">
-      <Filter>Header Files</Filter>
-    </ClInclude>
     <ClInclude Include="openvr_manager.h">
       <Filter>Header Files</Filter>
     </ClInclude>
@@ -105,6 +102,9 @@
       <Filter>Shared</Filter>
     </ClInclude>
     <ClInclude Include="menu_handler.h">
+      <Filter>Header Files</Filter>
+    </ClInclude>
+    <ClInclude Include="mathutil.h">
       <Filter>Header Files</Filter>
     </ClInclude>
   </ItemGroup>

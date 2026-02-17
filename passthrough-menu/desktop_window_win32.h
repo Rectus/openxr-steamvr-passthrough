@@ -57,6 +57,6 @@ protected:
 	bool m_bExitOnClose = false;
 	bool m_bExitOnNoClients = false;
 	bool m_bExitChangedByClients = false;
-	std::shared_ptr<SettingsMenu> m_settingsMenu = nullptr;
+	std::weak_ptr<SettingsMenu> m_settingsMenu;
 };
 

@@ -87,6 +87,9 @@ public:
 private:
 	void TextDescription(const char* fmt, ...);
 	void TextDescriptionSpaced(const char* fmt, ...);
+	bool TreeNodePersistent(const char* label, ImGuiTreeNodeFlags flags = 0);
+	bool CollapsingHeaderPersistent(const char* label, ImGuiTreeNodeFlags flags = 0);
+
 	void DrawMenu();
 
 	std::shared_ptr<ConfigManager> m_configManager;
@@ -130,5 +133,7 @@ private:
 	std::atomic<bool> m_bIsRendering = false;
 	uint32_t m_menuWidth = 0;
 	uint32_t m_menuHeight = 0;
+
+	std::map<ImGuiID, bool> m_treeNodeData;
 };
 

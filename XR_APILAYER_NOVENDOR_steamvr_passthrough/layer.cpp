@@ -1850,6 +1850,9 @@ namespace
 					MenuDisplayValues& vals = m_menuHandler->GetDisplayValues();
 					vals.bCorePassthroughActive = false;
 					vals.bFBPassthroughActive = false;
+					uint64_t frameTime = StartPerfTimer().QuadPart;
+					m_menuHandler->GetDisplayValues().lastFrameTimestamp = frameTime;
+
 					m_menuHandler->DispatchDisplayValues();
 				}
 

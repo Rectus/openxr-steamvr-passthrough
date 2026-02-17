@@ -84,6 +84,9 @@
     <ClInclude Include="..\shared\menu_ipc_server.h">
       <Filter>Shared</Filter>
     </ClInclude>
+    <ClInclude Include="..\XR_APILAYER_NOVENDOR_steamvr_passthrough\mathutil.h">
+      <Filter>Shared</Filter>
+    </ClInclude>
   </ItemGroup>
   <ItemGroup>
     <ClCompile Include="main.cpp">
