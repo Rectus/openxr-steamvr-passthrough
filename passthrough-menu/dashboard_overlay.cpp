@@ -7,8 +7,6 @@
 
 
 
-
-
 DashboardOverlay::DashboardOverlay()
 	: m_overlayHandle(vr::k_ulOverlayHandleInvalid)
 	, m_thumbnailHandle(vr::k_ulOverlayHandleInvalid)
@@ -20,6 +18,7 @@ DashboardOverlay::~DashboardOverlay()
 {
 	if (m_bRuntimeInitialized)
 	{
+		m_bRuntimeInitialized = false;
 		if (m_bHasOverlay)
 		{
 			DestroyOverlay();

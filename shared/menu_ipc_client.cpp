@@ -150,8 +150,17 @@ void MenuIPCClient::Listen()
 			}
 		}
 
-		if (WaitForSingleObject(m_event, 100) != WAIT_OBJECT_0)
+		DWORD result = WaitForSingleObject(m_event, 100);
+		if (result == WAIT_TIMEOUT && !m_bWritePending)
 		{
+			MenuIPCMessage message = {};
+			message.Header.Type = MessageType_KeepAlive;
+			WriteMessage(message, false);
+			continue;
+		}
+		else if (result != WAIT_OBJECT_0)
+		{
+			
 			continue;
 		}
 

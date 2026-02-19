@@ -2,8 +2,14 @@
 #include "pch.h"
 #include "menu_ipc_server.h"
 
+#define CLIENT_TIMEOUT_MS 1000
+
 MenuIPCServer::MenuIPCServer()
 {
+	LARGE_INTEGER freq;
+	QueryPerformanceFrequency(&freq);
+	m_counterFreq = freq.QuadPart;
+
 	HANDLE shutdownEvent = CreateEvent(NULL, TRUE, FALSE, NULL);
 
 	if (shutdownEvent == INVALID_HANDLE_VALUE || shutdownEvent == NULL) 
@@ -16,7 +22,7 @@ MenuIPCServer::MenuIPCServer()
 
 	m_bRunThread = true;
 	m_listenThread = std::thread(&MenuIPCServer::Listen, this);
-	Log("Menu IPC server started\n");
+	Log("Menu IPC Server: Started\n");
 }
 
 MenuIPCServer::~MenuIPCServer()
@@ -54,7 +60,7 @@ bool MenuIPCServer::WriteMessage(MenuIPCMessage& message, int clientIndex)
 {
 	if (message.Header.PayloadSize > IPC_PAYLOAD_SIZE)
 	{
-		ErrorLog("IPC WriteMessage: Payload too large!\n");
+		ErrorLog("Menu IPC Server: WriteMessage: Payload too large!\n");
 		return false;
 	}
 
@@ -62,7 +68,7 @@ bool MenuIPCServer::WriteMessage(MenuIPCMessage& message, int clientIndex)
 
 	if (m_clientConnections.size() <= clientIndex || !m_clientConnections[clientIndex]->bConnected)
 	{
-		ErrorLog("IPC WriteMessage: Invalid client!\n");
+		ErrorLog("Menu IPC Server: WriteMessage: Invalid client!\n");
 		return false;
 	}
 
@@ -70,13 +76,13 @@ bool MenuIPCServer::WriteMessage(MenuIPCMessage& message, int clientIndex)
 
 	if (connection->bWritePending)
 	{
-		ErrorLog("IPC WriteMessage: Write already pending!\n");
+		ErrorLog("Menu IPC Server: WriteMessage: Write already pending!\n");
 		return false;
 	}
 
 	if (message.Header.PayloadSize > IPC_PAYLOAD_SIZE)
 	{
-		ErrorLog("IPC WriteMessage: Payload too large!\n");
+		ErrorLog("Menu IPC Server: WriteMessage: Payload too large!\n");
 		return false;
 	}
 
@@ -93,13 +99,13 @@ bool MenuIPCServer::WriteMessage(MenuIPCMessage& message, int clientIndex)
 	{
 		if (writeSize != bytesWritten)
 		{
-			ErrorLog("IPC WriteMessage: Incorrect bytes written: %d, expected &d\n", writeSize, bytesWritten);
+			ErrorLog("Menu IPC Server: WriteMessage: Incorrect bytes written: %d, expected &d\n", writeSize, bytesWritten);
 			return false;
 		}		
 	}
 	else if (error == ERROR_NO_DATA || error == ERROR_BROKEN_PIPE)
 	{
-		Log("IPC Client %d disconnected.\n", clientIndex);
+		Log("Menu IPC Server: Client %d disconnected.\n", clientIndex);
 		connection->bConnected = false;
 		connection->bShuttingDown = true;
 		SetEvent(connection->ReadOverlap.hEvent);
@@ -111,7 +117,7 @@ bool MenuIPCServer::WriteMessage(MenuIPCMessage& message, int clientIndex)
 	}
 	else
 	{
-		ErrorLog("IPC WriteMessage: WriteFile error: %d\n", error);
+		ErrorLog("Menu IPC Server: WriteMessage: WriteFile error: %d\n", error);
 		return false;
 	}
 	return true;
@@ -121,7 +127,7 @@ bool MenuIPCServer::BroadcastMessage(MenuIPCMessage& message)
 {
 	if (message.Header.PayloadSize > IPC_PAYLOAD_SIZE)
 	{
-		ErrorLog("IPC BroadcastMessage: Payload too large!\n");
+		ErrorLog("Menu IPC Server: BroadcastMessage: Payload too large!\n");
 		return false;
 	}
 	int writeSize = IPC_HEADER_SIZE + message.Header.PayloadSize;
@@ -173,7 +179,7 @@ bool MenuIPCServer::BroadcastMessage(MenuIPCMessage& message)
 		{
 			if (writeSize != bytesWritten)
 			{
-				ErrorLog("IPC BroadcastMessage: Incorrect bytes written: %d, expected &d\n", writeSize, bytesWritten);
+				ErrorLog("Menu IPC Server: BroadcastMessage: Incorrect bytes written: %d, expected &d\n", writeSize, bytesWritten);
 			}
 		}
 		else if (error == ERROR_IO_PENDING)
@@ -182,14 +188,14 @@ bool MenuIPCServer::BroadcastMessage(MenuIPCMessage& message)
 		}
 		else if (error == ERROR_NO_DATA || error == ERROR_BROKEN_PIPE)
 		{
-			Log("IPC Client %d disconnected\n", clIdx);
+			Log("Menu IPC Server: Client %d disconnected\n", clIdx);
 			connection->bConnected = false;
 			connection->bShuttingDown = true;
 			SetEvent(connection->ReadOverlap.hEvent);
 		}
 		else
 		{
-			ErrorLog("IPC BroadcastMessage: WriteFile error: %d\n", GetLastError());
+			ErrorLog("Menu IPC Server: BroadcastMessage: WriteFile error: %d\n", GetLastError());
 		}
 	}
 	
@@ -213,7 +219,7 @@ void MenuIPCServer::Listen()
 		}
 		else if (eventIndex >= m_events.size())
 		{
-			ErrorLog("WaitForMultipleObjects failure: %d\n", eventIndex);
+			ErrorLog("Menu IPC Server: WaitForMultipleObjects failure: %d\n", eventIndex);
 			m_bRunThread = false;
 			break;
 		}
@@ -222,15 +228,33 @@ void MenuIPCServer::Listen()
 			m_bRunThread = false;
 			break;
 		}
-		DWORD clIdx = eventIndex - 1;
-		std::unique_lock<std::mutex> clientLock(m_clientConnections[clIdx]->Mutex);
+
+		LARGE_INTEGER time;
+		QueryPerformanceCounter(&time);
+		uint64_t currentTime = time.QuadPart;
+
+		// Check for timeouts
+		for (int i = 0; i < m_clientConnections.size(); i++)
+		{
+			std::unique_lock<std::mutex> clientLock(m_clientConnections[i]->Mutex);
+
+			if (m_clientConnections[i]->bConnected &&
+				currentTime > m_clientConnections[i]->LastMessageTime +
+				(CLIENT_TIMEOUT_MS * m_counterFreq / 1000))
+			{
+				Log("Menu IPC Server: Client %d timed out\n", i);
+				m_clientConnections[i]->bConnected = false;
+				m_clientConnections[i]->bShuttingDown = true;
+			}
+		}
+
+		DWORD clIdx = eventIndex - 1;	
 
 		if (m_clientConnections[clIdx]->bShuttingDown)
 		{
-			clientLock.unlock();
 			RemovePipe(clIdx);
 
-			if (m_clientConnections.size() == 0)
+			if (m_numIdlePipes < 1)
 			{
 				AddPipe();
 			}
@@ -238,29 +262,48 @@ void MenuIPCServer::Listen()
 			continue;
 		}
 
+		std::unique_lock<std::mutex> clientLock(m_clientConnections[clIdx]->Mutex);
+
 		DWORD numBytes = 0;
 
 		if (!m_clientConnections[clIdx]->bConnected)
 		{
-			if (GetOverlappedResult(m_clientConnections[clIdx]->Pipe, &m_clientConnections[clIdx]->ReadOverlap, &numBytes, FALSE))
+			bool bSuccess = GetOverlappedResult(m_clientConnections[clIdx]->Pipe, &m_clientConnections[clIdx]->ReadOverlap, &numBytes, FALSE);
+			DWORD error = GetLastError();
+
+			if (bSuccess)
 			{
 				Log("Menu IPC Server: Client connected to pipe %d\n", clIdx);
 				m_clientConnections[clIdx]->bConnected = true;
+				m_clientConnections[clIdx]->LastMessageTime = currentTime;
+				m_numIdlePipes--;
 				CueRead(clIdx);
 
 				// Add another pipe to wait for new connections
-				AddPipe();
+				if (m_numIdlePipes < 1)
+				{
+					AddPipe();
+				}
 
 				if (auto callback = m_callback.lock())
 				{
 					callback->MenuIPCClientConnected(clIdx);
 				}
 			}
-			else if (GetLastError() != ERROR_IO_PENDING)
+			else if (error == ERROR_BROKEN_PIPE)
 			{
-				ErrorLog("IPC Pipe error: %d\n", GetLastError());
-				clientLock.unlock();
-				RemovePipe(clIdx);
+				ErrorLog("Menu IPC Server: Client %d failed to connect!\n", clIdx);
+				m_clientConnections[clIdx]->bConnected = false;
+				m_clientConnections[clIdx]->bShuttingDown = true;
+				SetEvent(m_clientConnections[clIdx]->ReadOverlap.hEvent);
+				continue;
+			}
+			else if (error != ERROR_IO_PENDING)
+			{
+				ErrorLog("Menu IPC Server: Pipe error: %d\n", error);
+				m_clientConnections[clIdx]->bConnected = false;
+				m_clientConnections[clIdx]->bShuttingDown = true;
+				SetEvent(m_clientConnections[clIdx]->ReadOverlap.hEvent);
 			}
 
 			continue;
@@ -273,16 +316,24 @@ void MenuIPCServer::Listen()
 
 			if (bSuccess)
 			{
-				
 				m_clientConnections[clIdx]->bReadPending = false;
+				m_clientConnections[clIdx]->LastMessageTime = currentTime;
 
 				auto message = reinterpret_cast<MenuIPCMessage*>(m_clientConnections[clIdx]->ReadBuffer);
 
-				if (numBytes < IPC_HEADER_SIZE || numBytes != IPC_HEADER_SIZE + message->Header.PayloadSize)
+				if (message->Header.Type == MessageType_KeepAlive && !m_clientConnections[clIdx]->bWritePending)
 				{
-					ErrorLog("Invalid IPC message size: %d, expected %d\n", numBytes, IPC_HEADER_SIZE + message->Header.PayloadSize);
+					MenuIPCMessage message = {};
+					message.Header.Type = MessageType_KeepAlive;
+					clientLock.unlock();
+					WriteMessage(message, clIdx);
+					continue;
 				}
-				else if(auto callback = m_callback.lock())
+				else if (numBytes < IPC_HEADER_SIZE || numBytes != IPC_HEADER_SIZE + message->Header.PayloadSize)
+				{
+					ErrorLog("Menu IPC Server: Invalid IPC message size: %d, expected %d\n", numBytes, IPC_HEADER_SIZE + message->Header.PayloadSize);
+				}
+				else if (auto callback = m_callback.lock())
 				{
 					callback->MenuIPCMessageReceived(*message, clIdx);
 				}
@@ -296,18 +347,18 @@ void MenuIPCServer::Listen()
 			}
 			else if (error == ERROR_BROKEN_PIPE)
 			{
-				Log("IPC Client %d disconnected\n", clIdx);
+				Log("Menu IPC Server: Client %d disconnected\n", clIdx);
 				m_clientConnections[clIdx]->bConnected = false;
-				clientLock.unlock();
-				RemovePipe(clIdx);
+				m_clientConnections[clIdx]->bShuttingDown = true;
+				SetEvent(m_clientConnections[clIdx]->ReadOverlap.hEvent);
 				continue;
 			}
 			else
 			{
-				ErrorLog("IPC Pipe read error: %d\n", error);
+				ErrorLog("Menu IPC Server: Pipe read error: %d\n", error);
 				m_clientConnections[clIdx]->bConnected = false;
-				clientLock.unlock();
-				RemovePipe(clIdx);
+				m_clientConnections[clIdx]->bShuttingDown = true;
+				SetEvent(m_clientConnections[clIdx]->ReadOverlap.hEvent);
 				continue;
 			}
 		}
@@ -325,7 +376,7 @@ void MenuIPCServer::Listen()
 			{
 				if (numBytes != m_clientConnections[clIdx]->WriteSize)
 				{
-					ErrorLog("Wrong number of bytes written to pipe: %d, expected %d\n", numBytes, m_clientConnections[clIdx]->WriteSize);
+					ErrorLog("Menu IPC Server: Wrong number of bytes written to pipe: %d, expected %d\n", numBytes, m_clientConnections[clIdx]->WriteSize);
 				}
 				m_clientConnections[clIdx]->bWritePending = false;
 
@@ -336,25 +387,25 @@ void MenuIPCServer::Listen()
 			}
 			else if (error == ERROR_BROKEN_PIPE)
 			{
-				Log("IPC Client %d disconnected\n", clIdx);
+				Log("Menu IPC Server: Client %d disconnected\n", clIdx);
 				m_clientConnections[clIdx]->bConnected = false;
-				clientLock.unlock();
-				RemovePipe(clIdx);
+				m_clientConnections[clIdx]->bShuttingDown = true;
+				SetEvent(m_clientConnections[clIdx]->ReadOverlap.hEvent);
 				continue;
 			}
 			else
 			{
-				ErrorLog("IPC Pipe write error: %d\n", error);
+				ErrorLog("Menu IPC Server: Pipe write error: %d\n", error);
 				m_clientConnections[clIdx]->bConnected = false;
+				m_clientConnections[clIdx]->bShuttingDown = true;
 				m_clientConnections[clIdx]->bWritePending = false;
-				clientLock.unlock();
-				RemovePipe(clIdx);
+				SetEvent(m_clientConnections[clIdx]->ReadOverlap.hEvent);
 				continue;
 			}
 		}
 	}
 
-	Log("IPC server shutting down");
+	Log("Menu IPC Server: Shutting down...");
 
 	for (int i = static_cast<int>(m_clientConnections.size()) - 1; i >= 0; i--)
 	{
@@ -379,7 +430,7 @@ bool MenuIPCServer::CueRead(int index)
 		m_clientConnections[index]->bReadPending = true;
 		return true;
 	}
-	ErrorLog("IPC ReadFile failed: %d\n", GetLastError());
+	ErrorLog("Menu IPC Server: ReadFile failed: %d\n", GetLastError());
 	return false;
 }
 
@@ -399,7 +450,7 @@ bool MenuIPCServer::AddPipe()
 
 		DWORD length = FormatMessageA(FORMAT_MESSAGE_ALLOCATE_BUFFER | FORMAT_MESSAGE_FROM_SYSTEM | FORMAT_MESSAGE_IGNORE_INSERTS, NULL, GetLastError(), MAKELANGID(LANG_ENGLISH, SUBLANG_ENGLISH_US), (LPSTR)&messageBuffer, 0, NULL);
 
-		ErrorLog("CreateNamedPipeW failed: %s\n", messageBuffer);
+		ErrorLog("Menu IPC Server: CreateNamedPipeW failed: %s\n", messageBuffer);
 
 		LocalFree(messageBuffer);
 
@@ -415,7 +466,7 @@ bool MenuIPCServer::AddPipe()
 	if (connection->ReadOverlap.hEvent == INVALID_HANDLE_VALUE || connection->ReadOverlap.hEvent == NULL)
 	{
 		m_clientConnections.pop_back();
-		ErrorLog("CreateEvent failed\n");
+		ErrorLog("Menu IPC Server: CreateEvent failed\n");
 		return false;
 	}
 
@@ -431,12 +482,16 @@ bool MenuIPCServer::AddPipe()
 		{
 			SetEvent(connection->ReadOverlap.hEvent);
 		}
+		else
+		{
+			m_numIdlePipes++;
+		}
 		return true;
 	}
 
 	m_clientConnections.pop_back();
 
-	ErrorLog("Pipe connection failed\n");
+	ErrorLog("Menu IPC Server: Pipe connection failed\n");
 
 	return false;
 }

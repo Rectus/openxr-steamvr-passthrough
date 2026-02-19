@@ -5,7 +5,8 @@
 
 enum MenuIPCMessageType
 {
-	MessageType_SetAppName = 0,
+	MessageType_KeepAlive = 0,
+	MessageType_SetAppName,
 	MessageType_SetDisplayValues,
 	MessageType_RequestConfig,
 	MessageType_SendConfig_Main,

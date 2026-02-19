@@ -19,6 +19,7 @@ struct ClientConnection
 	std::atomic<bool> bWritePending = false;
 	std::atomic<bool> bShuttingDown = false;
 	std::mutex Mutex;
+	uint64_t LastMessageTime = 0;
 
 	ClientConnection() {}
 };
@@ -43,10 +44,12 @@ protected:
 
 	std::thread m_listenThread;
 	bool m_bRunThread = false;
+	std::atomic<int> m_numIdlePipes = 0;
 
 	std::weak_ptr<IMenuIPCReader> m_callback;
 
 	std::vector<std::unique_ptr<ClientConnection>> m_clientConnections;
 	std::vector<HANDLE> m_events;
 	std::shared_mutex m_connectionStateMutex;
+	uint64_t m_counterFreq = 0;
 };

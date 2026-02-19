@@ -42,7 +42,6 @@ SettingsMenu::~SettingsMenu()
 	{
 		m_dashboardOverlay->DestroyOverlay();
 	}
-	m_dashboardOverlay.reset();
 
 	ImGui::SaveIniSettingsToDisk(ImGui::GetIO().IniFilename);
 	m_renderer.WaitDeinitImGui();
@@ -51,9 +50,6 @@ SettingsMenu::~SettingsMenu()
 	ImGui::DestroyContext();
 
 	m_renderer.CleanupRenderer();
-	m_configManager.reset();
-	m_window.reset();
-	m_IPCServer.reset();
 }
 
 
@@ -477,8 +473,17 @@ void SettingsMenu::DrawMenu()
 	Config_Depth& depthConfig = m_configManager->GetConfig_Depth();
 	Config_Camera& cameraConfig = m_configManager->GetConfig_Camera();
 
-	bool hasClient = m_activeClient >= 0 && m_activeClient < m_displayValues.size();
-	MenuDisplayValues& displayValues = hasClient ? *m_displayValues[m_activeClient] : m_defualtDisplayValues;
+	bool hasClients = m_displayValues.size() > 0;
+	if (hasClients && m_activeClient >= m_displayValues.size())
+	{
+		m_activeClient = (int)m_displayValues.size() - 1;
+	}
+	else if(hasClients && m_activeClient < 0)
+	{
+		m_activeClient = 0;
+	}
+
+	MenuDisplayValues& displayValues = hasClients ? *m_displayValues[m_activeClient] : m_defualtDisplayValues;
 
 	ImVec4 colorTextGreen(0.2f, 0.8f, 0.2f, 1.0f);
 	ImVec4 colorTextRed(0.8f, 0.2f, 0.2f, 1.0f);
@@ -552,7 +557,7 @@ if (bIsActiveTab) { ImGui::PopStyleColor(1); bIsActiveTab = false; }
 		ImGui::EndChild();
 	}
 
-	if (hasClient && ImGui::BeginListBox("##Clients", ImVec2(1200.0f * 0.17f, ImGui::GetContentRegionAvail().y)))
+	if (hasClients && ImGui::BeginListBox("##Clients", ImVec2(1200.0f * 0.17f, ImGui::GetContentRegionAvail().y)))
 	{
 		float labelStart = ImGui::GetCursorPosY();
 
@@ -2549,12 +2554,10 @@ void SettingsMenu::MenuIPCClientConnected(int clientIndex)
 
 void SettingsMenu::MenuIPCClientDisconnected(int clientIndex)
 {
-	Log("disc: %d\n", clientIndex);
 	std::lock_guard<std::mutex> lock(m_menuWriteMutex);
 	if (clientIndex < m_displayValues.size())
 	{
 		m_displayValues.erase(m_displayValues.begin() + clientIndex);
-		Log("eraase: %d\n", m_displayValues.size());
 	}
 	else
 	{
