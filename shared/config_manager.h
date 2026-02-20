@@ -1,14 +1,10 @@
+
 #pragma once
+
 #include "shared_structs.h"
 #include "SimpleIni.h"
 
 
-enum ECameraProvider
-{
-	CameraProvider_OpenVR = 0,
-	CameraProvider_OpenCV = 1,
-	CameraProvider_Augmented = 2
-};
 
 enum ECameraDistortionMode
 {
@@ -221,7 +217,7 @@ struct Config_Camera
 	bool AutoExposureEnable = false;
 	float ExposureValue = -7.0f;
 
-	EStereoFrameLayout CameraFrameLayout = Mono;
+	EStereoFrameLayout CameraFrameLayout = FrameLayout_Mono;
 	bool CameraHasFisheyeLens = false;
 	ECameraDistortionMode CameraForceDistortionMode = CameraDistortionMode_NotSet;
 
@@ -786,7 +782,7 @@ struct Config_Depth
 class ConfigManager
 {
 public:
-	ConfigManager(std::wstring configFile, bool bAllowWrite);
+	ConfigManager(const std::string_view& configFile, bool bAllowWrite);
 	~ConfigManager();
 
 	bool ReadConfigFile();
@@ -833,7 +829,7 @@ private:
 
 	void SetupStereoPresets();
 
-	std::wstring m_configFile;
+	std::string m_configFile;
 	CSimpleIniA m_iniData;
 	bool m_bConfigUpdated = false;
 	bool m_bAllowWrite = false;

@@ -184,7 +184,7 @@ DXGI_FORMAT OpenGLImageFormatToDXGI(int64_t in)
 
 PassthroughRendererDX11Interop::PassthroughRendererDX11Interop(ID3D12Device* device, ID3D12CommandQueue* commandQueue, HMODULE dllModule, std::shared_ptr<ConfigManager> configManager)
 	: PassthroughRendererDX11(nullptr, dllModule, configManager)
-	, m_applicationRenderAPI(DirectX12)
+	, m_applicationRenderAPI(RenderAPI_Direct3D12)
 	, m_d3d12Device(device)
 	, m_d3d12CommandQueue(commandQueue)
 	, m_vulkanInstance(nullptr)
@@ -198,7 +198,7 @@ PassthroughRendererDX11Interop::PassthroughRendererDX11Interop(ID3D12Device* dev
 
 PassthroughRendererDX11Interop::PassthroughRendererDX11Interop(const XrGraphicsBindingVulkanKHR& binding, HMODULE dllModule, std::shared_ptr<ConfigManager> configManager)
 	: PassthroughRendererDX11(nullptr, dllModule, configManager)
-	, m_applicationRenderAPI(Vulkan)
+	, m_applicationRenderAPI(RenderAPI_Vulkan)
 	, m_d3d12Device(nullptr)
 	, m_d3d12CommandQueue(nullptr)
 	, m_vulkanInstance(binding.instance)
@@ -212,7 +212,7 @@ PassthroughRendererDX11Interop::PassthroughRendererDX11Interop(const XrGraphicsB
 
 PassthroughRendererDX11Interop::PassthroughRendererDX11Interop(const XrGraphicsBindingOpenGLWin32KHR& binding, HMODULE dllModule, std::shared_ptr<ConfigManager> configManager)
 	: PassthroughRendererDX11(nullptr, dllModule, configManager)
-	, m_applicationRenderAPI(OpenGL)
+	, m_applicationRenderAPI(RenderAPI_OpenGL)
 	, m_d3d12Device(nullptr)
 	, m_d3d12CommandQueue(nullptr)
 	, m_openglDeviceContext(binding.hDC)
@@ -252,12 +252,12 @@ void PassthroughRendererDX11Interop::ResetRenderer()
 
 	switch (m_applicationRenderAPI)
 	{
-	case DirectX12:
+	case RenderAPI_Direct3D12:
 	{
 
 		break;
 	}
-	case Vulkan:
+	case RenderAPI_Vulkan:
 	{
 		// Wait for queue to complete before freeing objects.
 		if (m_vulkanRenderCompleteFence && vkGetFenceStatus(m_vulkanDevice, m_vulkanRenderCompleteFence) == VK_NOT_READY)
@@ -328,7 +328,7 @@ void PassthroughRendererDX11Interop::ResetRenderer()
 
 		break;
 	}
-	case OpenGL:
+	case RenderAPI_OpenGL:
 	{
 		if (m_semaphoreFenceHandle) { CloseHandle(m_semaphoreFenceHandle); }
 
@@ -382,7 +382,7 @@ bool PassthroughRendererDX11Interop::InitRenderer()
 
 	switch (m_applicationRenderAPI)
 	{
-	case DirectX12:
+	case RenderAPI_Direct3D12:
 	{
 		std::vector<D3D_FEATURE_LEVEL> featureLevels = { D3D_FEATURE_LEVEL_12_1, D3D_FEATURE_LEVEL_12_0, D3D_FEATURE_LEVEL_11_1 };
 
@@ -401,7 +401,7 @@ bool PassthroughRendererDX11Interop::InitRenderer()
 		break;
 	}
 
-	case Vulkan:
+	case RenderAPI_Vulkan:
 	{
 		vkGetDeviceQueue(m_vulkanDevice, m_vulkanQueueFamilyIndex, m_vulkanQueueIndex, &m_vulkanQueue);
 
@@ -546,7 +546,7 @@ bool PassthroughRendererDX11Interop::InitRenderer()
 		break;
 	}
 
-	case OpenGL:
+	case RenderAPI_OpenGL:
 	{
 
 		IDXGIFactory1* factory = nullptr;
@@ -796,7 +796,7 @@ void PassthroughRendererDX11Interop::InitRenderTarget(const ERenderEye eye, void
 {
 	switch (m_applicationRenderAPI)
 	{
-	case DirectX12:
+	case RenderAPI_Direct3D12:
 	{
 		ID3D11Resource* res;
 		D3D11_RESOURCE_FLAGS flags = {};
@@ -812,9 +812,9 @@ void PassthroughRendererDX11Interop::InitRenderTarget(const ERenderEye eye, void
 		break;
 	}
 
-	case Vulkan:
+	case RenderAPI_Vulkan:
 	{
-		if (eye == LEFT_EYE)
+		if (eye == RenderEye_Left)
 		{
 			m_swapchainsLeft[imageIndex] = (VkImage)rendertarget;
 		}
@@ -825,10 +825,10 @@ void PassthroughRendererDX11Interop::InitRenderTarget(const ERenderEye eye, void
 
 		ID3D11Texture2D* d3dtexture;
 
-		VkImage& localRenderTarget = (eye == LEFT_EYE) ? m_localRendertargetsLeft[imageIndex] : m_localRendertargetsRight[imageIndex];
-		VkDeviceMemory& localRTMem = (eye == LEFT_EYE) ? m_localRTMemLeft[imageIndex] : m_localRTMemRight[imageIndex];
+		VkImage& localRenderTarget = (eye == RenderEye_Left) ? m_localRendertargetsLeft[imageIndex] : m_localRendertargetsRight[imageIndex];
+		VkDeviceMemory& localRTMem = (eye == RenderEye_Left) ? m_localRTMemLeft[imageIndex] : m_localRTMemRight[imageIndex];
 
-		HANDLE& handle = (eye == LEFT_EYE) ? m_sharedTextureLeft[imageIndex] : m_sharedTextureRight[imageIndex];
+		HANDLE& handle = (eye == RenderEye_Left) ? m_sharedTextureLeft[imageIndex] : m_sharedTextureRight[imageIndex];
 
 		if (CreateLocalTextureVulkan(localRenderTarget, localRTMem, &d3dtexture, handle, swapchainInfo, false))
 		{
@@ -840,9 +840,9 @@ void PassthroughRendererDX11Interop::InitRenderTarget(const ERenderEye eye, void
 		break;
 	}
 
-	case OpenGL:
+	case RenderAPI_OpenGL:
 	{
-		if (eye == LEFT_EYE)
+		if (eye == RenderEye_Left)
 		{
 			m_rendertargetsOpenGLLeft[imageIndex] = CAST_TEXTURE_TO_OPENGL_NAME(rendertarget);
 		}
@@ -853,10 +853,10 @@ void PassthroughRendererDX11Interop::InitRenderTarget(const ERenderEye eye, void
 
 		ID3D11Texture2D* d3dtexture;
 
-		uint32_t& localRenderTarget = (eye == LEFT_EYE) ? m_localRendertargetsOpenGLLeft[imageIndex] : m_localRendertargetsOpenGLRight[imageIndex];
-		uint32_t& localRTMemory = (eye == LEFT_EYE) ? m_localRTMemOpenGLLeft[imageIndex] : m_localRTMemOpenGLRight[imageIndex];
+		uint32_t& localRenderTarget = (eye == RenderEye_Left) ? m_localRendertargetsOpenGLLeft[imageIndex] : m_localRendertargetsOpenGLRight[imageIndex];
+		uint32_t& localRTMemory = (eye == RenderEye_Left) ? m_localRTMemOpenGLLeft[imageIndex] : m_localRTMemOpenGLRight[imageIndex];
 
-		HANDLE& handle = (eye == LEFT_EYE) ? m_sharedTextureLeft[imageIndex] : m_sharedTextureRight[imageIndex];
+		HANDLE& handle = (eye == RenderEye_Left) ? m_sharedTextureLeft[imageIndex] : m_sharedTextureRight[imageIndex];
 
 		if (CreateLocalTextureOpenGL(localRenderTarget, localRTMemory, &d3dtexture, handle, swapchainInfo, false))
 		{
@@ -877,11 +877,11 @@ void PassthroughRendererDX11Interop::InitRenderTarget(const ERenderEye eye, void
 
 void PassthroughRendererDX11Interop::InitDepthBuffer(const ERenderEye eye, void* depthBuffer, const uint32_t imageIndex, const XrSwapchainCreateInfo& swapchainInfo, const XrSwapchain swapchain)
 {
-	((eye == LEFT_EYE) ? m_depthSwapchainLeft : m_depthSwapchainRight) = swapchain;
+	((eye == RenderEye_Left) ? m_depthSwapchainLeft : m_depthSwapchainRight) = swapchain;
 
 	switch (m_applicationRenderAPI)
 	{
-	case DirectX12:
+	case RenderAPI_Direct3D12:
 	{
 		ID3D11Resource* res;
 		D3D11_RESOURCE_FLAGS flags = {};
@@ -898,9 +898,9 @@ void PassthroughRendererDX11Interop::InitDepthBuffer(const ERenderEye eye, void*
 		break;
 	}
 
-	case Vulkan:
+	case RenderAPI_Vulkan:
 	{
-		if (eye == LEFT_EYE)
+		if (eye == RenderEye_Left)
 		{
 			m_depthBuffersLeft[imageIndex] = (VkImage)depthBuffer;
 		}
@@ -911,10 +911,10 @@ void PassthroughRendererDX11Interop::InitDepthBuffer(const ERenderEye eye, void*
 
 		ID3D11Texture2D* d3dtexture;
 
-		VkImage& localDepthBuffer = (eye == LEFT_EYE) ? m_localDepthBuffersLeft[imageIndex] : m_localDepthBuffersRight[imageIndex];
-		VkDeviceMemory& localDBMem = (eye == LEFT_EYE) ? m_localDBMemLeft[imageIndex] : m_localDBMemRight[imageIndex];
+		VkImage& localDepthBuffer = (eye == RenderEye_Left) ? m_localDepthBuffersLeft[imageIndex] : m_localDepthBuffersRight[imageIndex];
+		VkDeviceMemory& localDBMem = (eye == RenderEye_Left) ? m_localDBMemLeft[imageIndex] : m_localDBMemRight[imageIndex];
 
-		HANDLE& handle = (eye == LEFT_EYE) ? m_sharedDepthTextureLeft[imageIndex] : m_sharedDepthTextureRight[imageIndex];
+		HANDLE& handle = (eye == RenderEye_Left) ? m_sharedDepthTextureLeft[imageIndex] : m_sharedDepthTextureRight[imageIndex];
 
 		if (CreateLocalTextureVulkan(localDepthBuffer, localDBMem, &d3dtexture, handle, swapchainInfo, true))
 		{
@@ -927,9 +927,9 @@ void PassthroughRendererDX11Interop::InitDepthBuffer(const ERenderEye eye, void*
 		break;
 	}
 
-	case OpenGL:
+	case RenderAPI_OpenGL:
 	{
-		if (eye == LEFT_EYE)
+		if (eye == RenderEye_Left)
 		{
 			m_depthBuffersOpenGLLeft[imageIndex] = CAST_TEXTURE_TO_OPENGL_NAME(depthBuffer);
 		}
@@ -940,10 +940,10 @@ void PassthroughRendererDX11Interop::InitDepthBuffer(const ERenderEye eye, void*
 
 		ID3D11Texture2D* d3dtexture;
 
-		uint32_t& localRenderTarget = (eye == LEFT_EYE) ? m_localDepthBuffersOpenGLLeft[imageIndex] : m_localDepthBuffersOpenGLRight[imageIndex];
-		uint32_t& localRTMemory = (eye == LEFT_EYE) ? m_localDBMemOpenGLLeft[imageIndex] : m_localDBMemOpenGLRight[imageIndex];
+		uint32_t& localRenderTarget = (eye == RenderEye_Left) ? m_localDepthBuffersOpenGLLeft[imageIndex] : m_localDepthBuffersOpenGLRight[imageIndex];
+		uint32_t& localRTMemory = (eye == RenderEye_Left) ? m_localDBMemOpenGLLeft[imageIndex] : m_localDBMemOpenGLRight[imageIndex];
 
-		HANDLE& handle = (eye == LEFT_EYE) ? m_sharedDepthTextureLeft[imageIndex] : m_sharedDepthTextureRight[imageIndex];
+		HANDLE& handle = (eye == RenderEye_Left) ? m_sharedDepthTextureLeft[imageIndex] : m_sharedDepthTextureRight[imageIndex];
 
 		if (CreateLocalTextureOpenGL(localRenderTarget, localRTMemory, &d3dtexture, handle, swapchainInfo, true))
 		{
@@ -1277,7 +1277,7 @@ void PassthroughRendererDX11Interop::RenderPassthroughFrame(const XrCompositionL
 
 	switch (m_applicationRenderAPI)
 	{
-	case DirectX12:
+	case RenderAPI_Direct3D12:
 	{
 		{
 			if (viewDataLeft.renderTarget.Texture.Get() == nullptr || viewDataRight.renderTarget.Texture.Get() == nullptr)
@@ -1317,7 +1317,7 @@ void PassthroughRendererDX11Interop::RenderPassthroughFrame(const XrCompositionL
 		break;
 	}
 
-	case Vulkan:
+	case RenderAPI_Vulkan:
 	{
 		int frameIndex = renderParams.LeftFrameIndex;
 
@@ -1483,7 +1483,7 @@ void PassthroughRendererDX11Interop::RenderPassthroughFrame(const XrCompositionL
 		break;
 	}
 
-	case OpenGL:
+	case RenderAPI_OpenGL:
 	{
 		{
 			wglMakeCurrent(m_openglDeviceContext, m_openglRenderContext);
@@ -1606,8 +1606,8 @@ bool PassthroughRendererDX11Interop::DownloadTextureToCPU(void* textureSRV, cons
 {
 	switch (m_applicationRenderAPI)
 	{
-	case Vulkan:
-	case OpenGL: // Use Vulkan context for OpenGL apps, since OpenGL doesn't support multithreading with separate rendering contexts on Windows.
+	case RenderAPI_Vulkan:
+	case RenderAPI_OpenGL: // Use Vulkan context for OpenGL apps, since OpenGL doesn't support multithreading with separate rendering contexts on Windows.
 	{
 
 		vkResetFences(m_vulkanDownloadDevice, 1, &m_vulkanDownloadFence);

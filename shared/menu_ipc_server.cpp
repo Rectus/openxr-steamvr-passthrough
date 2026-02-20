@@ -323,10 +323,10 @@ void MenuIPCServer::Listen()
 
 				if (message->Header.Type == MessageType_KeepAlive && !m_clientConnections[clIdx]->bWritePending)
 				{
-					MenuIPCMessage message = {};
-					message.Header.Type = MessageType_KeepAlive;
+					MenuIPCMessage sendMessage = {};
+					sendMessage.Header.Type = MessageType_KeepAlive;
 					clientLock.unlock();
-					WriteMessage(message, clIdx);
+					WriteMessage(sendMessage, clIdx);
 					continue;
 				}
 				else if (numBytes < IPC_HEADER_SIZE || numBytes != IPC_HEADER_SIZE + message->Header.PayloadSize)

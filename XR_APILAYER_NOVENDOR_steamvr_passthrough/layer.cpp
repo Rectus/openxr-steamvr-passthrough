@@ -24,10 +24,12 @@
 
 #include "pch.h"
 #include "layer.h"
+#include "layer_structs.h"
+#include "perfutil.h"
+#include "pathutil.h"
 #include "passthrough_renderer.h"
 #include "camera_manager.h"
 #include "config_manager.h"
-//#include "dashboard_menu.h"
 #include "menu_handler.h"
 #include "menu_ipc_client.h"
 #include "openvr_manager.h"
@@ -35,16 +37,17 @@
 #include <util.h>
 #include <map>
 #include <queue>
-#include <shlobj_core.h>
-#include <pathcch.h>
+//#include <shlobj_core.h>
+//#include <pathcch.h>
+#include "psapi.h"
 #include "lodepng.h"
 #include "resource.h"
 
 HMODULE g_dllModule = NULL;
 
 // Directory under AppData to write config.
-#define CONFIG_FILE_DIR L"\\OpenXR SteamVR Passthrough\\"
-#define CONFIG_FILE_NAME L"config.ini"
+#define CONFIG_FILE_DIR "\\OpenXR SteamVR Passthrough ああああテスト"
+#define CONFIG_FILE_NAME "\\config.ini"
 #define MENU_EXE_FILE_NAME L"\\passthrough-menu.exe"
 #define MENU_EXE_ARGUMENTS L" --fromlayer"
 
@@ -68,7 +71,6 @@ namespace
 			m_augmentedDepthReconstruction.reset();
 			m_cameraManager.reset();
 			m_augmentedCameraManager.reset();
-			//m_dashboardMenu.reset();
 			m_menuHandler.reset();
 			m_menuIPCClient.reset();
 			m_openVRManager.reset();
@@ -179,21 +181,11 @@ namespace
 				return result;
 			}
 #endif
-
-			PWSTR path;
-			std::wstring filePath(PATHCCH_MAX_CCH, L'\0');
-
-			SHGetKnownFolderPath(FOLDERID_RoamingAppData, 0, NULL, &path);
-			lstrcpyW((PWSTR)filePath.c_str(), path);
-			CoTaskMemFree(path);
-
-			PathCchAppend((PWSTR)filePath.data(), PATHCCH_MAX_CCH, CONFIG_FILE_DIR);
-			CreateDirectoryW((PWSTR)filePath.data(), NULL);
-			PathCchAppend((PWSTR)filePath.data(), PATHCCH_MAX_CCH, CONFIG_FILE_NAME);
-
-			m_configManager = std::make_shared<ConfigManager>(filePath, false);
-			m_bIsInitialConfig = m_configManager->ReadConfigFile();
-
+			{
+				std::string filePath = GetRoamingAppData() + CONFIG_FILE_DIR + CONFIG_FILE_NAME;
+				m_configManager = std::make_shared<ConfigManager>(filePath, false);
+				m_bIsInitialConfig = m_configManager->ReadConfigFile();
+			}
 
 			// Check that the SteamVR OpenXR runtime is being used.
 			if (m_configManager->GetConfig_Main().RequireSteamVRRuntime)
@@ -226,23 +218,22 @@ namespace
 
 			m_openVRManager = std::make_shared<OpenVRManager>();
 			m_menuIPCClient = std::make_shared<MenuIPCClient>();
-			//m_dashboardMenu = std::make_unique<DashboardMenu>(g_dllModule, m_configManager, m_openVRManager);
 			m_menuHandler = std::make_unique<MenuHandler>(g_dllModule, m_configManager, m_menuIPCClient);
 			m_menuIPCClient->RegisterReader(m_menuHandler);
 
-			MenuDisplayValues& vals = m_menuHandler->GetDisplayValues();
+			ClientData& data = m_menuHandler->GetClientData();
 
 			if (bEnableVarjoDepthExtension && m_configManager->GetConfig_Extensions().ExtVarjoDepthEstimation)
 			{
 				m_bVarjoDepthExtensionEnabled = true;
-				vals.bVarjoDepthEstimationExtensionActive = true;
+				data.Values.bVarjoDepthEstimationExtensionActive = true;
 				Log("Extension XR_VARJO_environment_depth_estimation enabled\n");
 			}
 
 			if (bEnableVarjoCompositionExtension && m_configManager->GetConfig_Extensions().ExtVarjoDepthComposition)
 			{
 				m_bVarjoCompositionExtensionEnabled = true;
-				vals.bVarjoDepthCompositionExtensionActive = true;
+				data.Values.bVarjoDepthCompositionExtensionActive = true;
 				Log("Extension XR_VARJO_composition_layer_depth_test enabled\n");
 			}
 
@@ -255,25 +246,40 @@ namespace
 			if (bInverseAlphaExtensionEnabled)
 			{
 				m_bInverseAlphaExtensionEnabled = true;
-				vals.bExtInvertedAlphaActive = true;
+				data.Values.bExtInvertedAlphaActive = true;
 				Log("Extension XR_EXT_composition_layer_inverted_alpha enabled\n");
 			}
 
 			if (bEnableAndroidCameraStateExtension)
 			{
 				m_bAndroidPassthroughStateExtensionEnabled = true;
-				vals.bAndroidPassthroughStateActive = true;
+				data.Values.bAndroidPassthroughStateActive = true;
 				Log("Extension XR_ANDROID_passthrough_camera_state enabled\n");
 			}
 
 			if (bEnableFBPassthroughExtension && m_configManager->GetConfig_Extensions().ExtFBPassthrough)
 			{
 				m_bFBPassthroughExtensionEnabled = true;
-				vals.bFBPassthroughExtensionActive = true;
+				data.Values.bFBPassthroughExtensionActive = true;
 				Log("Extension XR_FB_passthrough enabled\n");
 			}
 
-			m_menuHandler->DispatchDisplayValues();
+			wchar_t buffer[MAX_PATH] = { 0 };
+			GetModuleFileNameW(NULL, buffer, MAX_PATH);
+			std::string exePath = ToUTF8String(buffer);		
+			data.ApplicationModuleName = exePath.substr(exePath.find_last_of("/\\") + 1);
+			data.Values.ApplicationPID = GetCurrentProcessId();
+
+			data.ApplicationName = std::string(createInfo->applicationInfo.applicationName);
+			data.EngineName = std::string(createInfo->applicationInfo.engineName);
+			data.Values.ApplicationVersion = createInfo->applicationInfo.applicationVersion;
+			data.Values.EngineVersion = createInfo->applicationInfo.engineVersion;
+			data.Values.XRVersion = createInfo->applicationInfo.apiVersion;
+
+			m_menuHandler->DispatchApplicationModuleName();
+			m_menuHandler->DispatchApplicationName();
+			m_menuHandler->DispatchEngineName();
+			m_menuHandler->DispatchClientDataValues();
 
 			m_bSuccessfullyLoaded = true;
 			Log("OpenXR instance successfully created\n");
@@ -511,8 +517,7 @@ namespace
 
 		bool SetupRenderer(const XrInstance instance, const XrSessionCreateInfo* createInfo, const XrSession* session)
 		{
-			//MenuDisplayValues& displayValues = m_dashboardMenu->GetDisplayValues();
-			MenuDisplayValues& displayValues = m_menuHandler->GetDisplayValues();
+			ClientData& clientData = m_menuHandler->GetClientData();
 
 			const XrBaseInStructure* entry = reinterpret_cast<const XrBaseInStructure*>(createInfo->next);
 
@@ -526,18 +531,18 @@ namespace
 
 					const XrGraphicsBindingD3D11KHR* bindings = reinterpret_cast<const XrGraphicsBindingD3D11KHR*>(entry);
 					m_Renderer = std::make_shared<PassthroughRendererDX11>(bindings->device, g_dllModule, m_configManager);
-					m_renderAPI = DirectX11;
-					m_appRenderAPI = DirectX11;
+					m_renderAPI = RenderAPI_Direct3D11;
+					m_appRenderAPI = RenderAPI_Direct3D11;
 
 					if (!SetupProcessingPipeline())
 					{
 						return false;
 					}
 
-					displayValues.bSessionActive = true;
-					displayValues.renderAPI = DirectX11;
-					displayValues.appRenderAPI = DirectX11;
-					m_menuHandler->DispatchDisplayValues();
+					clientData.Values.bSessionActive = true;
+					clientData.Values.RenderAPI = RenderAPI_Direct3D11;
+					clientData.Values.AppRenderAPI = RenderAPI_Direct3D11;
+					m_menuHandler->DispatchClientDataValues();
 					m_bDepthSupportedByRenderer = true;
 					Log("Direct3D 11 rendering initialized\n");
 
@@ -550,12 +555,12 @@ namespace
 
 					const XrGraphicsBindingD3D12KHR* bindings = reinterpret_cast<const XrGraphicsBindingD3D12KHR*>(entry);
 
-					ERenderAPI usedAPI = DirectX11;
+					ERenderAPI usedAPI = RenderAPI_Direct3D11;
 
 					if (m_configManager->GetConfig_Main().UseLegacyD3D12Renderer)
 					{
 						m_Renderer = std::make_unique<PassthroughRendererDX12>(bindings->device, bindings->queue, g_dllModule, m_configManager);
-						usedAPI = DirectX12;
+						usedAPI = RenderAPI_Direct3D12;
 						Log("Using legacy Direct3D 12 renderer\n");
 					}
 					else
@@ -564,17 +569,17 @@ namespace
 					}
 
 					m_renderAPI = usedAPI;
-					m_appRenderAPI = DirectX12;
+					m_appRenderAPI = RenderAPI_Direct3D12;
 
 					if (!SetupProcessingPipeline())
 					{
 						return false;
 					}
 
-					displayValues.bSessionActive = true;
-					displayValues.renderAPI = usedAPI;
-					displayValues.appRenderAPI = DirectX12;
-					m_menuHandler->DispatchDisplayValues();
+					clientData.Values.bSessionActive = true;
+					clientData.Values.RenderAPI = usedAPI;
+					clientData.Values.AppRenderAPI = RenderAPI_Direct3D12;
+					m_menuHandler->DispatchClientDataValues();
 					m_bDepthSupportedByRenderer = true;
 					Log("Direct3D 12 rendering initialized\n");
 
@@ -585,7 +590,7 @@ namespace
 				{
 					Log("Initializing rendering for Vulkan...\n");
 
-					ERenderAPI usedAPI = Vulkan;
+					ERenderAPI usedAPI = RenderAPI_Vulkan;
 
 					const XrGraphicsBindingVulkanKHR* bindings = reinterpret_cast<const XrGraphicsBindingVulkanKHR*>(entry);
 					if (m_configManager->GetConfig_Main().UseLegacyVulkanRenderer)
@@ -602,22 +607,22 @@ namespace
 							return false;
 						}
 
-						usedAPI = DirectX11;
+						usedAPI = RenderAPI_Direct3D11;
 						m_Renderer = std::make_unique<PassthroughRendererDX11Interop>(*bindings, g_dllModule, m_configManager);
 					}
 
 					m_renderAPI = usedAPI;
-					m_appRenderAPI = Vulkan;
+					m_appRenderAPI = RenderAPI_Vulkan;
 
 					if (!SetupProcessingPipeline())
 					{
 						return false;
 					}
 
-					displayValues.bSessionActive = true;
-					displayValues.renderAPI = usedAPI;
-					displayValues.appRenderAPI = Vulkan;
-					m_menuHandler->DispatchDisplayValues();
+					clientData.Values.bSessionActive = true;
+					clientData.Values.RenderAPI = usedAPI;
+					clientData.Values.AppRenderAPI = RenderAPI_Vulkan;
+					m_menuHandler->DispatchClientDataValues();
 					m_bDepthSupportedByRenderer = false;
 					Log("Vulkan rendering initialized\n");
 
@@ -628,8 +633,8 @@ namespace
 				{
 					Log("Initializing rendering for OpenGL...\n");
 
-					m_appRenderAPI = OpenGL;
-					m_renderAPI = DirectX11;
+					m_appRenderAPI = RenderAPI_OpenGL;
+					m_renderAPI = RenderAPI_Direct3D11;
 
 					const XrGraphicsBindingOpenGLWin32KHR* bindings = reinterpret_cast<const XrGraphicsBindingOpenGLWin32KHR*>(entry);
 					
@@ -640,10 +645,10 @@ namespace
 						return false;
 					}
 
-					displayValues.bSessionActive = true;
-					displayValues.renderAPI = DirectX11;
-					displayValues.appRenderAPI = OpenGL;
-					m_menuHandler->DispatchDisplayValues();
+					clientData.Values.bSessionActive = true;
+					clientData.Values.RenderAPI = RenderAPI_Direct3D11;
+					clientData.Values.AppRenderAPI = RenderAPI_OpenGL;
+					m_menuHandler->DispatchClientDataValues();
 					m_bDepthSupportedByRenderer = false;
 					Log("OpenGL rendering initialized\n");
 
@@ -700,16 +705,15 @@ namespace
 
 					// Default to stereo mode if we have a compatible headset.
 					// TODO: Just checks for the fisheye model at the moment, whitelist of known models would be better.
-					/*if (m_cameraManager->GetFrameLayout() != Mono && m_cameraManager->IsUsingFisheyeModel())
+					/*if (m_cameraManager->GetFrameLayout() != FrameLayout_Mono && m_cameraManager->IsUsingFisheyeModel())
 					{
 						m_configManager->GetConfig_Main().ProjectionMode = Projection_StereoReconstruction;
 					}*/
 				}
 
-				//MenuDisplayValues& vals = m_dashboardMenu->GetDisplayValues();
-				MenuDisplayValues& vals = m_menuHandler->GetDisplayValues();
-				m_cameraManager->GetCameraDisplayStats(vals.CameraFrameWidth, vals.CameraFrameHeight, vals.CameraFrameRate, vals.CameraAPI);
-				m_menuHandler->DispatchDisplayValues();
+				ClientData& data = m_menuHandler->GetClientData();
+				m_cameraManager->GetCameraDisplayStats(data.Values.CameraFrameWidth, data.Values.CameraFrameHeight, data.Values.CameraFrameRate, data.Values.CameraProvider, data.Values.bCameraActive);
+				m_menuHandler->DispatchClientDataValues();
 
 				m_cameraManager->GetDistortedTextureSize(cameraTextureWidth, cameraTextureHeight, cameraFrameBufferSize);
 				m_cameraManager->GetUndistortedTextureSize(cameraUndistortedTextureWidth, cameraUndistortedTextureHeight, cameraUndistortedFrameBufferSize);
@@ -724,10 +728,9 @@ namespace
 					ErrorLog("Failed to initialize camera!\n");
 					return false;
 				}
-				//MenuDisplayValues& vals = m_dashboardMenu->GetDisplayValues();
-				MenuDisplayValues& vals = m_menuHandler->GetDisplayValues();
-				m_cameraManager->GetCameraDisplayStats(vals.CameraFrameWidth, vals.CameraFrameHeight, vals.CameraFrameRate, vals.CameraAPI);
-				m_menuHandler->DispatchDisplayValues();
+				ClientData& data = m_menuHandler->GetClientData();
+				m_cameraManager->GetCameraDisplayStats(data.Values.CameraFrameWidth, data.Values.CameraFrameHeight, data.Values.CameraFrameRate, data.Values.CameraProvider, data.Values.bCameraActive);
+				m_menuHandler->DispatchClientDataValues();
 
 				m_augmentedCameraManager->GetDistortedTextureSize(cameraTextureWidth, cameraTextureHeight, cameraFrameBufferSize);
 				m_augmentedCameraManager->GetDistortedTextureSize(cameraUndistortedTextureWidth, cameraUndistortedTextureHeight, cameraUndistortedFrameBufferSize);
@@ -741,10 +744,9 @@ namespace
 					ErrorLog("Failed to initialize camera!\n");
 					return false;
 				}
-				//MenuDisplayValues& vals = m_dashboardMenu->GetDisplayValues();
-				MenuDisplayValues& vals = m_menuHandler->GetDisplayValues();
-				m_cameraManager->GetCameraDisplayStats(vals.CameraFrameWidth, vals.CameraFrameHeight, vals.CameraFrameRate, vals.CameraAPI);
-				m_menuHandler->DispatchDisplayValues();
+				ClientData& data = m_menuHandler->GetClientData();
+				m_cameraManager->GetCameraDisplayStats(data.Values.CameraFrameWidth, data.Values.CameraFrameHeight, data.Values.CameraFrameRate, data.Values.CameraProvider, data.Values.bCameraActive);
+				m_menuHandler->DispatchClientDataValues();
 
 				m_cameraManager->GetDistortedTextureSize(cameraTextureWidth, cameraTextureHeight, cameraFrameBufferSize);
 				m_cameraManager->GetDistortedTextureSize(cameraUndistortedTextureWidth, cameraUndistortedTextureHeight, cameraUndistortedFrameBufferSize);
@@ -810,7 +812,6 @@ namespace
 				}
 				else if (isSystemHandled(createInfo->systemId) && !isCurrentSession(*session))
 				{
-					//m_dashboardMenu = std::make_unique<DashboardMenu>(g_dllModule, m_configManager, m_openVRManager);
 
 					m_currentInstance = instance;
 					m_currentSession = *session;
@@ -818,25 +819,12 @@ namespace
 					{
 						Log("Passthrough API layer enabled for session\n");
 						m_bUsePassthrough = m_configManager->GetConfig_Main().EnablePassthrough;
-
-						MenuDisplayValues& vals = m_menuHandler->GetDisplayValues();
-
-						vals.bVarjoDepthEstimationExtensionActive = m_bVarjoDepthExtensionEnabled;
-						vals.bVarjoDepthCompositionExtensionActive = m_bVarjoCompositionExtensionEnabled;
-						vals.bExtInvertedAlphaActive = m_bInverseAlphaExtensionEnabled;
-						vals.bAndroidPassthroughStateActive = m_bAndroidPassthroughStateExtensionEnabled;
-						vals.bFBPassthroughExtensionActive = m_bFBPassthroughExtensionEnabled;
-
-						vals.currentApplication = GetApplicationName();
-						m_menuHandler->DispatchDisplayValues();
-						m_menuHandler->DispatchApplicationName();
 					}
 					else
 					{
 						m_bUsePassthrough = false;
 						m_currentSession = XR_NULL_HANDLE;
 						ErrorLog("Failed to initialize rendering system!\n");
-						//m_dashboardMenu.reset();
 					}
 				}
 
@@ -862,28 +850,8 @@ namespace
 
 				m_Renderer.reset();
 
-				//m_dashboardMenu.reset();
-
 				m_currentSession = XR_NULL_HANDLE;
 				m_currentInstance = XR_NULL_HANDLE;
-
-				/*MenuDisplayValues& vals = m_dashboardMenu->GetDisplayValues();
-
-				vals.bSessionActive = false;
-				vals.renderAPI = None;
-				vals.frameBufferFlags = 0;
-				vals.frameBufferFormat = 0;
-				vals.depthBufferFormat = 0;
-				vals.frameBufferWidth = 0;
-				vals.frameBufferHeight = 0;
-				vals.nearZ = 0;
-				vals.farZ = 0;
-				vals.frameToPhotonsLatencyMS = 0;
-				vals.frameToRenderLatencyMS = 0;
-				vals.renderTimeMS = 0;
-
-				vals.bCorePassthroughActive = false;
-				vals.CoreCurrentMode = 0;*/
 			}
 
 			XrResult result = OpenXrApi::xrDestroySession(session);
@@ -1022,7 +990,7 @@ namespace
 
 			XrSwapchainCreateInfo newCreateInfo = *createInfo;
 			
-			if (m_appRenderAPI == Vulkan && m_renderAPI == DirectX11)
+			if (m_appRenderAPI == RenderAPI_Vulkan && m_renderAPI == RenderAPI_Direct3D11)
 			{
 				newCreateInfo.usageFlags |= (XR_SWAPCHAIN_USAGE_TRANSFER_SRC_BIT | XR_SWAPCHAIN_USAGE_TRANSFER_DST_BIT);
 			}
@@ -1178,9 +1146,9 @@ namespace
 
 		void UpdateSwapchains(const ERenderEye eye, const XrCompositionLayerProjection* layer, FrameRenderParameters& renderParams)
 		{
-			XrSwapchain* storedSwapchain = (eye == LEFT_EYE) ? &m_swapChainLeft : &m_swapChainRight;
-			XrSwapchain* storedDepthSwapchain = (eye == LEFT_EYE) ? &m_depthSwapChainLeft : &m_depthSwapChainRight;
-			int viewIndex = (eye == LEFT_EYE) ? 0 : 1;
+			XrSwapchain* storedSwapchain = (eye == RenderEye_Left) ? &m_swapChainLeft : &m_swapChainRight;
+			XrSwapchain* storedDepthSwapchain = (eye == RenderEye_Left) ? &m_depthSwapChainLeft : &m_depthSwapChainRight;
+			int viewIndex = (eye == RenderEye_Left) ? 0 : 1;
 
 			const XrSwapchain newSwapchain = layer->views[viewIndex].subImage.swapchain;
 
@@ -1201,9 +1169,9 @@ namespace
 
 			int imageIndex = held->second.back();
 			
-			if (eye == LEFT_EYE)
+			if (eye == RenderEye_Left)
 			{
-				m_menuHandler->GetDisplayValues().frameBufferFormat = props->second.format;
+				m_menuHandler->GetClientData().Values.FrameBufferFormat = props->second.format;
 				renderParams.LeftFrameIndex = imageIndex;
 			}
 			else
@@ -1217,15 +1185,15 @@ namespace
 			
 				XrStructureType type = XR_TYPE_SWAPCHAIN_IMAGE_D3D11_KHR;
 
-				if (m_appRenderAPI == DirectX12)
+				if (m_appRenderAPI == RenderAPI_Direct3D12)
 				{
 					type = XR_TYPE_SWAPCHAIN_IMAGE_D3D12_KHR;
 				}
-				else if (m_appRenderAPI == Vulkan)
+				else if (m_appRenderAPI == RenderAPI_Vulkan)
 				{
 					type = XR_TYPE_SWAPCHAIN_IMAGE_VULKAN_KHR;
 				}
-				if (m_appRenderAPI == OpenGL)
+				if (m_appRenderAPI == RenderAPI_OpenGL)
 				{
 					type = XR_TYPE_SWAPCHAIN_IMAGE_OPENGL_KHR;
 				}
@@ -1251,7 +1219,7 @@ namespace
 				{
 					ErrorLog("Error in xrEnumerateSwapchainImages: %i\n", result);
 
-					if (eye == LEFT_EYE)
+					if (eye == RenderEye_Left)
 					{
 						renderParams.LeftFrameIndex = -1;
 					}
@@ -1286,12 +1254,12 @@ namespace
 
 				if (depthProps != m_swapchainProperties.end())
 				{
-					if (eye == LEFT_EYE)
+					if (eye == RenderEye_Left)
 					{
-						MenuDisplayValues& vals = m_menuHandler->GetDisplayValues();
-						vals.depthBufferFormat = depthProps->second.format;
-						vals.nearZ = depthInfo->nearZ;
-						vals.farZ = depthInfo->farZ;
+						ClientData& data = m_menuHandler->GetClientData();
+						data.Values.DepthBufferFormat = depthProps->second.format;
+						data.Values.NearZ = depthInfo->nearZ;
+						data.Values.FarZ = depthInfo->farZ;
 					}
 
 					Log("Found depth swapchain %u for color swapchain %u, arraySize %u, depth range [%f:%f], Z-range[%g:%g]\n", depthInfo->subImage.swapchain, newSwapchain, depthProps->second.arraySize, depthInfo->minDepth, depthInfo->maxDepth, depthInfo->nearZ, depthInfo->farZ);
@@ -1309,15 +1277,15 @@ namespace
 
 					XrStructureType type = XR_TYPE_SWAPCHAIN_IMAGE_D3D11_KHR;
 
-					if (m_appRenderAPI == DirectX12)
+					if (m_appRenderAPI == RenderAPI_Direct3D12)
 					{
 						type = XR_TYPE_SWAPCHAIN_IMAGE_D3D12_KHR;
 					}
-					else if (m_appRenderAPI == Vulkan)
+					else if (m_appRenderAPI == RenderAPI_Vulkan)
 					{
 						type = XR_TYPE_SWAPCHAIN_IMAGE_VULKAN_KHR;
 					}
-					if (m_appRenderAPI == OpenGL)
+					if (m_appRenderAPI == RenderAPI_OpenGL)
 					{
 						type = XR_TYPE_SWAPCHAIN_IMAGE_OPENGL_KHR;
 					}
@@ -1349,7 +1317,7 @@ namespace
 				auto depth = m_heldSwapchains.find(*storedDepthSwapchain);
 				if (depth != m_heldSwapchains.end() && !depth->second.empty())
 				{
-					if (eye == LEFT_EYE)
+					if (eye == RenderEye_Left)
 					{
 						renderParams.LeftDepthIndex = depth->second.back();
 					}
@@ -1454,7 +1422,7 @@ namespace
 				}
 			}
 
-			MenuDisplayValues& displayValues = m_menuHandler->GetDisplayValues();
+			ClientData& clientData = m_menuHandler->GetClientData();
 
 			std::shared_lock readLock(frame->readWriteMutex);
 
@@ -1462,14 +1430,14 @@ namespace
 			LARGE_INTEGER preRenderTime = StartPerfTimer();
 
 			float frameToRenderTime = GetPerfTimerDiff(frame->header.ulFrameExposureTime, preRenderTime.QuadPart);
-			displayValues.frameToRenderLatencyMS = UpdateAveragePerfTime(m_frameToRenderTimes, frameToRenderTime, 20);
+			clientData.Values.FrameToRenderLatencyMS = UpdateAveragePerfTime(m_frameToRenderTimes, frameToRenderTime, 20);
 
 			LARGE_INTEGER displayTime;
 
 			OpenXrApi::xrConvertTimeToWin32PerformanceCounterKHR(m_currentInstance, frameEndInfo->displayTime, &displayTime);
 
 			float frameToPhotonsTime = GetPerfTimerDiff(frame->header.ulFrameExposureTime, displayTime.QuadPart);
-			displayValues.frameToPhotonsLatencyMS = UpdateAveragePerfTime(m_frameToPhotonTimes, frameToPhotonsTime, 20);
+			clientData.Values.FrameToPhotonsLatencyMS = UpdateAveragePerfTime(m_frameToPhotonTimes, frameToPhotonsTime, 20);
 
 
 			float timeToPhotons = GetPerfTimerDiff(preRenderTime.QuadPart, displayTime.QuadPart);
@@ -1508,8 +1476,8 @@ namespace
 				renderParams.RenderOpacity = fbLayer->Opacity;
 			}
 
-			UpdateSwapchains(LEFT_EYE, layer, renderParams);
-			UpdateSwapchains(RIGHT_EYE, layer, renderParams);
+			UpdateSwapchains(RenderEye_Left, layer, renderParams);
+			UpdateSwapchains(RenderEye_Right, layer, renderParams);
 
 			if (renderParams.LeftFrameIndex < 0 || renderParams.RightFrameIndex < 0)
 			{
@@ -1520,23 +1488,23 @@ namespace
 			if (coreConf.CoreForcePassthrough && coreConf.CoreForceMode >= 0)
 			{
 				renderParams.BlendMode = (EPassthroughBlendMode)coreConf.CoreForceMode;
-				displayValues.bCorePassthroughActive = true;
-				displayValues.bFBPassthroughActive = false;
-				displayValues.bFBPassthroughDepthActive = false;
+				clientData.Values.bCorePassthroughActive = true;
+				clientData.Values.bFBPassthroughActive = false;
+				clientData.Values.bFBPassthroughDepthActive = false;
 			}
 			else if (bUseFBPassthrough)
 			{
 				renderParams.BlendMode = AlphaBlendPremultiplied;
-				displayValues.bCorePassthroughActive = false;
-				displayValues.bFBPassthroughActive = true;
-				displayValues.bFBPassthroughDepthActive = fbLayer->DepthEnabled;
+				clientData.Values.bCorePassthroughActive = false;
+				clientData.Values.bFBPassthroughActive = true;
+				clientData.Values.bFBPassthroughDepthActive = fbLayer->DepthEnabled;
 			}
 			else
 			{
 				renderParams.BlendMode = (EPassthroughBlendMode)frameEndInfo->environmentBlendMode;
-				displayValues.bCorePassthroughActive = true;
-				displayValues.bFBPassthroughActive = false;
-				displayValues.bFBPassthroughDepthActive = false;
+				clientData.Values.bCorePassthroughActive = true;
+				clientData.Values.bFBPassthroughActive = false;
+				clientData.Values.bFBPassthroughDepthActive = false;
 			}
 
 			if (renderParams.BlendMode == AlphaBlendPremultiplied)
@@ -1567,7 +1535,7 @@ namespace
 				(bUseFBPassthrough && fbLayer->DepthEnabled) ||
 				depthConf.DepthForceComposition);
 
-			displayValues.bDepthBlendingActive = renderParams.bEnableDepthBlending;
+			clientData.Values.bDepthBlendingActive = renderParams.bEnableDepthBlending;
 
 			
 			if (m_bVarjoCompositionExtensionEnabled)
@@ -1618,10 +1586,10 @@ namespace
 
 
 			float renderTime = EndPerfTimer(preRenderTime.QuadPart);
-			displayValues.renderTimeMS = UpdateAveragePerfTime(m_passthroughRenderTimes, renderTime, 20);
+			clientData.Values.RenderTimeMS = UpdateAveragePerfTime(m_passthroughRenderTimes, renderTime, 20);
 
-			displayValues.stereoReconstructionTimeMS = m_depthReconstruction->GetReconstructionPerfTime();
-			displayValues.frameRetrievalTimeMS = m_cameraManager->GetFrameRetrievalPerfTime();
+			clientData.Values.StereoReconstructionTimeMS = m_depthReconstruction->GetReconstructionPerfTime();
+			clientData.Values.FrameRetrievalTimeMS = m_cameraManager->GetFrameRetrievalPerfTime();
 		}
 
 
@@ -1669,10 +1637,10 @@ namespace
 
 			if (m_menuHandler.get())
 			{
-				MenuDisplayValues& vals = m_menuHandler->GetDisplayValues();
+				ClientData& data = m_menuHandler->GetClientData();
 
-				vals.CoreCurrentMode = frameEndInfo->environmentBlendMode;
-				vals.numCompositionLayers = frameEndInfo->layerCount;
+				data.Values.CoreCurrentMode = frameEndInfo->environmentBlendMode;
+				data.Values.NumCompositionLayers = frameEndInfo->layerCount;
 				bool bDepthSubmitted = false;
 
 				for (uint32_t i = 0; i < frameEndInfo->layerCount; i++)
@@ -1681,9 +1649,9 @@ namespace
 
 					if (layer->type != XR_TYPE_COMPOSITION_LAYER_PROJECTION) { continue; }
 
-					vals.frameBufferHeight = layer->views[0].subImage.imageRect.extent.height;
-					vals.frameBufferWidth = layer->views[0].subImage.imageRect.extent.width;
-					vals.frameBufferFlags = layer->layerFlags;
+					data.Values.FrameBufferHeight = layer->views[0].subImage.imageRect.extent.height;
+					data.Values.FrameBufferWidth = layer->views[0].subImage.imageRect.extent.width;
+					data.Values.FrameBufferFlags = layer->layerFlags;
 
 					auto depthInfo = reinterpret_cast<const XrCompositionLayerDepthInfoKHR*>(layer->views[0].next);
 
@@ -1699,9 +1667,9 @@ namespace
 
 					break;
 				}
-				vals.bDepthLayerSubmitted = bDepthSubmitted;
+				data.Values.bDepthLayerSubmitted = bDepthSubmitted;
 
-				m_menuHandler->DispatchDisplayValues();
+				m_menuHandler->DispatchClientDataValues();
 			}
 
 			bool bInvalidEndFrame = false;
@@ -1840,20 +1808,20 @@ namespace
 			else if (bDidRender)
 			{
 				m_lastRenderTime = StartPerfTimer();
-				m_menuHandler->GetDisplayValues().lastFrameTimestamp = m_lastRenderTime.QuadPart;
-				m_menuHandler->DispatchDisplayValues();
+				m_menuHandler->GetClientData().Values.LastFrameTimestamp = m_lastRenderTime.QuadPart;
+				m_menuHandler->DispatchClientDataValues();
 			}
 			else
 			{
 				if (m_menuHandler.get())
 				{
-					MenuDisplayValues& vals = m_menuHandler->GetDisplayValues();
-					vals.bCorePassthroughActive = false;
-					vals.bFBPassthroughActive = false;
+					ClientData& data = m_menuHandler->GetClientData();
+					data.Values.bCorePassthroughActive = false;
+					data.Values.bFBPassthroughActive = false;
 					uint64_t frameTime = StartPerfTimer().QuadPart;
-					m_menuHandler->GetDisplayValues().lastFrameTimestamp = frameTime;
+					data.Values.LastFrameTimestamp = frameTime;
 
-					m_menuHandler->DispatchDisplayValues();
+					m_menuHandler->DispatchClientDataValues();
 				}
 
 				float time = EndPerfTimer(m_lastRenderTime);
@@ -2290,7 +2258,6 @@ namespace
 		std::shared_ptr<ConfigManager> m_configManager;
 		std::shared_ptr<ICameraManager> m_cameraManager;
 		std::shared_ptr<ICameraManager> m_augmentedCameraManager;
-		//std::unique_ptr<DashboardMenu> m_dashboardMenu;
 		std::shared_ptr<MenuHandler> m_menuHandler;
 		std::shared_ptr<MenuIPCClient> m_menuIPCClient;
 		std::shared_ptr<OpenVRManager> m_openVRManager;
@@ -2332,8 +2299,8 @@ namespace
 
 		FBPassthroughInstance m_fbPassthough;
 
-		ERenderAPI m_renderAPI = DirectX11;
-		ERenderAPI m_appRenderAPI = DirectX11;
+		ERenderAPI m_renderAPI = RenderAPI_Direct3D11;
+		ERenderAPI m_appRenderAPI = RenderAPI_Direct3D11;
 
     };
 

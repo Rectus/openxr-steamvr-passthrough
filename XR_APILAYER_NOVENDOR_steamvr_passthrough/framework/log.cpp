@@ -21,6 +21,7 @@
 // SOFTWARE.
 
 #include "pch.h"
+#include "pathutil.h"
 
 namespace {
     constexpr uint32_t k_maxLoggedErrors = 100;
@@ -72,7 +73,7 @@ namespace LAYER_NAMESPACE::logging {
             vsnprintf_s(buf + offset, sizeof(buf) - offset, _TRUNCATE, fmt, va);
 
             BufferLog(buf);
-            OutputDebugStringA(buf);
+            OutputDebugStringW(ToWideString(std::string_view(buf)).data());
             if (logStream.is_open()) {
                 logStream << buf;
                 logStream.flush();

@@ -19,11 +19,6 @@ DashboardOverlay::~DashboardOverlay()
 	if (m_bRuntimeInitialized)
 	{
 		m_bRuntimeInitialized = false;
-		if (m_bHasOverlay)
-		{
-			DestroyOverlay();
-		}
-
 		vr::VR_Shutdown();
 	}
 }

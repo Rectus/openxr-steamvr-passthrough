@@ -40,6 +40,15 @@ const std::string MenuVersionString = "0.3.6";
 
 #endif
 
+#define XR_NO_PROTOTYPES
+#define XR_USE_PLATFORM_WIN32
+#define XR_USE_GRAPHICS_API_OPENGL
+#define XR_USE_GRAPHICS_API_VULKAN
+#define XR_USE_GRAPHICS_API_D3D11
+#define XR_USE_GRAPHICS_API_D3D12
+
+#include <openxr/openxr.h>
+
 #include <vulkan/vulkan.h>
 
 

@@ -1,8 +1,9 @@
+
 #include "pch.h"
 #include "depth_reconstruction.h"
 
 #include "mathutil.h"
-
+#include "perfutil.h"
 
 
 
@@ -68,8 +69,8 @@ void DepthReconstruction::InitReconstruction()
     m_cvImageHeight = m_cameraFrameHeight / m_downscaleFactor;
     m_cvImageWidth = m_cameraFrameWidth / m_downscaleFactor;
 
-    m_cameraManager->GetIntrinsics(LEFT_EYE, m_cameraFocalLength[0], m_cameraCenter[0]);
-    m_cameraManager->GetIntrinsics(RIGHT_EYE, m_cameraFocalLength[1], m_cameraCenter[1]);
+    m_cameraManager->GetIntrinsics(RenderEye_Left, m_cameraFocalLength[0], m_cameraCenter[0]);
+    m_cameraManager->GetIntrinsics(RenderEye_Right, m_cameraFocalLength[1], m_cameraCenter[1]);
     m_cameraLeftToRightTransform = m_cameraManager->GetLeftToRightCameraTransform();
 
     ECameraDistortionCoefficients distCoeffs = { 0 };
@@ -130,7 +131,7 @@ void DepthReconstruction::InitReconstruction()
 
     if (m_cameraManager->IsUsingFisheyeModel())
     {
-        if (m_frameLayout != Mono)
+        if (m_frameLayout != FrameLayout_Mono)
         {
             cv::fisheye::stereoRectify(m_intrinsicsLeft, m_distortionParamsLeft, m_intrinsicsRight, m_distortionParamsRight, textureSize, R, T, R1, R2, P1, P2, Q, cv::CALIB_ZERO_DISPARITY, textureSize, 0.0, m_fovScale);
         }
@@ -146,7 +147,7 @@ void DepthReconstruction::InitReconstruction()
     }
     else 
     {
-        if (m_frameLayout != Mono)
+        if (m_frameLayout != FrameLayout_Mono)
         {
             cv::stereoRectify(m_intrinsicsLeft, m_distortionParamsLeft, m_intrinsicsRight, m_distortionParamsRight, textureSize, R, T, R1, R2, P1, P2, Q, cv::CALIB_ZERO_DISPARITY, 1.0, textureSize);
         }
@@ -233,7 +234,7 @@ void DepthReconstruction::CreateDistortionMap()
 
     distMap.resize(m_cameraTextureHeight * m_cameraTextureWidth * 2);
 
-    if (m_frameLayout == StereoHorizontalLayout)
+    if (m_frameLayout == FrameLayout_StereoHorizontal)
     {
         for (uint32_t y = 0; y < m_cameraTextureHeight; y++)
         {
@@ -254,7 +255,7 @@ void DepthReconstruction::CreateDistortionMap()
             }
         }
     }
-    else if (m_frameLayout == StereoVerticalLayout)
+    else if (m_frameLayout == FrameLayout_StereoVertical)
     {
         for (uint32_t y = 0; y < m_cameraFrameHeight; y++)
         {
@@ -389,7 +390,7 @@ void DepthReconstruction::RunThread()
             std::shared_lock readLock(frame->readWriteMutex);
 
             if(!frame->bHasFrameBuffer || 
-                frame->frameLayout == Mono || 
+                frame->frameLayout == FrameLayout_Mono || 
                 frame->frameBuffer->size() < m_cameraTextureHeight * m_cameraTextureWidth * 4 || 
                 frame->header.nFrameSequence == m_lastFrameSequence || 
                 frame->header.nFrameSequence % (stereoConfig.StereoFrameSkip + 1) != 0)
@@ -406,12 +407,12 @@ void DepthReconstruction::RunThread()
             
             cv::Rect frameROILeft, frameROIRight;
 
-            if (m_frameLayout == StereoHorizontalLayout)
+            if (m_frameLayout == FrameLayout_StereoHorizontal)
             {
                 frameROILeft = cv::Rect(0, 0, m_cameraFrameWidth, m_cameraFrameHeight);
                 frameROIRight = cv::Rect(m_cameraFrameWidth, 0, m_cameraFrameWidth, m_cameraFrameHeight);
             }
-            else if (m_frameLayout == StereoVerticalLayout)
+            else if (m_frameLayout == FrameLayout_StereoVertical)
             {
                 frameROILeft = cv::Rect(0, m_cameraFrameHeight, m_cameraFrameWidth, m_cameraFrameHeight);
                 frameROIRight = cv::Rect(0, 0, m_cameraFrameWidth, m_cameraFrameHeight);

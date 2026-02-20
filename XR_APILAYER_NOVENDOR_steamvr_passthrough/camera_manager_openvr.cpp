@@ -1,8 +1,8 @@
 #include "pch.h"
 #include "camera_manager.h"
-#include "layer.h"
+#include "layer_structs.h"
 #include "mathutil.h"
-
+#include "perfutil.h"
 
 
 
@@ -12,7 +12,7 @@ CameraManagerOpenVR::CameraManagerOpenVR(std::shared_ptr<IPassthroughRenderer> r
     , m_appRenderAPI(appRenderAPI)
     , m_configManager(configManager)
     , m_openVRManager(openVRManager)
-    , m_frameLayout(EStereoFrameLayout::Mono)
+    , m_frameLayout(EStereoFrameLayout::FrameLayout_Mono)
     , m_projectionDistanceFar(5.0f)
     , m_useAlternateProjectionCalc(false)
 {
@@ -134,21 +134,23 @@ EPassthroughCameraState CameraManagerOpenVR::GetCameraState() const
     }
 }
 
-void CameraManagerOpenVR::GetCameraDisplayStats(uint32_t& width, uint32_t& height, float& fps, std::string& API) const
+void CameraManagerOpenVR::GetCameraDisplayStats(uint32_t& width, uint32_t& height, float& fps, ECameraProvider& provider, bool& bIsActive) const
 {
     if (m_bCameraInitialized)
     {
         width = m_cameraTextureWidth;
         height = m_cameraTextureHeight;
         fps = 0;
-        API = "OpenVR - Active";
+        provider = ECameraProvider::CameraProvider_OpenVR;
+        bIsActive = true;
     }
     else
     {
         width = 0;
         height = 0;
         fps = 0;
-        API = "OpenVR - Inactive";
+        provider = ECameraProvider::CameraProvider_OpenVR;
+        bIsActive = false;
     }
 }
 
@@ -186,14 +188,14 @@ void CameraManagerOpenVR::GetIntrinsics(const ERenderEye cameraEye, XrVector2f& 
     {
         uint32_t cameraIndex = 0;
 
-        if (m_frameLayout == EStereoFrameLayout::StereoHorizontalLayout)
+        if (m_frameLayout == EStereoFrameLayout::FrameLayout_StereoHorizontal)
         {
-            cameraIndex = (cameraEye == LEFT_EYE) ? 0 : 1;
+            cameraIndex = (cameraEye == RenderEye_Left) ? 0 : 1;
         }
-        else if (m_frameLayout == EStereoFrameLayout::StereoVerticalLayout)
+        else if (m_frameLayout == EStereoFrameLayout::FrameLayout_StereoVertical)
         {
             // The camera indices are reversed for vertical layouts.
-            cameraIndex = (cameraEye == LEFT_EYE) ? 1 : 0;
+            cameraIndex = (cameraEye == RenderEye_Left) ? 1 : 0;
         }
 
         vr::IVRTrackedCamera* trackedCamera = m_openVRManager->GetVRTrackedCamera();
@@ -218,9 +220,9 @@ void CameraManagerOpenVR::GetIntrinsics(const ERenderEye cameraEye, XrVector2f& 
     }
     else
     {
-        if (m_frameLayout == EStereoFrameLayout::Mono || 
-            (m_frameLayout == EStereoFrameLayout::StereoHorizontalLayout && cameraEye == LEFT_EYE) || 
-            (m_frameLayout == EStereoFrameLayout::StereoVerticalLayout && cameraEye == RIGHT_EYE))
+        if (m_frameLayout == EStereoFrameLayout::FrameLayout_Mono || 
+            (m_frameLayout == EStereoFrameLayout::FrameLayout_StereoHorizontal && cameraEye == RenderEye_Left) || 
+            (m_frameLayout == EStereoFrameLayout::FrameLayout_StereoVertical && cameraEye == RenderEye_Right))
         {
             focalLength.x = cameraConf.OpenVR_Camera0_IntrinsicsFocal[0] / (float)cameraConf.OpenVR_Camera0_IntrinsicsSensorPixels[0] * m_cameraFrameWidth;
             focalLength.y = cameraConf.OpenVR_Camera0_IntrinsicsFocal[1] / (float)cameraConf.OpenVR_Camera0_IntrinsicsSensorPixels[1] * m_cameraFrameHeight;
@@ -252,7 +254,7 @@ void CameraManagerOpenVR::GetDistortionCoefficients(ECameraDistortionCoefficient
     }
     else
     {
-        if (m_frameLayout == EStereoFrameLayout::StereoVerticalLayout)
+        if (m_frameLayout == EStereoFrameLayout::FrameLayout_StereoVertical)
         {
             coeffs.v[0] = cameraConf.OpenVR_Camera1_IntrinsicsDist[0];
             coeffs.v[1] = cameraConf.OpenVR_Camera1_IntrinsicsDist[1];
@@ -307,7 +309,7 @@ bool CameraManagerOpenVR::IsUsingFisheyeModel() const
         return false;
     }
 
-    if (m_frameLayout != Mono && distTypes[0] != distTypes[1])
+    if (m_frameLayout != FrameLayout_Mono && distTypes[0] != distTypes[1])
     {
         ErrorLog("Error: Mismatched camera distortion functions are not supported %i != %%i\n", distTypes[0], distTypes[1]);
         return false;
@@ -344,12 +346,12 @@ void CameraManagerOpenVR::GetTrackedCameraEyePoses(XrMatrix4x4f& LeftPose, XrMat
             bGotRightCamera = false;
         }
 
-        if (m_frameLayout == EStereoFrameLayout::StereoHorizontalLayout)
+        if (m_frameLayout == EStereoFrameLayout::FrameLayout_StereoHorizontal)
         {
             LeftPose = ToXRMatrix4x4(Buffer[0]);
             RightPose = ToXRMatrix4x4(Buffer[1]);
         }
-        else if (m_frameLayout == EStereoFrameLayout::StereoVerticalLayout)
+        else if (m_frameLayout == EStereoFrameLayout::FrameLayout_StereoVertical)
         {
             // Vertical layouts have the right camera at index 0.
             LeftPose = ToXRMatrix4x4(Buffer[1]);
@@ -379,12 +381,12 @@ void CameraManagerOpenVR::GetTrackedCameraEyePoses(XrMatrix4x4f& LeftPose, XrMat
 
         XrMatrix4x4f_Multiply(&camera1Pose, &rotMatrix, &transMatrix); 
 
-        if (m_frameLayout == EStereoFrameLayout::StereoHorizontalLayout)
+        if (m_frameLayout == EStereoFrameLayout::FrameLayout_StereoHorizontal)
         {
             XrMatrix4x4f_Invert(&LeftPose, &camera0Pose);
             XrMatrix4x4f_Invert(&RightPose, &camera1Pose);
         }
-        else if (m_frameLayout == EStereoFrameLayout::StereoVerticalLayout)
+        else if (m_frameLayout == EStereoFrameLayout::FrameLayout_StereoVertical)
         {
             XrMatrix4x4f_Invert(&LeftPose, &camera1Pose);
             XrMatrix4x4f_Invert(&RightPose, &camera0Pose);
@@ -437,7 +439,7 @@ void CameraManagerOpenVR::UpdateStaticCameraParameters()
     {
         if ((layout & vr::EVRTrackedCameraFrameLayout_VerticalLayout) != 0)
         {
-            m_frameLayout = EStereoFrameLayout::StereoVerticalLayout;
+            m_frameLayout = EStereoFrameLayout::FrameLayout_StereoVertical;
             m_cameraFrameWidth = m_cameraTextureWidth;
             m_cameraFrameHeight = m_cameraTextureHeight / 2;
 
@@ -446,7 +448,7 @@ void CameraManagerOpenVR::UpdateStaticCameraParameters()
         }
         else
         {
-            m_frameLayout = EStereoFrameLayout::StereoHorizontalLayout;
+            m_frameLayout = EStereoFrameLayout::FrameLayout_StereoHorizontal;
             m_cameraFrameWidth = m_cameraTextureWidth / 2;
             m_cameraFrameHeight = m_cameraTextureHeight;
 
@@ -456,7 +458,7 @@ void CameraManagerOpenVR::UpdateStaticCameraParameters()
     }
     else
     {
-        m_frameLayout = EStereoFrameLayout::Mono;
+        m_frameLayout = EStereoFrameLayout::FrameLayout_Mono;
         m_cameraFrameWidth = m_cameraTextureWidth;
         m_cameraFrameHeight = m_cameraTextureHeight;
 
@@ -525,7 +527,7 @@ void CameraManagerOpenVR::ServeFrames()
 
     ComPtr<ID3D11Device> d3dInteropDevice;
 
-    if (m_renderAPI == Vulkan) // For the legacy Vulkan renderer.
+    if (m_renderAPI == RenderAPI_Vulkan) // For the legacy Vulkan renderer.
     {
         D3D11CreateDevice(NULL, D3D_DRIVER_TYPE_HARDWARE, NULL, 0, NULL, 0, D3D11_SDK_VERSION, &d3dInteropDevice, NULL, NULL);
     }
@@ -592,7 +594,7 @@ void CameraManagerOpenVR::ServeFrames()
 
         vr::EVRTrackedCameraFrameType frameType = mainConf.ProjectionMode == Projection_RoomView2D ? vr::VRTrackedCameraFrameType_MaximumUndistorted : vr::VRTrackedCameraFrameType_Distorted;
 
-        if (m_renderAPI == DirectX11)
+        if (m_renderAPI == RenderAPI_Direct3D11)
         {
             std::shared_ptr<IPassthroughRenderer> renderer = m_renderer.lock();
 
@@ -614,7 +616,7 @@ void CameraManagerOpenVR::ServeFrames()
                 continue;
             }
         }
-        else if (m_renderAPI == Vulkan)
+        else if (m_renderAPI == RenderAPI_Vulkan)
         {
             ID3D11ShaderResourceView* srv;
 
@@ -637,8 +639,8 @@ void CameraManagerOpenVR::ServeFrames()
         // Get the CPU frame for depth reconstruction, or the legacy D3D12 renderer.
         // GetVideoStreamFrameBuffer crashes when used with Vulkan and OpenGL apps,
         // for those APIs we manually copy it from the GPU texture instead.
-        if(m_renderAPI == DirectX12 || (mainConf.ProjectionMode == Projection_StereoReconstruction 
-            && (m_appRenderAPI == DirectX11 || m_appRenderAPI == DirectX12)))
+        if(m_renderAPI == RenderAPI_Direct3D12 || (mainConf.ProjectionMode == Projection_StereoReconstruction 
+            && (m_appRenderAPI == RenderAPI_Direct3D11 || m_appRenderAPI == RenderAPI_Direct3D12)))
         {
             if (m_underConstructionFrame->frameBuffer.get() == nullptr)
             {
@@ -654,7 +656,7 @@ void CameraManagerOpenVR::ServeFrames()
 
             m_underConstructionFrame->bHasFrameBuffer = true;
         }
-        else if (mainConf.ProjectionMode == Projection_StereoReconstruction && m_renderAPI == DirectX11 && m_underConstructionFrame->frameTextureResource != nullptr)
+        else if (mainConf.ProjectionMode == Projection_StereoReconstruction && m_renderAPI == RenderAPI_Direct3D11 && m_underConstructionFrame->frameTextureResource != nullptr)
         {
             if (m_underConstructionFrame->frameBuffer.get() == nullptr)
             {
@@ -704,7 +706,7 @@ void CameraManagerOpenVR::ServeFrames()
         XrMatrix4x4f headToTrackingPose, correctedCamera0ToHMDPose;
 
         // For vertical layouts the device pose is for the right camera.
-        if (m_frameLayout == EStereoFrameLayout::StereoVerticalLayout)
+        if (m_frameLayout == EStereoFrameLayout::FrameLayout_StereoVertical)
         {
             if (m_configManager->GetConfig_Camera().OpenVRCustomCalibration)
             {
@@ -827,7 +829,7 @@ XrMatrix4x4f CameraManagerOpenVR::GetHMDWorldToViewMatrix(const ERenderEye eye, 
 
     XrMatrix4x4f output, pose, viewToTracking, trackingToStage, refSpacePose;
 
-    int viewNum = eye == LEFT_EYE ? 0 : 1;
+    int viewNum = eye == RenderEye_Left ? 0 : 1;
 
     XrVector3f scale = { 1, 1, 1 };
 
@@ -859,7 +861,7 @@ XrMatrix4x4f CameraManagerOpenVR::GetHMDWorldToViewMatrix(const ERenderEye eye, 
 
 void CameraManagerOpenVR::UpdateProjectionMatrix(std::shared_ptr<CameraFrame>& frame)
 {
-    bool bIsStereo = m_frameLayout != EStereoFrameLayout::Mono;
+    bool bIsStereo = m_frameLayout != EStereoFrameLayout::FrameLayout_Mono;
 
     vr::IVRTrackedCamera* trackedCamera = m_openVRManager->GetVRTrackedCamera();
     Config_Main& mainConf = m_configManager->GetConfig_Main();
@@ -870,7 +872,7 @@ void CameraManagerOpenVR::UpdateProjectionMatrix(std::shared_ptr<CameraFrame>& f
         m_projectionDistanceFar = mainConf.ProjectionDistanceFar * 1.5f;
 
         // The camera indices are reversed for vertical layouts.
-        uint32_t leftIndex = (m_frameLayout == EStereoFrameLayout::StereoVerticalLayout) ? 1 : 0;
+        uint32_t leftIndex = (m_frameLayout == EStereoFrameLayout::FrameLayout_StereoVertical) ? 1 : 0;
 
         vr::HmdMatrix44_t vrProjection;
         vr::EVRTrackedCameraError error = trackedCamera->GetCameraProjection(m_hmdDeviceId, leftIndex, vr::VRTrackedCameraFrameType_MaximumUndistorted, NEAR_PROJECTION_DISTANCE, m_projectionDistanceFar, &vrProjection);
@@ -883,13 +885,13 @@ void CameraManagerOpenVR::UpdateProjectionMatrix(std::shared_ptr<CameraFrame>& f
 
         XrMatrix4x4f scaleMatrix, offsetMatrix, transMatrix;
 
-        if (m_frameLayout == EStereoFrameLayout::StereoHorizontalLayout)
+        if (m_frameLayout == EStereoFrameLayout::FrameLayout_StereoHorizontal)
         {
             XrMatrix4x4f_CreateScale(&scaleMatrix, 0.5f, 1.0f, 1.0f);
             XrMatrix4x4f_CreateTranslation(&offsetMatrix, -0.5f, 0.0f, 0.0f);
             XrMatrix4x4f_Multiply(&transMatrix, &offsetMatrix, &scaleMatrix);
         }
-        else if (m_frameLayout == EStereoFrameLayout::StereoVerticalLayout)
+        else if (m_frameLayout == EStereoFrameLayout::FrameLayout_StereoVertical)
         {
             XrMatrix4x4f_CreateScale(&scaleMatrix, 1.0f, 0.5f, 1.0f);
             XrMatrix4x4f_CreateTranslation(&offsetMatrix, 0.0f, 0.5f, 0.0f);
@@ -906,7 +908,7 @@ void CameraManagerOpenVR::UpdateProjectionMatrix(std::shared_ptr<CameraFrame>& f
         if (bIsStereo)
         {
             // The camera indices are reversed for vertical layouts.
-            uint32_t rightIndex = (m_frameLayout == EStereoFrameLayout::StereoVerticalLayout) ? 0 : 1;
+            uint32_t rightIndex = (m_frameLayout == EStereoFrameLayout::FrameLayout_StereoVertical) ? 0 : 1;
 
             error = trackedCamera->GetCameraProjection(m_hmdDeviceId, rightIndex, vr::VRTrackedCameraFrameType_MaximumUndistorted, NEAR_PROJECTION_DISTANCE, m_projectionDistanceFar, &vrProjection);
 
@@ -929,13 +931,13 @@ void CameraManagerOpenVR::CalculateFrameProjection(std::shared_ptr<CameraFrame>&
 {
     UpdateProjectionMatrix(frame);
 
-    CalculateFrameProjectionForEye(LEFT_EYE, frame, layer, refSpaceInfo, distortionParams);
-    CalculateFrameProjectionForEye(RIGHT_EYE, frame, layer, refSpaceInfo, distortionParams);
+    CalculateFrameProjectionForEye(RenderEye_Left, frame, layer, refSpaceInfo, distortionParams);
+    CalculateFrameProjectionForEye(RenderEye_Right, frame, layer, refSpaceInfo, distortionParams);
 
     // Detect the FOV being upside-down in order to prevent triangles from being backface culled
     frame->bIsRenderingMirrored = (layer.views[0].fov.angleUp - layer.views[0].fov.angleDown) < 0.0f;
 
-    if (m_appRenderAPI == OpenGL)
+    if (m_appRenderAPI == RenderAPI_OpenGL)
     {
         // Flip mirrored setting on OpenGL to get correct backface culling on rendering to upside down texture.
         frame->bIsRenderingMirrored = !frame->bIsRenderingMirrored;
@@ -1017,12 +1019,12 @@ void CameraManagerOpenVR::CalculateFrameProjectionForEye(const ERenderEye eye, s
 {
     Config_Main& mainConf = m_configManager->GetConfig_Main();
 
-    bool bIsStereo = m_frameLayout != EStereoFrameLayout::Mono;
-    uint32_t cameraId = (eye == RIGHT_EYE && bIsStereo) ? 1 : 0;
+    bool bIsStereo = m_frameLayout != EStereoFrameLayout::FrameLayout_Mono;
+    uint32_t cameraId = (eye == RenderEye_Right && bIsStereo) ? 1 : 0;
 
     XrMatrix4x4f hmdWorldToView = GetHMDWorldToViewMatrix(eye, layer, refSpaceInfo);
     
-    XrVector3f* projectionOriginWorld = (eye == LEFT_EYE) ? &frame->projectionOriginWorldLeft : &frame->projectionOriginWorldRight;
+    XrVector3f* projectionOriginWorld = (eye == RenderEye_Left) ? &frame->projectionOriginWorldLeft : &frame->projectionOriginWorldRight;
     XrMatrix4x4f hmdViewToWorld;
     XrMatrix4x4f_Invert(&hmdViewToWorld, &hmdWorldToView);
     XrVector3f inPos{ 0,0,0 };
@@ -1036,7 +1038,7 @@ void CameraManagerOpenVR::CalculateFrameProjectionForEye(const ERenderEye eye, s
 
     if (m_configManager->GetConfig_Depth().DepthReadFromApplication)
     {
-        depthInfo = (const XrCompositionLayerDepthInfoKHR*)layer.views[(eye == LEFT_EYE) ? 0 : 1].next;
+        depthInfo = (const XrCompositionLayerDepthInfoKHR*)layer.views[(eye == RenderEye_Left) ? 0 : 1].next;
 
         while (depthInfo != nullptr)
         {
@@ -1075,7 +1077,7 @@ void CameraManagerOpenVR::CalculateFrameProjectionForEye(const ERenderEye eye, s
     }
 
     XrMatrix4x4f hmdProjection;
-    XrMatrix4x4f_CreateProjectionFov(&hmdProjection, GRAPHICS_D3D, layer.views[(eye == LEFT_EYE) ? 0 : 1].fov, nearZ, farZ);
+    XrMatrix4x4f_CreateProjectionFov(&hmdProjection, GRAPHICS_D3D, layer.views[(eye == RenderEye_Left) ? 0 : 1].fov, nearZ, farZ);
 
     // Handle infinite and reversed Z - XrMatrix4x4f_CreateProjectionFov sets it up wrong.
     if (depthInfo && (farZ == (std::numeric_limits<float>::max)() || !std::isfinite(farZ) ))
@@ -1089,7 +1091,7 @@ void CameraManagerOpenVR::CalculateFrameProjectionForEye(const ERenderEye eye, s
         hmdProjection.m[14] = -(depthInfo->farZ * depthInfo->nearZ * (depthInfo->maxDepth - depthInfo->minDepth)) / (depthInfo->farZ - depthInfo->nearZ);
     }
 
-    if (m_appRenderAPI == OpenGL)
+    if (m_appRenderAPI == RenderAPI_OpenGL)
     {
         // Flip vertical axis to render to upside down texture.
         hmdProjection.m[1] *= -1;
@@ -1098,7 +1100,7 @@ void CameraManagerOpenVR::CalculateFrameProjectionForEye(const ERenderEye eye, s
         hmdProjection.m[13] *= -1;
     }
 
-    XrMatrix4x4f* worldToHMDMatrix = (eye == LEFT_EYE) ? &frame->worldToHMDProjectionLeft : &frame->worldToHMDProjectionRight;
+    XrMatrix4x4f* worldToHMDMatrix = (eye == RenderEye_Left) ? &frame->worldToHMDProjectionLeft : &frame->worldToHMDProjectionRight;
 
     XrMatrix4x4f_Multiply(worldToHMDMatrix, &hmdProjection, &hmdWorldToView);
 
@@ -1106,7 +1108,7 @@ void CameraManagerOpenVR::CalculateFrameProjectionForEye(const ERenderEye eye, s
 
     if (mainConf.ProjectionMode == Projection_RoomView2D)
     {
-        if (eye == LEFT_EYE)
+        if (eye == RenderEye_Left)
         {
 
             XrMatrix4x4f_Multiply(&frame->cameraProjectionToWorldLeft, &frame->cameraViewToWorldLeft, &m_cameraProjectionInvFarLeft);
@@ -1153,7 +1155,7 @@ void CameraManagerOpenVR::CalculateFrameProjectionForEye(const ERenderEye eye, s
         XrMatrix4x4f leftCameraFromTrackingPose;
         XrMatrix4x4f_Invert(&leftCameraFromTrackingPose, &frame->cameraViewToWorldLeft);
 
-        if (eye == LEFT_EYE)
+        if (eye == RenderEye_Left)
         {
             XrMatrix4x4f rectifiedRotation = distortionParams.rectifiedRotationLeft;
 

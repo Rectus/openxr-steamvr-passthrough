@@ -1063,7 +1063,7 @@ DX11TemporaryRenderTarget& PassthroughRendererDX11::GetTemporaryRenderTarget(con
 
 void PassthroughRendererDX11::InitRenderTarget(const ERenderEye eye, void* rendertarget, const uint32_t imageIndex, const XrSwapchainCreateInfo& swapchainInfo, const XrSwapchain swapchain)
 {
-	int viewIndex = (eye == LEFT_EYE) ? 0 : 1;
+	int viewIndex = (eye == RenderEye_Left) ? 0 : 1;
 
 	if (!CheckInitFrameData(imageIndex))
 	{
@@ -1265,7 +1265,7 @@ void PassthroughRendererDX11::SetupTemporalUAV(const uint32_t viewIndex, const u
 
 void PassthroughRendererDX11::InitDepthBuffer(const ERenderEye eye, void* depthBuffer, const uint32_t imageIndex, const XrSwapchainCreateInfo& swapchainInfo, const XrSwapchain swapchain)
 {
-	int viewIndex = (eye == LEFT_EYE) ? 0 : 1;
+	int viewIndex = (eye == RenderEye_Left) ? 0 : 1;
 
 	if (m_viewDepthData[viewIndex].size() < imageIndex + 1)
 	{
@@ -1654,8 +1654,8 @@ void PassthroughRendererDX11::RenderPassthroughFrame(const XrCompositionLayerPro
 
 	if (mainConf.DebugSource == DebugSource_ApplicationAlpha || mainConf.DebugSource == DebugSource_ApplicationDepth)
 	{
-		RenderDebugView(LEFT_EYE, layer, renderParams);
-		RenderDebugView(RIGHT_EYE, layer, renderParams);
+		RenderDebugView(RenderEye_Left, layer, renderParams);
+		RenderDebugView(RenderEye_Right, layer, renderParams);
 
 		RenderFrameFinish();
 
@@ -1822,31 +1822,31 @@ void PassthroughRendererDX11::RenderPassthroughFrame(const XrCompositionLayerPro
 	{
 		if (bUseDepthPass)
 		{
-			RenderDepthPrepassView(LEFT_EYE, layer, frame, depthFrame, numIndices, renderParams);
+			RenderDepthPrepassView(RenderEye_Left, layer, frame, depthFrame, numIndices, renderParams);
 		}
 
 		if (renderParams.BlendMode == Masked)
 		{
-			RenderMaskedPrepassView(LEFT_EYE, layer, frame, depthFrame, numIndices, renderParams);
+			RenderMaskedPrepassView(RenderEye_Left, layer, frame, depthFrame, numIndices, renderParams);
 		}
 
-		RenderSetupView(LEFT_EYE, layer, frame, depthFrame, renderParams);
+		RenderSetupView(RenderEye_Left, layer, frame, depthFrame, renderParams);
 
 		if (bRenderAlphaPrepass)
 		{
-			RenderAlphaPrepassView(LEFT_EYE, layer, frame, depthFrame, numIndices, renderParams);
+			RenderAlphaPrepassView(RenderEye_Left, layer, frame, depthFrame, numIndices, renderParams);
 		}
 
 		if (mainConf.ProjectToRenderModels)
 		{
-			RenderViewModelsForView(LEFT_EYE, layer, frame, depthFrame, numIndices, renderParams);
+			RenderViewModelsForView(RenderEye_Left, layer, frame, depthFrame, numIndices, renderParams);
 		}
 
-		RenderPassthroughView(LEFT_EYE, layer, frame, depthFrame, numIndices, renderParams);
+		RenderPassthroughView(RenderEye_Left, layer, frame, depthFrame, numIndices, renderParams);
 
 		if (bRenderBackground)
 		{
-			RenderBackgroundForView(LEFT_EYE, layer, frame, depthFrame, numIndices, renderParams);
+			RenderBackgroundForView(RenderEye_Left, layer, frame, depthFrame, numIndices, renderParams);
 		}
 	}
 
@@ -1855,31 +1855,31 @@ void PassthroughRendererDX11::RenderPassthroughFrame(const XrCompositionLayerPro
 	{
 		if (bUseDepthPass)
 		{
-			RenderDepthPrepassView(RIGHT_EYE, layer, frame, depthFrame, numIndices, renderParams);
+			RenderDepthPrepassView(RenderEye_Right, layer, frame, depthFrame, numIndices, renderParams);
 		}
 
 		if (renderParams.BlendMode == Masked)
 		{
-			RenderMaskedPrepassView(RIGHT_EYE, layer, frame, depthFrame, numIndices, renderParams);
+			RenderMaskedPrepassView(RenderEye_Right, layer, frame, depthFrame, numIndices, renderParams);
 		}
 
-		RenderSetupView(RIGHT_EYE, layer, frame, depthFrame, renderParams);
+		RenderSetupView(RenderEye_Right, layer, frame, depthFrame, renderParams);
 
 		if (bRenderAlphaPrepass)
 		{
-			RenderAlphaPrepassView(RIGHT_EYE, layer, frame, depthFrame, numIndices, renderParams);
+			RenderAlphaPrepassView(RenderEye_Right, layer, frame, depthFrame, numIndices, renderParams);
 		}
 
 		if (mainConf.ProjectToRenderModels)
 		{
-			RenderViewModelsForView(RIGHT_EYE, layer, frame, depthFrame, numIndices, renderParams);
+			RenderViewModelsForView(RenderEye_Right, layer, frame, depthFrame, numIndices, renderParams);
 		}
 
-		RenderPassthroughView(RIGHT_EYE, layer, frame, depthFrame, numIndices, renderParams);
+		RenderPassthroughView(RenderEye_Right, layer, frame, depthFrame, numIndices, renderParams);
 
 		if (bRenderBackground)
 		{
-			RenderBackgroundForView(RIGHT_EYE, layer, frame, depthFrame, numIndices, renderParams);
+			RenderBackgroundForView(RenderEye_Right, layer, frame, depthFrame, numIndices, renderParams);
 		}
 	}
 
@@ -1932,11 +1932,11 @@ void PassthroughRendererDX11::RenderHoleFillCS(DX11FrameData& frameData, std::sh
 
 void PassthroughRendererDX11::RenderSetupView(const ERenderEye eye, const XrCompositionLayerProjection* layer, std::shared_ptr<CameraFrame> frame, std::shared_ptr<DepthFrame> depthFrame, FrameRenderParameters& renderParams)
 {
-	int swapchainIndex = (eye == LEFT_EYE) ? renderParams.LeftFrameIndex : renderParams.RightFrameIndex;
-	int depthSwapchainIndex = (eye == LEFT_EYE) ? renderParams.LeftDepthIndex : renderParams.RightDepthIndex;
+	int swapchainIndex = (eye == RenderEye_Left) ? renderParams.LeftFrameIndex : renderParams.RightFrameIndex;
+	int depthSwapchainIndex = (eye == RenderEye_Left) ? renderParams.LeftDepthIndex : renderParams.RightDepthIndex;
 
 	DX11FrameData& frameData = m_frameData[m_frameIndex];
-	int viewIndex = (eye == LEFT_EYE) ? 0 : 1;
+	int viewIndex = (eye == RenderEye_Left) ? 0 : 1;
 
 	DX11ViewData& viewData = m_viewData[viewIndex][swapchainIndex];
 
@@ -1979,13 +1979,13 @@ void PassthroughRendererDX11::RenderSetupView(const ERenderEye eye, const XrComp
 
 	VSViewConstantBuffer vsViewBuffer = {};
 
-	vsViewBuffer.worldToHMDProjection = (eye == LEFT_EYE) ? frame->worldToHMDProjectionLeft : frame->worldToHMDProjectionRight;
+	vsViewBuffer.worldToHMDProjection = (eye == RenderEye_Left) ? frame->worldToHMDProjectionLeft : frame->worldToHMDProjectionRight;
 	XrMatrix4x4f_Invert(&vsViewBuffer.HMDProjectionToWorld, &vsViewBuffer.worldToHMDProjection);
-	vsViewBuffer.prevHMDFrame_WorldToHMDProjection = (eye == LEFT_EYE) ? frame->prevHMDFrame_WorldToHMDProjectionLeft : frame->prevHMDFrame_WorldToHMDProjectionRight;
-	vsViewBuffer.prevCameraFrame_WorldToHMDProjection = (eye == LEFT_EYE) ? frame->prevCameraFrame_WorldToHMDProjectionLeft : frame->prevCameraFrame_WorldToHMDProjectionRight;
+	vsViewBuffer.prevHMDFrame_WorldToHMDProjection = (eye == RenderEye_Left) ? frame->prevHMDFrame_WorldToHMDProjectionLeft : frame->prevHMDFrame_WorldToHMDProjectionRight;
+	vsViewBuffer.prevCameraFrame_WorldToHMDProjection = (eye == RenderEye_Left) ? frame->prevCameraFrame_WorldToHMDProjectionLeft : frame->prevCameraFrame_WorldToHMDProjectionRight;
 
-	vsViewBuffer.disparityUVBounds = GetFrameUVBounds(eye, StereoHorizontalLayout);
-	vsViewBuffer.projectionOriginWorld = (eye == LEFT_EYE) ? frame->projectionOriginWorldLeft : frame->projectionOriginWorldRight;
+	vsViewBuffer.disparityUVBounds = GetFrameUVBounds(eye, FrameLayout_StereoHorizontal);
+	vsViewBuffer.projectionOriginWorld = (eye == RenderEye_Left) ? frame->projectionOriginWorldLeft : frame->projectionOriginWorldRight;
 	vsViewBuffer.projectionDistance = mainConf.ProjectionDistanceFar;
 	vsViewBuffer.floorHeightOffset = mainConf.FloorHeightOffset;
 	vsViewBuffer.cameraBlendWeight = 1.0;
@@ -2007,7 +2007,7 @@ void PassthroughRendererDX11::RenderSetupView(const ERenderEye eye, const XrComp
 
 	psViewBuffer.prepassUVBounds = { 0.0f, 0.0f, 1.0f, 1.0f };
 	psViewBuffer.frameUVBounds = GetFrameUVBounds(eye, frame->frameLayout);
-	psViewBuffer.crossUVBounds = GetFrameUVBounds((eye == LEFT_EYE ? RIGHT_EYE : LEFT_EYE), frame->frameLayout);
+	psViewBuffer.crossUVBounds = GetFrameUVBounds((eye == RenderEye_Left ? RenderEye_Right : RenderEye_Left), frame->frameLayout);
 	psViewBuffer.rtArrayIndex = layer->views[viewIndex].subImage.imageArrayIndex;
 	psViewBuffer.cameraViewIndex = viewIndex;
 	psViewBuffer.bDoCutout = stereoConf.StereoCutoutEnabled && !bUseDepthPass;
@@ -2041,11 +2041,11 @@ void PassthroughRendererDX11::RenderSetupView(const ERenderEye eye, const XrComp
 // Reprojects one or two disparity maps into HMD projection space depth maps.
 void PassthroughRendererDX11::RenderDepthPrepassView(const ERenderEye eye, const XrCompositionLayerProjection* layer, std::shared_ptr<CameraFrame> frame, std::shared_ptr<DepthFrame> depthFrame, UINT numIndices, FrameRenderParameters& renderParams)
 {
-	int swapchainIndex = (eye == LEFT_EYE) ? renderParams.LeftFrameIndex : renderParams.RightFrameIndex;
-	int depthSwapchainIndex = (eye == LEFT_EYE) ? renderParams.LeftDepthIndex : renderParams.RightDepthIndex;
+	int swapchainIndex = (eye == RenderEye_Left) ? renderParams.LeftFrameIndex : renderParams.RightFrameIndex;
+	int depthSwapchainIndex = (eye == RenderEye_Left) ? renderParams.LeftDepthIndex : renderParams.RightDepthIndex;
 
 	DX11FrameData& frameData = m_frameData[m_frameIndex];
-	int viewIndex = (eye == LEFT_EYE) ? 0 : 1;
+	int viewIndex = (eye == RenderEye_Left) ? 0 : 1;
 
 	DX11ViewData& viewData = m_viewData[viewIndex][swapchainIndex];
 
@@ -2089,7 +2089,7 @@ void PassthroughRendererDX11::RenderDepthPrepassView(const ERenderEye eye, const
 
 	if (stereoConf.StereoUseDisparityTemporalFiltering)
 	{
-		int prevSwapchain = (eye == LEFT_EYE) ? m_prevSwapchainLeft : m_prevSwapchainRight;
+		int prevSwapchain = (eye == RenderEye_Left) ? m_prevSwapchainLeft : m_prevSwapchainRight;
 		ID3D11ShaderResourceView* psSRVs[2] = {
 			m_viewData[viewIndex][prevSwapchain].passthroughDepthStencil[0].SRV.Get(),
 			m_viewData[viewIndex][prevSwapchain].passthroughCameraValidity.SRV.Get()
@@ -2105,17 +2105,17 @@ void PassthroughRendererDX11::RenderDepthPrepassView(const ERenderEye eye, const
 
 	VSViewConstantBuffer vsViewBuffer = {};
 
-	vsViewBuffer.worldToHMDProjection = (eye == LEFT_EYE) ? frame->worldToHMDProjectionLeft : frame->worldToHMDProjectionRight;
+	vsViewBuffer.worldToHMDProjection = (eye == RenderEye_Left) ? frame->worldToHMDProjectionLeft : frame->worldToHMDProjectionRight;
 	XrMatrix4x4f_Invert(&vsViewBuffer.HMDProjectionToWorld, &vsViewBuffer.worldToHMDProjection);
-	vsViewBuffer.prevHMDFrame_WorldToHMDProjection = (eye == LEFT_EYE) ? frame->prevHMDFrame_WorldToHMDProjectionLeft : frame->prevHMDFrame_WorldToHMDProjectionRight;
-	vsViewBuffer.prevCameraFrame_WorldToHMDProjection = (eye == LEFT_EYE) ? frame->prevCameraFrame_WorldToHMDProjectionLeft : frame->prevCameraFrame_WorldToHMDProjectionRight;
+	vsViewBuffer.prevHMDFrame_WorldToHMDProjection = (eye == RenderEye_Left) ? frame->prevHMDFrame_WorldToHMDProjectionLeft : frame->prevHMDFrame_WorldToHMDProjectionRight;
+	vsViewBuffer.prevCameraFrame_WorldToHMDProjection = (eye == RenderEye_Left) ? frame->prevCameraFrame_WorldToHMDProjectionLeft : frame->prevCameraFrame_WorldToHMDProjectionRight;
 
-	vsViewBuffer.projectionOriginWorld = (eye == LEFT_EYE) ? frame->projectionOriginWorldLeft : frame->projectionOriginWorldRight;
+	vsViewBuffer.projectionOriginWorld = (eye == RenderEye_Left) ? frame->projectionOriginWorldLeft : frame->projectionOriginWorldRight;
 	vsViewBuffer.projectionDistance = mainConf.ProjectionDistanceFar;
 	vsViewBuffer.floorHeightOffset = mainConf.FloorHeightOffset;
 	vsViewBuffer.cameraViewIndex = viewIndex;
 	vsViewBuffer.cameraBlendWeight = 1.0;
-	vsViewBuffer.disparityUVBounds = GetFrameUVBounds(eye, StereoHorizontalLayout);
+	vsViewBuffer.disparityUVBounds = GetFrameUVBounds(eye, FrameLayout_StereoHorizontal);
 
 	m_renderContext->UpdateSubresource(viewData.vsViewConstantBuffer.Get(), 0, nullptr, &vsViewBuffer, 0, 0);
 
@@ -2134,8 +2134,8 @@ void PassthroughRendererDX11::RenderDepthPrepassView(const ERenderEye eye, const
 
 	if (stereoConf.StereoCutoutEnabled)
 	{
-		vsViewBuffer.cameraViewIndex = (eye != LEFT_EYE) ? 0 : 1;
-		vsViewBuffer.disparityUVBounds = GetFrameUVBounds((eye == LEFT_EYE) ? RIGHT_EYE : LEFT_EYE, StereoHorizontalLayout);
+		vsViewBuffer.cameraViewIndex = (eye != RenderEye_Left) ? 0 : 1;
+		vsViewBuffer.disparityUVBounds = GetFrameUVBounds((eye == RenderEye_Left) ? RenderEye_Right : RenderEye_Left, FrameLayout_StereoHorizontal);
 		vsViewBuffer.cameraBlendWeight = stereoConf.StereoCutoutSecondaryCameraWeight;
 
 		m_renderContext->UpdateSubresource(viewData.vsViewConstantBuffer.Get(), 0, nullptr, &vsViewBuffer, 0, 0);
@@ -2146,7 +2146,7 @@ void PassthroughRendererDX11::RenderDepthPrepassView(const ERenderEye eye, const
 
 		if (stereoConf.StereoUseDisparityTemporalFiltering)
 		{
-			int prevSwapchain = (eye == LEFT_EYE) ? m_prevSwapchainLeft : m_prevSwapchainRight;
+			int prevSwapchain = (eye == RenderEye_Left) ? m_prevSwapchainLeft : m_prevSwapchainRight;
 			ID3D11ShaderResourceView* psSRVs[2] = {
 				m_viewData[viewIndex][prevSwapchain].passthroughDepthStencil[1].SRV.Get(),
 				m_viewData[viewIndex][prevSwapchain].passthroughCameraValidity.SRV.Get()
@@ -2176,13 +2176,13 @@ void PassthroughRendererDX11::RenderDepthPrepassView(const ERenderEye eye, const
 // Renders chroma key cutout into the rendertarget alpha channel.
 void PassthroughRendererDX11::RenderMaskedPrepassView(const ERenderEye eye, const XrCompositionLayerProjection* layer, std::shared_ptr<CameraFrame> frame, std::shared_ptr<DepthFrame> depthFrame, UINT numIndices, FrameRenderParameters& renderParams)
 {
-	int swapchainIndex = (eye == LEFT_EYE) ? renderParams.LeftFrameIndex : renderParams.RightFrameIndex;
-	int depthSwapchainIndex = (eye == LEFT_EYE) ? renderParams.LeftDepthIndex : renderParams.RightDepthIndex;
+	int swapchainIndex = (eye == RenderEye_Left) ? renderParams.LeftFrameIndex : renderParams.RightFrameIndex;
+	int depthSwapchainIndex = (eye == RenderEye_Left) ? renderParams.LeftDepthIndex : renderParams.RightDepthIndex;
 
 	if (swapchainIndex < 0) { return; }
 
 	DX11FrameData& frameData = m_frameData[m_frameIndex];
-	int viewIndex = (eye == LEFT_EYE) ? 0 : 1;
+	int viewIndex = (eye == RenderEye_Left) ? 0 : 1;
 
 	DX11ViewData& viewData = m_viewData[viewIndex][swapchainIndex];
 
@@ -2230,10 +2230,10 @@ void PassthroughRendererDX11::RenderMaskedPrepassView(const ERenderEye eye, cons
 	m_renderContext->RSSetScissorRects(1, &scissor);
 
 	VSViewConstantBuffer vsViewBuffer = {};
-	vsViewBuffer.worldToHMDProjection = (eye == LEFT_EYE) ? frame->worldToHMDProjectionLeft : frame->worldToHMDProjectionRight;
+	vsViewBuffer.worldToHMDProjection = (eye == RenderEye_Left) ? frame->worldToHMDProjectionLeft : frame->worldToHMDProjectionRight;
 	XrMatrix4x4f_Invert(&vsViewBuffer.HMDProjectionToWorld, &vsViewBuffer.worldToHMDProjection);
-	vsViewBuffer.disparityUVBounds = GetFrameUVBounds(eye, StereoHorizontalLayout);
-	vsViewBuffer.projectionOriginWorld = (eye == LEFT_EYE) ? frame->projectionOriginWorldLeft : frame->projectionOriginWorldRight;
+	vsViewBuffer.disparityUVBounds = GetFrameUVBounds(eye, FrameLayout_StereoHorizontal);
+	vsViewBuffer.projectionOriginWorld = (eye == RenderEye_Left) ? frame->projectionOriginWorldLeft : frame->projectionOriginWorldRight;
 	vsViewBuffer.projectionDistance = mainConf.ProjectionDistanceFar;
 	vsViewBuffer.floorHeightOffset = mainConf.FloorHeightOffset;
 	vsViewBuffer.cameraBlendWeight = 1.0;
@@ -2252,17 +2252,17 @@ void PassthroughRendererDX11::RenderMaskedPrepassView(const ERenderEye eye, cons
 	{
 		bSingleStereoRenderTarget = true;
 
-		psViewBuffer.prepassUVBounds = { (eye == LEFT_EYE) ? 0.0f : 0.5f, 0.0f,
-			(eye == LEFT_EYE) ? 0.5f : 1.0f, 1.0f };
+		psViewBuffer.prepassUVBounds = { (eye == RenderEye_Left) ? 0.0f : 0.5f, 0.0f,
+			(eye == RenderEye_Left) ? 0.5f : 1.0f, 1.0f };
 	}
 	else
 	{
 		psViewBuffer.prepassUVBounds = { 0.0f, 0.0f, 1.0f, 1.0f };
 	}
-	psViewBuffer.worldToHMDProjection = (eye == LEFT_EYE) ? frame->worldToHMDProjectionLeft : frame->worldToHMDProjectionRight;
+	psViewBuffer.worldToHMDProjection = (eye == RenderEye_Left) ? frame->worldToHMDProjectionLeft : frame->worldToHMDProjectionRight;
 	XrMatrix4x4f_Invert(&psViewBuffer.HMDProjectionToWorld, &psViewBuffer.worldToHMDProjection);
 	psViewBuffer.frameUVBounds = GetFrameUVBounds(eye, frame->frameLayout);
-	psViewBuffer.crossUVBounds = GetFrameUVBounds((eye == LEFT_EYE ? RIGHT_EYE : LEFT_EYE), frame->frameLayout);
+	psViewBuffer.crossUVBounds = GetFrameUVBounds((eye == RenderEye_Left ? RenderEye_Right : RenderEye_Left), frame->frameLayout);
 	psViewBuffer.rtArrayIndex = layer->views[viewIndex].subImage.imageArrayIndex;
 	psViewBuffer.cameraViewIndex = viewIndex;
 	psViewBuffer.bDoCutout = bUseFullscreenPass && stereoConf.StereoCutoutEnabled;
@@ -2274,7 +2274,7 @@ void PassthroughRendererDX11::RenderMaskedPrepassView(const ERenderEye eye, cons
 
 	DX11TemporaryRenderTarget& tempTarget = GetTemporaryRenderTarget(m_frameIndex, bSingleStereoRenderTarget ? 0 : viewIndex);
 
-	if (eye == LEFT_EYE || !bSingleStereoRenderTarget)
+	if (eye == RenderEye_Left || !bSingleStereoRenderTarget)
 	{
 		float clearColor[4] = { m_configManager->GetConfig_Core().CoreForceMaskedUseCameraImage ? 1.0f : 0, 0, 0, 0 };
 		m_renderContext->ClearRenderTargetView(tempTarget.RTV.Get(), clearColor);
@@ -2453,12 +2453,12 @@ void PassthroughRendererDX11::RenderMaskedPrepassView(const ERenderEye eye, cons
 // Renders an alpha cutout into the rendertarget.
 void PassthroughRendererDX11::RenderAlphaPrepassView(const ERenderEye eye, const XrCompositionLayerProjection* layer, std::shared_ptr<CameraFrame> frame, std::shared_ptr<DepthFrame> depthFrame, UINT numIndices, FrameRenderParameters& renderParams)
 {
-	int swapchainIndex = (eye == LEFT_EYE) ? renderParams.LeftFrameIndex : renderParams.RightFrameIndex;
-	int depthSwapchainIndex = (eye == LEFT_EYE) ? renderParams.LeftDepthIndex : renderParams.RightDepthIndex;
+	int swapchainIndex = (eye == RenderEye_Left) ? renderParams.LeftFrameIndex : renderParams.RightFrameIndex;
+	int depthSwapchainIndex = (eye == RenderEye_Left) ? renderParams.LeftDepthIndex : renderParams.RightDepthIndex;
 
 	DX11FrameData& frameData = m_frameData[m_frameIndex];
 	DX11FrameData& prevFrameData = m_frameData[m_prevFrameIndex];
-	int viewIndex = (eye == LEFT_EYE) ? 0 : 1;
+	int viewIndex = (eye == RenderEye_Left) ? 0 : 1;
 
 	DX11ViewData& viewData = m_viewData[viewIndex][swapchainIndex];
 
@@ -2512,7 +2512,7 @@ void PassthroughRendererDX11::RenderAlphaPrepassView(const ERenderEye eye, const
 	{
 		if (bUseDepthPass && bUseDisparityTemporalFiltering)
 		{
-			int prevSwapchain = (eye == LEFT_EYE) ? m_prevSwapchainLeft : m_prevSwapchainRight;
+			int prevSwapchain = (eye == RenderEye_Left) ? m_prevSwapchainLeft : m_prevSwapchainRight;
 			ID3D11ShaderResourceView* vsSRVs[6] = {
 				viewData.passthroughDepthStencil[0].SRV.Get(),
 				viewData.passthroughDepthStencil[1].SRV.Get(),
@@ -2635,12 +2635,12 @@ void PassthroughRendererDX11::RenderAlphaPrepassView(const ERenderEye eye, const
 // Renders all SteamVR rendermodels with passthrough projected on them.
 void PassthroughRendererDX11::RenderViewModelsForView(const ERenderEye eye, const XrCompositionLayerProjection* layer, std::shared_ptr<CameraFrame> frame, std::shared_ptr<DepthFrame> depthFrame, UINT numIndices, FrameRenderParameters& renderParams)
 {
-	int swapchainIndex = (eye == LEFT_EYE) ? renderParams.LeftFrameIndex : renderParams.RightFrameIndex;
-	int depthSwapchainIndex = (eye == LEFT_EYE) ? renderParams.LeftDepthIndex : renderParams.RightDepthIndex;
+	int swapchainIndex = (eye == RenderEye_Left) ? renderParams.LeftFrameIndex : renderParams.RightFrameIndex;
+	int depthSwapchainIndex = (eye == RenderEye_Left) ? renderParams.LeftDepthIndex : renderParams.RightDepthIndex;
 
 	DX11FrameData& frameData = m_frameData[m_frameIndex];
 	DX11FrameData& prevFrameData = m_frameData[m_prevFrameIndex];
-	int viewIndex = (eye == LEFT_EYE) ? 0 : 1;
+	int viewIndex = (eye == RenderEye_Left) ? 0 : 1;
 
 	DX11ViewData& viewData = m_viewData[viewIndex][swapchainIndex];
 
@@ -2709,12 +2709,12 @@ void PassthroughRendererDX11::RenderViewModelsForView(const ERenderEye eye, cons
 // Renders the main passthrough view.
 void PassthroughRendererDX11::RenderPassthroughView(const ERenderEye eye, const XrCompositionLayerProjection* layer, std::shared_ptr<CameraFrame> frame, std::shared_ptr<DepthFrame> depthFrame, UINT numIndices, FrameRenderParameters& renderParams)
 {
-	int swapchainIndex = (eye == LEFT_EYE) ? renderParams.LeftFrameIndex : renderParams.RightFrameIndex;
-	int depthSwapchainIndex = (eye == LEFT_EYE) ? renderParams.LeftDepthIndex : renderParams.RightDepthIndex;
+	int swapchainIndex = (eye == RenderEye_Left) ? renderParams.LeftFrameIndex : renderParams.RightFrameIndex;
+	int depthSwapchainIndex = (eye == RenderEye_Left) ? renderParams.LeftDepthIndex : renderParams.RightDepthIndex;
 
 	DX11FrameData& frameData = m_frameData[m_frameIndex];
 	DX11FrameData& prevFrameData = m_frameData[m_prevFrameIndex];
-	int viewIndex = (eye == LEFT_EYE) ? 0 : 1;
+	int viewIndex = (eye == RenderEye_Left) ? 0 : 1;
 
 	DX11ViewData& viewData = m_viewData[viewIndex][swapchainIndex];
 
@@ -2775,7 +2775,7 @@ void PassthroughRendererDX11::RenderPassthroughView(const ERenderEye eye, const 
 	{
 		if (bUseDepthPass && bUseDisparityTemporalFiltering)
 		{
-			int prevSwapchain = (eye == LEFT_EYE) ? m_prevSwapchainLeft : m_prevSwapchainRight;
+			int prevSwapchain = (eye == RenderEye_Left) ? m_prevSwapchainLeft : m_prevSwapchainRight;
 			ID3D11ShaderResourceView* vsSRVs[6] = {
 				viewData.passthroughDepthStencil[0].SRV.Get(),
 				viewData.passthroughDepthStencil[1].SRV.Get(),
@@ -2815,13 +2815,13 @@ void PassthroughRendererDX11::RenderPassthroughView(const ERenderEye eye, const 
 	{
 		VSViewConstantBuffer vsViewBuffer = {};
 
-		vsViewBuffer.worldToHMDProjection = (eye == LEFT_EYE) ? frame->worldToHMDProjectionLeft : frame->worldToHMDProjectionRight;
+		vsViewBuffer.worldToHMDProjection = (eye == RenderEye_Left) ? frame->worldToHMDProjectionLeft : frame->worldToHMDProjectionRight;
 		XrMatrix4x4f_Invert(&vsViewBuffer.HMDProjectionToWorld, &vsViewBuffer.worldToHMDProjection);
-		vsViewBuffer.prevHMDFrame_WorldToHMDProjection = (eye == LEFT_EYE) ? frame->prevHMDFrame_WorldToHMDProjectionLeft : frame->prevHMDFrame_WorldToHMDProjectionRight;
-		vsViewBuffer.prevCameraFrame_WorldToHMDProjection = (eye == LEFT_EYE) ? frame->prevCameraFrame_WorldToHMDProjectionLeft : frame->prevCameraFrame_WorldToHMDProjectionRight;
+		vsViewBuffer.prevHMDFrame_WorldToHMDProjection = (eye == RenderEye_Left) ? frame->prevHMDFrame_WorldToHMDProjectionLeft : frame->prevHMDFrame_WorldToHMDProjectionRight;
+		vsViewBuffer.prevCameraFrame_WorldToHMDProjection = (eye == RenderEye_Left) ? frame->prevCameraFrame_WorldToHMDProjectionLeft : frame->prevCameraFrame_WorldToHMDProjectionRight;
 
-		vsViewBuffer.disparityUVBounds = GetFrameUVBounds(eye, StereoHorizontalLayout);
-		vsViewBuffer.projectionOriginWorld = (eye == LEFT_EYE) ? frame->projectionOriginWorldLeft : frame->projectionOriginWorldRight;
+		vsViewBuffer.disparityUVBounds = GetFrameUVBounds(eye, FrameLayout_StereoHorizontal);
+		vsViewBuffer.projectionOriginWorld = (eye == RenderEye_Left) ? frame->projectionOriginWorldLeft : frame->projectionOriginWorldRight;
 		vsViewBuffer.projectionDistance = mainConf.ProjectionDistanceFar;
 		vsViewBuffer.floorHeightOffset = mainConf.FloorHeightOffset;
 		vsViewBuffer.cameraBlendWeight = 1.0;
@@ -2975,23 +2975,23 @@ void PassthroughRendererDX11::RenderPassthroughView(const ERenderEye eye, const 
 	{
 		float secondaryWidthFactor = 0.6f;
 		XrRect2Di rect = layer->views[viewIndex].subImage.imageRect;
-		int scissorStart = (eye == LEFT_EYE) ? (int)(rect.extent.width * (1.0f - secondaryWidthFactor)) : 0;
-		int scissorEnd = (eye == LEFT_EYE) ? rect.extent.width : (int)(rect.extent.width * secondaryWidthFactor);
+		int scissorStart = (eye == RenderEye_Left) ? (int)(rect.extent.width * (1.0f - secondaryWidthFactor)) : 0;
+		int scissorEnd = (eye == RenderEye_Left) ? rect.extent.width : (int)(rect.extent.width * secondaryWidthFactor);
 		D3D11_RECT crossScissor = { rect.offset.x + scissorStart, rect.offset.y, rect.offset.x + scissorEnd, rect.offset.y + rect.extent.height };
 		m_renderContext->RSSetScissorRects(1, &crossScissor);
 
 		VSViewConstantBuffer vsCrossBuffer = {};
-		vsCrossBuffer.worldToHMDProjection = (eye == LEFT_EYE) ? frame->worldToHMDProjectionLeft : frame->worldToHMDProjectionRight;
+		vsCrossBuffer.worldToHMDProjection = (eye == RenderEye_Left) ? frame->worldToHMDProjectionLeft : frame->worldToHMDProjectionRight;
 		XrMatrix4x4f_Invert(&vsCrossBuffer.HMDProjectionToWorld, &vsCrossBuffer.worldToHMDProjection);
-		vsCrossBuffer.prevHMDFrame_WorldToHMDProjection = (eye == LEFT_EYE) ? frame->prevHMDFrame_WorldToHMDProjectionLeft : frame->prevHMDFrame_WorldToHMDProjectionRight;
-		vsCrossBuffer.prevCameraFrame_WorldToHMDProjection = (eye == LEFT_EYE) ? frame->prevCameraFrame_WorldToHMDProjectionLeft : frame->prevCameraFrame_WorldToHMDProjectionRight;
-		vsCrossBuffer.projectionOriginWorld = (eye == LEFT_EYE) ? frame->projectionOriginWorldLeft : frame->projectionOriginWorldRight;
+		vsCrossBuffer.prevHMDFrame_WorldToHMDProjection = (eye == RenderEye_Left) ? frame->prevHMDFrame_WorldToHMDProjectionLeft : frame->prevHMDFrame_WorldToHMDProjectionRight;
+		vsCrossBuffer.prevCameraFrame_WorldToHMDProjection = (eye == RenderEye_Left) ? frame->prevCameraFrame_WorldToHMDProjectionLeft : frame->prevCameraFrame_WorldToHMDProjectionRight;
+		vsCrossBuffer.projectionOriginWorld = (eye == RenderEye_Left) ? frame->projectionOriginWorldLeft : frame->projectionOriginWorldRight;
 		vsCrossBuffer.projectionDistance = mainConf.ProjectionDistanceFar;
 		vsCrossBuffer.floorHeightOffset = mainConf.FloorHeightOffset;
 		vsCrossBuffer.cameraBlendWeight = 1.0;
 
-		vsCrossBuffer.disparityUVBounds = GetFrameUVBounds(eye == LEFT_EYE ? RIGHT_EYE : LEFT_EYE, StereoHorizontalLayout);
-		vsCrossBuffer.cameraViewIndex = (eye != LEFT_EYE) ? 0 : 1;
+		vsCrossBuffer.disparityUVBounds = GetFrameUVBounds(eye == RenderEye_Left ? RenderEye_Right : RenderEye_Left, FrameLayout_StereoHorizontal);
+		vsCrossBuffer.cameraViewIndex = (eye != RenderEye_Left) ? 0 : 1;
 		vsCrossBuffer.bWriteDisparityFilter = false;
 		m_renderContext->UpdateSubresource(viewData.vsViewConstantBuffer.Get(), 0, nullptr, &vsCrossBuffer, 0, 0);
 
@@ -3000,7 +3000,7 @@ void PassthroughRendererDX11::RenderPassthroughView(const ERenderEye eye, const 
 		psCrossBuffer.cameraViewIndex = viewIndex;
 		psCrossBuffer.bUseFullscreenQuad = false;
 
-		psCrossBuffer.frameUVBounds = GetFrameUVBounds(eye == LEFT_EYE ? RIGHT_EYE : LEFT_EYE, frame->frameLayout);
+		psCrossBuffer.frameUVBounds = GetFrameUVBounds(eye == RenderEye_Left ? RenderEye_Right : RenderEye_Left, frame->frameLayout);
 		psCrossBuffer.bDoCutout = false;
 		psCrossBuffer.bPremultiplyAlpha = false;
 		m_renderContext->UpdateSubresource(viewData.psViewConstantBuffer.Get(), 0, nullptr, &psCrossBuffer, 0, 0);
@@ -3019,12 +3019,12 @@ void PassthroughRendererDX11::RenderPassthroughView(const ERenderEye eye, const 
 // Renders a background cylinder behind any gaps.
 void PassthroughRendererDX11::RenderBackgroundForView(const ERenderEye eye,  const XrCompositionLayerProjection* layer, std::shared_ptr<CameraFrame> frame, std::shared_ptr<DepthFrame> depthFrame,  UINT numIndices, FrameRenderParameters& renderParams)
 {
-	int swapchainIndex = (eye == LEFT_EYE) ? renderParams.LeftFrameIndex : renderParams.RightFrameIndex;
-	int depthSwapchainIndex = (eye == LEFT_EYE) ? renderParams.LeftDepthIndex : renderParams.RightDepthIndex;
+	int swapchainIndex = (eye == RenderEye_Left) ? renderParams.LeftFrameIndex : renderParams.RightFrameIndex;
+	int depthSwapchainIndex = (eye == RenderEye_Left) ? renderParams.LeftDepthIndex : renderParams.RightDepthIndex;
 
 	DX11FrameData& frameData = m_frameData[m_frameIndex];
 	DX11FrameData& prevFrameData = m_frameData[m_prevFrameIndex];
-	int viewIndex = (eye == LEFT_EYE) ? 0 : 1;
+	int viewIndex = (eye == RenderEye_Left) ? 0 : 1;
 
 	DX11ViewData& viewData = m_viewData[viewIndex][swapchainIndex];
 
@@ -3088,13 +3088,13 @@ void PassthroughRendererDX11::RenderBackgroundForView(const ERenderEye eye,  con
 
 void PassthroughRendererDX11::RenderDebugView(const ERenderEye eye, const XrCompositionLayerProjection* layer, FrameRenderParameters& renderParams)
 {
-	int swapchainIndex = (eye == LEFT_EYE) ? renderParams.LeftFrameIndex : renderParams.RightFrameIndex;
-	int depthSwapchainIndex = (eye == LEFT_EYE) ? renderParams.LeftDepthIndex : renderParams.RightDepthIndex;
+	int swapchainIndex = (eye == RenderEye_Left) ? renderParams.LeftFrameIndex : renderParams.RightFrameIndex;
+	int depthSwapchainIndex = (eye == RenderEye_Left) ? renderParams.LeftDepthIndex : renderParams.RightDepthIndex;
 
 	if (swapchainIndex < 0) { return; }
 
 	DX11FrameData& frameData = m_frameData[m_frameIndex];
-	int viewIndex = (eye == LEFT_EYE) ? 0 : 1;
+	int viewIndex = (eye == RenderEye_Left) ? 0 : 1;
 	
 	DX11ViewData& viewData = m_viewData[viewIndex][swapchainIndex];
 
@@ -3118,8 +3118,8 @@ void PassthroughRendererDX11::RenderDebugView(const ERenderEye eye, const XrComp
 	{
 		bSingleStereoRenderTarget = true;
 
-		psViewBuffer.prepassUVBounds = { (eye == LEFT_EYE) ? 0.0f : 0.5f, 0.0f,
-			(eye == LEFT_EYE) ? 0.5f : 1.0f, 1.0f };
+		psViewBuffer.prepassUVBounds = { (eye == RenderEye_Left) ? 0.0f : 0.5f, 0.0f,
+			(eye == RenderEye_Left) ? 0.5f : 1.0f, 1.0f };
 	}
 	else
 	{

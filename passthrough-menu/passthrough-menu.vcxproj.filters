@@ -33,9 +33,6 @@
     <ClInclude Include="desktop_window_win32.h">
       <Filter>Header Files</Filter>
     </ClInclude>
-    <ClInclude Include="openvr_manager.h">
-      <Filter>Header Files</Filter>
-    </ClInclude>
     <ClInclude Include="settings_menu.h">
       <Filter>Header Files</Filter>
     </ClInclude>
@@ -63,15 +60,6 @@
     <ClInclude Include="..\XR_APILAYER_NOVENDOR_steamvr_passthrough\framework\log.h">
       <Filter>Shared</Filter>
     </ClInclude>
-    <ClInclude Include="..\XR_APILAYER_NOVENDOR_steamvr_passthrough\config_manager.h">
-      <Filter>Shared</Filter>
-    </ClInclude>
-    <ClInclude Include="..\XR_APILAYER_NOVENDOR_steamvr_passthrough\camera_enumerator.h">
-      <Filter>Shared</Filter>
-    </ClInclude>
-    <ClInclude Include="..\XR_APILAYER_NOVENDOR_steamvr_passthrough\shared_structs.h">
-      <Filter>Shared</Filter>
-    </ClInclude>
     <ClInclude Include="..\shared\menu_ipc.h">
       <Filter>Shared</Filter>
     </ClInclude>
@@ -84,8 +72,20 @@
     <ClInclude Include="..\shared\menu_ipc_server.h">
       <Filter>Shared</Filter>
     </ClInclude>
-    <ClInclude Include="..\XR_APILAYER_NOVENDOR_steamvr_passthrough\mathutil.h">
+    <ClInclude Include="..\shared\mathutil.h">
       <Filter>Shared</Filter>
+    </ClInclude>
+    <ClInclude Include="..\shared\shared_structs.h">
+      <Filter>Shared</Filter>
+    </ClInclude>
+    <ClInclude Include="..\shared\config_manager.h">
+      <Filter>Shared</Filter>
+    </ClInclude>
+    <ClInclude Include="..\shared\pathutil.h">
+      <Filter>Shared</Filter>
+    </ClInclude>
+    <ClInclude Include="camera_enumerator.h">
+      <Filter>Header Files</Filter>
     </ClInclude>
   </ItemGroup>
   <ItemGroup>
@@ -99,9 +99,6 @@
       <Filter>Source Files</Filter>
     </ClCompile>
     <ClCompile Include="settings_menu.cpp">
-      <Filter>Source Files</Filter>
-    </ClCompile>
-    <ClCompile Include="openvr_manager.cpp">
       <Filter>Source Files</Filter>
     </ClCompile>
     <ClCompile Include="..\external\imgui\imgui_widgets.cpp">
@@ -131,12 +128,6 @@
     <ClCompile Include="..\XR_APILAYER_NOVENDOR_steamvr_passthrough\framework\log.cpp">
       <Filter>Shared</Filter>
     </ClCompile>
-    <ClCompile Include="..\XR_APILAYER_NOVENDOR_steamvr_passthrough\config_manager.cpp">
-      <Filter>Shared</Filter>
-    </ClCompile>
-    <ClCompile Include="..\XR_APILAYER_NOVENDOR_steamvr_passthrough\camera_enumerator.cpp">
-      <Filter>Shared</Filter>
-    </ClCompile>
     <ClCompile Include="..\shared\menu_ipc.cpp">
       <Filter>Shared</Filter>
     </ClCompile>
@@ -145,6 +136,21 @@
     </ClCompile>
     <ClCompile Include="..\shared\menu_ipc_server.cpp">
       <Filter>Shared</Filter>
+    </ClCompile>
+    <ClCompile Include="..\shared\config_manager.cpp">
+      <Filter>Shared</Filter>
+    </ClCompile>
+    <ClCompile Include="..\shared\pathutil.cpp">
+      <Filter>Shared</Filter>
+    </ClCompile>
+    <ClCompile Include="..\shared\fonts\cousine_regular.cpp">
+      <Filter>Shared</Filter>
+    </ClCompile>
+    <ClCompile Include="..\shared\fonts\roboto_medium.cpp">
+      <Filter>Shared</Filter>
+    </ClCompile>
+    <ClCompile Include="camera_enumerator.cpp">
+      <Filter>Source Files</Filter>
     </ClCompile>
   </ItemGroup>
   <ItemGroup>

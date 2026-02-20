@@ -7,7 +7,7 @@ MenuHandler::MenuHandler(HMODULE dllModule, std::shared_ptr<ConfigManager> confi
 	: m_dllModule(dllModule)
 	, m_configManager(configManager)
 	, m_IPCClient(IPCClient)
-	, m_displayValues()
+	, m_clientData()
 {
 	m_bRunThread = true;
 	m_menuThread = std::thread(&MenuHandler::RunThread, this);
@@ -22,15 +22,25 @@ MenuHandler::~MenuHandler()
 	}
 }
 
-void MenuHandler::DispatchDisplayValues()
+void MenuHandler::DispatchClientDataValues()
 {
-	m_bHasDisplayValues = true;
+	m_bHasClientData = true;
 	MenuIPCMessage message = {};
-	message.Header.Type = MessageType_SetDisplayValues;
-	message.Header.PayloadSize = sizeof(MenuDisplayValues); 
-	memcpy(message.Payload, &m_displayValues, sizeof(MenuDisplayValues));
-	reinterpret_cast<MenuDisplayValues*>(&message.Payload)->currentApplication = {};
+	message.Header.Type = MessageType_SetClientDataValues;
+	message.Header.PayloadSize = sizeof(ClientDataValues); 
+	memcpy(message.Payload, &m_clientData.Values, sizeof(ClientDataValues));
 	m_IPCClient->WriteMessage(message, false);
+}
+
+void MenuHandler::DispatchApplicationModuleName()
+{
+	m_bHasApplicationModuleName = true;
+	MenuIPCMessage message = {};
+	message.Header.Type = MessageType_SetAppModuleName;
+	int length = static_cast<int>(min(m_clientData.ApplicationModuleName.length() + 1, IPC_PAYLOAD_SIZE));
+	message.Header.PayloadSize = length;
+	memcpy(message.Payload, m_clientData.ApplicationModuleName.data(), length);
+	m_IPCClient->WriteMessage(message, true);
 }
 
 void MenuHandler::DispatchApplicationName()
@@ -38,9 +48,20 @@ void MenuHandler::DispatchApplicationName()
 	m_bHasApplicationName = true;
 	MenuIPCMessage message = {};
 	message.Header.Type = MessageType_SetAppName;
-	int length = static_cast<int>(min(m_displayValues.currentApplication.length(), IPC_PAYLOAD_SIZE - 1));
+	int length = static_cast<int>(min(m_clientData.ApplicationName.length() + 1, IPC_PAYLOAD_SIZE));
 	message.Header.PayloadSize = length;
-	memcpy(message.Payload, &m_displayValues.currentApplication, length);
+	memcpy(message.Payload, m_clientData.ApplicationName.data(), length);
+	m_IPCClient->WriteMessage(message, true);
+}
+
+void MenuHandler::DispatchEngineName()
+{
+	m_bHasEngineName = true;
+	MenuIPCMessage message = {};
+	message.Header.Type = MessageType_SetAppEngineName;
+	int length = static_cast<int>(min(m_clientData.EngineName.length() + 1, IPC_PAYLOAD_SIZE));
+	message.Header.PayloadSize = length;
+	memcpy(message.Payload, m_clientData.EngineName.data(), length);
 	m_IPCClient->WriteMessage(message, true);
 }
 
@@ -58,14 +79,24 @@ void inline CopyConfig(void* destination, MenuIPCMessage& message, size_t size)
 
 void MenuHandler::MenuIPCConnectedToServer()
 {
-	if (m_bHasDisplayValues)
+	if (m_bHasClientData)
 	{
-		DispatchDisplayValues();
+		DispatchClientDataValues();
+	}
+
+	if (m_bHasApplicationModuleName)
+	{
+		DispatchApplicationModuleName();
 	}
 
 	if (m_bHasApplicationName)
 	{
 		DispatchApplicationName();
+	}
+
+	if (m_bHasEngineName)
+	{
+		DispatchEngineName();
 	}
 }
 
@@ -75,6 +106,9 @@ void MenuHandler::MenuIPCMessageReceived(MenuIPCMessage& message, int clientInde
 
 	switch (message.Header.Type)
 	{
+	case MessageType_KeepAlive:
+		// Do nothing
+		break;
 
 	case MessageType_SendCommand_ApplyCameraParamChanges:
 

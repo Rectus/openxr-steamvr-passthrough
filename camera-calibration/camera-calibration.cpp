@@ -42,9 +42,9 @@ using Microsoft::WRL::ComPtr;
 
 enum EStereoFrameLayout
 {
-    Mono = 0,
-    StereoVerticalLayout = 1,
-    StereoHorizontalLayout = 2
+    FrameLayout_Mono = 0,
+    FrameLayout_StereoVertical = 1,
+    FrameLayout_StereoHorizontal = 2
 };
 
 struct CalibrationData
@@ -124,7 +124,7 @@ static vr::TrackedDevicePose_t g_waitingTrackedDevicePoses[vr::k_unMaxTrackedDev
 static uint32_t g_frameWidth = 0;
 static uint32_t g_frameHeight = 0;
 static uint32_t g_frameRate = 0;
-static EStereoFrameLayout g_frameLayout = Mono;
+static EStereoFrameLayout g_frameLayout = FrameLayout_Mono;
 static bool g_bFisheyeLens = false;
 static UINT g_resizeWidth = 0;
 static UINT g_resizeHeight = 0;
@@ -443,7 +443,7 @@ int APIENTRY wWinMain(_In_ HINSTANCE hInstance, _In_opt_ HINSTANCE hPrevInstance
             bCalibrationCompleteRight = true;
 
             {
-                CalibrationData& calibData = (g_frameLayout == StereoVerticalLayout) ? calibDataRight : calibDataLeft;
+                CalibrationData& calibData = (g_frameLayout == FrameLayout_StereoVertical) ? calibDataRight : calibDataLeft;
 
                 calibData.ExtrinsicsTranslation[0] = (float)g_iniData.GetDoubleValue(CONFIG_SECTION, "OpenVR_Camera0_TranslationX", calibData.ExtrinsicsTranslation[0]);
                 calibData.ExtrinsicsTranslation[1] = (float)g_iniData.GetDoubleValue(CONFIG_SECTION, "OpenVR_Camera0_TranslationY", calibData.ExtrinsicsTranslation[1]);
@@ -467,7 +467,7 @@ int APIENTRY wWinMain(_In_ HINSTANCE hInstance, _In_opt_ HINSTANCE hPrevInstance
             }
 
             {
-                CalibrationData& calibData = (g_frameLayout == StereoVerticalLayout) ? calibDataLeft : calibDataRight;
+                CalibrationData& calibData = (g_frameLayout == FrameLayout_StereoVertical) ? calibDataLeft : calibDataRight;
 
                 calibData.ExtrinsicsTranslation[0] = (float)g_iniData.GetDoubleValue(CONFIG_SECTION, "OpenVR_Camera1_TranslationX", calibData.ExtrinsicsTranslation[0]);
                 calibData.ExtrinsicsTranslation[1] = (float)g_iniData.GetDoubleValue(CONFIG_SECTION, "OpenVR_Camera1_TranslationY", calibData.ExtrinsicsTranslation[1]);
@@ -590,24 +590,24 @@ int APIENTRY wWinMain(_In_ HINSTANCE hInstance, _In_opt_ HINSTANCE hPrevInstance
         ImGui::Spacing();
 
         ImGui::Text("Camera frame layout");
-        if (ImGui::RadioButton("Monocular", g_frameLayout == Mono))
+        if (ImGui::RadioButton("Monocular", g_frameLayout == FrameLayout_Mono))
         {
-            g_frameLayout = Mono;
+            g_frameLayout = FrameLayout_Mono;
             SetFrameGeometry(calibDataLeft, false);
         }
         ImGui::SameLine();
 
-        if (ImGui::RadioButton("Stereo Vertical", g_frameLayout == StereoVerticalLayout))
+        if (ImGui::RadioButton("Stereo Vertical", g_frameLayout == FrameLayout_StereoVertical))
         {
-            g_frameLayout = StereoVerticalLayout;
+            g_frameLayout = FrameLayout_StereoVertical;
             SetFrameGeometry(calibDataLeft, false);
             SetFrameGeometry(calibDataRight, true);
         }
         ImGui::SameLine();
 
-        if (ImGui::RadioButton("Stereo Horizontal", g_frameLayout == StereoHorizontalLayout))
+        if (ImGui::RadioButton("Stereo Horizontal", g_frameLayout == FrameLayout_StereoHorizontal))
         {
-            g_frameLayout = StereoHorizontalLayout;
+            g_frameLayout = FrameLayout_StereoHorizontal;
             SetFrameGeometry(calibDataLeft, false);
             SetFrameGeometry(calibDataRight, true);
         }
@@ -687,7 +687,7 @@ int APIENTRY wWinMain(_In_ HINSTANCE hInstance, _In_opt_ HINSTANCE hPrevInstance
                 bRightCamera = false;
                 ImGui::EndTabItem();
             }
-            if (g_frameLayout != Mono && ImGui::BeginTabItem("Right Camera"))
+            if (g_frameLayout != FrameLayout_Mono && ImGui::BeginTabItem("Right Camera"))
             {
                 bRightCamera = true;
                 ImGui::EndTabItem();
@@ -775,7 +775,7 @@ int APIENTRY wWinMain(_In_ HINSTANCE hInstance, _In_opt_ HINSTANCE hPrevInstance
         }
         
 
-        if (g_frameLayout != Mono)
+        if (g_frameLayout != FrameLayout_Mono)
         {
             ImGui::Separator();
             ImGui::Text("Stereo Calibration");
@@ -880,7 +880,7 @@ int APIENTRY wWinMain(_In_ HINSTANCE hInstance, _In_opt_ HINSTANCE hPrevInstance
             g_iniData.SetLongValue(CONFIG_SECTION, "Camera0_IntrinsicsSensorPixelsX", calibDataLeft.SensorWidth);
             g_iniData.SetLongValue(CONFIG_SECTION, "Camera0_IntrinsicsSensorPixelsY", calibDataLeft.SensorHeight);
 
-            if (g_frameLayout != Mono)
+            if (g_frameLayout != FrameLayout_Mono)
             {
                 g_iniData.SetDoubleValue(CONFIG_SECTION, "Camera1_TranslationX", calibDataRight.ExtrinsicsTranslation[0]);
                 g_iniData.SetDoubleValue(CONFIG_SECTION, "Camera1_TranslationY", calibDataRight.ExtrinsicsTranslation[1]);
@@ -921,7 +921,7 @@ int APIENTRY wWinMain(_In_ HINSTANCE hInstance, _In_opt_ HINSTANCE hPrevInstance
             g_iniData.SetBoolValue(CONFIG_SECTION, "OpenVR_CameraHasFisheyeLens", g_bFisheyeLens);
 
             {
-                CalibrationData& calibData = (g_frameLayout == StereoVerticalLayout) ? calibDataRight : calibDataLeft;
+                CalibrationData& calibData = (g_frameLayout == FrameLayout_StereoVertical) ? calibDataRight : calibDataLeft;
 
                 g_iniData.SetDoubleValue(CONFIG_SECTION, "OpenVR_Camera0_TranslationX", calibData.ExtrinsicsTranslation[0]);
                 g_iniData.SetDoubleValue(CONFIG_SECTION, "OpenVR_Camera0_TranslationY", calibData.ExtrinsicsTranslation[1]);
@@ -941,9 +941,9 @@ int APIENTRY wWinMain(_In_ HINSTANCE hInstance, _In_opt_ HINSTANCE hPrevInstance
                 g_iniData.SetLongValue(CONFIG_SECTION, "OpenVR_Camera0_IntrinsicsSensorPixelsX", calibData.SensorWidth);
                 g_iniData.SetLongValue(CONFIG_SECTION, "OpenVR_Camera0_IntrinsicsSensorPixelsY", calibData.SensorHeight);
             }
-            if (g_frameLayout != Mono)
+            if (g_frameLayout != FrameLayout_Mono)
             {
-                CalibrationData& calibData = (g_frameLayout == StereoVerticalLayout) ? calibDataLeft : calibDataRight;
+                CalibrationData& calibData = (g_frameLayout == FrameLayout_StereoVertical) ? calibDataLeft : calibDataRight;
 
                 g_iniData.SetDoubleValue(CONFIG_SECTION, "OpenVR_Camera1_TranslationX", calibData.ExtrinsicsTranslation[0]);
                 g_iniData.SetDoubleValue(CONFIG_SECTION, "OpenVR_Camera1_TranslationY", calibData.ExtrinsicsTranslation[1]);
@@ -1036,7 +1036,7 @@ int APIENTRY wWinMain(_In_ HINSTANCE hInstance, _In_opt_ HINSTANCE hPrevInstance
         ImGui::EndDisabled();
 
         ImGui::BeginDisabled(bIsPerspectiveLocked);
-        if (g_frameLayout != Mono)
+        if (g_frameLayout != FrameLayout_Mono)
         {
             ImGui::Checkbox("Single Eye", &bViewSingleframe);           
         }
@@ -1103,7 +1103,7 @@ int APIENTRY wWinMain(_In_ HINSTANCE hInstance, _In_opt_ HINSTANCE hPrevInstance
                     DrawCameraFrame(calibDataLeft, true, false, 0);
                 }
             }
-            else if (bViewUndistorted && !bViewSingleframe && bHasIntrinsicsLeft && bHasIntrinsicsRight && !bIsCapturingStereo && g_frameLayout != Mono)
+            else if (bViewUndistorted && !bViewSingleframe && bHasIntrinsicsLeft && bHasIntrinsicsRight && !bIsCapturingStereo && g_frameLayout != FrameLayout_Mono)
             {
                 DrawStereoFrame(calibDataLeft, calibDataRight, false, false, 0);
             }
@@ -1414,13 +1414,13 @@ bool ImageCaptureUI(CalibrationData* calibData, CalibrationData* calibDataStereo
 
 void SetFrameGeometry(CalibrationData& calibData, bool bIsRightCamera)
 {
-    if (g_frameLayout == Mono)
+    if (g_frameLayout == FrameLayout_Mono)
     {
         calibData.SensorHeight = g_frameHeight;
         calibData.SensorWidth = g_frameWidth;
         calibData.FrameROI = cv::Rect(0, 0, g_frameWidth, g_frameHeight);
     }
-    else if (g_frameLayout == StereoHorizontalLayout)
+    else if (g_frameLayout == FrameLayout_StereoHorizontal)
     {
         if (bIsRightCamera)
         {
@@ -1434,7 +1434,7 @@ void SetFrameGeometry(CalibrationData& calibData, bool bIsRightCamera)
         calibData.SensorHeight = g_frameHeight;
         calibData.SensorWidth = g_frameWidth / 2;
     }
-    else if (g_frameLayout == StereoVerticalLayout)
+    else if (g_frameLayout == FrameLayout_StereoVertical)
     {
         if (bIsRightCamera)
         {

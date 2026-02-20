@@ -81,6 +81,7 @@
       <WholeProgramOptimization>false</WholeProgramOptimization>
       <BasicRuntimeChecks>Default</BasicRuntimeChecks>
       <EnableEnhancedInstructionSet>AdvancedVectorExtensions</EnableEnhancedInstructionSet>
+      <AdditionalOptions>/utf-8 %(AdditionalOptions)</AdditionalOptions>
     </ClCompile>
     <Link>
       <SubSystem>Windows</SubSystem>
@@ -138,6 +139,7 @@ copy $(SolutionDir)\readme.md $(OutDir)
       <InlineFunctionExpansion>AnySuitable</InlineFunctionExpansion>
       <FavorSizeOrSpeed>Speed</FavorSizeOrSpeed>
       <EnableEnhancedInstructionSet>AdvancedVectorExtensions</EnableEnhancedInstructionSet>
+      <AdditionalOptions>/utf-8 %(AdditionalOptions)</AdditionalOptions>
     </ClCompile>
     <Link>
       <SubSystem>Windows</SubSystem>
@@ -187,19 +189,21 @@ copy $(SolutionDir)THIRD_PARTY $(OutDir)THIRD_PARTY.txt</Command>
     <ClInclude Include="..\external\imgui\imgui.h" />
     <ClInclude Include="..\external\imgui\imgui_internal.h" />
     <ClInclude Include="..\external\lodepng\lodepng.h" />
+    <ClInclude Include="..\shared\config_manager.h" />
+    <ClInclude Include="..\shared\mathutil.h" />
     <ClInclude Include="..\shared\menu_ipc.h" />
     <ClInclude Include="..\shared\menu_ipc_client.h" />
-    <ClInclude Include="camera_enumerator.h" />
+    <ClInclude Include="..\shared\pathutil.h" />
+    <ClInclude Include="..\shared\perfutil.h" />
+    <ClInclude Include="..\shared\shared_structs.h" />
     <ClInclude Include="camera_manager.h" />
     <ClInclude Include="check.h" />
-    <ClInclude Include="config_manager.h" />
-    <ClInclude Include="dashboard_menu.h" />
     <ClInclude Include="depth_reconstruction.h" />
     <ClInclude Include="framework\dispatch.gen.h" />
     <ClInclude Include="framework\dispatch.h" />
     <ClInclude Include="framework\log.h" />
     <ClInclude Include="framework\util.h" />
-    <ClInclude Include="mathutil.h" />
+    <ClInclude Include="layer_structs.h" />
     <ClInclude Include="menu_handler.h" />
     <ClInclude Include="mesh.h" />
     <ClInclude Include="openvr_manager.h" />
@@ -207,7 +211,6 @@ copy $(SolutionDir)THIRD_PARTY $(OutDir)THIRD_PARTY.txt</Command>
     <ClInclude Include="layer.h" />
     <ClInclude Include="pch.h" />
     <ClInclude Include="resource.h" />
-    <ClInclude Include="shared_structs.h" />
     <ClInclude Include="version.h" />
   </ItemGroup>
   <ItemGroup>
@@ -239,13 +242,20 @@ copy $(SolutionDir)THIRD_PARTY $(OutDir)THIRD_PARTY.txt</Command>
       <PrecompiledHeader Condition="'$(Configuration)|$(Platform)'=='Debug|x64'">NotUsing</PrecompiledHeader>
       <PrecompiledHeader Condition="'$(Configuration)|$(Platform)'=='Release|x64'">NotUsing</PrecompiledHeader>
     </ClCompile>
+    <ClCompile Include="..\shared\config_manager.cpp" />
+    <ClCompile Include="..\shared\fonts\cousine_regular.cpp">
+      <PrecompiledHeader Condition="'$(Configuration)|$(Platform)'=='Debug|x64'">NotUsing</PrecompiledHeader>
+      <PrecompiledHeader Condition="'$(Configuration)|$(Platform)'=='Release|x64'">NotUsing</PrecompiledHeader>
+    </ClCompile>
+    <ClCompile Include="..\shared\fonts\roboto_medium.cpp">
+      <PrecompiledHeader Condition="'$(Configuration)|$(Platform)'=='Debug|x64'">NotUsing</PrecompiledHeader>
+      <PrecompiledHeader Condition="'$(Configuration)|$(Platform)'=='Release|x64'">NotUsing</PrecompiledHeader>
+    </ClCompile>
     <ClCompile Include="..\shared\menu_ipc.cpp" />
     <ClCompile Include="..\shared\menu_ipc_client.cpp" />
-    <ClCompile Include="camera_enumerator.cpp" />
+    <ClCompile Include="..\shared\pathutil.cpp" />
     <ClCompile Include="camera_manager_opencv.cpp" />
     <ClCompile Include="camera_manager_openvr.cpp" />
-    <ClCompile Include="config_manager.cpp" />
-    <ClCompile Include="dashboard_menu.cpp" />
     <ClCompile Include="depth_reconstruction.cpp" />
     <ClCompile Include="framework\dispatch.cpp" />
     <ClCompile Include="framework\dispatch.gen.cpp" />

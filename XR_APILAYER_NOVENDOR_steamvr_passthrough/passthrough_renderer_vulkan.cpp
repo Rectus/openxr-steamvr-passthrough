@@ -2,7 +2,6 @@
 #include "pch.h"
 #include "passthrough_renderer.h"
 
-#include <PathCch.h>
 #include <xr_linear.h>
 #include "lodepng.h"
 
@@ -1002,7 +1001,7 @@ bool PassthroughRendererVulkan::SetupDebugTexture(DebugTexture& texture)
 
 void PassthroughRendererVulkan::InitRenderTarget(const ERenderEye eye, void* rendertarget, const uint32_t imageIndex, const XrSwapchainCreateInfo& swapchainInfo, const XrSwapchain swapchain)
 {
-	int viewIndex = (eye == LEFT_EYE) ? 0 : 1;
+	int viewIndex = (eye == RenderEye_Left) ? 0 : 1;
 	int bufferIndex = viewIndex * NUM_SWAPCHAINS + imageIndex;
 
 	if (m_renderTargets[bufferIndex] == rendertarget)
@@ -1762,15 +1761,15 @@ void PassthroughRendererVulkan::RenderPassthroughFrame(const XrCompositionLayerP
 
 		memcpy(m_psMaskedConstantBufferMappings[m_frameIndex], &maskedBuffer, sizeof(PSMaskedConstantBuffer));
 
-		RenderMaskedPrepassView(LEFT_EYE, renderParams.LeftFrameIndex, layer, frame);
-		RenderPassthroughView(LEFT_EYE, renderParams.LeftFrameIndex, layer, frame, renderParams.BlendMode);
-		RenderMaskedPrepassView(RIGHT_EYE, renderParams.RightFrameIndex, layer, frame);
-		RenderPassthroughView(RIGHT_EYE, renderParams.RightFrameIndex, layer, frame, renderParams.BlendMode);
+		RenderMaskedPrepassView(RenderEye_Left, renderParams.LeftFrameIndex, layer, frame);
+		RenderPassthroughView(RenderEye_Left, renderParams.LeftFrameIndex, layer, frame, renderParams.BlendMode);
+		RenderMaskedPrepassView(RenderEye_Right, renderParams.RightFrameIndex, layer, frame);
+		RenderPassthroughView(RenderEye_Right, renderParams.RightFrameIndex, layer, frame, renderParams.BlendMode);
 	}
 	else
 	{
-		RenderPassthroughView(LEFT_EYE, renderParams.LeftFrameIndex, layer, frame, renderParams.BlendMode);
-		RenderPassthroughView(RIGHT_EYE, renderParams.RightFrameIndex, layer, frame, renderParams.BlendMode);
+		RenderPassthroughView(RenderEye_Left, renderParams.LeftFrameIndex, layer, frame, renderParams.BlendMode);
+		RenderPassthroughView(RenderEye_Right, renderParams.RightFrameIndex, layer, frame, renderParams.BlendMode);
 	}
 
 
@@ -1790,7 +1789,7 @@ void PassthroughRendererVulkan::RenderPassthroughView(const ERenderEye eye, cons
 {
 	if (swapchainIndex < 0) { return; }
 
-	int viewIndex = (eye == LEFT_EYE) ? 0 : 1;
+	int viewIndex = (eye == RenderEye_Left) ? 0 : 1;
 	int bufferIndex = viewIndex * NUM_SWAPCHAINS + swapchainIndex;
 
 	VkCommandBuffer commandBuffer = m_commandBuffer[m_frameIndex];
@@ -1825,12 +1824,12 @@ void PassthroughRendererVulkan::RenderPassthroughView(const ERenderEye eye, cons
 		Config_Main& mainConf = m_configManager->GetConfig_Main();
 
 		VSViewConstantBuffer vsViewBuffer = {};
-		vsViewBuffer.worldToHMDProjection = (eye == LEFT_EYE) ? frame->worldToHMDProjectionLeft : frame->worldToHMDProjectionRight;
-		vsViewBuffer.disparityUVBounds = GetFrameUVBounds(eye, StereoHorizontalLayout);
-		vsViewBuffer.projectionOriginWorld = (eye == LEFT_EYE) ? frame->projectionOriginWorldLeft : frame->projectionOriginWorldRight;
+		vsViewBuffer.worldToHMDProjection = (eye == RenderEye_Left) ? frame->worldToHMDProjectionLeft : frame->worldToHMDProjectionRight;
+		vsViewBuffer.disparityUVBounds = GetFrameUVBounds(eye, FrameLayout_StereoHorizontal);
+		vsViewBuffer.projectionOriginWorld = (eye == RenderEye_Left) ? frame->projectionOriginWorldLeft : frame->projectionOriginWorldRight;
 		vsViewBuffer.projectionDistance = mainConf.ProjectionDistanceFar;
 		vsViewBuffer.floorHeightOffset = mainConf.FloorHeightOffset;
-		vsViewBuffer.cameraViewIndex = (eye == LEFT_EYE) ? 0 : 1;
+		vsViewBuffer.cameraViewIndex = (eye == RenderEye_Left) ? 0 : 1;
 
 		memcpy(m_vsViewConstantBufferMappings[bufferIndex], &vsViewBuffer, sizeof(VSViewConstantBuffer));
 
@@ -1897,7 +1896,7 @@ void PassthroughRendererVulkan::RenderMaskedPrepassView(const ERenderEye eye, co
 {
 	if (swapchainIndex < 0) { return; }
 
-	int viewIndex = (eye == LEFT_EYE) ? 0 : 1;
+	int viewIndex = (eye == RenderEye_Left) ? 0 : 1;
 	int bufferIndex = viewIndex * NUM_SWAPCHAINS + swapchainIndex;
 
 	VkCommandBuffer commandBuffer = m_commandBuffer[m_frameIndex];
@@ -1933,12 +1932,12 @@ void PassthroughRendererVulkan::RenderMaskedPrepassView(const ERenderEye eye, co
 	Config_Main& mainConf = m_configManager->GetConfig_Main();
 
 	VSViewConstantBuffer vsViewBuffer = {};
-	vsViewBuffer.worldToHMDProjection = (eye == LEFT_EYE) ? frame->worldToHMDProjectionLeft : frame->worldToHMDProjectionRight;
-	vsViewBuffer.disparityUVBounds = GetFrameUVBounds(eye, StereoHorizontalLayout);
-	vsViewBuffer.projectionOriginWorld = (eye == LEFT_EYE) ? frame->projectionOriginWorldLeft : frame->projectionOriginWorldRight;
+	vsViewBuffer.worldToHMDProjection = (eye == RenderEye_Left) ? frame->worldToHMDProjectionLeft : frame->worldToHMDProjectionRight;
+	vsViewBuffer.disparityUVBounds = GetFrameUVBounds(eye, FrameLayout_StereoHorizontal);
+	vsViewBuffer.projectionOriginWorld = (eye == RenderEye_Left) ? frame->projectionOriginWorldLeft : frame->projectionOriginWorldRight;
 	vsViewBuffer.projectionDistance = mainConf.ProjectionDistanceFar;
 	vsViewBuffer.floorHeightOffset = mainConf.FloorHeightOffset;
-	vsViewBuffer.cameraViewIndex = (eye == LEFT_EYE) ? 0 : 1;
+	vsViewBuffer.cameraViewIndex = (eye == RenderEye_Left) ? 0 : 1;
 
 	memcpy(m_vsViewConstantBufferMappings[bufferIndex], &vsViewBuffer, sizeof(VSViewConstantBuffer));
 
@@ -1951,8 +1950,8 @@ void PassthroughRendererVulkan::RenderMaskedPrepassView(const ERenderEye eye, co
 	// Draw the correct half for single framebuffer views.
 	if (abs(layer->views[0].subImage.imageRect.offset.x - layer->views[1].subImage.imageRect.offset.x) > layer->views[0].subImage.imageRect.extent.width / 2)
 	{
-		psViewBuffer.prepassUVBounds = { (eye == LEFT_EYE) ? 0.0f : 0.5f, 0.0f,
-			(eye == LEFT_EYE) ? 0.5f : 1.0f, 1.0f };
+		psViewBuffer.prepassUVBounds = { (eye == RenderEye_Left) ? 0.0f : 0.5f, 0.0f,
+			(eye == RenderEye_Left) ? 0.5f : 1.0f, 1.0f };
 	}
 	else
 	{

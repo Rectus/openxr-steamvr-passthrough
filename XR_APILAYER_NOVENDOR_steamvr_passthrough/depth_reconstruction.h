@@ -1,6 +1,6 @@
 #pragma once
 
-#include "layer.h"
+#include "layer_structs.h"
 #include "openvr_manager.h"
 #include "config_manager.h"
 #include "camera_manager.h"

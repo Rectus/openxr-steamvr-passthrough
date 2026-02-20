@@ -1,6 +1,6 @@
 #include "pch.h"
 #include "openvr_manager.h"
-#include "layer.h"
+#include "layer_structs.h"
 
 #include "ivrclientcore.h"
 

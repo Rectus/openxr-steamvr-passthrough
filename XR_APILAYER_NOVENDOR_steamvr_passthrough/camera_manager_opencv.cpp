@@ -1,9 +1,11 @@
+
 #include "pch.h"
+
 #include "camera_manager.h"
-#include "layer.h"
+#include "layer_structs.h"
 #include <stdlib.h>
 #include "mathutil.h"
-
+#include "perfutil.h"
 
 
 
@@ -14,7 +16,7 @@ CameraManagerOpenCV::CameraManagerOpenCV(std::shared_ptr<IPassthroughRenderer> r
     , m_appRenderAPI(appRenderAPI)
     , m_configManager(configManager)
     , m_openVRManager(openVRManager)
-    , m_frameLayout(EStereoFrameLayout::Mono)
+    , m_frameLayout(EStereoFrameLayout::FrameLayout_Mono)
     , m_projectionDistanceFar(5.0f)
     , m_useAlternateProjectionCalc(false)
     , m_videoCapture()
@@ -127,21 +129,23 @@ EPassthroughCameraState CameraManagerOpenCV::GetCameraState() const
     }
 }
 
-void CameraManagerOpenCV::GetCameraDisplayStats(uint32_t& width, uint32_t& height, float& fps, std::string& API) const
+void CameraManagerOpenCV::GetCameraDisplayStats(uint32_t& width, uint32_t& height, float& fps, ECameraProvider& provider, bool& bIsActive) const
 {
     if (m_videoCapture.isOpened())
     {
         width = m_cameraTextureWidth;
         height = m_cameraTextureHeight;
         fps = (float)m_videoCapture.get(cv::CAP_PROP_FPS);
-        API = std::format("OpenCV - {}", m_videoCapture.getBackendName());
+        provider = CameraProvider_OpenCV;
+        bIsActive = true;
     }
     else
     {
         width = 0;
         height = 0;
         fps = 0;
-        API = "OpenCV - Inactive";
+        provider = CameraProvider_OpenCV;
+        bIsActive = false;
     }
 }
 
@@ -175,7 +179,7 @@ void CameraManagerOpenCV::GetIntrinsics(const ERenderEye cameraEye, XrVector2f& 
 {
     Config_Camera& cameraConf = m_configManager->GetConfig_Camera();
 
-    if(m_frameLayout == EStereoFrameLayout::Mono || cameraEye == LEFT_EYE)
+    if(m_frameLayout == EStereoFrameLayout::FrameLayout_Mono || cameraEye == RenderEye_Left)
     {
         focalLength.x = cameraConf.Camera0_IntrinsicsFocal[0] / (float)cameraConf.Camera0_IntrinsicsSensorPixels[0] * m_cameraFrameWidth;
         focalLength.y = cameraConf.Camera0_IntrinsicsFocal[1] / (float)cameraConf.Camera0_IntrinsicsSensorPixels[1] * m_cameraFrameHeight;
@@ -222,7 +226,7 @@ bool CameraManagerOpenCV::IsUsingFisheyeModel() const
 
 XrMatrix4x4f CameraManagerOpenCV::GetLeftToRightCameraTransform() const
 {
-    if (m_frameLayout == EStereoFrameLayout::Mono)
+    if (m_frameLayout == EStereoFrameLayout::FrameLayout_Mono)
     {
         XrMatrix4x4f ident;
         XrMatrix4x4f_CreateIdentity(&ident);
@@ -270,7 +274,7 @@ void CameraManagerOpenCV::UpdateStaticCameraParameters()
     m_cameraUndistortedFrameBufferSize = m_cameraFrameBufferSize;
 
 
-    if (m_frameLayout == EStereoFrameLayout::StereoVerticalLayout)
+    if (m_frameLayout == EStereoFrameLayout::FrameLayout_StereoVertical)
     {
             m_cameraFrameWidth = m_cameraTextureWidth;
             m_cameraFrameHeight = m_cameraTextureHeight / 2;
@@ -278,7 +282,7 @@ void CameraManagerOpenCV::UpdateStaticCameraParameters()
             m_cameraUndistortedFrameWidth = m_cameraUndistortedTextureWidth;
             m_cameraUndistortedFrameHeight = m_cameraUndistortedTextureHeight / 2;
     }
-    else if(m_frameLayout == EStereoFrameLayout::StereoHorizontalLayout)
+    else if(m_frameLayout == EStereoFrameLayout::FrameLayout_StereoHorizontal)
     {
         m_cameraFrameWidth = m_cameraTextureWidth / 2;
         m_cameraFrameHeight = m_cameraTextureHeight;
@@ -476,7 +480,7 @@ void CameraManagerOpenCV::ServeFrames()
         XrMatrix4x4f_Multiply(&temp, &rotMatrix, &transMatrix);
         XrMatrix4x4f_Invert(&camera0Pose, &temp);
 
-        if (m_frameLayout == EStereoFrameLayout::Mono)
+        if (m_frameLayout == EStereoFrameLayout::FrameLayout_Mono)
         {
             XrMatrix4x4f_Multiply(&camera0ToWorld, &trackedDevicePose, &camera0Pose);
 
@@ -584,7 +588,7 @@ XrMatrix4x4f CameraManagerOpenCV::GetHMDWorldToViewMatrix(const ERenderEye eye, 
 
     XrMatrix4x4f output, pose, viewToTracking, trackingToStage, refSpacePose;
 
-    int viewNum = eye == LEFT_EYE ? 0 : 1;
+    int viewNum = eye == RenderEye_Left ? 0 : 1;
 
     XrVector3f scale = { 1, 1, 1 };
 
@@ -616,7 +620,7 @@ XrMatrix4x4f CameraManagerOpenCV::GetHMDWorldToViewMatrix(const ERenderEye eye, 
 
 void CameraManagerOpenCV::UpdateProjectionMatrix(std::shared_ptr<CameraFrame>& frame)
 {
-    bool bIsStereo = m_frameLayout != EStereoFrameLayout::Mono;
+    bool bIsStereo = m_frameLayout != EStereoFrameLayout::FrameLayout_Mono;
 
 
     Config_Main& mainConf = m_configManager->GetConfig_Main();
@@ -632,7 +636,7 @@ void CameraManagerOpenCV::UpdateProjectionMatrix(std::shared_ptr<CameraFrame>& f
         XrMatrix4x4f_CreateProjectionFov(&projectionMatrix, GRAPHICS_D3D, fov, NEAR_PROJECTION_DISTANCE, m_projectionDistanceFar);
 
         XrVector2f focalLength, center;
-        GetIntrinsics(ERenderEye::LEFT_EYE, focalLength, center);
+        GetIntrinsics(ERenderEye::RenderEye_Left, focalLength, center);
 
         projectionMatrix.m[0] = 2.0f * focalLength.x / (float)m_cameraTextureWidth;
         projectionMatrix.m[5] = 2.0f * focalLength.y / (float)m_cameraTextureHeight;
@@ -642,13 +646,13 @@ void CameraManagerOpenCV::UpdateProjectionMatrix(std::shared_ptr<CameraFrame>& f
 
         XrMatrix4x4f scaleMatrix, offsetMatrix, transMatrix;
 
-        if (m_frameLayout == EStereoFrameLayout::StereoHorizontalLayout)
+        if (m_frameLayout == EStereoFrameLayout::FrameLayout_StereoHorizontal)
         {
             XrMatrix4x4f_CreateScale(&scaleMatrix, 0.5f, 1.0f, 1.0f);
             XrMatrix4x4f_CreateTranslation(&offsetMatrix, -0.5f, 0.0f, 0.0f);
             XrMatrix4x4f_Multiply(&transMatrix, &offsetMatrix, &scaleMatrix);
         }
-        else if (m_frameLayout == EStereoFrameLayout::StereoVerticalLayout)
+        else if (m_frameLayout == EStereoFrameLayout::FrameLayout_StereoVertical)
         {
             XrMatrix4x4f_CreateScale(&scaleMatrix, 1.0f, 0.5f, 1.0f);
             XrMatrix4x4f_CreateTranslation(&offsetMatrix, 0.0f, 0.5f, 0.0f);
@@ -680,13 +684,13 @@ void CameraManagerOpenCV::CalculateFrameProjection(std::shared_ptr<CameraFrame>&
 {
     UpdateProjectionMatrix(frame);
 
-    CalculateFrameProjectionForEye(LEFT_EYE, frame, layer, refSpaceInfo, distortionParams);
-    CalculateFrameProjectionForEye(RIGHT_EYE, frame, layer, refSpaceInfo, distortionParams);
+    CalculateFrameProjectionForEye(RenderEye_Left, frame, layer, refSpaceInfo, distortionParams);
+    CalculateFrameProjectionForEye(RenderEye_Right, frame, layer, refSpaceInfo, distortionParams);
 
     // Detect the FOV being upside-down in order to prevent triangles from being backface culled
     frame->bIsRenderingMirrored = (layer.views[0].fov.angleUp - layer.views[0].fov.angleDown) < 0.0f;
 
-    if (m_appRenderAPI == OpenGL)
+    if (m_appRenderAPI == RenderAPI_OpenGL)
     {
         // Flip mirrored setting on OpenGL to get correct backface culling on rendering to upside down texture.
         frame->bIsRenderingMirrored = !frame->bIsRenderingMirrored;
@@ -767,13 +771,13 @@ void CameraManagerOpenCV::CalculateFrameProjectionForEye(const ERenderEye eye, s
 {
     Config_Main& mainConf = m_configManager->GetConfig_Main();
 
-    bool bIsStereo = m_frameLayout != EStereoFrameLayout::Mono;
-    uint32_t cameraId = (eye == RIGHT_EYE && bIsStereo) ? 1 : 0;
+    bool bIsStereo = m_frameLayout != EStereoFrameLayout::FrameLayout_Mono;
+    uint32_t cameraId = (eye == RenderEye_Right && bIsStereo) ? 1 : 0;
 
     XrMatrix4x4f hmdWorldToView = GetHMDWorldToViewMatrix(eye, layer, refSpaceInfo);
 
-    XrVector3f* projectionOriginWorld = (eye == LEFT_EYE) ? &frame->projectionOriginWorldLeft : &frame->projectionOriginWorldRight;
-    XrMatrix4x4f* cameraViewToWorld = (eye == LEFT_EYE || !bIsStereo) ? &frame->cameraViewToWorldLeft : &frame->cameraViewToWorldRight;
+    XrVector3f* projectionOriginWorld = (eye == RenderEye_Left) ? &frame->projectionOriginWorldLeft : &frame->projectionOriginWorldRight;
+    XrMatrix4x4f* cameraViewToWorld = (eye == RenderEye_Left || !bIsStereo) ? &frame->cameraViewToWorldLeft : &frame->cameraViewToWorldRight;
     XrMatrix4x4f hmdViewToWorld;
     XrMatrix4x4f_Invert(&hmdViewToWorld, &hmdWorldToView);
     XrVector3f inPos{ 0,0,0 };
@@ -787,7 +791,7 @@ void CameraManagerOpenCV::CalculateFrameProjectionForEye(const ERenderEye eye, s
 
     if (m_configManager->GetConfig_Depth().DepthReadFromApplication)
     {
-        depthInfo = (const XrCompositionLayerDepthInfoKHR*)layer.views[(eye == LEFT_EYE) ? 0 : 1].next;
+        depthInfo = (const XrCompositionLayerDepthInfoKHR*)layer.views[(eye == RenderEye_Left) ? 0 : 1].next;
 
         while (depthInfo != nullptr)
         {
@@ -818,7 +822,7 @@ void CameraManagerOpenCV::CalculateFrameProjectionForEye(const ERenderEye eye, s
     }
 
     XrMatrix4x4f hmdProjection;
-    XrMatrix4x4f_CreateProjectionFov(&hmdProjection, GRAPHICS_D3D, layer.views[(eye == LEFT_EYE) ? 0 : 1].fov, nearZ, farZ);
+    XrMatrix4x4f_CreateProjectionFov(&hmdProjection, GRAPHICS_D3D, layer.views[(eye == RenderEye_Left) ? 0 : 1].fov, nearZ, farZ);
 
     // Handle infinite and reversed Z - XrMatrix4x4f_CreateProjectionFov sets it up wrong.
     if (depthInfo && (farZ == (std::numeric_limits<float>::max)() || !std::isfinite(farZ)))
@@ -832,7 +836,7 @@ void CameraManagerOpenCV::CalculateFrameProjectionForEye(const ERenderEye eye, s
         hmdProjection.m[14] = -(depthInfo->farZ * depthInfo->nearZ * (depthInfo->maxDepth - depthInfo->minDepth)) / (depthInfo->farZ - depthInfo->nearZ);
     }
 
-    if (m_appRenderAPI == OpenGL)
+    if (m_appRenderAPI == RenderAPI_OpenGL)
     {
         // Flip vertical axis to render to upside down texture.
         hmdProjection.m[1] *= -1;
@@ -841,7 +845,7 @@ void CameraManagerOpenCV::CalculateFrameProjectionForEye(const ERenderEye eye, s
         hmdProjection.m[13] *= -1;
     }
 
-    XrMatrix4x4f* worldToHMDMatrix = (eye == LEFT_EYE) ? &frame->worldToHMDProjectionLeft : &frame->worldToHMDProjectionRight;
+    XrMatrix4x4f* worldToHMDMatrix = (eye == RenderEye_Left) ? &frame->worldToHMDProjectionLeft : &frame->worldToHMDProjectionRight;
 
     XrMatrix4x4f_Multiply(worldToHMDMatrix, &hmdProjection, &hmdWorldToView);
 
@@ -869,7 +873,7 @@ void CameraManagerOpenCV::CalculateFrameProjectionForEye(const ERenderEye eye, s
     XrMatrix4x4f leftCameraFromTrackingPose;
     XrMatrix4x4f_Invert(&leftCameraFromTrackingPose, &frame->cameraViewToWorldLeft);
 
-    if (eye == LEFT_EYE)
+    if (eye == RenderEye_Left)
     {
         XrMatrix4x4f rectifiedRotation = distortionParams.rectifiedRotationLeft;
 

@@ -1,8 +1,10 @@
+
 #include "pch.h"
 #include "config_manager.h"
+#include "pathutil.h"
 
 
-ConfigManager::ConfigManager(std::wstring configFile, bool bAllowWrite)
+ConfigManager::ConfigManager(const std::string_view& configFile, bool bAllowWrite)
 	: m_configFile(configFile)
 	, m_bConfigUpdated(false)
 	, m_bAllowWrite(bAllowWrite)
@@ -21,7 +23,7 @@ ConfigManager::~ConfigManager()
 bool ConfigManager::ReadConfigFile()
 {
 	bool bIsInitial = false;
-	SI_Error result = m_iniData.LoadFile(m_configFile.c_str());
+	SI_Error result = m_iniData.LoadFile(ToWideString(m_configFile).data());
 	if (result < 0)
 	{
 		if (m_bAllowWrite)

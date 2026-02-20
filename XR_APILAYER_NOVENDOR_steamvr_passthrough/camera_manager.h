@@ -3,7 +3,7 @@
 #include <mutex>
 #include <atomic>
 #include <xr_linear.h>
-#include "layer.h"
+#include "layer_structs.h"
 #include "passthrough_renderer.h"
 #include "openvr_manager.h"
 #include "mesh.h"
@@ -48,7 +48,7 @@ public:
 	virtual void SetPaused(bool bIsPaused) = 0;
 
 	virtual EPassthroughCameraState GetCameraState() const = 0;
-	virtual void GetCameraDisplayStats(uint32_t& width, uint32_t& height, float& fps, std::string& API) const = 0;
+	virtual void GetCameraDisplayStats(uint32_t& width, uint32_t& height, float& fps, ECameraProvider& provider, bool& bIsActive) const = 0;
 	virtual void GetDistortedTextureSize(uint32_t& width, uint32_t& height, uint32_t& bufferSize) const = 0;
 	virtual void GetUndistortedTextureSize(uint32_t& width, uint32_t& height, uint32_t& bufferSize) const = 0;
 	virtual void GetDistortedFrameSize(uint32_t& width, uint32_t& height) const = 0;
@@ -99,7 +99,7 @@ public:
 	}
 
 	EPassthroughCameraState GetCameraState() const;
-	void GetCameraDisplayStats(uint32_t& width, uint32_t& height, float& fps, std::string& API) const;
+	void GetCameraDisplayStats(uint32_t& width, uint32_t& height, float& fps, ECameraProvider& provider, bool& bIsActive) const;
 	void GetDistortedTextureSize(uint32_t& width, uint32_t& height, uint32_t& bufferSize) const;
 	void GetUndistortedTextureSize(uint32_t& width, uint32_t& height, uint32_t& bufferSize) const;
 	void GetDistortedFrameSize(uint32_t& width, uint32_t& height) const;
@@ -219,7 +219,7 @@ public:
 	}
 
 	EPassthroughCameraState GetCameraState() const;
-	void GetCameraDisplayStats(uint32_t& width, uint32_t& height, float& fps, std::string& API) const;
+	void GetCameraDisplayStats(uint32_t& width, uint32_t& height, float& fps, ECameraProvider& provider, bool& bIsActive) const;
 	void GetDistortedTextureSize(uint32_t& width, uint32_t& height, uint32_t& bufferSize) const;
 	void GetUndistortedTextureSize(uint32_t& width, uint32_t& height, uint32_t& bufferSize) const;
 	void GetDistortedFrameSize(uint32_t& width, uint32_t& height) const;

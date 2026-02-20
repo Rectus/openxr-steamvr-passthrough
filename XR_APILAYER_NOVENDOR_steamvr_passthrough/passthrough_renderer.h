@@ -7,7 +7,7 @@
 #include <winuser.h>
 #include <functional>
 #include "config_manager.h"
-#include "layer.h"
+#include "layer_structs.h"
 #include "mesh.h"
 #include "d3d11on12.h"
 
@@ -21,20 +21,20 @@ using Microsoft::WRL::ComPtr;
 // Outputs Umin, Vmin, Umax, Vmax.
 inline XrVector4f GetFrameUVBounds(const ERenderEye eye, const EStereoFrameLayout layout)
 {
-	if (eye == LEFT_EYE)
+	if (eye == RenderEye_Left)
 	{
 		switch (layout)
 		{
-		case StereoHorizontalLayout:
+		case FrameLayout_StereoHorizontal:
 			return XrVector4f(0, 0, 0.5, 1.0);
 			break;
 
 			// The vertical layout has left camera below the right
-		case StereoVerticalLayout:
+		case FrameLayout_StereoVertical:
 			return XrVector4f(0, 0.5, 1.0, 1.0);
 			break;
 
-		case Mono:
+		case FrameLayout_Mono:
 			return XrVector4f(0, 0, 1.0, 1.0);
 			break;
 		}
@@ -43,15 +43,15 @@ inline XrVector4f GetFrameUVBounds(const ERenderEye eye, const EStereoFrameLayou
 	{
 		switch (layout)
 		{
-		case StereoHorizontalLayout:
+		case FrameLayout_StereoHorizontal:
 			return XrVector4f(0.5, 0, 1.0, 1.0);
 			break;
 
-		case StereoVerticalLayout:
+		case FrameLayout_StereoVertical:
 			return XrVector4f(0, 0, 1.0, 0.5);
 			break;
 
-		case Mono:
+		case FrameLayout_Mono:
 			return XrVector4f(0, 0, 1.0, 1.0);
 			break;
 		}

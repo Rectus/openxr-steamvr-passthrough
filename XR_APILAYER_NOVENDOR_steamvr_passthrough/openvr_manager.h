@@ -3,7 +3,7 @@
 
 #include <mutex>
 #include <shared_mutex>
-#include "layer.h"
+#include "layer_structs.h"
 
 namespace vr {
 	class IVRClientCore;

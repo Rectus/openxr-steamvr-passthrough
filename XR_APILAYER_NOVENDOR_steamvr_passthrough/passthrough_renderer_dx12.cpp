@@ -3,7 +3,6 @@
 
 #include "pch.h"
 #include "passthrough_renderer.h"
-#include <PathCch.h>
 #include <xr_linear.h>
 #include "lodepng.h"
 
@@ -911,7 +910,7 @@ bool PassthroughRendererDX12::InitPipeline(bool bFlipTriangles)
 
 void PassthroughRendererDX12::InitRenderTarget(const ERenderEye eye, void* rendertarget, const uint32_t imageIndex, const XrSwapchainCreateInfo& swapchainInfo, const XrSwapchain swapchain)
 {
-	int viewIndex = (eye == LEFT_EYE) ? 0 : 1;
+	int viewIndex = (eye == RenderEye_Left) ? 0 : 1;
 	int bufferIndex = viewIndex * NUM_SWAPCHAINS + imageIndex;
 
 	if (m_renderTargets[bufferIndex].Get() == rendertarget)
@@ -952,7 +951,7 @@ void PassthroughRendererDX12::InitRenderTarget(const ERenderEye eye, void* rende
 
 void PassthroughRendererDX12::InitDepthBuffer(const ERenderEye eye, void* depthBuffer, const uint32_t imageIndex, const XrSwapchainCreateInfo& swapchainInfo, const XrSwapchain swapchain)
 {
-	int viewIndex = (eye == LEFT_EYE) ? 0 : 1;
+	int viewIndex = (eye == RenderEye_Left) ? 0 : 1;
 	int bufferIndex = viewIndex * NUM_SWAPCHAINS + imageIndex;
 	if (m_depthStencils[bufferIndex].Get() == (ID3D12Resource*)depthBuffer)
 	{
@@ -1326,15 +1325,15 @@ void PassthroughRendererDX12::RenderPassthroughFrame(const XrCompositionLayerPro
 		maskedCBVHandle.ptr += (INDEX_CBV_PS_MASKED_0 + m_frameIndex) * m_CBVSRVHeapDescSize;
 		m_commandList->SetGraphicsRootDescriptorTable(2, maskedCBVHandle);
 
-		RenderMaskedPrepassView(LEFT_EYE, renderParams.LeftFrameIndex, layer, frame, numIndices);
-		RenderPassthroughView(LEFT_EYE, renderParams.LeftFrameIndex, layer, frame, renderParams.BlendMode, numIndices);
-		RenderMaskedPrepassView(RIGHT_EYE, renderParams.RightFrameIndex, layer, frame, numIndices);
-		RenderPassthroughView(RIGHT_EYE, renderParams.RightFrameIndex, layer, frame, renderParams.BlendMode, numIndices);
+		RenderMaskedPrepassView(RenderEye_Left, renderParams.LeftFrameIndex, layer, frame, numIndices);
+		RenderPassthroughView(RenderEye_Left, renderParams.LeftFrameIndex, layer, frame, renderParams.BlendMode, numIndices);
+		RenderMaskedPrepassView(RenderEye_Right, renderParams.RightFrameIndex, layer, frame, numIndices);
+		RenderPassthroughView(RenderEye_Right, renderParams.RightFrameIndex, layer, frame, renderParams.BlendMode, numIndices);
 	}
 	else
 	{
-		RenderPassthroughView(LEFT_EYE, renderParams.LeftFrameIndex, layer, frame, renderParams.BlendMode, numIndices);
-		RenderPassthroughView(RIGHT_EYE, renderParams.RightFrameIndex, layer, frame, renderParams.BlendMode, numIndices);
+		RenderPassthroughView(RenderEye_Left, renderParams.LeftFrameIndex, layer, frame, renderParams.BlendMode, numIndices);
+		RenderPassthroughView(RenderEye_Right, renderParams.RightFrameIndex, layer, frame, renderParams.BlendMode, numIndices);
 	}
 	RenderFrameFinish();
 }
@@ -1343,7 +1342,7 @@ void PassthroughRendererDX12::RenderPassthroughView(const ERenderEye eye, const 
 {
 	if (imageIndex < 0) { return; }
 
-	int viewIndex = (eye == LEFT_EYE) ? 0 : 1;
+	int viewIndex = (eye == RenderEye_Left) ? 0 : 1;
 	int bufferIndex = viewIndex * NUM_SWAPCHAINS + imageIndex;
 
 	ID3D12Resource* rendertarget = m_renderTargets[bufferIndex].Get();
@@ -1372,12 +1371,12 @@ void PassthroughRendererDX12::RenderPassthroughView(const ERenderEye eye, const 
 	Config_Stereo& stereoConf = m_configManager->GetConfig_Stereo();
 
 	VSViewConstantBuffer* vsViewBuffer = (VSViewConstantBuffer*)m_vsViewConstantBufferCPUData[bufferIndex];
-	vsViewBuffer->worldToHMDProjection = (eye == LEFT_EYE) ? frame->worldToHMDProjectionLeft : frame->worldToHMDProjectionRight;
-	vsViewBuffer->disparityUVBounds = GetFrameUVBounds(eye, StereoHorizontalLayout);
-	vsViewBuffer->projectionOriginWorld = (eye == LEFT_EYE) ? frame->projectionOriginWorldLeft : frame->projectionOriginWorldRight;
+	vsViewBuffer->worldToHMDProjection = (eye == RenderEye_Left) ? frame->worldToHMDProjectionLeft : frame->worldToHMDProjectionRight;
+	vsViewBuffer->disparityUVBounds = GetFrameUVBounds(eye, FrameLayout_StereoHorizontal);
+	vsViewBuffer->projectionOriginWorld = (eye == RenderEye_Left) ? frame->projectionOriginWorldLeft : frame->projectionOriginWorldRight;
 	vsViewBuffer->projectionDistance = mainConf.ProjectionDistanceFar;
 	vsViewBuffer->floorHeightOffset = mainConf.FloorHeightOffset;
-	vsViewBuffer->cameraViewIndex = (eye == LEFT_EYE) ? 0 : 1;
+	vsViewBuffer->cameraViewIndex = (eye == RenderEye_Left) ? 0 : 1;
 
 	D3D12_GPU_DESCRIPTOR_HANDLE cbvVSHandle = m_CBVSRVHeap->GetGPUDescriptorHandleForHeapStart();
 	cbvVSHandle.ptr += (INDEX_CBV_VS_VIEW_0 + bufferIndex) * m_CBVSRVHeapDescSize;
@@ -1412,27 +1411,27 @@ void PassthroughRendererDX12::RenderPassthroughView(const ERenderEye eye, const 
 	if (stereoConf.StereoCutoutEnabled)
 	{
 		float secondaryWidthFactor = 0.6f;
-		int scissorStart = (eye == LEFT_EYE) ? (int)(rect.extent.width * (1.0f - secondaryWidthFactor)) : 0;
-		int scissorEnd = (eye == LEFT_EYE) ? rect.extent.width : (int)(rect.extent.width * secondaryWidthFactor);
+		int scissorStart = (eye == RenderEye_Left) ? (int)(rect.extent.width * (1.0f - secondaryWidthFactor)) : 0;
+		int scissorEnd = (eye == RenderEye_Left) ? rect.extent.width : (int)(rect.extent.width * secondaryWidthFactor);
 		D3D12_RECT crossScissor = { rect.offset.x + scissorStart, rect.offset.y, rect.offset.x + scissorEnd, rect.offset.y + rect.extent.height };
 		m_commandList->RSSetScissorRects(1, &crossScissor);
 
 		int crossBufferIndex = NUM_SWAPCHAINS * 2 + bufferIndex;
 		VSViewConstantBuffer* vsCrossViewBuffer = (VSViewConstantBuffer*)m_vsViewConstantBufferCPUData[crossBufferIndex];
 		
-		vsCrossViewBuffer->worldToHMDProjection = (eye == LEFT_EYE) ? frame->worldToHMDProjectionLeft : frame->worldToHMDProjectionRight;
-		vsCrossViewBuffer->disparityUVBounds = GetFrameUVBounds(eye == LEFT_EYE ? RIGHT_EYE : LEFT_EYE, StereoHorizontalLayout);
-		vsCrossViewBuffer->projectionOriginWorld = (eye == LEFT_EYE) ? frame->projectionOriginWorldLeft : frame->projectionOriginWorldRight;
+		vsCrossViewBuffer->worldToHMDProjection = (eye == RenderEye_Left) ? frame->worldToHMDProjectionLeft : frame->worldToHMDProjectionRight;
+		vsCrossViewBuffer->disparityUVBounds = GetFrameUVBounds(eye == RenderEye_Left ? RenderEye_Right : RenderEye_Left, FrameLayout_StereoHorizontal);
+		vsCrossViewBuffer->projectionOriginWorld = (eye == RenderEye_Left) ? frame->projectionOriginWorldLeft : frame->projectionOriginWorldRight;
 		vsCrossViewBuffer->projectionDistance = mainConf.ProjectionDistanceFar;
 		vsCrossViewBuffer->floorHeightOffset = mainConf.FloorHeightOffset;
-		vsCrossViewBuffer->cameraViewIndex = (eye != LEFT_EYE) ? 0 : 1;
+		vsCrossViewBuffer->cameraViewIndex = (eye != RenderEye_Left) ? 0 : 1;
 
 		D3D12_GPU_DESCRIPTOR_HANDLE cbvCrossVSHandle = m_CBVSRVHeap->GetGPUDescriptorHandleForHeapStart();
 		cbvCrossVSHandle.ptr += (INDEX_CBV_VS_VIEW_0 + crossBufferIndex) * m_CBVSRVHeapDescSize;
 		m_commandList->SetGraphicsRootDescriptorTable(6, cbvCrossVSHandle);
 		
 		PSViewConstantBuffer* psCrossViewBuffer = (PSViewConstantBuffer*)m_psViewConstantBufferCPUData[crossBufferIndex];
-		psCrossViewBuffer->frameUVBounds = GetFrameUVBounds(eye == LEFT_EYE ? RIGHT_EYE : LEFT_EYE, frame->frameLayout);
+		psCrossViewBuffer->frameUVBounds = GetFrameUVBounds(eye == RenderEye_Left ? RenderEye_Right : RenderEye_Left, frame->frameLayout);
 		psCrossViewBuffer->rtArrayIndex = m_frameIndex;
 		psCrossViewBuffer->bDoCutout = true;
 		psCrossViewBuffer->bPremultiplyAlpha = false;
@@ -1491,7 +1490,7 @@ void PassthroughRendererDX12::RenderMaskedPrepassView(const ERenderEye eye, cons
 {
 	if (imageIndex < 0) { return; }
 
-	int viewIndex = (eye == LEFT_EYE) ? 0 : 1;
+	int viewIndex = (eye == RenderEye_Left) ? 0 : 1;
 	int bufferIndex = viewIndex * NUM_SWAPCHAINS + imageIndex;
 
 	ID3D12Resource* rendertarget = m_renderTargets[bufferIndex].Get();
@@ -1511,12 +1510,12 @@ void PassthroughRendererDX12::RenderMaskedPrepassView(const ERenderEye eye, cons
 	Config_Main& mainConf = m_configManager->GetConfig_Main();
 
 	VSViewConstantBuffer* vsViewBuffer = (VSViewConstantBuffer*)m_vsViewConstantBufferCPUData[bufferIndex];
-	vsViewBuffer->worldToHMDProjection = (eye == LEFT_EYE) ? frame->worldToHMDProjectionLeft : frame->worldToHMDProjectionRight;
-	vsViewBuffer->disparityUVBounds = GetFrameUVBounds(eye, StereoHorizontalLayout);
-	vsViewBuffer->projectionOriginWorld = (eye == LEFT_EYE) ? frame->projectionOriginWorldLeft : frame->projectionOriginWorldRight;
+	vsViewBuffer->worldToHMDProjection = (eye == RenderEye_Left) ? frame->worldToHMDProjectionLeft : frame->worldToHMDProjectionRight;
+	vsViewBuffer->disparityUVBounds = GetFrameUVBounds(eye, FrameLayout_StereoHorizontal);
+	vsViewBuffer->projectionOriginWorld = (eye == RenderEye_Left) ? frame->projectionOriginWorldLeft : frame->projectionOriginWorldRight;
 	vsViewBuffer->projectionDistance = mainConf.ProjectionDistanceFar;
 	vsViewBuffer->floorHeightOffset = mainConf.FloorHeightOffset;
-	vsViewBuffer->cameraViewIndex = (eye == LEFT_EYE) ? 0 : 1;
+	vsViewBuffer->cameraViewIndex = (eye == RenderEye_Left) ? 0 : 1;
 
 	D3D12_GPU_DESCRIPTOR_HANDLE cbvVSHandle = m_CBVSRVHeap->GetGPUDescriptorHandleForHeapStart();
 	cbvVSHandle.ptr += (INDEX_CBV_VS_VIEW_0 + bufferIndex) * m_CBVSRVHeapDescSize;
@@ -1528,8 +1527,8 @@ void PassthroughRendererDX12::RenderMaskedPrepassView(const ERenderEye eye, cons
 	// Draw the correct half for single framebuffer views.
 	if (abs(layer->views[0].subImage.imageRect.offset.x - layer->views[1].subImage.imageRect.offset.x) > layer->views[0].subImage.imageRect.extent.width / 2)
 	{
-		psViewBuffer->prepassUVBounds = { (eye == LEFT_EYE) ? 0.0f : 0.5f, 0.0f,
-			(eye == LEFT_EYE) ? 0.5f : 1.0f, 1.0f };
+		psViewBuffer->prepassUVBounds = { (eye == RenderEye_Left) ? 0.0f : 0.5f, 0.0f,
+			(eye == RenderEye_Left) ? 0.5f : 1.0f, 1.0f };
 		bSingleStereoRenderTarget = true;
 	}
 	else
@@ -1549,7 +1548,7 @@ void PassthroughRendererDX12::RenderMaskedPrepassView(const ERenderEye eye, cons
 	int32_t rtWidth = bSingleStereoRenderTarget ? rect.extent.width * 2 : rect.extent.width;
 
 	// Recreate the intermediate rendertarget if it can't hold the entire viewport.
-	if ((!bSingleStereoRenderTarget || eye == LEFT_EYE) &&
+	if ((!bSingleStereoRenderTarget || eye == RenderEye_Left) &&
 		(!m_intermediateRenderTargets[intermediateRTIndex].Get()
 		|| (int32_t)m_intermediateRenderTargets[intermediateRTIndex].Get()->GetDesc().Width < rtWidth
 		|| (int32_t)m_intermediateRenderTargets[intermediateRTIndex].Get()->GetDesc().Height < rect.extent.height))
@@ -1560,7 +1559,7 @@ void PassthroughRendererDX12::RenderMaskedPrepassView(const ERenderEye eye, cons
 	D3D12_CPU_DESCRIPTOR_HANDLE rtvHandle = m_intermediateRTVHeap->GetCPUDescriptorHandleForHeapStart();
 	rtvHandle.ptr += intermediateRTIndex * m_RTVHeapDescSize;
 
-	if (eye == LEFT_EYE || !bSingleStereoRenderTarget)
+	if (eye == RenderEye_Left || !bSingleStereoRenderTarget)
 	{
 		float clearColor[4] = { m_configManager->GetConfig_Core().CoreForceMaskedUseCameraImage ? 1.0f : 0, 0, 0, 0 };
 		m_commandList->ClearRenderTargetView(rtvHandle, clearColor, 0, NULL);

@@ -1,29 +1,23 @@
-
+﻿
 
 #include "pch.h"
 #include "main.h"
 
 #include <shellapi.h>
-#include <shlobj_core.h>
-#include <pathcch.h>
 #include <dwmapi.h>
 #include <Uxtheme.h>
-#include <filesystem>
 
+#include "pathutil.h"
 #include "desktop_window_win32.h"
-#include "dashboard_overlay.h"
 #include "settings_menu.h"
 #include "menu_ipc_server.h"
 
 
-
-
 // Directory under AppData to write config.
-#define CONFIG_FILE_DIR L"\\OpenXR SteamVR Passthrough\\"
-#define CONFIG_FILE_NAME L"config.ini"
-#define WINDOW_CONFIG_FILE_NAME L"imgui.ini"
-
-#define LOG_FILE_NAME "XR_APILAYER_NOVENDOR_steamvr_passthrough_menu.txt"
+#define CONFIG_FILE_DIR "\\OpenXR SteamVR Passthrough"
+#define CONFIG_FILE_NAME "\\config.ini"
+#define WINDOW_CONFIG_FILE_NAME "\\imgui.ini"
+#define LOG_FILE_NAME "\\XR_APILAYER_NOVENDOR_steamvr_passthrough_menu.txt"
 
 #define MUTEX_APP_KEY L"Global\\XR_APILAYER_NOVENDOR_steamvr_passthrough_menu"
 
@@ -92,28 +86,15 @@ int APIENTRY wWinMain(_In_ HINSTANCE hInstance, _In_opt_ HINSTANCE hPrevInstance
 
     if (!logStream.is_open())
     {
-#pragma warning(disable: 4996) // for getenv
-        std::string logFile = (std::filesystem::path(getenv("LOCALAPPDATA")) / LOG_FILE_NAME).string();
-#pragma warning(default: 4996)
-        logStream.open(logFile, std::ios_base::ate);
+        std::string logFile = GetLocalAppData() + LOG_FILE_NAME;
+        logStream.open(ToWideString(logFile), std::ios_base::ate);
     }
 
 
     std::shared_ptr<ConfigManager> configManager;
     bool bIsInitialConfig = false;
-
     {
-        PWSTR path;
-        std::wstring filePath(PATHCCH_MAX_CCH, L'\0');
-
-        SHGetKnownFolderPath(FOLDERID_RoamingAppData, 0, NULL, &path);
-        lstrcpyW((PWSTR)filePath.c_str(), path);
-        CoTaskMemFree(path);
-
-        PathCchAppend((PWSTR)filePath.data(), PATHCCH_MAX_CCH, CONFIG_FILE_DIR);
-        CreateDirectoryW((PWSTR)filePath.data(), NULL);
-        PathCchAppend((PWSTR)filePath.data(), PATHCCH_MAX_CCH, CONFIG_FILE_NAME);
-
+        std::string filePath = GetRoamingAppData() + CONFIG_FILE_DIR + CONFIG_FILE_NAME;
         configManager = std::make_shared<ConfigManager>(filePath, true);
         bIsInitialConfig = configManager->ReadConfigFile(); 
     }
@@ -126,16 +107,19 @@ int APIENTRY wWinMain(_In_ HINSTANCE hInstance, _In_opt_ HINSTANCE hPrevInstance
         return 1;
     }
 
-    std::shared_ptr<DashboardOverlay> overlay = std::make_shared<DashboardOverlay>();
     std::shared_ptr<MenuIPCServer> IPCServer = std::make_shared<MenuIPCServer>();
 
-    std::shared_ptr<SettingsMenu> menu = std::make_shared<SettingsMenu>(configManager, overlay, window, IPCServer);
+    std::shared_ptr<SettingsMenu> menu;
+    {
+        std::string windowConfigPath = GetRoamingAppData() + CONFIG_FILE_DIR + WINDOW_CONFIG_FILE_NAME;
+        menu = std::make_shared<SettingsMenu>(configManager, window, IPCServer, windowConfigPath);
+    }
+
     IPCServer->RegisterReader(menu);
 
     if (!menu->InitMenu())
     {
         window.reset();
-        overlay.reset();
         IPCServer.reset();
         return 1;
     }
@@ -182,7 +166,6 @@ int APIENTRY wWinMain(_In_ HINSTANCE hInstance, _In_opt_ HINSTANCE hPrevInstance
     Log("Shutting down...\n");
 
     menu.reset();
-    overlay.reset();
 
     window->DeinitWindow();
     window.reset();
