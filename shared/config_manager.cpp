@@ -28,12 +28,12 @@ bool ConfigManager::ReadConfigFile()
 	{
 		if (m_bAllowWrite)
 		{
-			Log("Failed to read config file, writing default values...\n");
+			g_logger->warn("Failed to read config file, writing default values...");
 			UpdateConfigFile();
 		}
 		else
 		{
-			Log("Failed to read config file\n");
+			g_logger->warn("Failed to read config file");
 		}
 
 		bIsInitial = true;
@@ -68,7 +68,7 @@ void ConfigManager::UpdateConfigFile()
 		SI_Error result = m_iniData.SaveFile(m_configFile.c_str());
 		if (result < 0)
 		{
-			ErrorLog("Failed to save config file, %i \n", errno);
+			g_logger->error("Failed to save config file, {}", errno);
 		}
 	}
 

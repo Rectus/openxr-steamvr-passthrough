@@ -9,6 +9,7 @@
 #include "mesh.h"
 #include <opencv2/videoio.hpp>
 #include "lodepng.h"
+#include "pathutil.h"
 
 
 enum EPassthroughCameraState
@@ -67,19 +68,17 @@ public:
 	{
 		const auto time = std::chrono::current_zone()->to_local(std::chrono::system_clock::now());
 
-#pragma warning(disable: 4996)// for getenv
-		const std::string fileName = (std::filesystem::path(getenv("LOCALAPPDATA")) / std::format("{} Camera Frame {:%Y-%m-%d %H-%M-%S}.png", cameraProvider, time)).string();
-#pragma warning(default: 4996)
+		const std::string fileName = GetLocalAppData() + std::format("\\{} Camera Frame {:%Y-%m-%d %H-%M-%S}.png", cameraProvider, time);
 
 		uint32_t error = lodepng::encode(fileName, frameBuffer->data(), width, height);
 
 		if (error)
 		{
-			ErrorLog("Failed to write texture to file %s: %s", fileName.data(), lodepng_error_text(error));
+			g_logger->error("Failed to write texture to file {} {}", fileName.data(), lodepng_error_text(error));
 		}
 		else
 		{
-			Log("Dumped camera frame to file: %s", fileName.data());
+			g_logger->info("Dumped camera frame to file: {}", fileName.data());
 		}
 	}
 };

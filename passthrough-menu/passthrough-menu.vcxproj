@@ -113,7 +113,7 @@
       <PreprocessorDefinitions>LAYER_NAMESPACE=steamvr_passthrough;_DEBUG;_WINDOWS;%(PreprocessorDefinitions)</PreprocessorDefinitions>
       <ConformanceMode>true</ConformanceMode>
       <LanguageStandard>stdcpp20</LanguageStandard>
-      <AdditionalIncludeDirectories>$(ProjectDir);$(SolutionDir)shared;$(SolutionDir)XR_APILAYER_NOVENDOR_steamvr_passthrough;$(SolutionDir)XR_APILAYER_NOVENDOR_steamvr_passthrough\framework;$(SolutionDir)external\OpenXR-SDK\include;$(SolutionDir)external\OpenXR-SDK\src\common;$(SolutionDir)external\openvr\headers;$(SolutionDir)external\lodepng;$(SolutionDir)external\imgui;$(SolutionDir)external\imgui\backends;$(SolutionDir)external\simpleini;$(SolutionDir)external\opencv\build\include;$(VULKAN_SDK)\Include</AdditionalIncludeDirectories>
+      <AdditionalIncludeDirectories>$(ProjectDir);$(SolutionDir)shared;$(SolutionDir)XR_APILAYER_NOVENDOR_steamvr_passthrough;$(SolutionDir)XR_APILAYER_NOVENDOR_steamvr_passthrough\framework;$(SolutionDir)external\OpenXR-SDK\include;$(SolutionDir)external\OpenXR-SDK\src\common;$(SolutionDir)external\openvr\headers;$(SolutionDir)external\lodepng;$(SolutionDir)external\imgui;$(SolutionDir)external\imgui\backends;$(SolutionDir)external\simpleini;$(SolutionDir)external\opencv\build\include;$(SolutionDir)external\spdlog\include;$(VULKAN_SDK)\Include</AdditionalIncludeDirectories>
       <PrecompiledHeader>Use</PrecompiledHeader>
       <PrecompiledHeaderFile>pch.h</PrecompiledHeaderFile>
       <AdditionalOptions>/utf-8 %(AdditionalOptions)</AdditionalOptions>
@@ -134,7 +134,7 @@
       <PreprocessorDefinitions>LAYER_NAMESPACE=steamvr_passthrough;NDEBUG;_WINDOWS;%(PreprocessorDefinitions)</PreprocessorDefinitions>
       <ConformanceMode>true</ConformanceMode>
       <LanguageStandard>stdcpp20</LanguageStandard>
-      <AdditionalIncludeDirectories>$(ProjectDir);$(SolutionDir)shared;$(SolutionDir)XR_APILAYER_NOVENDOR_steamvr_passthrough;$(SolutionDir)XR_APILAYER_NOVENDOR_steamvr_passthrough\framework;$(SolutionDir)external\OpenXR-SDK\include;$(SolutionDir)external\OpenXR-SDK\src\common;$(SolutionDir)external\openvr\headers;$(SolutionDir)external\lodepng;$(SolutionDir)external\imgui;$(SolutionDir)external\imgui\backends;$(SolutionDir)external\simpleini;$(SolutionDir)external\opencv\build\include;$(VULKAN_SDK)\Include</AdditionalIncludeDirectories>
+      <AdditionalIncludeDirectories>$(ProjectDir);$(SolutionDir)shared;$(SolutionDir)XR_APILAYER_NOVENDOR_steamvr_passthrough;$(SolutionDir)XR_APILAYER_NOVENDOR_steamvr_passthrough\framework;$(SolutionDir)external\OpenXR-SDK\include;$(SolutionDir)external\OpenXR-SDK\src\common;$(SolutionDir)external\openvr\headers;$(SolutionDir)external\lodepng;$(SolutionDir)external\imgui;$(SolutionDir)external\imgui\backends;$(SolutionDir)external\simpleini;$(SolutionDir)external\opencv\build\include;$(SolutionDir)external\spdlog\include;$(VULKAN_SDK)\Include</AdditionalIncludeDirectories>
       <EnableEnhancedInstructionSet>AdvancedVectorExtensions</EnableEnhancedInstructionSet>
       <FavorSizeOrSpeed>Speed</FavorSizeOrSpeed>
       <PrecompiledHeader>Use</PrecompiledHeader>
@@ -163,7 +163,8 @@
     <ClInclude Include="..\shared\menu_ipc_server.h" />
     <ClInclude Include="..\shared\pathutil.h" />
     <ClInclude Include="..\shared\shared_structs.h" />
-    <ClInclude Include="..\XR_APILAYER_NOVENDOR_steamvr_passthrough\framework\log.h" />
+    <ClInclude Include="..\shared\spdlog_imgui_buffer_sink.h" />
+    <ClInclude Include="..\shared\version.h" />
     <ClInclude Include="camera_enumerator.h" />
     <ClInclude Include="dashboard_overlay.h" />
     <ClInclude Include="settings_menu.h" />
@@ -225,7 +226,6 @@
     <ClCompile Include="..\shared\menu_ipc.cpp" />
     <ClCompile Include="..\shared\menu_ipc_server.cpp" />
     <ClCompile Include="..\shared\pathutil.cpp" />
-    <ClCompile Include="..\XR_APILAYER_NOVENDOR_steamvr_passthrough\framework\log.cpp" />
     <ClCompile Include="camera_enumerator.cpp" />
     <ClCompile Include="dashboard_overlay.cpp" />
     <ClCompile Include="settings_menu.cpp" />

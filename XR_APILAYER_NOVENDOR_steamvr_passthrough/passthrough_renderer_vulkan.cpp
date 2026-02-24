@@ -138,7 +138,7 @@ void TransitionImage(VkCommandBuffer commandBuffer, VkImage image, VkImageLayout
 	}
 	else
 	{
-		ErrorLog("Unknown layout transition!\n");
+		g_logger->error("Unknown layout transition!");
 		return;
 	}
 
@@ -279,7 +279,7 @@ bool PassthroughRendererVulkan::InitRenderer()
 
 		if (vkCreateCommandPool(m_device, &poolInfo, nullptr, &m_commandPool) != VK_SUCCESS)
 		{
-			ErrorLog("vkCreateCommandPool failure!\n");
+			g_logger->error("vkCreateCommandPool failure!");
 			return false;
 		}
 	
@@ -290,7 +290,7 @@ bool PassthroughRendererVulkan::InitRenderer()
 
 		if (vkAllocateCommandBuffers(m_device, &allocInfo, m_commandBuffer) != VK_SUCCESS)
 		{
-			ErrorLog("vkAllocateCommandBuffers failure!\n");
+			g_logger->error("vkAllocateCommandBuffers failure!");
 			return false;
 		}
 
@@ -318,7 +318,7 @@ bool PassthroughRendererVulkan::InitRenderer()
 
 	if (!m_fullscreenQuadVS || !m_passthroughVS || !m_passthroughPS || !m_alphaPrepassPS || !m_maskedPrepassShader || !m_maskedAlphaCopyPS)
 	{
-		ErrorLog("Shader module creation failure!\n");
+		g_logger->error("Shader module creation failure!");
 		return false;
 	}
 
@@ -336,7 +336,7 @@ bool PassthroughRendererVulkan::InitRenderer()
 
 		if (vkCreateDescriptorPool(m_device, &poolInfo, nullptr, &m_descriptorPool) != VK_SUCCESS)
 		{
-			ErrorLog("vkCreateDescriptorPool failure!\n");
+			g_logger->error("vkCreateDescriptorPool failure!");
 			return false;
 		}
 		m_deletionQueue.push_back([=]() { vkDestroyDescriptorPool(m_device, m_descriptorPool, nullptr); });
@@ -362,7 +362,7 @@ bool PassthroughRendererVulkan::InitRenderer()
 
 		if (vkCreateDescriptorSetLayout(m_device, &layoutInfo, nullptr, &m_descriptorLayout) != VK_SUCCESS)
 		{
-			ErrorLog("vkCreateDescriptorSetLayout failure!\n");
+			g_logger->error("vkCreateDescriptorSetLayout failure!");
 			return false;
 		}
 		m_deletionQueue.push_back([=]() { vkDestroyDescriptorSetLayout(m_device, m_descriptorLayout, nullptr); });
@@ -383,7 +383,7 @@ bool PassthroughRendererVulkan::InitRenderer()
 
 		if (vkAllocateDescriptorSets(m_device, &allocInfo, m_descriptorSets) != VK_SUCCESS)
 		{
-			ErrorLog("vkAllocateDescriptorSets failure!\n");
+			g_logger->error("vkAllocateDescriptorSets failure!");
 			return false;
 		}
 
@@ -392,7 +392,7 @@ bool PassthroughRendererVulkan::InitRenderer()
 		{
 			if (!CreateBuffer(m_device, m_physDevice, m_vsPassConstantBuffer[i], m_vsPassConstantBufferMem[i], 256, VK_BUFFER_USAGE_UNIFORM_BUFFER_BIT, VK_MEMORY_PROPERTY_HOST_VISIBLE_BIT | VK_MEMORY_PROPERTY_HOST_COHERENT_BIT, &m_deletionQueue))
 			{
-				ErrorLog("m_vsPassConstantBuffer creation failure!\n");
+				g_logger->error("m_vsPassConstantBuffer creation failure!");
 				return false;
 			}
 
@@ -406,7 +406,7 @@ bool PassthroughRendererVulkan::InitRenderer()
 
 			if (!CreateBuffer(m_device, m_physDevice, m_psPassConstantBuffer[i], m_psPassConstantBufferMem[i], 256, VK_BUFFER_USAGE_UNIFORM_BUFFER_BIT, VK_MEMORY_PROPERTY_HOST_VISIBLE_BIT | VK_MEMORY_PROPERTY_HOST_COHERENT_BIT, &m_deletionQueue))
 			{
-				ErrorLog("m_psPassConstantBuffer creation failure!\n");
+				g_logger->error("m_psPassConstantBuffer creation failure!");
 				return false;
 			}
 
@@ -420,7 +420,7 @@ bool PassthroughRendererVulkan::InitRenderer()
 
 			if (!CreateBuffer(m_device, m_physDevice, m_psMaskedConstantBuffer[i], m_psMaskedConstantBufferMem[i], 256, VK_BUFFER_USAGE_UNIFORM_BUFFER_BIT, VK_MEMORY_PROPERTY_HOST_VISIBLE_BIT | VK_MEMORY_PROPERTY_HOST_COHERENT_BIT, &m_deletionQueue))
 			{
-				ErrorLog("psMaskedConstantBuffer creation failure!\n");
+				g_logger->error("psMaskedConstantBuffer creation failure!");
 				return false;
 			}
 
@@ -437,7 +437,7 @@ bool PassthroughRendererVulkan::InitRenderer()
 		{
 			if (!CreateBuffer(m_device, m_physDevice, m_vsViewConstantBuffer[i], m_vsViewConstantBufferMem[i], 256, VK_BUFFER_USAGE_UNIFORM_BUFFER_BIT, VK_MEMORY_PROPERTY_HOST_VISIBLE_BIT | VK_MEMORY_PROPERTY_HOST_COHERENT_BIT, &m_deletionQueue))
 			{
-				ErrorLog("m_vsViewConstantBuffer creation failure!\n");
+				g_logger->error("m_vsViewConstantBuffer creation failure!");
 				return false;
 			}
 
@@ -451,7 +451,7 @@ bool PassthroughRendererVulkan::InitRenderer()
 
 			if (!CreateBuffer(m_device, m_physDevice, m_psViewConstantBuffer[i], m_psViewConstantBufferMem[i], 256, VK_BUFFER_USAGE_UNIFORM_BUFFER_BIT, VK_MEMORY_PROPERTY_HOST_VISIBLE_BIT | VK_MEMORY_PROPERTY_HOST_COHERENT_BIT, &m_deletionQueue))
 			{
-				ErrorLog("m_psViewConstantBuffer creation failure!\n");
+				g_logger->error("m_psViewConstantBuffer creation failure!");
 				return false;
 			}
 
@@ -474,14 +474,14 @@ bool PassthroughRendererVulkan::InitRenderer()
 	
 	if (vkCreateSampler(m_device, &samplerInfo, nullptr, &m_cameraSampler) != VK_SUCCESS)
 	{
-		ErrorLog("Camera vkCreateSampler failure!\n");
+		g_logger->error("Camera vkCreateSampler failure!");
 		return false;
 	}
 	m_deletionQueue.push_back([=]() { vkDestroySampler(m_device, m_intermediateSampler, nullptr); });
 
 	if (vkCreateSampler(m_device, &samplerInfo, nullptr, &m_intermediateSampler) != VK_SUCCESS)
 	{
-		ErrorLog("Intermediate vkCreateSampler failure!\n");
+		g_logger->error("Intermediate vkCreateSampler failure!");
 		return false;
 	}
 	m_deletionQueue.push_back([=]() { vkDestroySampler(m_device, m_cameraSampler, nullptr); });
@@ -542,7 +542,7 @@ bool PassthroughRendererVulkan::SetupPipeline(VkFormat format)
 
 	if (vkCreateRenderPass(m_device, &rpInfo, nullptr, &m_renderpass) != VK_SUCCESS)
 	{
-		ErrorLog("Default vkCreateRenderPass failure!\n");
+		g_logger->error("Default vkCreateRenderPass failure!");
 		return false;
 	}
 	m_deletionQueue.push_back([=]() { vkDestroyRenderPass(m_device, m_renderpass, nullptr); });
@@ -566,7 +566,7 @@ bool PassthroughRendererVulkan::SetupPipeline(VkFormat format)
 
 	if (vkCreateRenderPass(m_device, &maskedRPInfo, nullptr, &m_renderpassMaskedPrepass) != VK_SUCCESS)
 	{
-		ErrorLog("Masked vkCreateRenderPass failure!\n");
+		g_logger->error("Masked vkCreateRenderPass failure!");
 		return false;
 	}
 	m_deletionQueue.push_back([=]() { vkDestroyRenderPass(m_device, m_renderpassMaskedPrepass, nullptr); });
@@ -580,7 +580,7 @@ bool PassthroughRendererVulkan::SetupPipeline(VkFormat format)
 
 	if (vkCreatePipelineLayout(m_device, &pipelineLayoutInfo, nullptr, &m_pipelineLayout) != VK_SUCCESS)
 	{
-		ErrorLog("vkCreatePipelineLayout failure!\n");
+		g_logger->error("vkCreatePipelineLayout failure!");
 		return false;
 	}
 	m_deletionQueue.push_back([=]() { vkDestroyPipelineLayout(m_device, m_pipelineLayout, nullptr); });
@@ -829,7 +829,7 @@ bool PassthroughRendererVulkan::SetupPipeline(VkFormat format)
 
 	if (vkCreateGraphicsPipelines(m_device, VK_NULL_HANDLE, (uint32_t)pipelineInfos.size(), pipelineInfos.data(), nullptr, pipelines.data()) != VK_SUCCESS)
 	{
-		ErrorLog("vkCreateGraphicsPipelines failure!\n");
+		g_logger->error("vkCreateGraphicsPipelines failure!");
 		return false;
 	}
 
@@ -863,7 +863,7 @@ VkShaderModule PassthroughRendererVulkan::CreateShaderModule(const uint32_t* byt
 
 	if (vkCreateShaderModule(m_device, &createInfo, nullptr, &module) != VK_SUCCESS)
 	{
-		ErrorLog("vkCreateShaderModule failure!\n");
+		g_logger->error("vkCreateShaderModule failure!");
 		return nullptr;
 	}
 
@@ -918,7 +918,7 @@ bool PassthroughRendererVulkan::SetupDebugTexture(DebugTexture& texture)
 
 	if (!CreateBuffer(m_device, m_physDevice, m_debugTextureBuffer, m_debugTextureBufferMem, texture.Texture.size(), VK_BUFFER_USAGE_TRANSFER_SRC_BIT, VK_MEMORY_PROPERTY_HOST_VISIBLE_BIT, &m_deletionQueue))
 	{
-		ErrorLog("Test image buffer creation failure!\n");
+		g_logger->error("Test image buffer creation failure!");
 		return false;
 	}
 
@@ -938,7 +938,7 @@ bool PassthroughRendererVulkan::SetupDebugTexture(DebugTexture& texture)
 
 	if (vkCreateImage(m_device, &imageInfo, nullptr, &m_debugTexture) != VK_SUCCESS)
 	{
-		ErrorLog("Test image vkCreateImage failure!\n");
+		g_logger->error("Test image vkCreateImage failure!");
 		return false;
 	}
 	m_deletionQueue.push_back([=]() { vkDestroyImage(m_device, m_debugTexture, nullptr); });
@@ -960,7 +960,7 @@ bool PassthroughRendererVulkan::SetupDebugTexture(DebugTexture& texture)
 			allocInfo.memoryTypeIndex = i;
 			if (vkAllocateMemory(m_device, &allocInfo, nullptr, &m_debugTextureMem) != VK_SUCCESS)
 			{
-				ErrorLog("Test image vkAllocateMemory failure!\n");
+				g_logger->error("Test image vkAllocateMemory failure!");
 				return false;
 			}
 			break;
@@ -969,7 +969,7 @@ bool PassthroughRendererVulkan::SetupDebugTexture(DebugTexture& texture)
 
 	if (!m_debugTextureMem)
 	{
-		ErrorLog("Test image memory allocation failure!\n");
+		g_logger->error("Test image memory allocation failure!");
 		return false;
 	}
 	m_deletionQueue.push_back([=]() { vkFreeMemory(m_device, m_debugTextureMem, nullptr); });
@@ -988,7 +988,7 @@ bool PassthroughRendererVulkan::SetupDebugTexture(DebugTexture& texture)
 
 	if (vkCreateImageView(m_device, &viewInfo, nullptr, &m_debugTextureView) != VK_SUCCESS)
 	{
-		ErrorLog("Test image vkCreateImageView failure!\n");
+		g_logger->error("Test image vkCreateImageView failure!");
 		return false;
 	}
 	m_deletionQueue.push_back([=]() { vkDestroyImageView(m_device, m_debugTextureView, nullptr); });
@@ -1042,7 +1042,7 @@ void PassthroughRendererVulkan::InitRenderTarget(const ERenderEye eye, void* ren
 	if (vkCreateImageView(m_device, &viewInfo, nullptr, &m_renderTargetViews[bufferIndex]) != VK_SUCCESS)
 	{
 		m_renderTargets[bufferIndex] = nullptr;
-		ErrorLog("Render target vkCreateImageView failure!\n");
+		g_logger->error("Render target vkCreateImageView failure!");
 		return;
 	}
 
@@ -1057,7 +1057,7 @@ void PassthroughRendererVulkan::InitRenderTarget(const ERenderEye eye, void* ren
 	{
 		m_renderTargets[bufferIndex] = nullptr;
 		vkDestroyImageView(m_device, m_renderTargetViews[bufferIndex], nullptr);
-		ErrorLog("Render target vkCreateFramebuffer failure!\n");
+		g_logger->error("Render target vkCreateFramebuffer failure!");
 		return;
 	}
 }
@@ -1083,7 +1083,7 @@ bool PassthroughRendererVulkan::GenerateMesh(VkCommandBuffer commandBuffer)
 
 	if (!CreateBuffer(m_device, m_physDevice, m_cylinderMeshVertexBuffer, m_cylinderMeshVertexBufferMem, bufferSize, VK_BUFFER_USAGE_VERTEX_BUFFER_BIT, VK_MEMORY_PROPERTY_HOST_VISIBLE_BIT, &m_deletionQueue))
 	{
-		ErrorLog("Mesh vertex buffer creation failure!\n");
+		g_logger->error("Mesh vertex buffer creation failure!");
 		return false;
 	}
 
@@ -1096,7 +1096,7 @@ bool PassthroughRendererVulkan::GenerateMesh(VkCommandBuffer commandBuffer)
 
 	if (!CreateBuffer(m_device, m_physDevice, m_cylinderMeshIndexBuffer, m_cylinderMeshIndexBufferMem, bufferSize, VK_BUFFER_USAGE_INDEX_BUFFER_BIT, VK_MEMORY_PROPERTY_HOST_VISIBLE_BIT, &m_deletionQueue))
 	{
-		ErrorLog("Mesh index buffer creation failure!\n");
+		g_logger->error("Mesh index buffer creation failure!");
 		return false;
 	}
 
@@ -1125,7 +1125,7 @@ void PassthroughRendererVulkan::SetupUVDistortionMap(std::shared_ptr<std::vector
 
 	if (!CreateBuffer(m_device, m_physDevice, m_uvDistortionMapBuffer, m_uvDistortionMapBufferMem, uvDistortionMap->size() * sizeof(float), VK_BUFFER_USAGE_TRANSFER_SRC_BIT, VK_MEMORY_PROPERTY_HOST_VISIBLE_BIT, &m_deletionQueue))
 	{
-		ErrorLog("UV distortion map buffer creation failure!\n");
+		g_logger->error("UV distortion map buffer creation failure!");
 		return;
 	}
 
@@ -1152,7 +1152,7 @@ void PassthroughRendererVulkan::SetupUVDistortionMap(std::shared_ptr<std::vector
 
 	if (vkCreateImage(m_device, &imageInfo, nullptr, &m_uvDistortionMap) != VK_SUCCESS)
 	{
-		ErrorLog("UV distortion map vkCreateImage failure!\n");
+		g_logger->error("UV distortion map vkCreateImage failure!");
 		return;
 	}
 
@@ -1172,7 +1172,7 @@ void PassthroughRendererVulkan::SetupUVDistortionMap(std::shared_ptr<std::vector
 			allocInfo.memoryTypeIndex = j;
 			if (vkAllocateMemory(m_device, &allocInfo, nullptr, &m_uvDistortionMapMem) != VK_SUCCESS)
 			{
-				ErrorLog("UV distortion map vkAllocateMemory failure!\n");
+				g_logger->error("UV distortion map vkAllocateMemory failure!");
 				vkDestroyImage(m_device, m_uvDistortionMap, nullptr);
 				return;
 			}
@@ -1182,7 +1182,7 @@ void PassthroughRendererVulkan::SetupUVDistortionMap(std::shared_ptr<std::vector
 
 	if (!m_uvDistortionMapMem)
 	{
-		ErrorLog("UV distortion map memory prop not found!\n");
+		g_logger->error("UV distortion map memory prop not found!");
 		vkDestroyImage(m_device, m_uvDistortionMap, nullptr);
 		m_uvDistortionMap = nullptr;
 		return;
@@ -1205,7 +1205,7 @@ void PassthroughRendererVulkan::SetupUVDistortionMap(std::shared_ptr<std::vector
 		vkDestroyImage(m_device, m_uvDistortionMap, nullptr);
 		vkFreeMemory(m_device, m_uvDistortionMapMem, nullptr);
 		m_uvDistortionMap = nullptr;
-		ErrorLog("UV distortion map vkCreateImageView failure!\n");
+		g_logger->error("UV distortion map vkCreateImageView failure!");
 		return;
 	}
 
@@ -1249,7 +1249,7 @@ void PassthroughRendererVulkan::SetupIntermediateRenderTarget(uint32_t index, ui
 
 	if (vkCreateImage(m_device, &imageInfo, nullptr, &m_intermediateRenderTargets[index]) != VK_SUCCESS)
 	{
-		ErrorLog("Intermediate rendertarget vkCreateImage failure!\n");
+		g_logger->error("Intermediate rendertarget vkCreateImage failure!");
 		return;
 	}
 
@@ -1269,7 +1269,7 @@ void PassthroughRendererVulkan::SetupIntermediateRenderTarget(uint32_t index, ui
 			allocInfo.memoryTypeIndex = j;
 			if (vkAllocateMemory(m_device, &allocInfo, nullptr, &m_intermediateRenderTargetMem[index]) != VK_SUCCESS)
 			{
-				ErrorLog("Intermediate rendertarget vkAllocateMemory failure!\n");
+				g_logger->error("Intermediate rendertarget vkAllocateMemory failure!");
 				vkDestroyImage(m_device, m_intermediateRenderTargets[index], nullptr);
 				return;
 			}
@@ -1279,7 +1279,7 @@ void PassthroughRendererVulkan::SetupIntermediateRenderTarget(uint32_t index, ui
 
 	if (!m_intermediateRenderTargetMem[index])
 	{
-		ErrorLog("Intermediate rendertarget memory prop not found!\n");
+		g_logger->error("Intermediate rendertarget memory prop not found!");
 		vkDestroyImage(m_device, m_intermediateRenderTargets[index], nullptr);
 		return;
 	}
@@ -1303,7 +1303,7 @@ void PassthroughRendererVulkan::SetupIntermediateRenderTarget(uint32_t index, ui
 		vkDestroyImage(m_device, m_intermediateRenderTargets[index], nullptr);
 		vkFreeMemory(m_device, m_intermediateRenderTargetMem[index], nullptr);
 		m_intermediateRenderTargets[index] = nullptr;
-		ErrorLog("Intermediate rendertarget vkCreateImageView failure!\n");
+		g_logger->error("Intermediate rendertarget vkCreateImageView failure!");
 		return;
 	}
 
@@ -1320,7 +1320,7 @@ void PassthroughRendererVulkan::SetupIntermediateRenderTarget(uint32_t index, ui
 		vkDestroyImage(m_device, m_intermediateRenderTargets[index], nullptr);
 		vkFreeMemory(m_device, m_intermediateRenderTargetMem[index], nullptr);
 		m_intermediateRenderTargets[index] = nullptr;
-		ErrorLog("Intermediate rendertarget vkCreateFramebuffer failure!\n");
+		g_logger->error("Intermediate rendertarget vkCreateFramebuffer failure!");
 		return;
 	}
 }
@@ -1362,7 +1362,7 @@ bool PassthroughRendererVulkan::UpdateCameraFrameResource(VkCommandBuffer comman
 
 	if (vkCreateImage(m_device, &imageInfo, nullptr, &m_cameraFrameRes[frameIndex]) != VK_SUCCESS)
 	{
-		ErrorLog("Shared texture vkCreateImage failure!\n");
+		g_logger->error("Shared texture vkCreateImage failure!");
 		return false;
 	}
 
@@ -1387,7 +1387,7 @@ bool PassthroughRendererVulkan::UpdateCameraFrameResource(VkCommandBuffer comman
 			allocInfo.memoryTypeIndex = j;
 			if (vkAllocateMemory(m_device, &allocInfo, nullptr, &m_cameraFrameResMem[frameIndex]) != VK_SUCCESS)
 			{
-				ErrorLog("Shared texture vkAllocateMemory failure!\n");
+				g_logger->error("Shared texture vkAllocateMemory failure!");
 				vkDestroyImage(m_device, m_cameraFrameRes[frameIndex], nullptr);
 				return false;
 			}
@@ -1397,7 +1397,7 @@ bool PassthroughRendererVulkan::UpdateCameraFrameResource(VkCommandBuffer comman
 
 	if (!m_cameraFrameResMem[frameIndex])
 	{
-		ErrorLog("Shared texture memory prop not found!\n");
+		g_logger->error("Shared texture memory prop not found!");
 		vkDestroyImage(m_device, m_cameraFrameRes[frameIndex], nullptr);
 		return false;
 	}
@@ -1418,7 +1418,7 @@ bool PassthroughRendererVulkan::UpdateCameraFrameResource(VkCommandBuffer comman
 
 	if (vkCreateImageView(m_device, &viewInfo, nullptr, &m_cameraFrameResView[frameIndex]) != VK_SUCCESS)
 	{
-		ErrorLog("Shared texture vkCreateImageView failure!\n");
+		g_logger->error("Shared texture vkCreateImageView failure!");
 		vkDestroyImage(m_device, m_cameraFrameRes[frameIndex], nullptr);
 		vkFreeMemory(m_device, m_cameraFrameResMem[frameIndex], nullptr);
 		return false;
@@ -1428,7 +1428,7 @@ bool PassthroughRendererVulkan::UpdateCameraFrameResource(VkCommandBuffer comman
 
 	if (vkCreateImageView(m_device, &viewInfo, nullptr, &m_cameraFrameResArrayView[frameIndex]) != VK_SUCCESS)
 	{
-		ErrorLog("Shared texture vkCreateImageView failure!\n");
+		g_logger->error("Shared texture vkCreateImageView failure!");
 		vkDestroyImageView(m_device, m_cameraFrameResView[frameIndex], nullptr);
 		vkDestroyImage(m_device, m_cameraFrameRes[frameIndex], nullptr);
 		vkFreeMemory(m_device, m_cameraFrameResMem[frameIndex], nullptr);
@@ -1664,7 +1664,7 @@ void PassthroughRendererVulkan::RenderPassthroughFrame(const XrCompositionLayerP
 		if (!g_bVulkanStereoErrorShown)
 		{
 			g_bVulkanStereoErrorShown = true;
-			ErrorLog("Stereo reconstruction is not currently supported under Vulkan!\n");
+			g_logger->error("Stereo reconstruction is not currently supported under Vulkan!");
 		}
 		return;
 	}

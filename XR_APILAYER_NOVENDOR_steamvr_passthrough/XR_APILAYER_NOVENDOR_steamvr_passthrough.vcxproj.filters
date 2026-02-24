@@ -80,9 +80,6 @@
     <ClInclude Include="openvr_manager.h">
       <Filter>Header Files</Filter>
     </ClInclude>
-    <ClInclude Include="version.h">
-      <Filter>Header Files</Filter>
-    </ClInclude>
     <ClInclude Include="..\shared\menu_ipc.h">
       <Filter>Shared</Filter>
     </ClInclude>
@@ -108,6 +105,12 @@
       <Filter>Header Files</Filter>
     </ClInclude>
     <ClInclude Include="..\shared\pathutil.h">
+      <Filter>Shared</Filter>
+    </ClInclude>
+    <ClInclude Include="..\shared\version.h">
+      <Filter>Shared</Filter>
+    </ClInclude>
+    <ClInclude Include="..\shared\spdlog_ipc_sink.h">
       <Filter>Shared</Filter>
     </ClInclude>
   </ItemGroup>

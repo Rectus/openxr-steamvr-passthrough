@@ -93,6 +93,7 @@ The following are required:
 - [LodePNG](https://github.com/lvandeve/lodepng) (Included as Git submodule)
 - [SimpleINI](https://github.com/brofield/simpleini) (Included as Git submodule)
 - [Dear ImGui](https://github.com/ocornut/imgui) (Included as Git submodule)
+- [spdlog](https://github.com/gabime/spdlog) (Included as Git submodule)
 - [Vulkan SDK](https://vulkan.lunarg.com/sdk/home) (Uses the VULKAN_SDK environment variable)
 - [OpenCV 4.10.0](https://github.com/opencv/opencv) (The project is setup for static linking by default - requires custom source build)
 - [OpenCV-Contrib](https://github.com/opencv/opencv_contrib) (The ximgproc module needs to be built along with OpenCV for WLS and FBS filtering support.)

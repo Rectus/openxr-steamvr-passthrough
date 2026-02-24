@@ -44,7 +44,7 @@ bool CameraManagerOpenVR::InitCamera()
 
     if (!trackedCamera) 
     {
-        ErrorLog("SteamVR Tracked Camera interface error!\n");
+        g_logger->error("SteamVR Tracked Camera interface error!");
         return false; 
     }
 
@@ -52,13 +52,13 @@ bool CameraManagerOpenVR::InitCamera()
     vr::EVRTrackedCameraError error = trackedCamera->HasCamera(m_hmdDeviceId, &bHasCamera);
     if (error != vr::VRTrackedCameraError_None)
     {
-        ErrorLog("Error %i checking camera on device %i\n", error, m_hmdDeviceId);
+        g_logger->error("Error %i checking camera on device {}", static_cast<int32_t>(error), m_hmdDeviceId);
         m_bCameraFailed = true;
         return false;
     }
     else if(!bHasCamera)
     {
-        ErrorLog("No passthrough camera found!\n");
+        g_logger->error("No passthrough camera found!");
         m_bCameraFailed = true;
         return false;
     }
@@ -69,7 +69,7 @@ bool CameraManagerOpenVR::InitCamera()
 
     if (cameraError != vr::VRTrackedCameraError_None)
     {
-        Log("AcquireVideoStreamingService error %i on device %i\n", (int)cameraError, m_hmdDeviceId);
+        g_logger->info("AcquireVideoStreamingService error {} on device {}", static_cast<int32_t>(error), m_hmdDeviceId);
         m_bCameraFailed = true;
         return false;
     }
@@ -105,7 +105,7 @@ void CameraManagerOpenVR::DeinitCamera()
 
         if (error != vr::VRTrackedCameraError_None)
         {
-            Log("ReleaseVideoStreamingService error %i\n", (int)error);
+            g_logger->info("ReleaseVideoStreamingService error {}", static_cast<int32_t>(error));
         }
     }
 }
@@ -204,7 +204,7 @@ void CameraManagerOpenVR::GetIntrinsics(const ERenderEye cameraEye, XrVector2f& 
         vr::EVRTrackedCameraError cameraError = trackedCamera->GetCameraIntrinsics(m_hmdDeviceId, cameraIndex, vr::VRTrackedCameraFrameType_MaximumUndistorted, (vr::HmdVector2_t*)&focalLength, (vr::HmdVector2_t*)&center);
         if (cameraError != vr::VRTrackedCameraError_None)
         {
-            ErrorLog("GetCameraIntrinsics error %i on device Id %i\n", cameraError, m_hmdDeviceId);
+            g_logger->error("GetCameraIntrinsics error %i on device Id %i\n", static_cast<int32_t>(cameraError), m_hmdDeviceId);
         }
 
         // Multiply the values by the distorted/undistorted ratio, since we need the values for the distorted resolution.
@@ -249,7 +249,7 @@ void CameraManagerOpenVR::GetDistortionCoefficients(ECameraDistortionCoefficient
         uint32_t numBytes = m_openVRManager->GetVRSystem()->GetArrayTrackedDeviceProperty(m_hmdDeviceId, vr::Prop_CameraDistortionCoefficients_Float_Array, vr::k_unFloatPropertyTag, &coeffs, 16 * sizeof(double), &error);
         if (error != vr::TrackedProp_Success || numBytes == 0)
         {
-            ErrorLog("Failed to get tracked camera distortion coefficients, error [%i]\n", error);
+            g_logger->error("Failed to get tracked camera distortion coefficients, error [{}]", static_cast<int32_t>(error));
         }
     }
     else
@@ -305,13 +305,13 @@ bool CameraManagerOpenVR::IsUsingFisheyeModel() const
     uint32_t numBytes = m_openVRManager->GetVRSystem()->GetArrayTrackedDeviceProperty(m_hmdDeviceId, vr::Prop_CameraDistortionFunction_Int32_Array, vr::k_unInt32PropertyTag, &distTypes, 4 * sizeof(int32_t), &error);
     if (error != vr::TrackedProp_Success || numBytes == 0)
     {
-        ErrorLog("Failed to get tracked camera distortion types, error [%i]\n", error);
+        g_logger->error("Failed to get tracked camera distortion types, error [{}]", static_cast<int32_t>(error));
         return false;
     }
 
     if (m_frameLayout != FrameLayout_Mono && distTypes[0] != distTypes[1])
     {
-        ErrorLog("Error: Mismatched camera distortion functions are not supported %i != %%i\n", distTypes[0], distTypes[1]);
+        g_logger->error("Error: Mismatched camera distortion functions are not supported {} != {}", static_cast<int32_t>(distTypes[0]), static_cast<int32_t>(distTypes[1]));
         return false;
     }
 
@@ -341,7 +341,7 @@ void CameraManagerOpenVR::GetTrackedCameraEyePoses(XrMatrix4x4f& LeftPose, XrMat
         uint32_t numBytes = vrSystem->GetArrayTrackedDeviceProperty(m_hmdDeviceId, vr::Prop_CameraToHeadTransforms_Matrix34_Array, vr::k_unHmdMatrix34PropertyTag, &Buffer, sizeof(Buffer), &error);
         if (error != vr::TrackedProp_Success || numBytes == 0)
         {
-            ErrorLog("Failed to get tracked camera pose array, error [%i]\n", error);
+            g_logger->error("Failed to get tracked camera pose array, error [{}]", static_cast<int32_t>(error));
             bGotLeftCamera = false;
             bGotRightCamera = false;
         }
@@ -407,23 +407,23 @@ void CameraManagerOpenVR::UpdateStaticCameraParameters()
     vr::EVRTrackedCameraError cameraError = trackedCamera->GetCameraFrameSize(m_hmdDeviceId, vr::VRTrackedCameraFrameType_Distorted, &m_cameraTextureWidth, &m_cameraTextureHeight, &m_cameraFrameBufferSize);
     if (cameraError != vr::VRTrackedCameraError_None)
     {
-        ErrorLog("CameraFrameSize error %i on device Id %i\n", cameraError, m_hmdDeviceId);
+        g_logger->error("CameraFrameSize error {} on device Id {}", static_cast<int32_t>(cameraError), m_hmdDeviceId);
     }
 
     if (m_cameraTextureWidth == 0 || m_cameraTextureHeight == 0 || m_cameraFrameBufferSize == 0)
     {
-        ErrorLog("Invalid frame size received:Width = %u, Height = %u, Size = %u\n", m_cameraTextureWidth, m_cameraTextureHeight, m_cameraFrameBufferSize);
+        g_logger->error("Invalid frame size received: Width = {}, Height = {}, Size = {}", m_cameraTextureWidth, m_cameraTextureHeight, m_cameraFrameBufferSize);
     }
 
     cameraError = trackedCamera->GetCameraFrameSize(m_hmdDeviceId, vr::VRTrackedCameraFrameType_MaximumUndistorted, &m_cameraUndistortedTextureWidth, &m_cameraUndistortedTextureHeight, &m_cameraUndistortedFrameBufferSize);
     if (cameraError != vr::VRTrackedCameraError_None)
     {
-        ErrorLog("CameraFrameSize error %i on device Id %i\n", cameraError, m_hmdDeviceId);
+        g_logger->error("CameraFrameSize error {} on device Id {}", static_cast<int32_t>(cameraError), m_hmdDeviceId);
     }
 
     if (m_cameraUndistortedTextureWidth == 0 || m_cameraUndistortedTextureHeight == 0 || m_cameraUndistortedFrameBufferSize == 0)
     {
-        ErrorLog("Invalid frame size received:Width = %u, Height = %u, Size = %u\n", m_cameraUndistortedTextureWidth, m_cameraUndistortedTextureHeight, m_cameraUndistortedFrameBufferSize);
+        g_logger->error("Invalid frame size received: Width = {}, Height = {}, Size = {}", m_cameraUndistortedTextureWidth, m_cameraUndistortedTextureHeight, m_cameraUndistortedFrameBufferSize);
     }
 
     vr::TrackedPropertyError propError;
@@ -432,7 +432,7 @@ void CameraManagerOpenVR::UpdateStaticCameraParameters()
 
     if (propError != vr::TrackedProp_Success)
     {
-        ErrorLog("GetTrackedCameraEyePoses error %i\n", propError);
+        g_logger->error("GetTrackedCameraEyePoses error {}", static_cast<int32_t>(propError));
     }
 
     if ((layout & vr::EVRTrackedCameraFrameLayout_Stereo) != 0)
@@ -578,7 +578,7 @@ void CameraManagerOpenVR::ServeFrames()
             }
             else
             {
-                ErrorLog("GetVideoStreamFrameBuffer-header error %i\n", error);
+                g_logger->error("GetVideoStreamFrameBuffer-header error {}", static_cast<int32_t>(error));
             }
 
             if (!m_bRunThread) { return; }
@@ -612,7 +612,7 @@ void CameraManagerOpenVR::ServeFrames()
             vr::EVRTrackedCameraError error = trackedCamera->GetVideoStreamTextureD3D11(m_cameraHandle, frameType, renderer->GetRenderDevice(), &m_underConstructionFrame->frameTextureResource, nullptr, 0);
             if (error != vr::VRTrackedCameraError_None)
             {
-                ErrorLog("GetVideoStreamTextureD3D11 error %i\n", error);
+                g_logger->error("GetVideoStreamTextureD3D11 error {}", static_cast<int32_t>(error));
                 continue;
             }
         }
@@ -623,7 +623,7 @@ void CameraManagerOpenVR::ServeFrames()
             vr::EVRTrackedCameraError error = trackedCamera->GetVideoStreamTextureD3D11(m_cameraHandle, frameType, d3dInteropDevice.Get(), (void**)&srv, nullptr, 0);
             if (error != vr::VRTrackedCameraError_None)
             {
-                ErrorLog("GetVideoStreamTextureD3D11 error %i\n", error);
+                g_logger->error("GetVideoStreamTextureD3D11 error {}", static_cast<int32_t>(error));
                 continue;
             }
 
@@ -650,7 +650,7 @@ void CameraManagerOpenVR::ServeFrames()
             vr::EVRTrackedCameraError error = trackedCamera->GetVideoStreamFrameBuffer(m_cameraHandle, frameType, m_underConstructionFrame->frameBuffer->data(), (uint32_t)m_underConstructionFrame->frameBuffer->size(), nullptr, 0);
             if (error != vr::VRTrackedCameraError_None)
             {
-                ErrorLog("GetVideoStreamFrameBuffer error %i\n", error);
+                g_logger->error("GetVideoStreamFrameBuffer error {}", static_cast<int32_t>(error));
                 continue;
             }
 
@@ -879,7 +879,7 @@ void CameraManagerOpenVR::UpdateProjectionMatrix(std::shared_ptr<CameraFrame>& f
 
         if (error != vr::VRTrackedCameraError_None)
         {
-            ErrorLog("CameraProjection error %i on device %i\n", error, m_hmdDeviceId);
+            g_logger->error("CameraProjection error {} on device {}", static_cast<int32_t>(error), m_hmdDeviceId);
             return;
         }
 
@@ -914,7 +914,7 @@ void CameraManagerOpenVR::UpdateProjectionMatrix(std::shared_ptr<CameraFrame>& f
 
             if (error != vr::VRTrackedCameraError_None)
             {
-                ErrorLog("CameraProjection error %i on device %i\n", error, m_hmdDeviceId);
+                g_logger->error("CameraProjection error {} on device {}", static_cast<int32_t>(error), m_hmdDeviceId);
                 return;
             }
 

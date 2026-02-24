@@ -31,7 +31,7 @@ bool DashboardOverlay::InitRuntime()
 
 	if (!vr::VR_IsRuntimeInstalled())
 	{
-		ErrorLog("SteamVR installation not detected!\n");
+		g_logger->error("SteamVR installation not detected!");
 		return false;
 	}
 
@@ -41,12 +41,12 @@ bool DashboardOverlay::InitRuntime()
 
 	if (error == vr::EVRInitError::VRInitError_Init_NoServerForBackgroundApp)
 	{
-		Log("SteamVR not running. Not starting overlay.\n");
+		g_logger->info("SteamVR not running. Not starting overlay.");
 		return false;
 	}
 	else if (error != vr::EVRInitError::VRInitError_None)
 	{
-		ErrorLog("Failed to initialize SteamVR runtime, error %i\n", error);
+		g_logger->error("Failed to initialize SteamVR runtime, error {}", static_cast<int32_t>(error));
 		return false;
 	}
 
@@ -56,7 +56,7 @@ bool DashboardOverlay::InitRuntime()
 
 	if (error != vr::EVRInitError::VRInitError_None)
 	{
-		ErrorLog("Failed to initialize SteamVR runtime, error %i\n", error);
+		g_logger->error("Failed to initialize SteamVR runtime, error {}", static_cast<int32_t>(error));
 		return false;
 	}
 
@@ -80,7 +80,7 @@ bool DashboardOverlay::CreateOverlay(uint32_t width, uint32_t height)
 	vr::EVROverlayError error = vrOverlay->FindOverlay(overlayKey.c_str(), &m_overlayHandle);
 	if (error != vr::EVROverlayError::VROverlayError_None && error != vr::EVROverlayError::VROverlayError_UnknownOverlay)
 	{
-		Log("Warning: SteamVR FindOverlay error (%d)\n", error);
+		g_logger->info("Warning: SteamVR FindOverlay error (%d)", static_cast<int32_t>(error));
 	}
 
 	if (m_overlayHandle == vr::k_ulOverlayHandleInvalid)
@@ -88,7 +88,7 @@ bool DashboardOverlay::CreateOverlay(uint32_t width, uint32_t height)
 		error = vrOverlay->CreateDashboardOverlay(overlayKey.c_str(), "OpenXR Passthrough", &m_overlayHandle, &m_thumbnailHandle);
 		if (error != vr::EVROverlayError::VROverlayError_None)
 		{
-			ErrorLog("SteamVR overlay init error (%d)\n", error);
+			g_logger->error("SteamVR overlay init error {}", static_cast<int32_t>(error));
 			return false;
 		}
 
@@ -126,7 +126,7 @@ void DashboardOverlay::DestroyOverlay()
 	vr::EVROverlayError error = vrOverlay->DestroyOverlay(m_overlayHandle);
 	if (error != vr::EVROverlayError::VROverlayError_None)
 	{
-		ErrorLog("SteamVR DestroyOverlay error (%d)\n", error);
+		g_logger->error("SteamVR DestroyOverlay error {}", static_cast<int32_t>(error));
 	}
 
 	m_overlayHandle = vr::k_ulOverlayHandleInvalid;
@@ -137,13 +137,13 @@ void DashboardOverlay::CreateThumbnail()
 	HRSRC resInfo = FindResource(NULL, MAKEINTRESOURCE(IDB_PNG_DASHBOARD_ICON), L"PNG");
 	if (resInfo == nullptr)
 	{
-		ErrorLog("Error finding icon resource.\n");
+		g_logger->error("Error finding icon resource!");
 		return;
 	}
 	HGLOBAL memory = LoadResource(NULL, resInfo);
 	if (memory == nullptr)
 	{
-		ErrorLog("Error loading icon resource.\n");
+		g_logger->error("Error loading icon resource!");
 		return;
 	}
 	size_t data_size = SizeofResource(NULL, resInfo);
@@ -151,7 +151,7 @@ void DashboardOverlay::CreateThumbnail()
 
 	if (data == nullptr)
 	{
-		ErrorLog("Error reading icon resource.\n");
+		g_logger->error("Error reading icon resource!");
 		return;
 	}
 	std::vector<uint8_t> buffer;
@@ -161,7 +161,7 @@ void DashboardOverlay::CreateThumbnail()
 
 	if (error)
 	{
-		ErrorLog("Error decoding icon.\n");
+		g_logger->error("Error decoding icon!");
 		return;
 	}
 
@@ -174,7 +174,7 @@ void DashboardOverlay::OverlayFrameSync()
 
 	if (error != vr::VROverlayError_None)
 	{
-		ErrorLog("WaitFrameSync error: %d\n", error);
+		g_logger->error("WaitFrameSync error: {}", static_cast<int32_t>(error));
 	}
 }
 
@@ -323,7 +323,7 @@ void DashboardOverlay::HandleOverlayEvents(ImGuiIO& io)
 		case vr::VREvent_Quit:
 
 			vr::VRSystem()->AcknowledgeQuit_Exiting();
-			Log("SteamVR telling application to quit\n");
+			g_logger->info("SteamVR telling application to quit");
 			break;
 		}
 	}
@@ -352,7 +352,7 @@ void DashboardOverlay::UpdateOverlay(vr::VRVulkanTextureData_t* textureData, ImG
 	vr::EVROverlayError error = vrOverlay->SetOverlayTexture(m_overlayHandle, &texture);
 	if (error != vr::VROverlayError_None)
 	{
-		ErrorLog("SteamVR had an error on updating overlay (%d)\n", error);
+		g_logger->error("SteamVR had an error on updating overlay: {}", static_cast<int32_t>(error));
 	}
 
 	if (!m_bIsKeyboardOpen && io.WantTextInput)

@@ -57,9 +57,6 @@
     <ClInclude Include="..\external\imgui\backends\imgui_impl_win32.h">
       <Filter>Libraries</Filter>
     </ClInclude>
-    <ClInclude Include="..\XR_APILAYER_NOVENDOR_steamvr_passthrough\framework\log.h">
-      <Filter>Shared</Filter>
-    </ClInclude>
     <ClInclude Include="..\shared\menu_ipc.h">
       <Filter>Shared</Filter>
     </ClInclude>
@@ -86,6 +83,12 @@
     </ClInclude>
     <ClInclude Include="camera_enumerator.h">
       <Filter>Header Files</Filter>
+    </ClInclude>
+    <ClInclude Include="..\shared\version.h">
+      <Filter>Shared</Filter>
+    </ClInclude>
+    <ClInclude Include="..\shared\spdlog_imgui_buffer_sink.h">
+      <Filter>Shared</Filter>
     </ClInclude>
   </ItemGroup>
   <ItemGroup>
@@ -124,9 +127,6 @@
     </ClCompile>
     <ClCompile Include="..\external\imgui\backends\imgui_impl_win32.cpp">
       <Filter>Libraries</Filter>
-    </ClCompile>
-    <ClCompile Include="..\XR_APILAYER_NOVENDOR_steamvr_passthrough\framework\log.cpp">
-      <Filter>Shared</Filter>
     </ClCompile>
     <ClCompile Include="..\shared\menu_ipc.cpp">
       <Filter>Shared</Filter>

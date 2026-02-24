@@ -95,7 +95,9 @@ using namespace std::chrono_literals;
 #include <XrToString.h>
 #endif
 
-#include "log.h"
+#define SPDLOG_WCHAR_TO_UTF8_SUPPORT
+#include "spdlog/spdlog.h"
+#include "spdlog/sinks/dup_filter_sink.h"
 
-using namespace steamvr_passthrough;
-using namespace steamvr_passthrough::logging;
+extern std::shared_ptr<spdlog::logger> g_logger;
+extern std::shared_ptr<spdlog::sinks::dup_filter_sink_mt> g_logSinkAggregator;

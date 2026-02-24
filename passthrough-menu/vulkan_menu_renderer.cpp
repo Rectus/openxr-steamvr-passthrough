@@ -45,7 +45,7 @@ bool VulkanMenuRenderer::SetupRenderer(std::shared_ptr<DesktopWindowWin32> windo
 		VkResult result = vkEnumerateInstanceExtensionProperties(nullptr, &numProperties, properties.data());
 		if (result != VK_SUCCESS)
 		{
-			ErrorLog("vkEnumerateInstanceExtensionProperties failure: %d\n", result);
+			g_logger->error("vkEnumerateInstanceExtensionProperties failure: {}", static_cast<int32_t>(result));
 			return false;
 		}
 
@@ -53,7 +53,7 @@ bool VulkanMenuRenderer::SetupRenderer(std::shared_ptr<DesktopWindowWin32> windo
 		{
 			if (!HasExtension(properties, extension))
 			{
-				ErrorLog("Required Vulkan extension not found: %s\n", extension);
+				g_logger->error("Required Vulkan extension not found: {}", extension);
 				return false;
 			}
 		}
@@ -69,7 +69,7 @@ bool VulkanMenuRenderer::SetupRenderer(std::shared_ptr<DesktopWindowWin32> windo
 		result = vkCreateInstance(&createInfo, nullptr, &m_instance);
 		if (result != VK_SUCCESS)
 		{
-			ErrorLog("vkCreateInstance failure: %d\n", result);
+			g_logger->error("vkCreateInstance failure: {}", static_cast<int32_t>(result));
 			return false;
 		}
 
@@ -77,14 +77,14 @@ bool VulkanMenuRenderer::SetupRenderer(std::shared_ptr<DesktopWindowWin32> windo
 		m_physicalDevice = ImGui_ImplVulkanH_SelectPhysicalDevice(m_instance);
 		if (m_physicalDevice == VK_NULL_HANDLE)
 		{
-			ErrorLog("Failed to select Vulkan physical device!\n");
+			g_logger->error("Failed to select Vulkan physical device!");
 			return false;
 		}
 
 		m_queueFamily = ImGui_ImplVulkanH_SelectQueueFamilyIndex(m_physicalDevice);
 		if (m_queueFamily == (uint32_t)-1)
 		{
-			ErrorLog("Failed to select Vulkan queue family!\n");
+			g_logger->error("Failed to select Vulkan queue family!");
 			return false;
 		}
 	}
@@ -121,7 +121,7 @@ bool VulkanMenuRenderer::SetupRenderer(std::shared_ptr<DesktopWindowWin32> windo
 		VkResult result = vkCreateDevice(m_physicalDevice, &create_info, nullptr, &m_device);
 		if (result != VK_SUCCESS)
 		{
-			ErrorLog("vkCreateDevice failure: %d\n", result);
+			g_logger->error("vkCreateDevice failure: {}", static_cast<int32_t>(result));
 			return false;
 		}
 
@@ -145,7 +145,7 @@ bool VulkanMenuRenderer::SetupRenderer(std::shared_ptr<DesktopWindowWin32> windo
 		VkResult result = vkCreateDescriptorPool(m_device, &poolInfo, nullptr, &m_descriptorPool);
 		if (result != VK_SUCCESS)
 		{
-			ErrorLog("vkCreateDescriptorPool failure: %d\n", result);
+			g_logger->error("vkCreateDescriptorPool failure: {}", static_cast<int32_t>(result));
 			return false;
 		}
 	}
@@ -153,7 +153,7 @@ bool VulkanMenuRenderer::SetupRenderer(std::shared_ptr<DesktopWindowWin32> windo
 
 	if (!window->CreateVulkanSurface(m_instance, m_surface))
 	{
-		ErrorLog("Failed to create Vulkan surface!\n");
+		g_logger->error("Failed to create Vulkan surface!");
 		return false;
 	}
 
@@ -161,7 +161,7 @@ bool VulkanMenuRenderer::SetupRenderer(std::shared_ptr<DesktopWindowWin32> windo
 	vkGetPhysicalDeviceSurfaceSupportKHR(m_physicalDevice, m_queueFamily, m_surface, &res);
 	if (res != VK_TRUE)
 	{
-		ErrorLog("Presentation not suppported on Vulkan surface!\n");
+		g_logger->error("Presentation not suppported on Vulkan surface!");
 		return false;
 	}
 
@@ -252,22 +252,22 @@ bool VulkanMenuRenderer::RenderMenu(bool bRenderOffscreen)
 		result = vkAcquireNextImageKHR(m_device, m_windowData.Swapchain, UINT64_MAX, imageSemaphore, VK_NULL_HANDLE, &m_windowData.FrameIndex);
 		if (result == VK_ERROR_OUT_OF_DATE_KHR)
 		{
-			ErrorLog("VK_ERROR_OUT_OF_DATE_KHR: %d\n", m_windowData.FrameIndex);
+			g_logger->error("VK_ERROR_OUT_OF_DATE_KHR: {}", m_windowData.FrameIndex);
 			m_swapChainRebuild = true;
 			return false;
 		}
 		else if (result == VK_SUBOPTIMAL_KHR)
 		{
-			ErrorLog("VK_SUBOPTIMAL_KHR: %d\n", m_windowData.FrameIndex);
+			g_logger->error("VK_SUBOPTIMAL_KHR: {}", m_windowData.FrameIndex);
 			m_swapChainRebuild = true;
 		}
 		else if (result == VK_NOT_READY)
 		{
-			ErrorLog("Semaphore not ready: %d\n", m_windowData.SemaphoreIndex);
+			g_logger->error("Semaphore not ready: {}", m_windowData.SemaphoreIndex);
 		}
 		else if (result != VK_SUCCESS)
 		{
-			ErrorLog("vkAcquireNextImageKHR failed: %d\n", result);
+			g_logger->error("vkAcquireNextImageKHR failed: {}", static_cast<int32_t>(result));
 			return false;
 		}
 	}
@@ -277,21 +277,21 @@ bool VulkanMenuRenderer::RenderMenu(bool bRenderOffscreen)
 	result = vkWaitForFences(m_device, 1, &frameData->Fence, VK_TRUE, UINT64_MAX);
 	if (result != VK_SUCCESS)
 	{
-		ErrorLog("vkWaitForFences failed: %d\n", result);
+		g_logger->error("vkWaitForFences failed: {}", static_cast<int32_t>(result));
 		return false;
 	}
 
 	result = vkResetFences(m_device, 1, &frameData->Fence);
 	if (result != VK_SUCCESS)
 	{
-		ErrorLog("vkResetFences failed: %d\n", result);
+		g_logger->error("vkResetFences failed: {}", static_cast<int32_t>(result));
 		return false;
 	}
 
 	result = vkResetCommandPool(m_device, frameData->CommandPool, 0);
 	if (result != VK_SUCCESS)
 	{
-		ErrorLog("vkResetCommandPool failed: %d\n", result);
+		g_logger->error("vkResetCommandPool failed: {}", static_cast<int32_t>(result));
 		return false;
 	}
 
@@ -302,7 +302,7 @@ bool VulkanMenuRenderer::RenderMenu(bool bRenderOffscreen)
 	result = vkBeginCommandBuffer(frameData->CommandBuffer, &bufferInfo);
 	if (result != VK_SUCCESS)
 	{
-		ErrorLog("vkBeginCommandBuffer failed: %d\n", result);
+		g_logger->error("vkBeginCommandBuffer failed: {}", static_cast<int32_t>(result));
 		return false;
 	}
 
@@ -342,14 +342,14 @@ bool VulkanMenuRenderer::RenderMenu(bool bRenderOffscreen)
 	result = vkEndCommandBuffer(frameData->CommandBuffer);
 	if (result != VK_SUCCESS)
 	{
-		ErrorLog("vkEndCommandBuffer failed: %d\n", result);
+		g_logger->error("vkEndCommandBuffer failed: {}", static_cast<int32_t>(result));
 		return false;
 	}
 
 	result = vkQueueSubmit(m_queue, 1, &submitInfo, frameData->Fence);
 	if (result != VK_SUCCESS)
 	{
-		ErrorLog("vkQueueSubmit failed: %d\n", result);
+		g_logger->error("vkQueueSubmit failed: {}", static_cast<int32_t>(result));
 		return false;
 	}
 
@@ -380,7 +380,7 @@ bool VulkanMenuRenderer::RenderMenu(bool bRenderOffscreen)
 		}
 		else if (result != VK_SUCCESS)
 		{
-			ErrorLog("vkQueuePresentKHR failed: %d\n", result);
+			g_logger->error("vkQueuePresentKHR failed: {}", static_cast<int32_t>(result));
 			return false;
 		}
 	}
@@ -389,7 +389,7 @@ bool VulkanMenuRenderer::RenderMenu(bool bRenderOffscreen)
 		result = vkWaitForFences(m_device, 1, &frameData->Fence, VK_TRUE, 1000 * 1000 * 8);
 		if (result != VK_SUCCESS)
 		{
-			ErrorLog("vkWaitForFences failed: %d\n", result);
+			g_logger->error("vkWaitForFences failed: {}", static_cast<int32_t>(result));
 			return false;
 		}
 	}

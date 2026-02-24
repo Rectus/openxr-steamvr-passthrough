@@ -32,6 +32,9 @@ SettingsMenu::SettingsMenu(std::shared_ptr<ConfigManager> configManager, std::sh
 	m_dashboardOverlay = std::make_unique<DashboardOverlay>();
 	m_renderer = VulkanMenuRenderer();
 	m_defaultClientData.ApplicationName = "No application";
+
+	m_clientLogger = std::make_unique<spdlog::logger>("clients", g_logRingbuffer);
+	m_clientLogger->set_pattern("%v");
 }
 
 
@@ -2075,7 +2078,7 @@ if (bIsActiveTab) { ImGui::PopStyleColor(1); bIsActiveTab = false; }
 			ImGui::BeginGroup();
 		
 			ImGui::PushFont(m_fixedFont);
-			ImGui::Text("Layer Version: %s", steamvr_passthrough::VersionString.c_str());
+			ImGui::Text("Layer Version: %s", VersionString.c_str());
 			IMGUI_BIG_SPACING;
 
 			if (!hasClients)
@@ -2492,21 +2495,36 @@ if (bIsActiveTab) { ImGui::PopStyleColor(1); bIsActiveTab = false; }
 
 		if (CollapsingHeaderPersistent("Log", ImGuiTreeNodeFlags_DefaultOpen))
 		{
-			//ImGui::BeginChild("Log", ImVec2(0, 0), true);
 			ImGui::PushFont(m_fixedFont);
 			ImGui::PushTextWrapPos(ImGui::GetContentRegionAvail().x);
 
-			ReadLogBuffer([](std::deque<std::string>& logBuffer) 
+			g_logRingbuffer->draw_log("clients");
+
+			/*std::vector<spdlog::details::log_msg_buffer> logMessages = g_logRingbuffer->last_raw();
+
+			for (auto it = logMessages.begin(); it != logMessages.end(); it++)
 			{
-				for (auto it = logBuffer.begin(); it != logBuffer.end(); it++)
+				if (it->level == spdlog::level::warn)
 				{
-					ImGui::Text((const char*)u8"%s", it->data());
-				}		
-			});
+					ImGui::TextColored(ImVec4(0.9f, 0.7f, 0.2f, 1.0f), it->payload.data());
+				}
+				else if (it->level == spdlog::level::err)
+				{
+					ImGui::TextColored(ImVec4(0.8f, 0.2f, 0.2f, 1.0f), it->payload.data());
+				}
+				else if (it->logger_name == "clients")
+				{
+					ImGui::TextColored(ImVec4(0.8f, 0.8f, 0.95f, 1.0f), it->payload.data());
+				}
+				else
+				{
+					ImGui::Text(it->payload.data());
+				}
+				
+			}*/
 
 			ImGui::PopTextWrapPos();
 			ImGui::PopFont();
-			//ImGui::EndChild();
 		}
 		ImGui::EndChild();
 	}
@@ -2688,7 +2706,7 @@ void SettingsMenu::MenuIPCClientConnected(int clientIndex)
 
 		if (m_clientData.size() != clientIndex)
 		{
-			ErrorLog("Client count desynced: %d != %d\n", clientIndex, m_clientData.size());
+			g_logger->error("Client count desynced: {} != {}", clientIndex, m_clientData.size());
 		}
 
 		while (m_clientData.size() <= clientIndex)
@@ -2750,7 +2768,7 @@ void SettingsMenu::MenuIPCClientDisconnected(int clientIndex)
 	}
 	else
 	{
-		ErrorLog("Client count desynced: %d >= %d\n", clientIndex, m_clientData.size());
+		g_logger->error("Client count desynced: {} >= {}", clientIndex, m_clientData.size());
 	}
 
 	if (m_IPCServer->GetNumClients() == 0)
@@ -2763,12 +2781,28 @@ void SettingsMenu::MenuIPCMessageReceived(MenuIPCMessage& message, int clientInd
 {
 	if (clientIndex >= m_clientData.size())
 	{
-		ErrorLog("IPC message from invalid client index: %d >= %d\n", clientIndex, m_clientData.size());
+		g_logger->error("IPC message from invalid client index: {} >= {}", clientIndex, m_clientData.size());
 		return;
 	}
 
 	switch (message.Header.Type)
 	{
+	case MessageType_Log:
+
+		if (message.Header.PayloadSize > 3)
+		{
+			// Strip trailing line break.
+			message.Payload[message.Header.PayloadSize - 1] = '\0';
+
+			m_clientLogger->log(static_cast<spdlog::level::level_enum>(message.Payload[0]), "[{}:{}] {}", clientIndex, m_clientData[clientIndex]->ApplicationModuleName, reinterpret_cast<const char *>(message.Payload + 1));
+		}
+		else
+		{
+			g_logger->error("Empty log mesasge from IPC: {}", (int)message.Header.PayloadSize);
+		}
+		break;
+
+
 	case MessageType_SetClientDataValues:
 
 		if (message.Header.PayloadSize == sizeof(ClientDataValues))
@@ -2779,7 +2813,7 @@ void SettingsMenu::MenuIPCMessageReceived(MenuIPCMessage& message, int clientInd
 		}
 		else
 		{
-			ErrorLog("Invalid size ClientDataValues from IPC: %d\n", (int)message.Header.PayloadSize);
+			g_logger->error("Invalid size ClientDataValues from IPC: {}", (int)message.Header.PayloadSize);
 		}
 
 		break;
@@ -2794,7 +2828,7 @@ void SettingsMenu::MenuIPCMessageReceived(MenuIPCMessage& message, int clientInd
 		}
 		else
 		{
-			ErrorLog("Invalid application name string from IPC!\n");
+			g_logger->error("Invalid application name string from IPC!");
 		}
 
 		break;
@@ -2809,7 +2843,7 @@ void SettingsMenu::MenuIPCMessageReceived(MenuIPCMessage& message, int clientInd
 		}
 		else
 		{
-			ErrorLog("Invalid application module name string from IPC!\n");
+			g_logger->error("Invalid application module name string from IPC!");
 		}
 
 		break;
@@ -2824,14 +2858,14 @@ void SettingsMenu::MenuIPCMessageReceived(MenuIPCMessage& message, int clientInd
 		}
 		else
 		{
-			ErrorLog("Invalid engine name string from IPC!\n");
+			g_logger->error("Invalid engine name string from IPC!");
 		}
 
 		break;
 
 	default:
 
-		ErrorLog("Unhandled IPC message type %d\n", (int)message.Header.Type);
+		g_logger->error("Unhandled IPC message type {}", (int)message.Header.Type);
 
 	}
 }

@@ -117,13 +117,10 @@ class DispatchGenCppOutputGenerator(DispatchGenOutputGenerator):
 #include <layer.h>
 
 #include "dispatch.h"
-#include "log.h"
 
 #ifndef LAYER_NAMESPACE
 #error Must define LAYER_NAMESPACE
 #endif
-
-using namespace LAYER_NAMESPACE::logging;
 
 namespace LAYER_NAMESPACE
 {'''
@@ -178,14 +175,14 @@ namespace LAYER_NAMESPACE
 #if USE_TRACELOGGING
 			TraceLoggingWrite(g_traceProvider, "{cur_cmd.name}_Error", TLArg(exc.what(), "Error"));
 #endif
-			ErrorLog("{cur_cmd.name}: %s\\n", exc.what());
+			g_logger->error("{cur_cmd.name}: {{}}", exc.what());
 			result = XR_ERROR_RUNTIME_FAILURE;
 		}}
 #if USE_TRACELOGGING
 		TraceLoggingWrite(g_traceProvider, "{cur_cmd.name}_Result", TLArg(xr::ToCString(result), "Result"));
 #endif
 		if (XR_FAILED(result)) {{
-			ErrorLog("{cur_cmd.name} failed with %d\\n", result);
+			g_logger->error("{cur_cmd.name} failed with {{}}", static_cast<int32_t>(result));
 		}}
 
 		return result;
@@ -208,7 +205,7 @@ namespace LAYER_NAMESPACE
 #if USE_TRACELOGGING
 			TraceLoggingWrite(g_traceProvider, "{cur_cmd.name}_Error", TLArg(exc.what(), "Error"));
 #endif
-			ErrorLog("{cur_cmd.name}: %s\\n", exc.what());
+			g_logger->error("{cur_cmd.name}: {{}}", exc.what());
 		}}
 
 #if USE_TRACELOGGING

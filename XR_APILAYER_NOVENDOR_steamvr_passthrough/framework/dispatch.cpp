@@ -25,13 +25,10 @@
 #include <layer.h>
 
 #include "dispatch.h"
-#include "log.h"
 
 #ifndef LAYER_NAMESPACE
 #error Must define LAYER_NAMESPACE
 #endif
-
-using namespace LAYER_NAMESPACE::logging;
 
 namespace LAYER_NAMESPACE {
 
@@ -42,7 +39,9 @@ namespace LAYER_NAMESPACE {
 #if USE_TRACELOGGING
         TraceLoggingWrite(g_traceProvider, "xrCreateApiLayerInstance");
 #endif
-        DebugLog("--> xrCreateApiLayerInstance\n");
+#ifdef _DEBUG
+        g_logger->debug("--> xrCreateApiLayerInstance");
+#endif
 
         if (!apiLayerInfo || apiLayerInfo->structType != XR_LOADER_INTERFACE_STRUCT_API_LAYER_CREATE_INFO ||
             apiLayerInfo->structVersion != XR_API_LAYER_CREATE_INFO_STRUCT_VERSION ||
@@ -52,7 +51,7 @@ namespace LAYER_NAMESPACE {
             apiLayerInfo->nextInfo->structSize != sizeof(XrApiLayerNextInfo) ||
             apiLayerInfo->nextInfo->layerName != LayerName || !apiLayerInfo->nextInfo->nextGetInstanceProcAddr ||
             !apiLayerInfo->nextInfo->nextCreateApiLayerInstance) {
-            ErrorLog("xrCreateApiLayerInstance validation failed\n");
+            g_logger->error("xrCreateApiLayerInstance validation failed");
             return XR_ERROR_INITIALIZATION_FAILED;
         }
 
@@ -63,7 +62,7 @@ namespace LAYER_NAMESPACE {
 #if USE_TRACELOGGING
                 TraceLoggingWrite(g_traceProvider, "xrCreateApiLayerInstance", TLArg(info->layerName, "LayerName"));
 #endif
-                Log("Using layer: %s\n", info->layerName);
+                g_logger->info("Using layer: {}", info->layerName);
                 info = info->next;
             }
         }
@@ -122,7 +121,7 @@ namespace LAYER_NAMESPACE {
                         it = ++it;
                     }
                     else {
-                        Log("Cannot satisfy implicit extension request: %s\n", it->c_str());
+                        g_logger->info("Cannot satisfy implicit extension request: {}", it->c_str());
                         it = implicitExtensions.erase(it);
                     }
                 }
@@ -143,14 +142,14 @@ namespace LAYER_NAMESPACE {
             requestedExtensions.push_back(std::string(ext));
 
             if (std::find(blockedExtensions.cbegin(), blockedExtensions.cend(), ext) == blockedExtensions.cend()) {
-                Log("Requested extension: %s\n", ext.data());
+                g_logger->info("Requested extension: {}", ext.data());
                 newEnabledExtensionNames.push_back(ext.data());
             } else {
-                Log("Blocking extension: %s\n", ext.data());
+                g_logger->info("Blocking extension: {}", ext.data());
             }
         }
         for (const auto& ext : implicitExtensions) {
-            Log("Requesting extension: %s\n", ext.c_str());
+            g_logger->info("Requesting extension: {}", ext.c_str());
             newEnabledExtensionNames.push_back(ext.c_str());
         }
         chainInstanceCreateInfo.enabledExtensionNames = newEnabledExtensionNames.data();
@@ -175,7 +174,7 @@ namespace LAYER_NAMESPACE {
 #if USE_TRACELOGGING
                 TraceLoggingWrite(g_traceProvider, "xrCreateInstance_Error", TLArg(exc.what(), "Error"));
 #endif
-                ErrorLog("xrCreateInstance: %s\n", exc.what());
+                g_logger->error("xrCreateInstance: {}", exc.what());
                 result = XR_ERROR_RUNTIME_FAILURE;
             }
 
@@ -193,11 +192,12 @@ namespace LAYER_NAMESPACE {
         TraceLoggingWrite(g_traceProvider, "xrCreateApiLayerInstance_Result", TLArg(xr::ToCString(result), "Result"));
 #endif
         if (XR_FAILED(result)) {
-            ErrorLog("xrCreateApiLayerInstance failed with %d\n", result);
+            g_logger->error("xrCreateApiLayerInstance failed with {}", static_cast<int32_t>(result));
         }
 
-        DebugLog("<-- xrCreateApiLayerInstance %d\n", result);
-
+#ifdef _DEBUG
+        g_logger->debug("<-- xrCreateApiLayerInstance {}", static_cast<int32_t>(result));
+#endif
         return result;
     }
 
@@ -217,7 +217,7 @@ namespace LAYER_NAMESPACE {
 #if USE_TRACELOGGING
             TraceLoggingWrite(g_traceProvider, "xrDestroyInstance_Error", TLArg(exc.what(), "Error"));
 #endif
-            ErrorLog("xrDestroyInstance: %s\n", exc.what());
+            g_logger->error("xrDestroyInstance: {}", exc.what());
             result = XR_ERROR_RUNTIME_FAILURE;
         }
 
@@ -225,7 +225,7 @@ namespace LAYER_NAMESPACE {
         TraceLoggingWrite(g_traceProvider, "xrDestroyInstance_Result", TLArg(xr::ToCString(result), "Result"));
 #endif
         if (XR_FAILED(result)) {
-            ErrorLog("xrDestroyInstance failed with %d\n", result);
+            g_logger->error("xrDestroyInstance failed with {}", static_cast<int32_t>(result));
         }
 
         return result;
@@ -244,7 +244,7 @@ namespace LAYER_NAMESPACE {
 #if USE_TRACELOGGING
             TraceLoggingWrite(g_traceProvider, "xrGetInstanceProcAddr_Error", TLArg(exc.what(), "Error"));
 #endif
-            ErrorLog("xrGetInstanceProcAddr: %s\n", exc.what());
+            g_logger->error("xrGetInstanceProcAddr: {}", exc.what());
             result = XR_ERROR_RUNTIME_FAILURE;
         }
 

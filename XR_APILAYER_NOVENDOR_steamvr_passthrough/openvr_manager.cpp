@@ -34,7 +34,7 @@ bool OpenVRManager::InitRuntime()
 
     if (!vr::VR_IsRuntimeInstalled())
     {
-        ErrorLog("SteamVR installation not detected!\n");
+        g_logger->error("SteamVR installation not detected!");
         return false;
     }
 
@@ -47,14 +47,14 @@ bool OpenVRManager::InitRuntime()
     HMODULE vrClientModule = GetModuleHandleA("vrclient_x64");
     if (!vrClientModule)
     {
-        ErrorLog("vrclient_x64.dll not loaded by application!\n");
+        g_logger->error("vrclient_x64.dll not loaded by application!");
         return false;
     }
     
     VRClientCoreFactoryFn factoryFunc = (VRClientCoreFactoryFn)(GetProcAddress(vrClientModule, "VRClientCoreFactory"));
     if (!factoryFunc)
     {
-        ErrorLog("Failed to get VRClientCoreFactory from vrclient_x64.dll!\n");
+        g_logger->error("Failed to get VRClientCoreFactory from vrclient_x64.dll!");
         return false;
     }
 
@@ -62,7 +62,7 @@ bool OpenVRManager::InitRuntime()
     m_vrClientCore = static_cast<vr::IVRClientCore*>(factoryFunc(vr::IVRClientCore_Version, &coreError));
     if (!m_vrClientCore)
     {
-        ErrorLog("Failed to find IVRSystem interface, error %i\n", coreError);
+        g_logger->error("Failed to find IVRSystem interface, error {}", static_cast<int32_t>(coreError));
         return false;
     }
 
@@ -71,7 +71,7 @@ bool OpenVRManager::InitRuntime()
 
     if (m_vrSystem == nullptr || error != vr::EVRInitError::VRInitError_None)
     {
-        ErrorLog("Failed to find IVRSystem interface, error %i\n", error);
+        g_logger->error("Failed to find IVRSystem interface, error {}", static_cast<int32_t>(error));
         return false;
     }
 
@@ -79,7 +79,7 @@ bool OpenVRManager::InitRuntime()
 
     if (m_vrCompositor == nullptr || error != vr::EVRInitError::VRInitError_None)
     {
-        ErrorLog("Failed to find IVRCompositor interface, error %i\n", error);
+        g_logger->error("Failed to find IVRCompositor interface, error {}", static_cast<int32_t>(error));
         return false;
     }
 
@@ -87,7 +87,7 @@ bool OpenVRManager::InitRuntime()
 
     if (m_vrTrackedCamera == nullptr || error != vr::EVRInitError::VRInitError_None)
     {
-        ErrorLog("Failed to find IVRTrackedCamera interface, error %i\n", error);
+        g_logger->error("Failed to find IVRTrackedCamera interface, error {}", static_cast<int32_t>(error));
         return false;
     }
 
@@ -95,7 +95,7 @@ bool OpenVRManager::InitRuntime()
 
     if (m_vrOverlay == nullptr || error != vr::EVRInitError::VRInitError_None)
     {
-        ErrorLog("Failed to find IVROverlay interface, error %i\n", error);
+        g_logger->error("Failed to find IVROverlay interface, error {}", static_cast<int32_t>(error));
         return false;
     }
 
@@ -103,7 +103,7 @@ bool OpenVRManager::InitRuntime()
 
     if (m_vrRenderModels == nullptr || error != vr::EVRInitError::VRInitError_None)
     {
-        ErrorLog("Failed to find IVRRenderModels interface, error %i\n", error);
+        g_logger->error("Failed to find IVRRenderModels interface, error {}", static_cast<int32_t>(error));
         return false;
     }
 
@@ -118,7 +118,7 @@ bool OpenVRManager::InitRuntime()
 
     if (m_hmdDeviceId < 0)
     {
-        ErrorLog("HMD device ID not found!\n");
+        g_logger->error("HMD device ID not found!");
         return false;
     }
 

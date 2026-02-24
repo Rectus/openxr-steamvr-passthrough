@@ -72,6 +72,8 @@ namespace
 			m_menuHandler.reset();
 			m_menuIPCClient.reset();
 			m_openVRManager.reset();
+
+			spdlog::shutdown();
 		}
 
 		XrResult xrCreateInstance(const XrInstanceCreateInfo* createInfo) override
@@ -142,11 +144,11 @@ namespace
 
 			if (result != XR_SUCCESS)
 			{
-				ErrorLog("xrCreateInstance returned error %i.\n", result);
+				g_logger->error("xrCreateInstance returned error {}", static_cast<int32_t>(result));
 				return result;
 			}
 
-			Log("Application %s creating OpenXR instance...\n", GetApplicationName().c_str());
+			g_logger->info("Application {} creating OpenXR instance...", GetApplicationName());
 
 #if USE_TRACELOGGING
 			// Dump the application name and OpenXR runtime information to help debugging issues.
@@ -158,14 +160,14 @@ namespace
 							 XR_VERSION_MINOR(instanceProperties.runtimeVersion),
 							 XR_VERSION_PATCH(instanceProperties.runtimeVersion));
 			TraceLoggingWrite(g_traceProvider, "xrCreateInstance", TLArg(runtimeName.c_str(), "RuntimeName"));
-			Log("Application: %s\n", GetApplicationName().c_str());
-			Log("Using OpenXR runtime: %s\n", runtimeName.c_str());
+			g_logger->info("Application: {}", GetApplicationName().c_str());
+			g_logger->info("Using OpenXR runtime: {}", runtimeName.c_str());
 #endif
 
 			std::wstring dllPath(MAX_PATH, L'\0');
 			if (FAILED(GetModuleFileNameW(g_dllModule, (LPWSTR)dllPath.c_str(), (DWORD)dllPath.size())))
 			{
-				ErrorLog("Error retreiving DLL path.\n");
+				g_logger->error("Error retreiving DLL path!");
 			}
 
 #ifndef OPENVR_BUILD_STATIC
@@ -175,7 +177,7 @@ namespace
 			// If loading fails without error, hopefully it means the library is already loaded.
 			if (LoadLibraryExW((LPWSTR)openVRPath.c_str(), NULL, 0) == nullptr && GetLastError() != 0)
 			{
-				ErrorLog("Error loading OpenVR DLL: %lu\n", GetLastError());
+				g_logger->error("Error loading OpenVR DLL: {}", GetLastError());
 				return result;
 			}
 #endif
@@ -193,7 +195,7 @@ namespace
 
 				if (strncmp(instanceProperties.runtimeName, "SteamVR/OpenXR", 14))
 				{
-					ErrorLog("The active OpenXR runtime is %s, not SteamVR, passthrough layer not enabled\n", instanceProperties.runtimeName);
+					g_logger->error("The active OpenXR runtime is {}, not SteamVR, passthrough layer not enabled!", instanceProperties.runtimeName);
 					return result;
 				}
 			}
@@ -211,7 +213,7 @@ namespace
 			}
 			else
 			{
-				ErrorLog("Failed to launch settings menu process: %d\n", GetLastError());
+				g_logger->error("Failed to launch settings menu process: {}", GetLastError());
 			}
 
 			m_openVRManager = std::make_shared<OpenVRManager>();
@@ -225,41 +227,41 @@ namespace
 			{
 				m_bVarjoDepthExtensionEnabled = true;
 				data.Values.bVarjoDepthEstimationExtensionActive = true;
-				Log("Extension XR_VARJO_environment_depth_estimation enabled\n");
+				g_logger->info("Extension XR_VARJO_environment_depth_estimation enabled");
 			}
 
 			if (bEnableVarjoCompositionExtension && m_configManager->GetConfig_Extensions().ExtVarjoDepthComposition)
 			{
 				m_bVarjoCompositionExtensionEnabled = true;
 				data.Values.bVarjoDepthCompositionExtensionActive = true;
-				Log("Extension XR_VARJO_composition_layer_depth_test enabled\n");
+				g_logger->info("Extension XR_VARJO_composition_layer_depth_test enabled");
 			}
 
 			if (bEnableVulkan2Extension)
 			{
 				m_bEnableVulkan2Extension = true;
-				Log("Extension XR_KHR_vulkan_enable2 detected\n");
+				g_logger->info("Extension XR_KHR_vulkan_enable2 detected");
 			}
 
 			if (bInverseAlphaExtensionEnabled)
 			{
 				m_bInverseAlphaExtensionEnabled = true;
 				data.Values.bExtInvertedAlphaActive = true;
-				Log("Extension XR_EXT_composition_layer_inverted_alpha enabled\n");
+				g_logger->info("Extension XR_EXT_composition_layer_inverted_alpha enabled");
 			}
 
 			if (bEnableAndroidCameraStateExtension)
 			{
 				m_bAndroidPassthroughStateExtensionEnabled = true;
 				data.Values.bAndroidPassthroughStateActive = true;
-				Log("Extension XR_ANDROID_passthrough_camera_state enabled\n");
+				g_logger->info("Extension XR_ANDROID_passthrough_camera_state enabled");
 			}
 
 			if (bEnableFBPassthroughExtension && m_configManager->GetConfig_Extensions().ExtFBPassthrough)
 			{
 				m_bFBPassthroughExtensionEnabled = true;
 				data.Values.bFBPassthroughExtensionActive = true;
-				Log("Extension XR_FB_passthrough enabled\n");
+				g_logger->info("Extension XR_FB_passthrough enabled");
 			}
 	
 			data.ApplicationModuleName = GetProcessFileName();
@@ -277,7 +279,7 @@ namespace
 			m_menuHandler->DispatchClientDataValues();
 
 			m_bSuccessfullyLoaded = true;
-			Log("OpenXR instance successfully created\n");
+			g_logger->info("OpenXR instance successfully created");
 
 			return result;
 		}
@@ -403,7 +405,7 @@ namespace
 				TraceLoggingWrite(g_traceProvider, "xrGetSystem", TLArg(systemProperties.systemName, "SystemName"));
 #endif
 
-				Log("Using OpenXR system: %s\n", systemProperties.systemName);
+				g_logger->info("Using OpenXR system: {}", systemProperties.systemName);
 			}
 
 			// Remember the XrSystemId to use.
@@ -522,7 +524,7 @@ namespace
 				{
 				case XR_TYPE_GRAPHICS_BINDING_D3D11_KHR:
 				{
-					Log("Initializing rendering for Direct3D 11...\n");
+					g_logger->info("Initializing rendering for Direct3D 11...");
 
 					const XrGraphicsBindingD3D11KHR* bindings = reinterpret_cast<const XrGraphicsBindingD3D11KHR*>(entry);
 					m_Renderer = std::make_shared<PassthroughRendererDX11>(bindings->device, g_dllModule, m_configManager);
@@ -539,14 +541,14 @@ namespace
 					clientData.Values.AppRenderAPI = RenderAPI_Direct3D11;
 					m_menuHandler->DispatchClientDataValues();
 					m_bDepthSupportedByRenderer = true;
-					Log("Direct3D 11 rendering initialized\n");
+					g_logger->info("Direct3D 11 rendering initialized");
 
 					return true;
 				}
 
 				case XR_TYPE_GRAPHICS_BINDING_D3D12_KHR:
 				{
-					Log("Initializing rendering for Direct3D 12...\n");
+					g_logger->info("Initializing rendering for Direct3D 12...");
 
 					const XrGraphicsBindingD3D12KHR* bindings = reinterpret_cast<const XrGraphicsBindingD3D12KHR*>(entry);
 
@@ -556,7 +558,7 @@ namespace
 					{
 						m_Renderer = std::make_unique<PassthroughRendererDX12>(bindings->device, bindings->queue, g_dllModule, m_configManager);
 						usedAPI = RenderAPI_Direct3D12;
-						Log("Using legacy Direct3D 12 renderer\n");
+						g_logger->info("Using legacy Direct3D 12 renderer");
 					}
 					else
 					{
@@ -576,14 +578,14 @@ namespace
 					clientData.Values.AppRenderAPI = RenderAPI_Direct3D12;
 					m_menuHandler->DispatchClientDataValues();
 					m_bDepthSupportedByRenderer = true;
-					Log("Direct3D 12 rendering initialized\n");
+					g_logger->info("Direct3D 12 rendering initialized");
 
 					return true;
 				}
 
 				case XR_TYPE_GRAPHICS_BINDING_VULKAN_KHR: // same as XR_TYPE_GRAPHICS_BINDING_VULKAN2_KHR
 				{
-					Log("Initializing rendering for Vulkan...\n");
+					g_logger->info("Initializing rendering for Vulkan...");
 
 					ERenderAPI usedAPI = RenderAPI_Vulkan;
 
@@ -592,13 +594,13 @@ namespace
 					{
 
 						m_Renderer = std::make_unique<PassthroughRendererVulkan>(*bindings, g_dllModule, m_configManager);
-						Log("Using legacy Vulkan renderer\n");
+						g_logger->info("Using legacy Vulkan renderer");
 					}
 					else
 					{
 						if (!m_bEnableVulkan2Extension)
 						{
-							ErrorLog("The XR_KHR_vulkan_enable extension is only supported with the legacy renderer, passthrough rendering not enabled\n");
+							g_logger->error("The XR_KHR_vulkan_enable extension is only supported with the legacy renderer, passthrough rendering not enabled");
 							return false;
 						}
 
@@ -619,14 +621,14 @@ namespace
 					clientData.Values.AppRenderAPI = RenderAPI_Vulkan;
 					m_menuHandler->DispatchClientDataValues();
 					m_bDepthSupportedByRenderer = false;
-					Log("Vulkan rendering initialized\n");
+					g_logger->info("Vulkan rendering initialized");
 
 					return true;
 				}
 
 				case XR_TYPE_GRAPHICS_BINDING_OPENGL_WIN32_KHR:
 				{
-					Log("Initializing rendering for OpenGL...\n");
+					g_logger->info("Initializing rendering for OpenGL...");
 
 					m_appRenderAPI = RenderAPI_OpenGL;
 					m_renderAPI = RenderAPI_Direct3D11;
@@ -645,7 +647,7 @@ namespace
 					clientData.Values.AppRenderAPI = RenderAPI_OpenGL;
 					m_menuHandler->DispatchClientDataValues();
 					m_bDepthSupportedByRenderer = false;
-					Log("OpenGL rendering initialized\n");
+					g_logger->info("OpenGL rendering initialized");
 
 					return true;
 				}
@@ -655,7 +657,7 @@ namespace
 					entry = reinterpret_cast<const XrBaseInStructure*>(entry->next);
 				}
 			}
-			Log("Passthrough API layer: No supported graphics APIs detected!\n");
+			g_logger->info("Passthrough API layer: No supported graphics APIs detected!");
 			return false;
 		}
 
@@ -675,7 +677,7 @@ namespace
 
 			if (!m_Renderer.get())
 			{
-				ErrorLog("Trying to initialize processing pipeline without renderer!\n");
+				g_logger->error("Trying to initialize processing pipeline without renderer!");
 				return false;
 			}
 
@@ -690,7 +692,7 @@ namespace
 
 				if (!m_cameraManager->InitCamera())
 				{
-					ErrorLog("Failed to initialize camera!\n");
+					g_logger->error("Failed to initialize camera!");
 					return false;
 				}
 
@@ -720,7 +722,7 @@ namespace
 
 				if (!m_cameraManager->InitCamera() || !m_augmentedCameraManager->InitCamera())
 				{
-					ErrorLog("Failed to initialize camera!\n");
+					g_logger->error("Failed to initialize camera!");
 					return false;
 				}
 				ClientData& data = m_menuHandler->GetClientData();
@@ -736,7 +738,7 @@ namespace
 
 				if (!m_cameraManager->InitCamera())
 				{
-					ErrorLog("Failed to initialize camera!\n");
+					g_logger->error("Failed to initialize camera!");
 					return false;
 				}
 				ClientData& data = m_menuHandler->GetClientData();
@@ -752,7 +754,7 @@ namespace
 			m_Renderer->SetFrameSize(cameraTextureWidth, cameraTextureHeight, cameraFrameBufferSize, cameraUndistortedTextureWidth, cameraUndistortedTextureHeight, cameraUndistortedFrameBufferSize);
 			if (!m_Renderer->InitRenderer())
 			{
-				ErrorLog("Failed to initialize renderer!\n");
+				g_logger->error("Failed to initialize renderer!");
 				return false;
 			}
 
@@ -803,7 +805,7 @@ namespace
 			{
 				if (!m_bSuccessfullyLoaded)
 				{
-					ErrorLog("Loading failed, not attaching to session!\n");
+					g_logger->error("Loading failed, not attaching to session!");
 				}
 				else if (isSystemHandled(createInfo->systemId) && !isCurrentSession(*session))
 				{
@@ -812,14 +814,14 @@ namespace
 					m_currentSession = *session;
 					if (SetupRenderer(instance, createInfo, session))
 					{
-						Log("Passthrough API layer enabled for session\n");
+						g_logger->info("Passthrough API layer enabled for session");
 						m_bUsePassthrough = m_configManager->GetConfig_Main().EnablePassthrough;
 					}
 					else
 					{
 						m_bUsePassthrough = false;
 						m_currentSession = XR_NULL_HANDLE;
-						ErrorLog("Failed to initialize rendering system!\n");
+						g_logger->error("Failed to initialize rendering system!");
 					}
 				}
 
@@ -836,7 +838,7 @@ namespace
 		{
 			if (isCurrentSession(session))
 			{
-				Log("Passthrough session ending...\n");
+				g_logger->info("Passthrough session ending...");
 				
 				m_depthReconstruction.reset();
 				m_augmentedDepthReconstruction.reset();
@@ -995,7 +997,7 @@ namespace
 			{
 				m_swapchainProperties[*swapchain] = *createInfo;
 
-				Log("App created new %u x %u swapchain %u, createFlags 0x%x, usageFlags 0x%x, format %i, sampleCount %u, faceCount %u, arraySize %u, mipCount %u\n", createInfo->width, createInfo->height, *swapchain, createInfo->createFlags, createInfo->usageFlags, createInfo->format, createInfo->sampleCount, createInfo->faceCount, createInfo->arraySize, createInfo->mipCount);
+				g_logger->info("App created new {} x {} swapchain {}, createFlags 0x{:x}, usageFlags 0x{:X}, format {}, sampleCount {}, faceCount {}, arraySize {}, mipCount {}", createInfo->width, createInfo->height, reinterpret_cast<uint64_t>(*swapchain), createInfo->createFlags, createInfo->usageFlags, createInfo->format, createInfo->sampleCount, createInfo->faceCount, createInfo->arraySize, createInfo->mipCount);
 			}
 			return result;
 		}
@@ -1049,7 +1051,7 @@ namespace
 			}
 			else
 			{
-				ErrorLog("Error in xrAcquireSwapchainImage: %i\n", result);
+				g_logger->error("Error in xrAcquireSwapchainImage: {}", static_cast<int32_t>(result));
 			}
 
 			return result;
@@ -1069,7 +1071,7 @@ namespace
 				auto held = m_heldSwapchains.find(swapchain);
 				if (held != m_heldSwapchains.end() && !held->second.empty())
 				{
-					ErrorLog("App waiting on a second swapchain per-frame!\n");
+					g_logger->error("App waiting on a second swapchain per-frame!");
 					held->second.pop();
 
 					OpenXrApi::xrReleaseSwapchainImage(swapchain, nullptr);
@@ -1118,7 +1120,7 @@ namespace
 			}
 			else
 			{
-				DebugLog("Swapchain not acquired: %i\n", swapchain);
+				g_logger->info("Swapchain not acquired: {}", reinterpret_cast<uint64_t>(swapchain));
 				return OpenXrApi::xrReleaseSwapchainImage(swapchain, releaseInfo);
 			}
 		}
@@ -1176,7 +1178,7 @@ namespace
 
 			if (newSwapchain != *storedSwapchain)
 			{
-				Log("Updating swapchain %u to %u with eye %u, index %u, arraySize %u\n", *storedSwapchain, newSwapchain, eye, imageIndex, props->second.arraySize);
+				g_logger->info("Updating swapchain {} to {} with eye {}, index {}, arraySize {}", reinterpret_cast<uint64_t>(*storedSwapchain), reinterpret_cast<uint64_t>(newSwapchain), static_cast<uint32_t>(eye), imageIndex, props->second.arraySize);
 			
 				XrStructureType type = XR_TYPE_SWAPCHAIN_IMAGE_D3D11_KHR;
 
@@ -1212,7 +1214,7 @@ namespace
 				}
 				else
 				{
-					ErrorLog("Error in xrEnumerateSwapchainImages: %i\n", result);
+					g_logger->error("Error in xrEnumerateSwapchainImages: {}", static_cast<int32_t>(result));
 
 					if (eye == RenderEye_Left)
 					{
@@ -1257,7 +1259,7 @@ namespace
 						data.Values.FarZ = depthInfo->farZ;
 					}
 
-					Log("Found depth swapchain %u for color swapchain %u, arraySize %u, depth range [%f:%f], Z-range[%g:%g]\n", depthInfo->subImage.swapchain, newSwapchain, depthProps->second.arraySize, depthInfo->minDepth, depthInfo->maxDepth, depthInfo->nearZ, depthInfo->farZ);
+					g_logger->info("Found depth swapchain {} for color swapchain {}, arraySize {}, depth range [{}:{}], Z-range[{:g}:{:g}]", reinterpret_cast<uint64_t>(depthInfo->subImage.swapchain), reinterpret_cast<uint64_t>(newSwapchain), depthProps->second.arraySize, depthInfo->minDepth, depthInfo->maxDepth, depthInfo->nearZ, depthInfo->farZ);
 
 					const XrRect2Di& depthRect = depthInfo->subImage.imageRect;
 					const XrRect2Di& colorRect = layer->views[viewIndex].subImage.imageRect;
@@ -1267,7 +1269,7 @@ namespace
 						depthRect.extent.width != colorRect.extent.width || 
 						depthRect.extent.height != depthRect.extent.height)
 					{
-						ErrorLog("The color and depth textures have mismatched imageRects, this is not supported by the layer: %i, %i, %i, %i : %i, %i, %i, %i\n", colorRect.offset.x, colorRect.offset.y, colorRect.extent.width, colorRect.extent.height, depthRect.offset.x, depthRect.offset.y, depthRect.extent.width, depthRect.extent.height);
+						g_logger->error("The color and depth textures have mismatched imageRects, this is not supported by the layer: {}, {}, {}, {} : {}, {}, {}, {}", colorRect.offset.x, colorRect.offset.y, colorRect.extent.width, colorRect.extent.height, depthRect.offset.x, depthRect.offset.y, depthRect.extent.width, depthRect.extent.height);
 					}
 
 					XrStructureType type = XR_TYPE_SWAPCHAIN_IMAGE_D3D11_KHR;
@@ -1302,7 +1304,7 @@ namespace
 					}
 					else
 					{
-						ErrorLog("Error in xrEnumerateSwapchainImages when enumerating depthbuffers: %i\n", result);
+						g_logger->error("Error in xrEnumerateSwapchainImages when enumerating depthbuffers: {}", static_cast<int32_t>(result));
 					}
 				}
 			}
@@ -1323,7 +1325,7 @@ namespace
 				}
 				else
 				{
-					ErrorLog("Error: No valid depth swapchain found!\n");
+					g_logger->error("Error: No valid depth swapchain found!");
 				}
 			}
 		}
@@ -1351,13 +1353,13 @@ namespace
 			HRSRC resInfo = FindResource(g_dllModule, MAKEINTRESOURCE(IDB_PNG_TESTPATTERN), L"PNG");
 			if (resInfo == nullptr)
 			{
-				ErrorLog("Error finding test pattern resource.\n");
+				g_logger->error("Error finding test pattern resource!");
 				return;
 			}
 			HGLOBAL memory = LoadResource(g_dllModule, resInfo);
 			if (memory == nullptr)
 			{
-				ErrorLog("Error loading test pattern resource.\n");
+				g_logger->error("Error loading test pattern resource!");
 				return;
 			}
 			size_t data_size = SizeofResource(g_dllModule, resInfo);
@@ -1365,7 +1367,7 @@ namespace
 
 			if (data == nullptr)
 			{
-				ErrorLog("Error reading test pattern resource.\n");
+				g_logger->error("Error reading test pattern resource!");
 				return;
 			}
 
@@ -1381,7 +1383,7 @@ namespace
 
 			if (error)
 			{
-				ErrorLog("Error decoding test pattern.\n");
+				g_logger->error("Error decoding test pattern!");
 				return;
 			}
 
@@ -1476,7 +1478,7 @@ namespace
 
 			if (renderParams.LeftFrameIndex < 0 || renderParams.RightFrameIndex < 0)
 			{
-				ErrorLog("Error: No swapchains found!\n");
+				g_logger->error("Error: No swapchains found!");
 				return;
 			}			
 
@@ -1725,13 +1727,13 @@ namespace
 									{
 										if ((!m_cameraManager->InitCamera() || !m_augmentedCameraManager->InitCamera()))
 										{
-											ErrorLog("Failed to reinitialize camera!\n");
+											g_logger->error("Failed to reinitialize camera!");
 											break;
 										}
 									}
 									else if (!m_cameraManager->InitCamera())
 									{
-										ErrorLog("Failed to reinitialize camera!\n");
+										g_logger->error("Failed to reinitialize camera!");
 										break;
 									}
 									m_bCamerasInitialized = true;
@@ -1757,7 +1759,7 @@ namespace
 					result = OpenXrApi::xrReleaseSwapchainImage(held.first, nullptr);
 					if (XR_FAILED(result))
 					{
-						ErrorLog("Error in xrReleaseSwapchainImage: %i\n", result);
+						g_logger->error("Error in xrReleaseSwapchainImage: {}", static_cast<int32_t>(result));
 					}
 				}
 			}
@@ -1781,7 +1783,7 @@ namespace
 						if (i > 0 && !bErrorShown)
 						{
 							bErrorShown = true;
-							ErrorLog("Non-underlay XrCompositionLayerPassthroughFB detected (layer #%d). The API layer currently only supports underlay passthrough.\n", i);
+							g_logger->error("Non-underlay XrCompositionLayerPassthroughFB detected (layer #{}). The API layer currently only supports underlay passthrough.", i);
 						}
 
 						continue;
@@ -1853,13 +1855,13 @@ namespace
 		{
 			if (!m_bVarjoDepthExtensionEnabled)
 			{
-				ErrorLog("xrSetEnvironmentDepthEstimationVARJO called without enabling extension!\n");
+				g_logger->error("xrSetEnvironmentDepthEstimationVARJO called without enabling extension!");
 				return XR_ERROR_RUNTIME_FAILURE;
 			}
 
 			if (!isCurrentSession(session))
 			{
-				ErrorLog("xrSetEnvironmentDepthEstimationVARJO called on untracked session!\n");
+				g_logger->error("xrSetEnvironmentDepthEstimationVARJO called on untracked session!");
 				return XR_ERROR_HANDLE_INVALID;
 			}
 
@@ -1872,7 +1874,7 @@ namespace
 			{
 				if (!m_bDepthSupportedByRenderer)
 				{
-					ErrorLog("Varjo depth estimation unsupported by current renderer.\n");
+					g_logger->error("Varjo depth estimation unsupported by current renderer.");
 				}
 				return XR_ERROR_FEATURE_UNSUPPORTED;
 			}
@@ -1888,13 +1890,13 @@ namespace
 		{
 			if (!m_bAndroidPassthroughStateExtensionEnabled)
 			{
-				ErrorLog("xrGetPassthroughCameraStateANDROID called without enabling extension!\n");
+				g_logger->error("xrGetPassthroughCameraStateANDROID called without enabling extension!");
 				return XR_ERROR_RUNTIME_FAILURE;
 			}
 
 			if (!isCurrentSession(session))
 			{
-				ErrorLog("xrGetPassthroughCameraStateANDROID called on untracked session!\n");
+				g_logger->error("xrGetPassthroughCameraStateANDROID called on untracked session!");
 				return XR_ERROR_HANDLE_INVALID;
 			}
 
@@ -1932,19 +1934,19 @@ namespace
 		{
 			if (!m_bFBPassthroughExtensionEnabled)
 			{
-				ErrorLog("xrCreatePassthroughFB called without enabling extension!\n");
+				g_logger->error("xrCreatePassthroughFB called without enabling extension!");
 				return XR_ERROR_RUNTIME_FAILURE;
 			}
 
 			if (!isCurrentSession(session))
 			{
-				ErrorLog("xrCreatePassthroughFB called on untracked session!\n");
+				g_logger->error("xrCreatePassthroughFB called on untracked session!");
 				return XR_ERROR_HANDLE_INVALID;
 			}
 
 			if (m_fbPassthough.InstanceCreated)
 			{
-				ErrorLog("Multiple calls to xrCreatePassthroughFB!\n");
+				g_logger->error("Multiple calls to xrCreatePassthroughFB!");
 				return XR_ERROR_FEATURE_ALREADY_CREATED_PASSTHROUGH_FB;
 			}
 
@@ -1963,7 +1965,7 @@ namespace
 		{
 			if (!m_bFBPassthroughExtensionEnabled)
 			{
-				ErrorLog("xrDestroyPassthroughFB called without enabling extension!\n");
+				g_logger->error("xrDestroyPassthroughFB called without enabling extension!");
 				return XR_ERROR_RUNTIME_FAILURE;
 			}
 
@@ -1986,7 +1988,7 @@ namespace
 		{
 			if (!m_bFBPassthroughExtensionEnabled)
 			{
-				ErrorLog("xrPassthroughStartFB called without enabling extension!\n");
+				g_logger->error("xrPassthroughStartFB called without enabling extension!");
 				return XR_ERROR_RUNTIME_FAILURE;
 			}
 
@@ -2006,7 +2008,7 @@ namespace
 		{
 			if (!m_bFBPassthroughExtensionEnabled)
 			{
-				ErrorLog("xrPassthroughPauseFB called without enabling extension!\n");
+				g_logger->error("xrPassthroughPauseFB called without enabling extension!");
 				return XR_ERROR_RUNTIME_FAILURE;
 			}
 
@@ -2027,13 +2029,13 @@ namespace
 
 			if (!m_bFBPassthroughExtensionEnabled)
 			{
-				ErrorLog("xrCreatePassthroughLayerFB called without enabling extension!\n");
+				g_logger->error("xrCreatePassthroughLayerFB called without enabling extension!");
 				return XR_ERROR_RUNTIME_FAILURE;
 			}
 
 			if (!isCurrentSession(session))
 			{
-				ErrorLog("xrCreatePassthroughLayerFB called on untracked session!\n");
+				g_logger->error("xrCreatePassthroughLayerFB called on untracked session!");
 				return XR_ERROR_HANDLE_INVALID;
 			}
 
@@ -2046,7 +2048,7 @@ namespace
 
 			if (createInfo->purpose != XR_PASSTHROUGH_LAYER_PURPOSE_RECONSTRUCTION_FB)
 			{
-				ErrorLog("xrCreatePassthroughLayerFB: unsupported purpose requested: %u!\n", createInfo->purpose);
+				g_logger->error("xrCreatePassthroughLayerFB: unsupported purpose requested: {}", static_cast<int32_t>(createInfo->purpose));
 
 				if (!m_configManager->GetConfig_Extensions().ExtFBPassthroughFakeUnsupportedFeatures)
 				{
@@ -2072,7 +2074,7 @@ namespace
 		{
 			if (!m_bFBPassthroughExtensionEnabled)
 			{
-				ErrorLog("xrDestroyPassthroughLayerFB called without enabling extension!\n");
+				g_logger->error("xrDestroyPassthroughLayerFB called without enabling extension!");
 				return XR_ERROR_RUNTIME_FAILURE;
 			}
 
@@ -2092,7 +2094,7 @@ namespace
 		{
 			if (!m_bFBPassthroughExtensionEnabled)
 			{
-				ErrorLog("xrPassthroughLayerPauseFB called without enabling extension!\n");
+				g_logger->error("xrPassthroughLayerPauseFB called without enabling extension!");
 				return XR_ERROR_RUNTIME_FAILURE;
 			}
 
@@ -2113,7 +2115,7 @@ namespace
 		{
 			if (!m_bFBPassthroughExtensionEnabled)
 			{
-				ErrorLog("xrPassthroughLayerResumeFB called without enabling extension!\n");
+				g_logger->error("xrPassthroughLayerResumeFB called without enabling extension!");
 				return XR_ERROR_RUNTIME_FAILURE;
 			}
 
@@ -2134,7 +2136,7 @@ namespace
 		{
 			if (!m_bFBPassthroughExtensionEnabled)
 			{
-				ErrorLog("xrPassthroughLayerSetStyleFB called without enabling extension!\n");
+				g_logger->error("xrPassthroughLayerSetStyleFB called without enabling extension!");
 				return XR_ERROR_RUNTIME_FAILURE;
 			}
 
@@ -2149,13 +2151,13 @@ namespace
 					{
 						if (bFoundStruct)
 						{
-							ErrorLog("Multiple chained structs passed to xrPassthroughLayerSetStyleFB!\n");
+							g_logger->error("Multiple chained structs passed to xrPassthroughLayerSetStyleFB!");
 							return XR_ERROR_VALIDATION_FAILURE;
 						}
 
 						if (chained->type != XR_TYPE_PASSTHROUGH_BRIGHTNESS_CONTRAST_SATURATION_FB)
 						{
-							ErrorLog("Currently unsupported chained struct %u passed to xrPassthroughLayerSetStyleFB!\n", chained->type);
+							g_logger->error("Currently unsupported chained struct %u passed to xrPassthroughLayerSetStyleFB!", static_cast<int32_t>(chained->type));
 							if (!m_configManager->GetConfig_Extensions().ExtFBPassthroughFakeUnsupportedFeatures)
 							{
 								return XR_ERROR_FEATURE_UNSUPPORTED;
@@ -2193,11 +2195,11 @@ namespace
 		{
 			if (!m_bFBPassthroughExtensionEnabled)
 			{
-				ErrorLog("xrCreateGeometryInstanceFB called without enabling extension!\n");
+				g_logger->error("xrCreateGeometryInstanceFB called without enabling extension!");
 				return XR_ERROR_RUNTIME_FAILURE;
 			}
 
-			ErrorLog("xrCreateGeometryInstanceFB is not currently supported!\n");
+			g_logger->error("xrCreateGeometryInstanceFB is not currently supported!");
 
 			if (!m_configManager->GetConfig_Extensions().ExtFBPassthroughFakeUnsupportedFeatures)
 			{
@@ -2210,11 +2212,11 @@ namespace
 		{
 			if (!m_bFBPassthroughExtensionEnabled)
 			{
-				ErrorLog("xrDestroyGeometryInstanceFB called without enabling extension!\n");
+				g_logger->error("xrDestroyGeometryInstanceFB called without enabling extension!");
 				return XR_ERROR_RUNTIME_FAILURE;
 			}
 
-			ErrorLog("xrDestroyGeometryInstanceFB is not currently supported!\n");
+			g_logger->error("xrDestroyGeometryInstanceFB is not currently supported!");
 
 			if (!m_configManager->GetConfig_Extensions().ExtFBPassthroughFakeUnsupportedFeatures)
 			{
@@ -2227,11 +2229,11 @@ namespace
 		{
 			if (!m_bFBPassthroughExtensionEnabled)
 			{
-				ErrorLog("xrGeometryInstanceSetTransformFB called without enabling extension!\n");
+				g_logger->error("xrGeometryInstanceSetTransformFB called without enabling extension!");
 				return XR_ERROR_RUNTIME_FAILURE;
 			}
 
-			ErrorLog("xrGeometryInstanceSetTransformFB is not currently supported!\n");
+			g_logger->error("xrGeometryInstanceSetTransformFB is not currently supported!");
 
 			if (!m_configManager->GetConfig_Extensions().ExtFBPassthroughFakeUnsupportedFeatures)
 			{

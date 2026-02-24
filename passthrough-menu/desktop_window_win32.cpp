@@ -69,7 +69,7 @@ bool DesktopWindowWin32::InitWindow(bool bStartOpen, int cmdShow)
 
         DWORD length = FormatMessageA(FORMAT_MESSAGE_ALLOCATE_BUFFER | FORMAT_MESSAGE_FROM_SYSTEM | FORMAT_MESSAGE_IGNORE_INSERTS, NULL, GetLastError(), MAKELANGID(LANG_ENGLISH, SUBLANG_ENGLISH_US), (LPSTR)&messageBuffer, 0, NULL);
 
-        ErrorLog("CreateWindowW failed: %s\n", messageBuffer);
+        g_logger->error("CreateWindowW failed: {}", messageBuffer);
 
         LocalFree(messageBuffer);
 

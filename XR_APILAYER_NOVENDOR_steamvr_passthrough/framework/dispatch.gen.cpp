@@ -26,13 +26,10 @@
 #include <layer.h>
 
 #include "dispatch.h"
-#include "log.h"
 
 #ifndef LAYER_NAMESPACE
 #error Must define LAYER_NAMESPACE
 #endif
-
-using namespace LAYER_NAMESPACE::logging;
 
 namespace LAYER_NAMESPACE
 {
@@ -55,14 +52,14 @@ namespace LAYER_NAMESPACE
 #if USE_TRACELOGGING
 			TraceLoggingWrite(g_traceProvider, "xrGetSystem_Error", TLArg(exc.what(), "Error"));
 #endif
-			ErrorLog("xrGetSystem: %s\n", exc.what());
+			g_logger->error("xrGetSystem: {}", exc.what());
 			result = XR_ERROR_RUNTIME_FAILURE;
 		}
 #if USE_TRACELOGGING
 		TraceLoggingWrite(g_traceProvider, "xrGetSystem_Result", TLArg(xr::ToCString(result), "Result"));
 #endif
 		if (XR_FAILED(result)) {
-			ErrorLog("xrGetSystem failed with %d\n", result);
+			g_logger->error("xrGetSystem failed with {}", static_cast<int32_t>(result));
 		}
 
 		return result;
@@ -84,14 +81,14 @@ namespace LAYER_NAMESPACE
 #if USE_TRACELOGGING
 			TraceLoggingWrite(g_traceProvider, "xrGetSystemProperties_Error", TLArg(exc.what(), "Error"));
 #endif
-			ErrorLog("xrGetSystemProperties: %s\n", exc.what());
+			g_logger->error("xrGetSystemProperties: {}", exc.what());
 			result = XR_ERROR_RUNTIME_FAILURE;
 		}
 #if USE_TRACELOGGING
 		TraceLoggingWrite(g_traceProvider, "xrGetSystemProperties_Result", TLArg(xr::ToCString(result), "Result"));
 #endif
 		if (XR_FAILED(result)) {
-			ErrorLog("xrGetSystemProperties failed with %d\n", result);
+			g_logger->error("xrGetSystemProperties failed with {}", static_cast<int32_t>(result));
 		}
 
 		return result;
@@ -113,14 +110,14 @@ namespace LAYER_NAMESPACE
 #if USE_TRACELOGGING
 			TraceLoggingWrite(g_traceProvider, "xrEnumerateEnvironmentBlendModes_Error", TLArg(exc.what(), "Error"));
 #endif
-			ErrorLog("xrEnumerateEnvironmentBlendModes: %s\n", exc.what());
+			g_logger->error("xrEnumerateEnvironmentBlendModes: {}", exc.what());
 			result = XR_ERROR_RUNTIME_FAILURE;
 		}
 #if USE_TRACELOGGING
 		TraceLoggingWrite(g_traceProvider, "xrEnumerateEnvironmentBlendModes_Result", TLArg(xr::ToCString(result), "Result"));
 #endif
 		if (XR_FAILED(result)) {
-			ErrorLog("xrEnumerateEnvironmentBlendModes failed with %d\n", result);
+			g_logger->error("xrEnumerateEnvironmentBlendModes failed with {}", static_cast<int32_t>(result));
 		}
 
 		return result;
@@ -142,14 +139,14 @@ namespace LAYER_NAMESPACE
 #if USE_TRACELOGGING
 			TraceLoggingWrite(g_traceProvider, "xrCreateSession_Error", TLArg(exc.what(), "Error"));
 #endif
-			ErrorLog("xrCreateSession: %s\n", exc.what());
+			g_logger->error("xrCreateSession: {}", exc.what());
 			result = XR_ERROR_RUNTIME_FAILURE;
 		}
 #if USE_TRACELOGGING
 		TraceLoggingWrite(g_traceProvider, "xrCreateSession_Result", TLArg(xr::ToCString(result), "Result"));
 #endif
 		if (XR_FAILED(result)) {
-			ErrorLog("xrCreateSession failed with %d\n", result);
+			g_logger->error("xrCreateSession failed with {}", static_cast<int32_t>(result));
 		}
 
 		return result;
@@ -171,14 +168,14 @@ namespace LAYER_NAMESPACE
 #if USE_TRACELOGGING
 			TraceLoggingWrite(g_traceProvider, "xrDestroySession_Error", TLArg(exc.what(), "Error"));
 #endif
-			ErrorLog("xrDestroySession: %s\n", exc.what());
+			g_logger->error("xrDestroySession: {}", exc.what());
 			result = XR_ERROR_RUNTIME_FAILURE;
 		}
 #if USE_TRACELOGGING
 		TraceLoggingWrite(g_traceProvider, "xrDestroySession_Result", TLArg(xr::ToCString(result), "Result"));
 #endif
 		if (XR_FAILED(result)) {
-			ErrorLog("xrDestroySession failed with %d\n", result);
+			g_logger->error("xrDestroySession failed with {}", static_cast<int32_t>(result));
 		}
 
 		return result;
@@ -200,14 +197,14 @@ namespace LAYER_NAMESPACE
 #if USE_TRACELOGGING
 			TraceLoggingWrite(g_traceProvider, "xrCreateReferenceSpace_Error", TLArg(exc.what(), "Error"));
 #endif
-			ErrorLog("xrCreateReferenceSpace: %s\n", exc.what());
+			g_logger->error("xrCreateReferenceSpace: {}", exc.what());
 			result = XR_ERROR_RUNTIME_FAILURE;
 		}
 #if USE_TRACELOGGING
 		TraceLoggingWrite(g_traceProvider, "xrCreateReferenceSpace_Result", TLArg(xr::ToCString(result), "Result"));
 #endif
 		if (XR_FAILED(result)) {
-			ErrorLog("xrCreateReferenceSpace failed with %d\n", result);
+			g_logger->error("xrCreateReferenceSpace failed with {}", static_cast<int32_t>(result));
 		}
 
 		return result;
@@ -229,14 +226,14 @@ namespace LAYER_NAMESPACE
 #if USE_TRACELOGGING
 			TraceLoggingWrite(g_traceProvider, "xrDestroySpace_Error", TLArg(exc.what(), "Error"));
 #endif
-			ErrorLog("xrDestroySpace: %s\n", exc.what());
+			g_logger->error("xrDestroySpace: {}", exc.what());
 			result = XR_ERROR_RUNTIME_FAILURE;
 		}
 #if USE_TRACELOGGING
 		TraceLoggingWrite(g_traceProvider, "xrDestroySpace_Result", TLArg(xr::ToCString(result), "Result"));
 #endif
 		if (XR_FAILED(result)) {
-			ErrorLog("xrDestroySpace failed with %d\n", result);
+			g_logger->error("xrDestroySpace failed with {}", static_cast<int32_t>(result));
 		}
 
 		return result;
@@ -258,14 +255,14 @@ namespace LAYER_NAMESPACE
 #if USE_TRACELOGGING
 			TraceLoggingWrite(g_traceProvider, "xrCreateSwapchain_Error", TLArg(exc.what(), "Error"));
 #endif
-			ErrorLog("xrCreateSwapchain: %s\n", exc.what());
+			g_logger->error("xrCreateSwapchain: {}", exc.what());
 			result = XR_ERROR_RUNTIME_FAILURE;
 		}
 #if USE_TRACELOGGING
 		TraceLoggingWrite(g_traceProvider, "xrCreateSwapchain_Result", TLArg(xr::ToCString(result), "Result"));
 #endif
 		if (XR_FAILED(result)) {
-			ErrorLog("xrCreateSwapchain failed with %d\n", result);
+			g_logger->error("xrCreateSwapchain failed with {}", static_cast<int32_t>(result));
 		}
 
 		return result;
@@ -287,14 +284,14 @@ namespace LAYER_NAMESPACE
 #if USE_TRACELOGGING
 			TraceLoggingWrite(g_traceProvider, "xrDestroySwapchain_Error", TLArg(exc.what(), "Error"));
 #endif
-			ErrorLog("xrDestroySwapchain: %s\n", exc.what());
+			g_logger->error("xrDestroySwapchain: {}", exc.what());
 			result = XR_ERROR_RUNTIME_FAILURE;
 		}
 #if USE_TRACELOGGING
 		TraceLoggingWrite(g_traceProvider, "xrDestroySwapchain_Result", TLArg(xr::ToCString(result), "Result"));
 #endif
 		if (XR_FAILED(result)) {
-			ErrorLog("xrDestroySwapchain failed with %d\n", result);
+			g_logger->error("xrDestroySwapchain failed with {}", static_cast<int32_t>(result));
 		}
 
 		return result;
@@ -316,14 +313,14 @@ namespace LAYER_NAMESPACE
 #if USE_TRACELOGGING
 			TraceLoggingWrite(g_traceProvider, "xrAcquireSwapchainImage_Error", TLArg(exc.what(), "Error"));
 #endif
-			ErrorLog("xrAcquireSwapchainImage: %s\n", exc.what());
+			g_logger->error("xrAcquireSwapchainImage: {}", exc.what());
 			result = XR_ERROR_RUNTIME_FAILURE;
 		}
 #if USE_TRACELOGGING
 		TraceLoggingWrite(g_traceProvider, "xrAcquireSwapchainImage_Result", TLArg(xr::ToCString(result), "Result"));
 #endif
 		if (XR_FAILED(result)) {
-			ErrorLog("xrAcquireSwapchainImage failed with %d\n", result);
+			g_logger->error("xrAcquireSwapchainImage failed with {}", static_cast<int32_t>(result));
 		}
 
 		return result;
@@ -345,14 +342,14 @@ namespace LAYER_NAMESPACE
 #if USE_TRACELOGGING
 			TraceLoggingWrite(g_traceProvider, "xrWaitSwapchainImage_Error", TLArg(exc.what(), "Error"));
 #endif
-			ErrorLog("xrWaitSwapchainImage: %s\n", exc.what());
+			g_logger->error("xrWaitSwapchainImage: {}", exc.what());
 			result = XR_ERROR_RUNTIME_FAILURE;
 		}
 #if USE_TRACELOGGING
 		TraceLoggingWrite(g_traceProvider, "xrWaitSwapchainImage_Result", TLArg(xr::ToCString(result), "Result"));
 #endif
 		if (XR_FAILED(result)) {
-			ErrorLog("xrWaitSwapchainImage failed with %d\n", result);
+			g_logger->error("xrWaitSwapchainImage failed with {}", static_cast<int32_t>(result));
 		}
 
 		return result;
@@ -374,14 +371,14 @@ namespace LAYER_NAMESPACE
 #if USE_TRACELOGGING
 			TraceLoggingWrite(g_traceProvider, "xrReleaseSwapchainImage_Error", TLArg(exc.what(), "Error"));
 #endif
-			ErrorLog("xrReleaseSwapchainImage: %s\n", exc.what());
+			g_logger->error("xrReleaseSwapchainImage: {}", exc.what());
 			result = XR_ERROR_RUNTIME_FAILURE;
 		}
 #if USE_TRACELOGGING
 		TraceLoggingWrite(g_traceProvider, "xrReleaseSwapchainImage_Result", TLArg(xr::ToCString(result), "Result"));
 #endif
 		if (XR_FAILED(result)) {
-			ErrorLog("xrReleaseSwapchainImage failed with %d\n", result);
+			g_logger->error("xrReleaseSwapchainImage failed with {}", static_cast<int32_t>(result));
 		}
 
 		return result;
@@ -403,14 +400,14 @@ namespace LAYER_NAMESPACE
 #if USE_TRACELOGGING
 			TraceLoggingWrite(g_traceProvider, "xrBeginFrame_Error", TLArg(exc.what(), "Error"));
 #endif
-			ErrorLog("xrBeginFrame: %s\n", exc.what());
+			g_logger->error("xrBeginFrame: {}", exc.what());
 			result = XR_ERROR_RUNTIME_FAILURE;
 		}
 #if USE_TRACELOGGING
 		TraceLoggingWrite(g_traceProvider, "xrBeginFrame_Result", TLArg(xr::ToCString(result), "Result"));
 #endif
 		if (XR_FAILED(result)) {
-			ErrorLog("xrBeginFrame failed with %d\n", result);
+			g_logger->error("xrBeginFrame failed with {}", static_cast<int32_t>(result));
 		}
 
 		return result;
@@ -432,14 +429,14 @@ namespace LAYER_NAMESPACE
 #if USE_TRACELOGGING
 			TraceLoggingWrite(g_traceProvider, "xrEndFrame_Error", TLArg(exc.what(), "Error"));
 #endif
-			ErrorLog("xrEndFrame: %s\n", exc.what());
+			g_logger->error("xrEndFrame: {}", exc.what());
 			result = XR_ERROR_RUNTIME_FAILURE;
 		}
 #if USE_TRACELOGGING
 		TraceLoggingWrite(g_traceProvider, "xrEndFrame_Result", TLArg(xr::ToCString(result), "Result"));
 #endif
 		if (XR_FAILED(result)) {
-			ErrorLog("xrEndFrame failed with %d\n", result);
+			g_logger->error("xrEndFrame failed with {}", static_cast<int32_t>(result));
 		}
 
 		return result;
@@ -461,14 +458,14 @@ namespace LAYER_NAMESPACE
 #if USE_TRACELOGGING
 			TraceLoggingWrite(g_traceProvider, "xrGetVulkanDeviceExtensionsKHR_Error", TLArg(exc.what(), "Error"));
 #endif
-			ErrorLog("xrGetVulkanDeviceExtensionsKHR: %s\n", exc.what());
+			g_logger->error("xrGetVulkanDeviceExtensionsKHR: {}", exc.what());
 			result = XR_ERROR_RUNTIME_FAILURE;
 		}
 #if USE_TRACELOGGING
 		TraceLoggingWrite(g_traceProvider, "xrGetVulkanDeviceExtensionsKHR_Result", TLArg(xr::ToCString(result), "Result"));
 #endif
 		if (XR_FAILED(result)) {
-			ErrorLog("xrGetVulkanDeviceExtensionsKHR failed with %d\n", result);
+			g_logger->error("xrGetVulkanDeviceExtensionsKHR failed with {}", static_cast<int32_t>(result));
 		}
 
 		return result;
@@ -490,14 +487,14 @@ namespace LAYER_NAMESPACE
 #if USE_TRACELOGGING
 			TraceLoggingWrite(g_traceProvider, "xrCreateVulkanDeviceKHR_Error", TLArg(exc.what(), "Error"));
 #endif
-			ErrorLog("xrCreateVulkanDeviceKHR: %s\n", exc.what());
+			g_logger->error("xrCreateVulkanDeviceKHR: {}", exc.what());
 			result = XR_ERROR_RUNTIME_FAILURE;
 		}
 #if USE_TRACELOGGING
 		TraceLoggingWrite(g_traceProvider, "xrCreateVulkanDeviceKHR_Result", TLArg(xr::ToCString(result), "Result"));
 #endif
 		if (XR_FAILED(result)) {
-			ErrorLog("xrCreateVulkanDeviceKHR failed with %d\n", result);
+			g_logger->error("xrCreateVulkanDeviceKHR failed with {}", static_cast<int32_t>(result));
 		}
 
 		return result;
@@ -519,14 +516,14 @@ namespace LAYER_NAMESPACE
 #if USE_TRACELOGGING
 			TraceLoggingWrite(g_traceProvider, "xrCreatePassthroughFB_Error", TLArg(exc.what(), "Error"));
 #endif
-			ErrorLog("xrCreatePassthroughFB: %s\n", exc.what());
+			g_logger->error("xrCreatePassthroughFB: {}", exc.what());
 			result = XR_ERROR_RUNTIME_FAILURE;
 		}
 #if USE_TRACELOGGING
 		TraceLoggingWrite(g_traceProvider, "xrCreatePassthroughFB_Result", TLArg(xr::ToCString(result), "Result"));
 #endif
 		if (XR_FAILED(result)) {
-			ErrorLog("xrCreatePassthroughFB failed with %d\n", result);
+			g_logger->error("xrCreatePassthroughFB failed with {}", static_cast<int32_t>(result));
 		}
 
 		return result;
@@ -548,14 +545,14 @@ namespace LAYER_NAMESPACE
 #if USE_TRACELOGGING
 			TraceLoggingWrite(g_traceProvider, "xrDestroyPassthroughFB_Error", TLArg(exc.what(), "Error"));
 #endif
-			ErrorLog("xrDestroyPassthroughFB: %s\n", exc.what());
+			g_logger->error("xrDestroyPassthroughFB: {}", exc.what());
 			result = XR_ERROR_RUNTIME_FAILURE;
 		}
 #if USE_TRACELOGGING
 		TraceLoggingWrite(g_traceProvider, "xrDestroyPassthroughFB_Result", TLArg(xr::ToCString(result), "Result"));
 #endif
 		if (XR_FAILED(result)) {
-			ErrorLog("xrDestroyPassthroughFB failed with %d\n", result);
+			g_logger->error("xrDestroyPassthroughFB failed with {}", static_cast<int32_t>(result));
 		}
 
 		return result;
@@ -577,14 +574,14 @@ namespace LAYER_NAMESPACE
 #if USE_TRACELOGGING
 			TraceLoggingWrite(g_traceProvider, "xrPassthroughStartFB_Error", TLArg(exc.what(), "Error"));
 #endif
-			ErrorLog("xrPassthroughStartFB: %s\n", exc.what());
+			g_logger->error("xrPassthroughStartFB: {}", exc.what());
 			result = XR_ERROR_RUNTIME_FAILURE;
 		}
 #if USE_TRACELOGGING
 		TraceLoggingWrite(g_traceProvider, "xrPassthroughStartFB_Result", TLArg(xr::ToCString(result), "Result"));
 #endif
 		if (XR_FAILED(result)) {
-			ErrorLog("xrPassthroughStartFB failed with %d\n", result);
+			g_logger->error("xrPassthroughStartFB failed with {}", static_cast<int32_t>(result));
 		}
 
 		return result;
@@ -606,14 +603,14 @@ namespace LAYER_NAMESPACE
 #if USE_TRACELOGGING
 			TraceLoggingWrite(g_traceProvider, "xrPassthroughPauseFB_Error", TLArg(exc.what(), "Error"));
 #endif
-			ErrorLog("xrPassthroughPauseFB: %s\n", exc.what());
+			g_logger->error("xrPassthroughPauseFB: {}", exc.what());
 			result = XR_ERROR_RUNTIME_FAILURE;
 		}
 #if USE_TRACELOGGING
 		TraceLoggingWrite(g_traceProvider, "xrPassthroughPauseFB_Result", TLArg(xr::ToCString(result), "Result"));
 #endif
 		if (XR_FAILED(result)) {
-			ErrorLog("xrPassthroughPauseFB failed with %d\n", result);
+			g_logger->error("xrPassthroughPauseFB failed with {}", static_cast<int32_t>(result));
 		}
 
 		return result;
@@ -635,14 +632,14 @@ namespace LAYER_NAMESPACE
 #if USE_TRACELOGGING
 			TraceLoggingWrite(g_traceProvider, "xrCreatePassthroughLayerFB_Error", TLArg(exc.what(), "Error"));
 #endif
-			ErrorLog("xrCreatePassthroughLayerFB: %s\n", exc.what());
+			g_logger->error("xrCreatePassthroughLayerFB: {}", exc.what());
 			result = XR_ERROR_RUNTIME_FAILURE;
 		}
 #if USE_TRACELOGGING
 		TraceLoggingWrite(g_traceProvider, "xrCreatePassthroughLayerFB_Result", TLArg(xr::ToCString(result), "Result"));
 #endif
 		if (XR_FAILED(result)) {
-			ErrorLog("xrCreatePassthroughLayerFB failed with %d\n", result);
+			g_logger->error("xrCreatePassthroughLayerFB failed with {}", static_cast<int32_t>(result));
 		}
 
 		return result;
@@ -664,14 +661,14 @@ namespace LAYER_NAMESPACE
 #if USE_TRACELOGGING
 			TraceLoggingWrite(g_traceProvider, "xrDestroyPassthroughLayerFB_Error", TLArg(exc.what(), "Error"));
 #endif
-			ErrorLog("xrDestroyPassthroughLayerFB: %s\n", exc.what());
+			g_logger->error("xrDestroyPassthroughLayerFB: {}", exc.what());
 			result = XR_ERROR_RUNTIME_FAILURE;
 		}
 #if USE_TRACELOGGING
 		TraceLoggingWrite(g_traceProvider, "xrDestroyPassthroughLayerFB_Result", TLArg(xr::ToCString(result), "Result"));
 #endif
 		if (XR_FAILED(result)) {
-			ErrorLog("xrDestroyPassthroughLayerFB failed with %d\n", result);
+			g_logger->error("xrDestroyPassthroughLayerFB failed with {}", static_cast<int32_t>(result));
 		}
 
 		return result;
@@ -693,14 +690,14 @@ namespace LAYER_NAMESPACE
 #if USE_TRACELOGGING
 			TraceLoggingWrite(g_traceProvider, "xrPassthroughLayerPauseFB_Error", TLArg(exc.what(), "Error"));
 #endif
-			ErrorLog("xrPassthroughLayerPauseFB: %s\n", exc.what());
+			g_logger->error("xrPassthroughLayerPauseFB: {}", exc.what());
 			result = XR_ERROR_RUNTIME_FAILURE;
 		}
 #if USE_TRACELOGGING
 		TraceLoggingWrite(g_traceProvider, "xrPassthroughLayerPauseFB_Result", TLArg(xr::ToCString(result), "Result"));
 #endif
 		if (XR_FAILED(result)) {
-			ErrorLog("xrPassthroughLayerPauseFB failed with %d\n", result);
+			g_logger->error("xrPassthroughLayerPauseFB failed with {}", static_cast<int32_t>(result));
 		}
 
 		return result;
@@ -722,14 +719,14 @@ namespace LAYER_NAMESPACE
 #if USE_TRACELOGGING
 			TraceLoggingWrite(g_traceProvider, "xrPassthroughLayerResumeFB_Error", TLArg(exc.what(), "Error"));
 #endif
-			ErrorLog("xrPassthroughLayerResumeFB: %s\n", exc.what());
+			g_logger->error("xrPassthroughLayerResumeFB: {}", exc.what());
 			result = XR_ERROR_RUNTIME_FAILURE;
 		}
 #if USE_TRACELOGGING
 		TraceLoggingWrite(g_traceProvider, "xrPassthroughLayerResumeFB_Result", TLArg(xr::ToCString(result), "Result"));
 #endif
 		if (XR_FAILED(result)) {
-			ErrorLog("xrPassthroughLayerResumeFB failed with %d\n", result);
+			g_logger->error("xrPassthroughLayerResumeFB failed with {}", static_cast<int32_t>(result));
 		}
 
 		return result;
@@ -751,14 +748,14 @@ namespace LAYER_NAMESPACE
 #if USE_TRACELOGGING
 			TraceLoggingWrite(g_traceProvider, "xrPassthroughLayerSetStyleFB_Error", TLArg(exc.what(), "Error"));
 #endif
-			ErrorLog("xrPassthroughLayerSetStyleFB: %s\n", exc.what());
+			g_logger->error("xrPassthroughLayerSetStyleFB: {}", exc.what());
 			result = XR_ERROR_RUNTIME_FAILURE;
 		}
 #if USE_TRACELOGGING
 		TraceLoggingWrite(g_traceProvider, "xrPassthroughLayerSetStyleFB_Result", TLArg(xr::ToCString(result), "Result"));
 #endif
 		if (XR_FAILED(result)) {
-			ErrorLog("xrPassthroughLayerSetStyleFB failed with %d\n", result);
+			g_logger->error("xrPassthroughLayerSetStyleFB failed with {}", static_cast<int32_t>(result));
 		}
 
 		return result;
@@ -780,14 +777,14 @@ namespace LAYER_NAMESPACE
 #if USE_TRACELOGGING
 			TraceLoggingWrite(g_traceProvider, "xrCreateGeometryInstanceFB_Error", TLArg(exc.what(), "Error"));
 #endif
-			ErrorLog("xrCreateGeometryInstanceFB: %s\n", exc.what());
+			g_logger->error("xrCreateGeometryInstanceFB: {}", exc.what());
 			result = XR_ERROR_RUNTIME_FAILURE;
 		}
 #if USE_TRACELOGGING
 		TraceLoggingWrite(g_traceProvider, "xrCreateGeometryInstanceFB_Result", TLArg(xr::ToCString(result), "Result"));
 #endif
 		if (XR_FAILED(result)) {
-			ErrorLog("xrCreateGeometryInstanceFB failed with %d\n", result);
+			g_logger->error("xrCreateGeometryInstanceFB failed with {}", static_cast<int32_t>(result));
 		}
 
 		return result;
@@ -809,14 +806,14 @@ namespace LAYER_NAMESPACE
 #if USE_TRACELOGGING
 			TraceLoggingWrite(g_traceProvider, "xrDestroyGeometryInstanceFB_Error", TLArg(exc.what(), "Error"));
 #endif
-			ErrorLog("xrDestroyGeometryInstanceFB: %s\n", exc.what());
+			g_logger->error("xrDestroyGeometryInstanceFB: {}", exc.what());
 			result = XR_ERROR_RUNTIME_FAILURE;
 		}
 #if USE_TRACELOGGING
 		TraceLoggingWrite(g_traceProvider, "xrDestroyGeometryInstanceFB_Result", TLArg(xr::ToCString(result), "Result"));
 #endif
 		if (XR_FAILED(result)) {
-			ErrorLog("xrDestroyGeometryInstanceFB failed with %d\n", result);
+			g_logger->error("xrDestroyGeometryInstanceFB failed with {}", static_cast<int32_t>(result));
 		}
 
 		return result;
@@ -838,14 +835,14 @@ namespace LAYER_NAMESPACE
 #if USE_TRACELOGGING
 			TraceLoggingWrite(g_traceProvider, "xrGeometryInstanceSetTransformFB_Error", TLArg(exc.what(), "Error"));
 #endif
-			ErrorLog("xrGeometryInstanceSetTransformFB: %s\n", exc.what());
+			g_logger->error("xrGeometryInstanceSetTransformFB: {}", exc.what());
 			result = XR_ERROR_RUNTIME_FAILURE;
 		}
 #if USE_TRACELOGGING
 		TraceLoggingWrite(g_traceProvider, "xrGeometryInstanceSetTransformFB_Result", TLArg(xr::ToCString(result), "Result"));
 #endif
 		if (XR_FAILED(result)) {
-			ErrorLog("xrGeometryInstanceSetTransformFB failed with %d\n", result);
+			g_logger->error("xrGeometryInstanceSetTransformFB failed with {}", static_cast<int32_t>(result));
 		}
 
 		return result;
@@ -867,14 +864,14 @@ namespace LAYER_NAMESPACE
 #if USE_TRACELOGGING
 			TraceLoggingWrite(g_traceProvider, "xrSetEnvironmentDepthEstimationVARJO_Error", TLArg(exc.what(), "Error"));
 #endif
-			ErrorLog("xrSetEnvironmentDepthEstimationVARJO: %s\n", exc.what());
+			g_logger->error("xrSetEnvironmentDepthEstimationVARJO: {}", exc.what());
 			result = XR_ERROR_RUNTIME_FAILURE;
 		}
 #if USE_TRACELOGGING
 		TraceLoggingWrite(g_traceProvider, "xrSetEnvironmentDepthEstimationVARJO_Result", TLArg(xr::ToCString(result), "Result"));
 #endif
 		if (XR_FAILED(result)) {
-			ErrorLog("xrSetEnvironmentDepthEstimationVARJO failed with %d\n", result);
+			g_logger->error("xrSetEnvironmentDepthEstimationVARJO failed with {}", static_cast<int32_t>(result));
 		}
 
 		return result;
@@ -896,14 +893,14 @@ namespace LAYER_NAMESPACE
 #if USE_TRACELOGGING
 			TraceLoggingWrite(g_traceProvider, "xrGetPassthroughCameraStateANDROID_Error", TLArg(exc.what(), "Error"));
 #endif
-			ErrorLog("xrGetPassthroughCameraStateANDROID: %s\n", exc.what());
+			g_logger->error("xrGetPassthroughCameraStateANDROID: {}", exc.what());
 			result = XR_ERROR_RUNTIME_FAILURE;
 		}
 #if USE_TRACELOGGING
 		TraceLoggingWrite(g_traceProvider, "xrGetPassthroughCameraStateANDROID_Result", TLArg(xr::ToCString(result), "Result"));
 #endif
 		if (XR_FAILED(result)) {
-			ErrorLog("xrGetPassthroughCameraStateANDROID failed with %d\n", result);
+			g_logger->error("xrGetPassthroughCameraStateANDROID failed with {}", static_cast<int32_t>(result));
 		}
 
 		return result;

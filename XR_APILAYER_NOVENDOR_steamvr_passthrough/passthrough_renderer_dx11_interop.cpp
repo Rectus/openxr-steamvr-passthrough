@@ -131,7 +131,7 @@ DXGI_FORMAT VulkanImageFormatToDXGI(VkFormat in)
 		return DXGI_FORMAT_UNKNOWN;
 
 	default:
-		ErrorLog("Unhandled Vulkan image format %d\n", in);
+		g_logger->error("Unhandled Vulkan image format {}", static_cast<int32_t>(in));
 		return DXGI_FORMAT_UNKNOWN;
 	}
 }
@@ -176,7 +176,7 @@ DXGI_FORMAT OpenGLImageFormatToDXGI(int64_t in)
 	//case GL_DEPTH_COMPONENT24:
 
 	default:
-		ErrorLog("Unhandled OpenGL image format 0x%x\n", in);
+		g_logger->error("Unhandled OpenGL image format 0x{:x}", in);
 		return DXGI_FORMAT_UNKNOWN;
 	}
 }
@@ -388,13 +388,13 @@ bool PassthroughRendererDX11Interop::InitRenderer()
 
 		if (FAILED(D3D11On12CreateDevice(m_d3d12Device.Get(), 0, featureLevels.data(), (UINT)featureLevels.size(), reinterpret_cast<IUnknown**>(m_d3d12CommandQueue.GetAddressOf()), 1, 0, &m_d3dDevice, nullptr, nullptr)))
 		{
-			ErrorLog("Failed to create D3D11 to D3D12 interop device!\n");
+			g_logger->error("Failed to create D3D11 to D3D12 interop device!");
 			return false;
 		}
 
 		if (FAILED(m_d3dDevice.As(&m_d3d11On12Device)))
 		{
-			ErrorLog("Failed to query D3D11 to D3D12 interop device!\n");
+			g_logger->error("Failed to query D3D11 to D3D12 interop device!");
 			return false;
 		}
 
@@ -413,7 +413,7 @@ bool PassthroughRendererDX11Interop::InitRenderer()
 		IDXGIFactory1* factory = nullptr;
 		if (FAILED(CreateDXGIFactory1(__uuidof(IDXGIFactory1), (void**)(&factory))))
 		{
-			ErrorLog("CreateDXGIFactory failure!\n");
+			g_logger->error("CreateDXGIFactory failure!");
 			return false;
 		}
 
@@ -425,7 +425,7 @@ bool PassthroughRendererDX11Interop::InitRenderer()
 		{
 			if (adapter->GetDesc(&desc) != S_OK)
 			{
-				ErrorLog("GetDesc failure!\n");
+				g_logger->error("GetDesc failure!");
 				factory->Release();
 				return false;
 			}
@@ -457,19 +457,19 @@ bool PassthroughRendererDX11Interop::InitRenderer()
 
 		if (FAILED(res))
 		{
-			ErrorLog("D3D11CreateDevice failure: 0x%x\n", res);
+			g_logger->error("D3D11CreateDevice failure: 0x{:x}", static_cast<int32_t>(res));
 			return false;
 		}
 
 		if (FAILED(m_d3dDevice->QueryInterface(__uuidof(ID3D11Device5), (void**)m_d3d11Device5.GetAddressOf())))
 		{
-			ErrorLog("Querying ID3D11Device5 failure!\n");
+			g_logger->error("Querying ID3D11Device5 failure!");
 			return false;
 		}
 
 		if (FAILED(m_deviceContext->QueryInterface(__uuidof(ID3D11DeviceContext4), (void**)m_d3d11DeviceContext4.GetAddressOf())))
 		{
-			ErrorLog("Querying ID3D11DeviceContext4 failure!\n");
+			g_logger->error("Querying ID3D11DeviceContext4 failure!");
 			return false;
 		}
 
@@ -479,7 +479,7 @@ bool PassthroughRendererDX11Interop::InitRenderer()
 
 		if (vkCreateCommandPool(m_vulkanDevice, &poolInfo, nullptr, &m_vulkanCommandPool) != VK_SUCCESS)
 		{
-			ErrorLog("vkCreateCommandPool failure!\n");
+			g_logger->error("vkCreateCommandPool failure!");
 			return false;
 		}
 
@@ -490,7 +490,7 @@ bool PassthroughRendererDX11Interop::InitRenderer()
 
 		if (vkAllocateCommandBuffers(m_vulkanDevice, &allocInfo, m_vulkanCommandBuffer) != VK_SUCCESS)
 		{
-			ErrorLog("vkAllocateCommandBuffers failure!\n");
+			g_logger->error("vkAllocateCommandBuffers failure!");
 			vkDestroyCommandPool(m_vulkanDevice, m_vulkanCommandPool, nullptr);
 			return false;
 		}
@@ -498,7 +498,7 @@ bool PassthroughRendererDX11Interop::InitRenderer()
 
 		if (FAILED(m_d3d11Device5->CreateFence(1, D3D11_FENCE_FLAG_SHARED, __uuidof(ID3D11Fence), (void**)m_semaphoreFence.GetAddressOf())))
 		{
-			ErrorLog("CreateFence failure!\n");
+			g_logger->error("CreateFence failure!");
 			return false;
 		}
 
@@ -511,7 +511,7 @@ bool PassthroughRendererDX11Interop::InitRenderer()
 
 		if (vkCreateSemaphore(m_vulkanDevice, &semaphoreInfo, nullptr, &m_semaphoreVulkan) != VK_SUCCESS)
 		{
-			ErrorLog("vkCreateSemaphore failure!\n");
+			g_logger->error("vkCreateSemaphore failure!");
 			return false;
 		}
 
@@ -526,7 +526,7 @@ bool PassthroughRendererDX11Interop::InitRenderer()
 
 		if (importFunc(m_vulkanDevice, &importInfo) != VK_SUCCESS)
 		{
-			ErrorLog("vkImportSemaphoreWin32HandleKHR failure!\n");
+			g_logger->error("vkImportSemaphoreWin32HandleKHR failure!");
 			return false;
 		}
 
@@ -534,7 +534,7 @@ bool PassthroughRendererDX11Interop::InitRenderer()
 
 		if (vkCreateFence(m_vulkanDevice, &fenceInfo, nullptr, &m_vulkanRenderCompleteFence) != VK_SUCCESS)
 		{
-			ErrorLog("vkCreateFence failure!\n");
+			g_logger->error("vkCreateFence failure!");
 			return false;
 		}
 
@@ -552,7 +552,7 @@ bool PassthroughRendererDX11Interop::InitRenderer()
 		IDXGIFactory1* factory = nullptr;
 		if (FAILED(CreateDXGIFactory1(__uuidof(IDXGIFactory1), (void**)(&factory))))
 		{
-			ErrorLog("CreateDXGIFactory failure!\n");
+			g_logger->error("CreateDXGIFactory failure!");
 			return false;
 		}
 
@@ -565,14 +565,14 @@ bool PassthroughRendererDX11Interop::InitRenderer()
 
 		if (res != S_OK)
 		{
-			ErrorLog("EnumAdapters failure: 0x%x\n", res);
+			g_logger->error("EnumAdapters failure: 0x{:x}", static_cast<int32_t>(res));
 			return false;	
 		}
 
 		DXGI_ADAPTER_DESC adapterDesc{};
 		if (adapter->GetDesc(&adapterDesc) != S_OK)
 		{
-			ErrorLog("GetDesc failure!\n");
+			g_logger->error("GetDesc failure!");
 			factory->Release();
 			return false;
 		}
@@ -585,25 +585,25 @@ bool PassthroughRendererDX11Interop::InitRenderer()
 
 		if (FAILED(res))
 		{
-			ErrorLog("D3D11CreateDevice failure: 0x%x\n", res);
+			g_logger->error("D3D11CreateDevice failure: 0x{:x}", static_cast<int32_t>(res));
 			return false;
 		}
 
 		if (FAILED(m_d3dDevice->QueryInterface(__uuidof(ID3D11Device5), (void**)m_d3d11Device5.GetAddressOf())))
 		{
-			ErrorLog("Querying ID3D11Device5 failure!\n");
+			g_logger->error("Querying ID3D11Device5 failure!");
 			return false;
 		}
 
 		if (FAILED(m_deviceContext->QueryInterface(__uuidof(ID3D11DeviceContext4), (void**)m_d3d11DeviceContext4.GetAddressOf())))
 		{
-			ErrorLog("Querying ID3D11DeviceContext4 failure!\n");
+			g_logger->error("Querying ID3D11DeviceContext4 failure!");
 			return false;
 		}
 
 		if (FAILED(m_d3d11Device5->CreateFence(1, D3D11_FENCE_FLAG_SHARED, __uuidof(ID3D11Fence), (void**)m_semaphoreFence.GetAddressOf())))
 		{
-			ErrorLog("CreateFence failure!\n");
+			g_logger->error("CreateFence failure!");
 			return false;
 		}
 
@@ -611,7 +611,7 @@ bool PassthroughRendererDX11Interop::InitRenderer()
 
 		if (FAILED(result))
 		{
-			ErrorLog("CreateSharedHandle failure: 0x%x\n", result);
+			g_logger->error("CreateSharedHandle failure: 0x{:x}", static_cast<int32_t>(result));
 			return false;
 		}
 
@@ -622,7 +622,7 @@ bool PassthroughRendererDX11Interop::InitRenderer()
 		GLenum error = glGetError();
 		if (GLenum error = glGetError() != GL_NO_ERROR)
 		{
-			ErrorLog("glGenSemaphoresEXT error: 0x%x\n", error);
+			g_logger->error("glGenSemaphoresEXT error: 0x{:x}", static_cast<uint32_t>(error));
 		}
 
 		glImportSemaphoreWin32HandleEXT(m_semaphoreOpenGL, HANDLE_TYPE_D3D12_FENCE_EXT, m_semaphoreFenceHandle);
@@ -630,7 +630,7 @@ bool PassthroughRendererDX11Interop::InitRenderer()
 		error = glGetError();
 		if (GLenum error = glGetError() != GL_NO_ERROR)
 		{
-			ErrorLog("glImportSemaphoreWin32HandleEXT error: 0x%x\n", error);
+			g_logger->error("glImportSemaphoreWin32HandleEXT error: 0x{:x}", static_cast<uint32_t>(error));
 		}
 
 		
@@ -643,7 +643,7 @@ bool PassthroughRendererDX11Interop::InitRenderer()
 
 		if (vkCreateInstance(&createInfo, nullptr, &m_vulkanInstance) != VK_SUCCESS)
 		{
-			ErrorLog("vkCreateInstance failure!\n");
+			g_logger->error("vkCreateInstance failure!");
 			return false;
 		}
 
@@ -655,7 +655,7 @@ bool PassthroughRendererDX11Interop::InitRenderer()
 
 		if (deviceCount < 1)
 		{
-			ErrorLog("Failed to enumerate Vulkan devices!\n");
+			g_logger->error("Failed to enumerate Vulkan devices!");
 			return false;
 		}
 
@@ -680,7 +680,7 @@ bool PassthroughRendererDX11Interop::InitRenderer()
 
 		if (!bFoundPhysDevice)
 		{
-			ErrorLog("No matching Vulkan physical device found!\n");
+			g_logger->error("No matching Vulkan physical device found!");
 			return false;
 		}
 
@@ -753,7 +753,7 @@ bool PassthroughRendererDX11Interop::InitVulkanDownloadTexture()
 
 	if (vkCreateDevice(m_vulkanPhysDevice, &deviceInfo, nullptr, &m_vulkanDownloadDevice) != VK_SUCCESS)
 	{
-		ErrorLog("vkCreateDevice failure!\n");
+		g_logger->error("vkCreateDevice failure!");
 		return false;
 	}
 
@@ -765,7 +765,7 @@ bool PassthroughRendererDX11Interop::InitVulkanDownloadTexture()
 
 	if (vkCreateCommandPool(m_vulkanDownloadDevice, &poolInfo, nullptr, &m_vulkanDownloadCommandPool) != VK_SUCCESS)
 	{
-		ErrorLog("vkCreateCommandPool failure!\n");
+		g_logger->error("vkCreateCommandPool failure!");
 		return false;
 	}
 
@@ -776,7 +776,7 @@ bool PassthroughRendererDX11Interop::InitVulkanDownloadTexture()
 
 	if (vkAllocateCommandBuffers(m_vulkanDownloadDevice, &allocInfo, &m_vulkanDownloadCommandBuffer) != VK_SUCCESS)
 	{
-		ErrorLog("vkAllocateCommandBuffers failure!\n");
+		g_logger->error("vkAllocateCommandBuffers failure!");
 		vkDestroyCommandPool(m_vulkanDownloadDevice, m_vulkanDownloadCommandPool, nullptr);
 		return false;
 	}
@@ -785,7 +785,7 @@ bool PassthroughRendererDX11Interop::InitVulkanDownloadTexture()
 
 	if (vkCreateFence(m_vulkanDownloadDevice, &fenceInfo2, nullptr, &m_vulkanDownloadFence) != VK_SUCCESS)
 	{
-		ErrorLog("vkCreateFence failure!\n");
+		g_logger->error("vkCreateFence failure!");
 		return false;
 	}
 
@@ -803,7 +803,7 @@ void PassthroughRendererDX11Interop::InitRenderTarget(const ERenderEye eye, void
 		flags.BindFlags = D3D11_BIND_SHADER_RESOURCE | D3D11_BIND_RENDER_TARGET;
 		if (FAILED(m_d3d11On12Device->CreateWrappedResource((ID3D12Resource*)rendertarget, &flags, D3D12_RESOURCE_STATE_RENDER_TARGET, D3D12_RESOURCE_STATE_RENDER_TARGET, IID_PPV_ARGS(&res))))
 		{
-			ErrorLog("Failed to create wrapped rendertarget!\n");
+			g_logger->error("Failed to create wrapped rendertarget!");
 			return;
 		}
 
@@ -888,7 +888,7 @@ void PassthroughRendererDX11Interop::InitDepthBuffer(const ERenderEye eye, void*
 		flags.BindFlags = D3D11_BIND_SHADER_RESOURCE | D3D11_BIND_DEPTH_STENCIL;
 		if (FAILED(m_d3d11On12Device->CreateWrappedResource((ID3D12Resource*)depthBuffer, &flags, D3D12_RESOURCE_STATE_DEPTH_WRITE, D3D12_RESOURCE_STATE_DEPTH_WRITE, IID_PPV_ARGS(&res))))
 		{
-			ErrorLog("Failed to create wrapped depth stencil!\n");
+			g_logger->error("Failed to create wrapped depth stencil!");
 			return;
 		}
 
@@ -981,7 +981,7 @@ bool PassthroughRendererDX11Interop::CreateLocalTextureVulkan(VkImage& localVulk
 	HRESULT res = m_d3dDevice->CreateTexture2D(&textureDesc, nullptr, localD3DTexture);
 	if (res != S_OK)
 	{
-		ErrorLog("Shared texture CreateTexture2D failure: 0x%x\n", res);
+		g_logger->error("Shared texture CreateTexture2D failure: 0x{:x}", static_cast<int32_t>(res));
 		return false;
 	}
 
@@ -1019,7 +1019,7 @@ bool PassthroughRendererDX11Interop::CreateLocalTextureVulkan(VkImage& localVulk
 
 	if (vkCreateImage(m_vulkanDevice, &imageInfo, nullptr, &localVulkanTexture) != VK_SUCCESS)
 	{
-		ErrorLog("Shared texture vkCreateImage failure!\n");
+		g_logger->error("Shared texture vkCreateImage failure!");
 		return false;
 	}
 
@@ -1044,7 +1044,7 @@ bool PassthroughRendererDX11Interop::CreateLocalTextureVulkan(VkImage& localVulk
 			allocInfo.memoryTypeIndex = i;
 			if (vkAllocateMemory(m_vulkanDevice, &allocInfo, nullptr, &localVulkanTextureMemory) != VK_SUCCESS)
 			{
-				ErrorLog("Shared texture vkAllocateMemory failure!\n");
+				g_logger->error("Shared texture vkAllocateMemory failure!");
 				vkDestroyImage(m_vulkanDevice, localVulkanTexture, nullptr);
 				localVulkanTexture = nullptr;
 				return false;
@@ -1055,7 +1055,7 @@ bool PassthroughRendererDX11Interop::CreateLocalTextureVulkan(VkImage& localVulk
 
 	if (vkBindImageMemory(m_vulkanDevice, localVulkanTexture, localVulkanTextureMemory, 0) != VK_SUCCESS)
 	{
-		ErrorLog("Failed to bind shared texture memory!\n");
+		g_logger->error("Failed to bind shared texture memory!");
 		vkDestroyImage(m_vulkanDevice, localVulkanTexture, nullptr);
 		vkFreeMemory(m_vulkanDevice, localVulkanTextureMemory, nullptr);
 		localVulkanTexture = nullptr;
@@ -1085,7 +1085,7 @@ bool PassthroughRendererDX11Interop::CreateLocalTextureOpenGL(uint32_t& localOpe
 	HRESULT res = m_d3dDevice->CreateTexture2D(&textureDesc, nullptr, localD3DTexture);
 	if (res != S_OK)
 	{
-		ErrorLog("Shared texture CreateTexture2D failure: 0x%x\n", res);
+		g_logger->error("Shared texture CreateTexture2D failure: 0x{:x}", static_cast<int32_t>(res));
 		return false;
 	}
 
@@ -1124,7 +1124,7 @@ bool PassthroughRendererDX11Interop::CreateLocalTextureOpenGL(uint32_t& localOpe
 	GLenum error = glGetError();
 	if (GLenum error = glGetError() != GL_NO_ERROR)
 	{
-		ErrorLog("glCreateMemoryObjectsEXT error: 0x%x\n", error);
+		g_logger->error("glCreateMemoryObjectsEXT error: 0x{:x}", static_cast<uint32_t>(error));
 		return false;
 	}
 
@@ -1133,7 +1133,7 @@ bool PassthroughRendererDX11Interop::CreateLocalTextureOpenGL(uint32_t& localOpe
 	error = glGetError();
 	if (GLenum error = glGetError() != GL_NO_ERROR)
 	{
-		ErrorLog("glImportMemoryWin32HandleEXT error: 0x%x\n", error);
+		g_logger->error("glImportMemoryWin32HandleEXT error: 0x{:x}", static_cast<uint32_t>(error));
 		return false;
 	}
 
@@ -1142,7 +1142,7 @@ bool PassthroughRendererDX11Interop::CreateLocalTextureOpenGL(uint32_t& localOpe
 	error = glGetError();
 	if (GLenum error = glGetError() != GL_NO_ERROR)
 	{
-		ErrorLog("glTexStorageMem2DEXT error: 0x%x\n", error);
+		g_logger->error("glTexStorageMem2DEXT error: 0x{:x}", static_cast<uint32_t>(error));
 		return false;
 	}
 
@@ -1282,7 +1282,7 @@ void PassthroughRendererDX11Interop::RenderPassthroughFrame(const XrCompositionL
 		{
 			if (viewDataLeft.renderTarget.Texture.Get() == nullptr || viewDataRight.renderTarget.Texture.Get() == nullptr)
 			{
-				ErrorLog("Tried to render without initialized rendertarget texture!\n");
+				g_logger->error("Tried to render without initialized rendertarget texture!");
 				return;
 			}
 
@@ -1531,7 +1531,7 @@ void PassthroughRendererDX11Interop::RenderPassthroughFrame(const XrCompositionL
 			GLenum error = glGetError();
 			if (GLenum error = glGetError() != GL_NO_ERROR)
 			{
-				ErrorLog("glSignalSemaphoreEXT error: 0x%x\n", error);
+				g_logger->error("glSignalSemaphoreEXT error: 0x{:x}", static_cast<uint32_t>(error));
 			}
 
 			m_d3d11DeviceContext4->Wait(m_semaphoreFence.Get(), m_semaphoreValue);
@@ -1549,7 +1549,7 @@ void PassthroughRendererDX11Interop::RenderPassthroughFrame(const XrCompositionL
 			error = glGetError();
 			if (GLenum error = glGetError() != GL_NO_ERROR)
 			{
-				ErrorLog("glWaitSemaphoreEXT error: 0x%x\n", error);
+				g_logger->error("glWaitSemaphoreEXT error: 0x{:x}", error);
 			}
 		}
 
@@ -1643,7 +1643,7 @@ bool PassthroughRendererDX11Interop::DownloadTextureToCPU(void* textureSRV, cons
 
 			if (vkCreateImage(m_vulkanDownloadDevice, &imageInfo, nullptr, &gpuTexture) != VK_SUCCESS)
 			{
-				ErrorLog("Shared texture vkCreateImage failure!\n");
+				g_logger->error("Shared texture vkCreateImage failure!");
 				return false;
 			}
 
@@ -1668,7 +1668,7 @@ bool PassthroughRendererDX11Interop::DownloadTextureToCPU(void* textureSRV, cons
 					allocInfo.memoryTypeIndex = j;
 					if (vkAllocateMemory(m_vulkanDownloadDevice, &allocInfo, nullptr, &gpuTextureMemory) != VK_SUCCESS)
 					{
-						ErrorLog("Shared texture vkAllocateMemory failure!\n");
+						g_logger->error("Shared texture vkAllocateMemory failure!");
 						vkDestroyImage(m_vulkanDownloadDevice, gpuTexture, nullptr);
 						return false;
 					}
@@ -1678,7 +1678,7 @@ bool PassthroughRendererDX11Interop::DownloadTextureToCPU(void* textureSRV, cons
 
 			if (gpuTextureMemory == VK_NULL_HANDLE)
 			{
-				ErrorLog("Shared texture memory prop not found!\n");
+				g_logger->error("Shared texture memory prop not found!");
 				vkDestroyImage(m_vulkanDownloadDevice, gpuTexture, nullptr);
 				return false;
 			}
@@ -1722,7 +1722,7 @@ bool PassthroughRendererDX11Interop::DownloadTextureToCPU(void* textureSRV, cons
 					allocInfo.memoryTypeIndex = i;
 					if (vkAllocateMemory(m_vulkanDownloadDevice, &allocInfo, nullptr, &m_vulkanDownloadBufferMemory) != VK_SUCCESS)
 					{
-						ErrorLog("Download buffer vkAllocateMemory failure!\n");
+						g_logger->error("Download buffer vkAllocateMemory failure!");
 						vkDestroyBuffer(m_vulkanDownloadDevice, m_vulkanDownloadBuffer, nullptr);
 						m_vulkanDownloadBuffer = VK_NULL_HANDLE;
 						vkDestroyImage(m_vulkanDownloadDevice, gpuTexture, nullptr);
@@ -1736,7 +1736,7 @@ bool PassthroughRendererDX11Interop::DownloadTextureToCPU(void* textureSRV, cons
 
 			if (!m_vulkanDownloadBufferMemory)
 			{
-				ErrorLog("Download buffer failure!\n");
+				g_logger->error("Download buffer failure!");
 				vkDestroyBuffer(m_vulkanDownloadDevice, m_vulkanDownloadBuffer, nullptr);
 				m_vulkanDownloadBuffer = VK_NULL_HANDLE;
 				vkDestroyImage(m_vulkanDownloadDevice, gpuTexture, nullptr);

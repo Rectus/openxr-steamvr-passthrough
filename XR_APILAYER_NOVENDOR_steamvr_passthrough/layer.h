@@ -25,6 +25,8 @@
 #include "framework/dispatch.gen.h"
 #include "version.h"
 
+#define LOG_FILE_DIR "\\OpenXR SteamVR Passthrough"
+
 namespace steamvr_passthrough
 {
     // Singleton accessor.

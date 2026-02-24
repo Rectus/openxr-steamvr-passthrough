@@ -6,6 +6,7 @@
 enum MenuIPCMessageType
 {
 	MessageType_KeepAlive = 0,
+	MessageType_Log,
 	MessageType_SetAppModuleName,
 	MessageType_SetAppName,
 	MessageType_SetAppEngineName,

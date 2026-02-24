@@ -2,6 +2,7 @@
 
 #include "pch.h"
 #include "main.h"
+#include "version.h"
 
 #include <shellapi.h>
 #include <dwmapi.h>
@@ -12,23 +13,23 @@
 #include "settings_menu.h"
 #include "menu_ipc_server.h"
 
+#include "spdlog/sinks/basic_file_sink.h"
+#include "spdlog/sinks/dup_filter_sink.h"
+#include "spdlog/sinks/msvc_sink.h"
+
 
 // Directory under AppData to write config.
 #define CONFIG_FILE_DIR "\\OpenXR SteamVR Passthrough"
 #define CONFIG_FILE_NAME "\\config.ini"
 #define WINDOW_CONFIG_FILE_NAME "\\imgui.ini"
+#define LOG_FILE_DIR "\\OpenXR SteamVR Passthrough"
 #define LOG_FILE_NAME "\\menu.log"
 
 #define MUTEX_APP_KEY L"Global\\XR_APILAYER_NOVENDOR_steamvr_passthrough_menu"
 
-namespace steamvr_passthrough 
-{
-    namespace logging 
-    {
-        std::ofstream logStream;
-    }
-}
 
+std::shared_ptr<spdlog::logger> g_logger;
+std::shared_ptr<spdlog_imgui_buffer_sink_mt> g_logRingbuffer;
 
 
 int APIENTRY wWinMain(_In_ HINSTANCE hInstance, _In_opt_ HINSTANCE hPrevInstance, _In_ LPWSTR lpCmdLine, _In_ int       nCmdShow)
@@ -84,11 +85,26 @@ int APIENTRY wWinMain(_In_ HINSTANCE hInstance, _In_opt_ HINSTANCE hPrevInstance
         return 1;
     }
 
-    if (!logStream.is_open())
     {
-        std::string logFile = GetLocalAppData() + LOG_FILE_DIR + LOG_FILE_NAME;
+        std::shared_ptr<spdlog::sinks::dup_filter_sink_mt> duplicateFilter = std::make_shared<spdlog::sinks::dup_filter_sink_mt>(std::chrono::minutes(10));
+
+        g_logRingbuffer = std::make_shared<spdlog_imgui_buffer_sink_mt>(500);
+        g_logRingbuffer->set_pattern("%v");
+        duplicateFilter->add_sink(g_logRingbuffer);
+
+        std::string logFilePath = GetLocalAppData() + LOG_FILE_DIR + LOG_FILE_NAME;
         CreateDirectoryPath(GetLocalAppData() + LOG_FILE_DIR);
-        logStream.open(ToWideString(logFile), std::ios_base::ate);
+
+        duplicateFilter->add_sink(std::make_shared<spdlog::sinks::basic_file_sink_mt>(logFilePath, true));
+        duplicateFilter->add_sink(std::make_shared<spdlog::sinks::msvc_sink_mt>());
+
+        g_logger = std::make_shared<spdlog::logger>("menu", duplicateFilter);
+        g_logger->set_pattern("[%Y-%m-%d %H:%M:%S.%e] [%l] %v");
+        g_logger->flush_on(spdlog::level::err);
+        spdlog::flush_every(std::chrono::seconds(10));
+
+        g_logger->info("Starting Passthrough Wenu version {}", VersionString);
+        g_logger->info("Logging to {}", logFilePath);
     }
 
 
@@ -96,6 +112,7 @@ int APIENTRY wWinMain(_In_ HINSTANCE hInstance, _In_opt_ HINSTANCE hPrevInstance
     bool bIsInitialConfig = false;
     {
         std::string filePath = GetRoamingAppData() + CONFIG_FILE_DIR + CONFIG_FILE_NAME;
+        g_logger->info("Reading config file from {}", filePath);
         configManager = std::make_shared<ConfigManager>(filePath, true);
         bIsInitialConfig = configManager->ReadConfigFile(); 
     }
@@ -127,7 +144,7 @@ int APIENTRY wWinMain(_In_ HINSTANCE hInstance, _In_opt_ HINSTANCE hPrevInstance
 
     window->SetMenu(menu);
 
-    Log("Menu started.\n");
+    g_logger->info("Menu started");
 
     MSG quitMessage = {};
   
@@ -164,7 +181,7 @@ int APIENTRY wWinMain(_In_ HINSTANCE hInstance, _In_opt_ HINSTANCE hPrevInstance
         }
     }
 
-    Log("Shutting down...\n");
+    g_logger->info("Shutting down...");
 
     menu.reset();
 

@@ -25,22 +25,21 @@
 #include <layer.h>
 
 #include "dispatch.h"
-#include "log.h"
 #include "pathutil.h"
+
+#include "spdlog/async.h"
+#include "spdlog/sinks/basic_file_sink.h"
+#include "spdlog/sinks/dup_filter_sink.h"
+#include "spdlog/sinks/msvc_sink.h"
 
 #ifndef LAYER_NAMESPACE
 #error Must define LAYER_NAMESPACE
 #endif
 
-namespace LAYER_NAMESPACE {
-    namespace logging {
-        // The file logger.
-        std::ofstream logStream;
-    } // namespace log
-} // namespace LAYER_NAMESPACE
+std::shared_ptr<spdlog::logger> g_logger = nullptr;
+std::shared_ptr<spdlog::sinks::dup_filter_sink_mt> g_logSinkAggregator = nullptr;
 
 using namespace LAYER_NAMESPACE;
-using namespace LAYER_NAMESPACE::logging;
 
 extern "C" {
 
@@ -54,16 +53,29 @@ XrResult __declspec(dllexport) XRAPI_CALL
 #endif
 
     // Start logging to file.
-    if (!logStream.is_open()) {
-        std::string logFile = GetLocalAppData() + LOG_FILE_DIR +  "\\client_" + GetProcessFileName(false) + ".log";
+    if (!g_logger.get())
+    {
+        g_logSinkAggregator = std::make_shared<spdlog::sinks::dup_filter_sink_mt>(std::chrono::minutes(10));
+
+        std::string logFilePath = GetLocalAppData() + LOG_FILE_DIR +"\\client_" + GetProcessFileName(false) + ".log";
         CreateDirectoryPath(GetLocalAppData() + LOG_FILE_DIR);
-        logStream.open(ToWideString(logFile), std::ios_base::ate);
+
+        g_logSinkAggregator->add_sink(std::make_shared<spdlog::sinks::basic_file_sink_mt>(logFilePath, true));
+        g_logSinkAggregator->add_sink(std::make_shared<spdlog::sinks::msvc_sink_mt>());
+
+        spdlog::init_thread_pool(100, 1);
+        g_logger = std::make_shared<spdlog::async_logger>("menu", g_logSinkAggregator, spdlog::thread_pool(), spdlog::async_overflow_policy::discard_new);
+        g_logger->set_pattern("[%Y-%m-%d %H:%M:%S.%e] [%l] %v");
+        g_logger->flush_on(spdlog::level::err);
+        spdlog::flush_every(std::chrono::seconds(10));
     }
 
-    DebugLog("--> xrNegotiateLoaderApiLayerInterface\n");
+#ifdef _DEBUG
+    g_logger->debug("--> xrNegotiateLoaderApiLayerInterface");
+#endif
 
     if (apiLayerName && apiLayerName != LayerName) {
-        ErrorLog("Invalid apiLayerName \"%s\"\n", apiLayerName);
+        g_logger->error("Invalid apiLayerName \"{}\"", apiLayerName);
         return XR_ERROR_INITIALIZATION_FAILED;
     }
 
@@ -77,7 +89,7 @@ XrResult __declspec(dllexport) XRAPI_CALL
         loaderInfo->maxInterfaceVersion < XR_CURRENT_LOADER_API_LAYER_VERSION ||
         loaderInfo->maxInterfaceVersion > XR_CURRENT_LOADER_API_LAYER_VERSION ||
         loaderInfo->maxApiVersion < XR_CURRENT_API_VERSION || loaderInfo->minApiVersion > XR_CURRENT_API_VERSION) {
-        ErrorLog("xrNegotiateLoaderApiLayerInterface validation failed\n");
+        g_logger->error("xrNegotiateLoaderApiLayerInterface validation failed");
         return XR_ERROR_INITIALIZATION_FAILED;
     }
 
@@ -87,9 +99,11 @@ XrResult __declspec(dllexport) XRAPI_CALL
     apiLayerRequest->getInstanceProcAddr = reinterpret_cast<PFN_xrGetInstanceProcAddr>(xrGetInstanceProcAddr);
     apiLayerRequest->createApiLayerInstance = reinterpret_cast<PFN_xrCreateApiLayerInstance>(xrCreateApiLayerInstance);
 
-    DebugLog("<-- xrNegotiateLoaderApiLayerInterface\n");
+#ifdef _DEBUG
+    g_logger->debug("<-- xrNegotiateLoaderApiLayerInterface");
+#endif
 
-    Log("%s layer (%s) is active\n", LayerName.c_str(), VersionString.c_str());
+    g_logger->info("{} layer ({}) is active", LayerName.c_str(), VersionString.c_str());
 
 #if USE_TRACELOGGING
     TraceLoggingWrite(g_traceProvider, "xrNegotiateLoaderApiLayerInterface_Complete");

@@ -96,42 +96,42 @@ bool PassthroughRendererDX11::InitRenderer()
 
 	if (FAILED(m_d3dDevice->CreateComputeShader(g_FillHolesCS, sizeof(g_FillHolesCS), nullptr, &m_fillHolesCS)))
 	{
-		ErrorLog("g_FillHolesCS creation failure!\n");
+		g_logger->error("g_FillHolesCS creation failure!");
 		return false;
 	}
 	SET_DXGI_DEBUGNAME(m_fillHolesCS);
 
 	if (FAILED(m_d3dDevice->CreateVertexShader(g_FullscreenQuadVS, sizeof(g_FullscreenQuadVS), nullptr, &m_fullscreenQuadVS)))
 	{
-		ErrorLog("g_FullscreenQuadVS creation failure!\n");
+		g_logger->error("g_FullscreenQuadVS creation failure!");
 		return false;
 	}
 	SET_DXGI_DEBUGNAME(m_fullscreenQuadVS);
 
 	if (FAILED(m_d3dDevice->CreateVertexShader(g_MeshRigidVS, sizeof(g_MeshRigidVS), nullptr, &m_meshRigidVS)))
 	{
-		ErrorLog("g_MeshRigidVS creation failure!\n");
+		g_logger->error("g_MeshRigidVS creation failure!");
 		return false;
 	}
 	SET_DXGI_DEBUGNAME(m_meshRigidVS);
 
 	if (FAILED(m_d3dDevice->CreateVertexShader(g_PassthroughVS, sizeof(g_PassthroughVS), nullptr, &m_passthroughVS)))
 	{
-		ErrorLog("g_PassthroughVS creation failure!\n");
+		g_logger->error("g_PassthroughVS creation failure!");
 		return false;
 	}
 	SET_DXGI_DEBUGNAME(m_passthroughVS);
 
 	if (FAILED(m_d3dDevice->CreateVertexShader(g_PassthroughStereoVS, sizeof(g_PassthroughStereoVS), nullptr, &m_passthroughStereoVS)))
 	{
-		ErrorLog("g_PassthroughStereoVS creation failure!\n");
+		g_logger->error("g_PassthroughStereoVS creation failure!");
 		return false;
 	}
 	SET_DXGI_DEBUGNAME(m_passthroughStereoVS);
 
 	if (FAILED(m_d3dDevice->CreateVertexShader(g_PassthroughStereoTemporalVS, sizeof(g_PassthroughStereoTemporalVS), nullptr, &m_passthroughStereoTemporalVS)))
 	{
-		ErrorLog("g_PassthroughStereoTemporalVS creation failure, temporal disparity filter disabled.\n");
+		g_logger->error("g_PassthroughStereoTemporalVS creation failure, temporal disparity filter disabled!");
 		m_bIsVSUAVSupported = false;
 	}
 	else
@@ -141,119 +141,119 @@ bool PassthroughRendererDX11::InitRenderer()
 
 	if (FAILED(m_d3dDevice->CreateVertexShader(g_PassthroughReadDepthVS, sizeof(g_PassthroughReadDepthVS), nullptr, &m_passthroughReadDepthVS)))
 	{
-		ErrorLog("g_PassthroughReadDepthVS creation failure!\n");
+		g_logger->error("g_PassthroughReadDepthVS creation failure!");
 		return false;
 	}
 	SET_DXGI_DEBUGNAME(m_passthroughReadDepthVS);
 
 	if (FAILED(m_d3dDevice->CreatePixelShader(g_PassthroughPS, sizeof(g_PassthroughPS), nullptr, &m_passthroughPS)))
 	{
-		ErrorLog("g_PassthroughPS creation failure!\n");
+		g_logger->error("g_PassthroughPS creation failure!");
 		return false;
 	}
 	SET_DXGI_DEBUGNAME(m_passthroughPS);
 
 	if (FAILED(m_d3dDevice->CreatePixelShader(g_PassthroughTemporalPS, sizeof(g_PassthroughTemporalPS), nullptr, &m_passthroughTemporalPS)))
 	{
-		ErrorLog("g_PassthroughTemporalPS creation failure.\n");
+		g_logger->error("g_PassthroughTemporalPS creation failure.");
 		return false;
 	}
 	SET_DXGI_DEBUGNAME(m_passthroughTemporalPS);
 
 	if (FAILED(m_d3dDevice->CreatePixelShader(g_AlphaPrepassPS, sizeof(g_AlphaPrepassPS), nullptr, &m_alphaPrepassPS)))
 	{
-		ErrorLog("g_AlphaPrepassPS creation failure!\n");
+		g_logger->error("g_AlphaPrepassPS creation failure!");
 		return false;
 	}
 	SET_DXGI_DEBUGNAME(m_alphaPrepassPS);
 
 	if (FAILED(m_d3dDevice->CreatePixelShader(g_AlphaPrepassMaskedPS, sizeof(g_AlphaPrepassMaskedPS), nullptr, &m_maskedAlphaPrepassPS)))
 	{
-		ErrorLog("g_AlphaPrepassMaskedPS creation failure!\n");
+		g_logger->error("g_AlphaPrepassMaskedPS creation failure!");
 		return false;
 	}
 	SET_DXGI_DEBUGNAME(m_maskedAlphaPrepassPS);
 
 	if (FAILED(m_d3dDevice->CreatePixelShader(g_AlphaPrepassMaskedFullscreenPS, sizeof(g_AlphaPrepassMaskedFullscreenPS), nullptr, &m_maskedAlphaPrepassFullscreenPS)))
 	{
-		ErrorLog("g_AlphaPrepassMaskedFullscreenPS creation failure!\n");
+		g_logger->error("g_AlphaPrepassMaskedFullscreenPS creation failure!");
 		return false;
 	}
 	SET_DXGI_DEBUGNAME(m_maskedAlphaPrepassFullscreenPS);
 
 	if (FAILED(m_d3dDevice->CreatePixelShader(g_AlphaCopyMaskedPS, sizeof(g_AlphaCopyMaskedPS), nullptr, &m_maskedAlphaCopyPS)))
 	{
-		ErrorLog("g_AlphaCopyMaskedPS creation failure!\n");
+		g_logger->error("g_AlphaCopyMaskedPS creation failure!");
 		return false;
 	}
 	SET_DXGI_DEBUGNAME(m_maskedAlphaCopyPS);
 
 	if (FAILED(m_d3dDevice->CreatePixelShader(g_depthWritePS, sizeof(g_depthWritePS), nullptr, &m_depthWritePS)))
 	{
-		ErrorLog("g_depthWritePS creation failure!\n");
+		g_logger->error("g_depthWritePS creation failure!");
 		return false;
 	}
 	SET_DXGI_DEBUGNAME(m_depthWritePS);
 
 	if (FAILED(m_d3dDevice->CreatePixelShader(g_depthWriteTemporalPS, sizeof(g_depthWriteTemporalPS), nullptr, &m_depthWriteTemporalPS)))
 	{
-		ErrorLog("g_depthWriteTemporalPS creation failure!\n");
+		g_logger->error("g_depthWriteTemporalPS creation failure!");
 		return false;
 	}
 	SET_DXGI_DEBUGNAME(m_depthWriteTemporalPS);
 
 	if (FAILED(m_d3dDevice->CreatePixelShader(g_PassthroughStereoCompositePS, sizeof(g_PassthroughStereoCompositePS), nullptr, &m_stereoCompositePS)))
 	{
-		ErrorLog("g_PassthroughStereoCompositePS creation failure!\n");
+		g_logger->error("g_PassthroughStereoCompositePS creation failure!");
 		return false;
 	}
 	SET_DXGI_DEBUGNAME(m_stereoCompositePS);
 
 	if (FAILED(m_d3dDevice->CreatePixelShader(g_PassthroughStereoCompositeTemporalPS, sizeof(g_PassthroughStereoCompositeTemporalPS), nullptr, &m_stereoCompositeTemporalPS)))
 	{
-		ErrorLog("g_PassthroughStereoCompositeTemporalPS creation failure!\n");
+		g_logger->error("g_PassthroughStereoCompositeTemporalPS creation failure!");
 		return false;
 	}
 	SET_DXGI_DEBUGNAME(m_stereoCompositeTemporalPS);
 
 	if (FAILED(m_d3dDevice->CreatePixelShader(g_FullscreenPassthroughPS, sizeof(g_FullscreenPassthroughPS), nullptr, &m_fullscreenPassthroughPS)))
 	{
-		ErrorLog("g_FullscreenPassthroughPS creation failure!\n");
+		g_logger->error("g_FullscreenPassthroughPS creation failure!");
 		return false;
 	}
 	SET_DXGI_DEBUGNAME(m_fullscreenPassthroughPS);
 
 	if (FAILED(m_d3dDevice->CreatePixelShader(g_FullscreenPassthroughTemporalPS, sizeof(g_FullscreenPassthroughTemporalPS), nullptr, &m_fullscreenPassthroughTemporalPS)))
 	{
-		ErrorLog("g_FullscreenPassthroughTemporalPS creation failure!\n");
+		g_logger->error("g_FullscreenPassthroughTemporalPS creation failure!");
 		return false;
 	}
 	SET_DXGI_DEBUGNAME(m_fullscreenPassthroughTemporalPS);
 
 	if (FAILED(m_d3dDevice->CreatePixelShader(g_FullscreenPassthroughCompositePS, sizeof(g_FullscreenPassthroughCompositePS), nullptr, &m_fullscreenPassthroughCompositePS)))
 	{
-		ErrorLog("g_FullscreenPassthroughCompositePS creation failure!\n");
+		g_logger->error("g_FullscreenPassthroughCompositePS creation failure!");
 		return false;
 	}
 	SET_DXGI_DEBUGNAME(m_fullscreenPassthroughCompositePS);
 
 	if (FAILED(m_d3dDevice->CreatePixelShader(g_FullscreenPassthroughCompositeTemporalPS, sizeof(g_FullscreenPassthroughCompositeTemporalPS), nullptr, &m_fullscreenPassthroughCompositeTemporalPS)))
 	{
-		ErrorLog("g_FullscreenPassthroughCompositeTemporalPS creation failure!\n");
+		g_logger->error("g_FullscreenPassthroughCompositeTemporalPS creation failure!");
 		return false;
 	}
 	SET_DXGI_DEBUGNAME(m_fullscreenPassthroughCompositeTemporalPS);
 
 	if (FAILED(m_d3dDevice->CreatePixelShader(g_debugAlphaToColorPS, sizeof(g_debugAlphaToColorPS), nullptr, &m_debugAlphaToColorPS)))
 	{
-		ErrorLog("g_debugAlphaToColorPS creation failure!\n");
+		g_logger->error("g_debugAlphaToColorPS creation failure!");
 		return false;
 	}
 	SET_DXGI_DEBUGNAME(m_debugAlphaToColorPS);
 
 	if (FAILED(m_d3dDevice->CreatePixelShader(g_debugDepthToColorPS, sizeof(g_debugDepthToColorPS), nullptr, &m_debugDepthToColorPS)))
 	{
-		ErrorLog("g_debugDepthToColorPS creation failure!\n");
+		g_logger->error("g_debugDepthToColorPS creation failure!");
 		return false;
 	}
 	SET_DXGI_DEBUGNAME(m_debugDepthToColorPS);
@@ -267,7 +267,7 @@ bool PassthroughRendererDX11::InitRenderer()
 	{
 		if (FAILED(m_d3dDevice->CreateBuffer(&bufferDesc, nullptr, &m_vsMeshConstantBuffer[i])))
 		{
-			ErrorLog("m_vsMeshConstantBuffer creation failure!\n");
+			g_logger->error("m_vsMeshConstantBuffer creation failure!");
 			return false;
 		}
 	}
@@ -281,7 +281,7 @@ bool PassthroughRendererDX11::InitRenderer()
 	depth.StencilEnable = false;
 	if (FAILED(m_d3dDevice->CreateDepthStencilState(&depth, m_depthStencilStateDisabled.GetAddressOf())))
 	{
-		ErrorLog("CreateDepthStencilState failure!\n");
+		g_logger->error("CreateDepthStencilState failure!");
 		return false;
 	}
 	SET_DXGI_DEBUGNAME(m_depthStencilStateDisabled);
@@ -291,7 +291,7 @@ bool PassthroughRendererDX11::InitRenderer()
 	depth.DepthFunc = D3D11_COMPARISON_LESS_EQUAL;
 	if (FAILED(m_d3dDevice->CreateDepthStencilState(&depth, m_depthStencilStateLess.GetAddressOf())))
 	{
-		ErrorLog("CreateDepthStencilState failure!\n");
+		g_logger->error("CreateDepthStencilState failure!");
 		return false;
 	}
 	SET_DXGI_DEBUGNAME(m_depthStencilStateLess);
@@ -300,7 +300,7 @@ bool PassthroughRendererDX11::InitRenderer()
 	depth.DepthFunc = D3D11_COMPARISON_LESS_EQUAL;
 	if (FAILED(m_d3dDevice->CreateDepthStencilState(&depth, m_depthStencilStateLessWrite.GetAddressOf())))
 	{
-		ErrorLog("CreateDepthStencilState failure!\n");
+		g_logger->error("CreateDepthStencilState failure!");
 		return false;
 	}
 	SET_DXGI_DEBUGNAME(m_depthStencilStateLessWrite);
@@ -309,7 +309,7 @@ bool PassthroughRendererDX11::InitRenderer()
 	depth.DepthFunc = D3D11_COMPARISON_GREATER_EQUAL;
 	if (FAILED(m_d3dDevice->CreateDepthStencilState(&depth, m_depthStencilStateGreater.GetAddressOf())))
 	{
-		ErrorLog("CreateDepthStencilState failure!\n");
+		g_logger->error("CreateDepthStencilState failure!");
 		return false;
 	}
 	SET_DXGI_DEBUGNAME(m_depthStencilStateGreater);
@@ -318,7 +318,7 @@ bool PassthroughRendererDX11::InitRenderer()
 	depth.DepthFunc = D3D11_COMPARISON_GREATER_EQUAL;
 	if (FAILED(m_d3dDevice->CreateDepthStencilState(&depth, m_depthStencilStateGreaterWrite.GetAddressOf())))
 	{
-		ErrorLog("CreateDepthStencilState failure!\n");
+		g_logger->error("CreateDepthStencilState failure!");
 		return false;
 	}
 	SET_DXGI_DEBUGNAME(m_depthStencilStateGreaterWrite);
@@ -338,7 +338,7 @@ bool PassthroughRendererDX11::InitRenderer()
 	depth.BackFace.StencilDepthFailOp = D3D11_STENCIL_OP_KEEP;
 	if (FAILED(m_d3dDevice->CreateDepthStencilState(&depth, m_depthStencilStateAlwaysWrite.GetAddressOf())))
 	{
-		ErrorLog("CreateDepthStencilState failure!\n");
+		g_logger->error("CreateDepthStencilState failure!");
 		return false;
 	}
 	SET_DXGI_DEBUGNAME(m_depthStencilStateAlwaysWrite);
@@ -353,7 +353,7 @@ bool PassthroughRendererDX11::InitRenderer()
 	sampler.MaxLOD = D3D12_FLOAT32_MAX;
 	if (FAILED(m_d3dDevice->CreateSamplerState(&sampler, m_defaultSampler.GetAddressOf())))
 	{
-		ErrorLog("CreateSamplerState failure!\n");
+		g_logger->error("CreateSamplerState failure!");
 		return false;
 	}
 	SET_DXGI_DEBUGNAME(m_defaultSampler);
@@ -369,7 +369,7 @@ bool PassthroughRendererDX11::InitRenderer()
 	blendState.RenderTarget[0].DestBlendAlpha = D3D11_BLEND_ONE;
 	if (FAILED(m_d3dDevice->CreateBlendState(&blendState, m_blendStateDestAlpha.GetAddressOf())))
 	{
-		ErrorLog("CreateBlendState failure!\n");
+		g_logger->error("CreateBlendState failure!");
 		return false;
 	}
 	SET_DXGI_DEBUGNAME(m_blendStateDestAlpha);
@@ -380,7 +380,7 @@ bool PassthroughRendererDX11::InitRenderer()
 
 	if (FAILED(m_d3dDevice->CreateBlendState(&blendState, m_blendStateInvDestAlpha.GetAddressOf())))
 	{
-		ErrorLog("CreateBlendState failure!\n");
+		g_logger->error("CreateBlendState failure!");
 		return false;
 	}
 	SET_DXGI_DEBUGNAME(m_blendStateInvDestAlpha);
@@ -390,7 +390,7 @@ bool PassthroughRendererDX11::InitRenderer()
 
 	if (FAILED(m_d3dDevice->CreateBlendState(&blendState, m_blendStateDestAlphaPremultiplied.GetAddressOf())))
 	{
-		ErrorLog("CreateBlendState failure!\n");
+		g_logger->error("CreateBlendState failure!");
 		return false;
 	}
 	SET_DXGI_DEBUGNAME(m_blendStateDestAlphaPremultiplied);
@@ -400,7 +400,7 @@ bool PassthroughRendererDX11::InitRenderer()
 
 	if (FAILED(m_d3dDevice->CreateBlendState(&blendState, m_blendStateInvDestAlphaPremultiplied.GetAddressOf())))
 	{
-		ErrorLog("CreateBlendState failure!\n");
+		g_logger->error("CreateBlendState failure!");
 		return false;
 	}
 	SET_DXGI_DEBUGNAME(m_blendStateInvDestAlphaPremultiplied);
@@ -416,7 +416,7 @@ bool PassthroughRendererDX11::InitRenderer()
 
 	if (FAILED(m_d3dDevice->CreateBlendState(&blendState, m_blendStateSrcAlpha.GetAddressOf())))
 	{
-		ErrorLog("CreateBlendState failure!\n");
+		g_logger->error("CreateBlendState failure!");
 		return false;
 	}
 	SET_DXGI_DEBUGNAME(m_blendStateSrcAlpha);
@@ -430,7 +430,7 @@ bool PassthroughRendererDX11::InitRenderer()
 
 	if (FAILED(m_d3dDevice->CreateBlendState(&blendState, m_blendStateWriteAlpha.GetAddressOf())))
 	{
-		ErrorLog("CreateBlendState failure!\n");
+		g_logger->error("CreateBlendState failure!");
 		return false;
 	}
 	SET_DXGI_DEBUGNAME(m_blendStateWriteAlpha);
@@ -444,7 +444,7 @@ bool PassthroughRendererDX11::InitRenderer()
 
 	if (FAILED(m_d3dDevice->CreateBlendState(&blendState, m_blendStateWriteMinAlpha.GetAddressOf())))
 	{
-		ErrorLog("CreateBlendState failure!\n");
+		g_logger->error("CreateBlendState failure!");
 		return false;
 	}
 	SET_DXGI_DEBUGNAME(m_blendStateWriteMinAlpha);
@@ -453,7 +453,7 @@ bool PassthroughRendererDX11::InitRenderer()
 
 	if (FAILED(m_d3dDevice->CreateBlendState(&blendState, m_blendStateWriteMaxAlpha.GetAddressOf())))
 	{
-		ErrorLog("CreateBlendState failure!\n");
+		g_logger->error("CreateBlendState failure!");
 		return false;
 	}
 	SET_DXGI_DEBUGNAME(m_blendStateWriteMaxAlpha);
@@ -468,7 +468,7 @@ bool PassthroughRendererDX11::InitRenderer()
 
 	if (FAILED(m_d3dDevice->CreateBlendState(&blendState, m_blendStatePrepassUseAppAlpha.GetAddressOf())))
 	{
-		ErrorLog("CreateBlendState failure!\n");
+		g_logger->error("CreateBlendState failure!");
 		return false;
 	}
 	SET_DXGI_DEBUGNAME(m_blendStatePrepassUseAppAlpha);
@@ -482,7 +482,7 @@ bool PassthroughRendererDX11::InitRenderer()
 
 	if (FAILED(m_d3dDevice->CreateBlendState(&blendState, m_blendStatePrepassUseInvertedAppAlpha.GetAddressOf())))
 	{
-		ErrorLog("CreateBlendState failure!\n");
+		g_logger->error("CreateBlendState failure!");
 		return false;
 	}
 	SET_DXGI_DEBUGNAME(m_blendStatePrepassUseInvertedAppAlpha);
@@ -496,7 +496,7 @@ bool PassthroughRendererDX11::InitRenderer()
 
 	if (FAILED(m_d3dDevice->CreateBlendState(&blendState, m_blendStatePrepassIgnoreAppAlpha.GetAddressOf())))
 	{
-		ErrorLog("CreateBlendState failure!\n");
+		g_logger->error("CreateBlendState failure!");
 		return false;
 	}
 	SET_DXGI_DEBUGNAME(m_blendStatePrepassIgnoreAppAlpha);
@@ -506,7 +506,7 @@ bool PassthroughRendererDX11::InitRenderer()
 
 	if (FAILED(m_d3dDevice->CreateBlendState(&blendState, m_blendStatePrepassZeroAppAlpha.GetAddressOf())))
 	{
-		ErrorLog("CreateBlendState failure!\n");
+		g_logger->error("CreateBlendState failure!");
 		return false;
 	}
 	SET_DXGI_DEBUGNAME(m_blendStatePrepassZeroAppAlpha);
@@ -521,7 +521,7 @@ bool PassthroughRendererDX11::InitRenderer()
 
 	if (FAILED(m_d3dDevice->CreateBlendState(&blendState, m_blendStatePrepassBlendAppAlpha.GetAddressOf())))
 	{
-		ErrorLog("CreateBlendState failure!\n");
+		g_logger->error("CreateBlendState failure!");
 		return false;
 	}
 	SET_DXGI_DEBUGNAME(m_blendStatePrepassBlendAppAlpha);
@@ -535,7 +535,7 @@ bool PassthroughRendererDX11::InitRenderer()
 
 	if (FAILED(m_d3dDevice->CreateBlendState(&blendState, m_blendStatePrepassBlendInverseAppAlpha.GetAddressOf())))
 	{
-		ErrorLog("CreateBlendState failure!\n");
+		g_logger->error("CreateBlendState failure!");
 		return false;
 	}
 	SET_DXGI_DEBUGNAME(m_blendStatePrepassBlendInverseAppAlpha);
@@ -550,7 +550,7 @@ bool PassthroughRendererDX11::InitRenderer()
 
 	if (FAILED(m_d3dDevice->CreateBlendState(&blendState, m_blendStateWriteFactored.GetAddressOf())))
 	{
-		ErrorLog("CreateBlendState failure!\n");
+		g_logger->error("CreateBlendState failure!");
 		return false;
 	}
 	SET_DXGI_DEBUGNAME(m_blendStateWriteFactored);
@@ -565,7 +565,7 @@ bool PassthroughRendererDX11::InitRenderer()
 	rasterizerDesc.DepthBias = 0;
 	if (FAILED(m_d3dDevice->CreateRasterizerState(&rasterizerDesc, m_rasterizerState.GetAddressOf())))
 	{
-		ErrorLog("CreateRasterizerState failure!\n");
+		g_logger->error("CreateRasterizerState failure!");
 		return false;
 	}
 	SET_DXGI_DEBUGNAME(m_rasterizerState);
@@ -573,7 +573,7 @@ bool PassthroughRendererDX11::InitRenderer()
 	rasterizerDesc.FrontCounterClockwise = true;
 	if (FAILED(m_d3dDevice->CreateRasterizerState(&rasterizerDesc, m_rasterizerStateMirrored.GetAddressOf())))
 	{
-		ErrorLog("CreateRasterizerState failure!\n");
+		g_logger->error("CreateRasterizerState failure!");
 		return false;
 	}
 	SET_DXGI_DEBUGNAME(m_rasterizerStateMirrored);
@@ -582,7 +582,7 @@ bool PassthroughRendererDX11::InitRenderer()
 	rasterizerDesc.DepthBias = 16;
 	if (FAILED(m_d3dDevice->CreateRasterizerState(&rasterizerDesc, m_rasterizerStateDepthBias.GetAddressOf())))
 	{
-		ErrorLog("CreateRasterizerState failure!\n");
+		g_logger->error("CreateRasterizerState failure!");
 		return false;
 	}
 	SET_DXGI_DEBUGNAME(m_rasterizerStateDepthBias);
@@ -590,7 +590,7 @@ bool PassthroughRendererDX11::InitRenderer()
 	rasterizerDesc.FrontCounterClockwise = true;
 	if (FAILED(m_d3dDevice->CreateRasterizerState(&rasterizerDesc, m_rasterizerStateDepthBiasMirrored.GetAddressOf())))
 	{
-		ErrorLog("CreateRasterizerState failure!\n");
+		g_logger->error("CreateRasterizerState failure!");
 		return false;
 	}
 	SET_DXGI_DEBUGNAME(m_rasterizerStateDepthBiasMirrored);
@@ -606,7 +606,7 @@ bool PassthroughRendererDX11::InitRenderer()
 
 	if (FAILED(m_d3dDevice->CreateInputLayout(&vertexDesc, 1, g_PassthroughVS, sizeof(g_PassthroughVS), &m_inputLayout)))
 	{
-		ErrorLog("CreateInputLayout failure!\n");
+		g_logger->error("CreateInputLayout failure!");
 		return false;
 	}
 	SET_DXGI_DEBUGNAME(m_inputLayout);
@@ -656,7 +656,7 @@ void PassthroughRendererDX11::SetupDebugTexture(DebugTexture& texture)
 
 	if (FAILED(m_d3dDevice->CreateTexture2D(&textureDesc, nullptr, &m_debugTexture.Texture)))
 	{
-		ErrorLog("Debug Texture CreateTexture2D error!\n");
+		g_logger->error("Debug Texture CreateTexture2D error!");
 		return;
 	}
 
@@ -667,7 +667,7 @@ void PassthroughRendererDX11::SetupDebugTexture(DebugTexture& texture)
 
 	if (FAILED(m_d3dDevice->CreateTexture2D(&uploadTextureDesc, nullptr, &m_debugTextureUpload)))
 	{
-		ErrorLog("Debug Texture Upload CreateTexture2D error!\n");
+		g_logger->error("Debug Texture Upload CreateTexture2D error!");
 		return;
 	}
 
@@ -678,7 +678,7 @@ void PassthroughRendererDX11::SetupDebugTexture(DebugTexture& texture)
 
 	if (FAILED(m_d3dDevice->CreateShaderResourceView(m_debugTexture.Texture.Get(), &srvDesc, &m_debugTexture.SRV)))
 	{
-		ErrorLog("Debug Texture CreateShaderResourceView error!\n");
+		g_logger->error("Debug Texture CreateShaderResourceView error!");
 		return;
 	}
 }
@@ -710,7 +710,7 @@ void PassthroughRendererDX11::SetupCameraFrameResource(const uint32_t imageIndex
 
 	if (FAILED(m_d3dDevice->CreateTexture2D(&uploadTextureDesc, nullptr, &m_cameraFrameUploadTexture)))
 	{
-		ErrorLog("Frame Resource CreateTexture2D error!\n");
+		g_logger->error("Frame Resource CreateTexture2D error!");
 		return;
 	}
 	SET_DXGI_DEBUGNAME(m_cameraFrameUploadTexture);
@@ -719,12 +719,12 @@ void PassthroughRendererDX11::SetupCameraFrameResource(const uint32_t imageIndex
 
 	if (FAILED(m_d3dDevice->CreateTexture2D(&textureDesc, nullptr, &frameData.cameraFrame.Texture)))
 	{
-		ErrorLog("Frame Resource CreateTexture2D error!\n");
+		g_logger->error("Frame Resource CreateTexture2D error!");
 		return;
 	}
 	if (FAILED(m_d3dDevice->CreateShaderResourceView(frameData.cameraFrame.Texture.Get(), &srvDesc, &frameData.cameraFrame.SRV)))
 	{
-		ErrorLog("Frame Resource CreateShaderResourceView error!\n");
+		g_logger->error("Frame Resource CreateShaderResourceView error!");
 		return;
 	}
 }
@@ -756,7 +756,7 @@ void PassthroughRendererDX11::SetupCameraUndistortedFrameResource(const uint32_t
 
 	if (FAILED(m_d3dDevice->CreateTexture2D(&uploadTextureDesc, nullptr, &m_cameraUndistortedFrameUploadTexture)))
 	{
-		ErrorLog("Frame Resource CreateTexture2D error!\n");
+		g_logger->error("Frame Resource CreateTexture2D error!");
 		return;
 	}
 	SET_DXGI_DEBUGNAME(m_cameraUndistortedFrameUploadTexture);
@@ -765,12 +765,12 @@ void PassthroughRendererDX11::SetupCameraUndistortedFrameResource(const uint32_t
 
 	if (FAILED(m_d3dDevice->CreateTexture2D(&textureDesc, nullptr, &frameData.cameraUndistortedFrame.Texture)))
 	{
-		ErrorLog("Frame Resource CreateTexture2D error!\n");
+		g_logger->error("Frame Resource CreateTexture2D error!");
 		return;
 	}
 	if (FAILED(m_d3dDevice->CreateShaderResourceView(frameData.cameraUndistortedFrame.Texture.Get(), &srvDesc, &frameData.cameraUndistortedFrame.SRV)))
 	{
-		ErrorLog("Frame Resource CreateShaderResourceView error!\n");
+		g_logger->error("Frame Resource CreateShaderResourceView error!");
 		return;
 	}
 }
@@ -819,7 +819,7 @@ void PassthroughRendererDX11::SetupDisparityMap(uint32_t width, uint32_t height)
 
 	if (FAILED(m_d3dDevice->CreateTexture2D(&uploadTextureDesc, nullptr, &m_disparityMapUploadTexture)))
 	{
-		ErrorLog("Disparity Map CreateTexture2D error!\n");
+		g_logger->error("Disparity Map CreateTexture2D error!");
 		return;
 	}
 	SET_DXGI_DEBUGNAME(m_disparityMapUploadTexture);
@@ -831,18 +831,18 @@ void PassthroughRendererDX11::SetupDisparityMap(uint32_t width, uint32_t height)
 
 		if (FAILED(m_d3dDevice->CreateTexture2D(&textureDesc, nullptr, &frameData.disparityMap.Texture)))
 		{
-			ErrorLog("Disparity Map CreateTexture2D error!\n");
+			g_logger->error("Disparity Map CreateTexture2D error!");
 			return;
 		}
 
 		if (FAILED(m_d3dDevice->CreateUnorderedAccessView(frameData.disparityMap.Texture.Get(), &uavDesc, &frameData.disparityMap.UAV)))
 		{
-			ErrorLog("Disparity Map CreateUnorderedAccessView error!\n");
+			g_logger->error("Disparity Map CreateUnorderedAccessView error!");
 		}
 
 		if (FAILED(m_d3dDevice->CreateShaderResourceView(frameData.disparityMap.Texture.Get(), &srvDesc, &frameData.disparityMap.SRV)))
 		{
-			ErrorLog("Disparity Map CreateShaderResourceView error!\n");
+			g_logger->error("Disparity Map CreateShaderResourceView error!");
 			return;
 		}
 
@@ -851,17 +851,17 @@ void PassthroughRendererDX11::SetupDisparityMap(uint32_t width, uint32_t height)
 
 			if (FAILED(m_d3dDevice->CreateTexture2D(&uavTextureDesc, nullptr, &frameData.disparityFilter.Texture)))
 			{
-				ErrorLog("Disparity Map UAV CreateTexture2D error!\n");
+				g_logger->error("Disparity Map UAV CreateTexture2D error!");
 			}
 
 			if (FAILED(m_d3dDevice->CreateUnorderedAccessView(frameData.disparityFilter.Texture.Get(), &uavDesc, &frameData.disparityFilter.UAV)))
 			{
-				ErrorLog("Disparity Map CreateUnorderedAccessView error!\n");
+				g_logger->error("Disparity Map CreateUnorderedAccessView error!");
 			}
 
 			if (FAILED(m_d3dDevice->CreateShaderResourceView(frameData.disparityFilter.Texture.Get(), &srvDesc, &frameData.disparityFilter.SRV)))
 			{
-				ErrorLog("Disparity Map CreateShaderResourceView error!\n");
+				g_logger->error("Disparity Map CreateShaderResourceView error!");
 			}
 		}
 	}
@@ -902,19 +902,19 @@ void PassthroughRendererDX11::SetupPassthroughDepthStencil(uint32_t viewIndex, u
 
 			if (FAILED(m_d3dDevice->CreateTexture2D(&textureDesc, nullptr, &viewData.passthroughDepthStencil[i].Texture)))
 			{
-				ErrorLog("Passthrough Depth Stencil CreateTexture2D error!\n");
+				g_logger->error("Passthrough Depth Stencil CreateTexture2D error!");
 				return;
 			}
 
 			if (FAILED(m_d3dDevice->CreateShaderResourceView(viewData.passthroughDepthStencil[i].Texture.Get(), &srvDesc, &viewData.passthroughDepthStencil[i].SRV)))
 			{
-				ErrorLog("Passthrough Depth Stencil CreateShaderResourceView error!\n");
+				g_logger->error("Passthrough Depth Stencil CreateShaderResourceView error!");
 				return;
 			}
 
 			if (FAILED(m_d3dDevice->CreateDepthStencilView(viewData.passthroughDepthStencil[i].Texture.Get(), &dsvDesc, &viewData.passthroughDepthStencil[i].DSV)))
 			{
-				ErrorLog("Passthrough Depth Stencil CreateDepthStencilView error!\n");
+				g_logger->error("Passthrough Depth Stencil CreateDepthStencilView error!");
 			}
 		}
 	}
@@ -945,19 +945,19 @@ void PassthroughRendererDX11::SetupPassthroughDepthStencil(uint32_t viewIndex, u
 
 		if (FAILED(m_d3dDevice->CreateTexture2D(&textureDesc, nullptr, &viewData.passthroughCameraValidity.Texture)))
 		{
-			ErrorLog("Passthrough Camera Invalidation CreateTexture2D error!\n");
+			g_logger->error("Passthrough Camera Invalidation CreateTexture2D error!");
 			return;
 		}
 
 		if (FAILED(m_d3dDevice->CreateShaderResourceView(viewData.passthroughCameraValidity.Texture.Get(), &srvDesc, &viewData.passthroughCameraValidity.SRV)))
 		{
-			ErrorLog("Passthrough Camera Invalidation CreateShaderResourceView error!\n");
+			g_logger->error("Passthrough Camera Invalidation CreateShaderResourceView error!");
 			return;
 		}
 
 		if (FAILED(m_d3dDevice->CreateRenderTargetView(viewData.passthroughCameraValidity.Texture.Get(), &rtvDesc, &viewData.passthroughCameraValidity.RTV)))
 		{
-			ErrorLog("Passthrough Camera Invalidation CreateRenderTargetView error!\n");
+			g_logger->error("Passthrough Camera Invalidation CreateRenderTargetView error!");
 		}
 	}
 }
@@ -983,7 +983,7 @@ void PassthroughRendererDX11::SetupUVDistortionMap(std::shared_ptr<std::vector<f
 
 	if (FAILED(m_d3dDevice->CreateTexture2D(&textureDesc, &uploadData, &m_uvDistortionMap.Texture)))
 	{
-		ErrorLog("UV Distortion Map CreateTexture2D error!\n");
+		g_logger->error("UV Distortion Map CreateTexture2D error!");
 		return;
 	}
 
@@ -994,7 +994,7 @@ void PassthroughRendererDX11::SetupUVDistortionMap(std::shared_ptr<std::vector<f
 
 	if (FAILED(m_d3dDevice->CreateShaderResourceView(m_uvDistortionMap.Texture.Get(), &srvDesc, &m_uvDistortionMap.SRV)))
 	{
-		ErrorLog("UV Distortion Map CreateShaderResourceView error!\n");
+		g_logger->error("UV Distortion Map CreateShaderResourceView error!");
 		return;
 	}
 }
@@ -1032,7 +1032,7 @@ DX11TemporaryRenderTarget& PassthroughRendererDX11::GetTemporaryRenderTarget(con
 
 	if (FAILED(m_d3dDevice->CreateTexture2D(&textureDesc, nullptr, &texture)))
 	{
-		ErrorLog("Temporary Render Target CreateTexture2D error!\n");
+		g_logger->error("Temporary Render Target CreateTexture2D error!");
 		return viewData.temporaryRenderTarget;
 	}
 
@@ -1045,7 +1045,7 @@ DX11TemporaryRenderTarget& PassthroughRendererDX11::GetTemporaryRenderTarget(con
 
 	if (FAILED(m_d3dDevice->CreateShaderResourceView(texture, &srvDesc, &viewData.temporaryRenderTarget.SRV)))
 	{
-		ErrorLog("Temporary Render Target CreateShaderResourceView error!\n");
+		g_logger->error("Temporary Render Target CreateShaderResourceView error!");
 	}
 
 	D3D11_RENDER_TARGET_VIEW_DESC rtvDesc{};
@@ -1054,7 +1054,7 @@ DX11TemporaryRenderTarget& PassthroughRendererDX11::GetTemporaryRenderTarget(con
 
 	if (FAILED(m_d3dDevice->CreateRenderTargetView(texture, &rtvDesc, &viewData.temporaryRenderTarget.RTV)))
 	{
-		ErrorLog("Temporary Render Target CreateRenderTargetView error!\n");
+		g_logger->error("Temporary Render Target CreateRenderTargetView error!");
 	}
 
 	return viewData.temporaryRenderTarget;
@@ -1067,13 +1067,13 @@ void PassthroughRendererDX11::InitRenderTarget(const ERenderEye eye, void* rende
 
 	if (!CheckInitFrameData(imageIndex))
 	{
-		ErrorLog("Failed to init DX11 frame data!\n");
+		g_logger->error("Failed to init DX11 frame data!");
 		return;
 	}
 
 	if (!CheckInitViewData(viewIndex, imageIndex))
 	{
-		ErrorLog("Failed to init DX11 view data!\n");
+		g_logger->error("Failed to init DX11 view data!");
 		return;
 	}
 
@@ -1094,7 +1094,7 @@ void PassthroughRendererDX11::InitRenderTarget(const ERenderEye eye, void* rende
 
 	if (FAILED(m_d3dDevice->CreateRenderTargetView((ID3D11Texture2D*)rendertarget, &rtvDesc, viewData.renderTarget.RTV.GetAddressOf())))
 	{
-		ErrorLog("Render Target CreateRenderTargetView error!\n");
+		g_logger->error("Render Target CreateRenderTargetView error!");
 		return;
 	}
 
@@ -1109,7 +1109,7 @@ void PassthroughRendererDX11::InitRenderTarget(const ERenderEye eye, void* rende
 
 	if (FAILED(m_d3dDevice->CreateShaderResourceView((ID3D11Resource*)rendertarget, &srvDesc, &viewData.renderTarget.SRV)))
 	{
-		ErrorLog("Render Target CreateShaderResourceView error!\n");
+		g_logger->error("Render Target CreateShaderResourceView error!");
 		return;
 	}
 
@@ -1147,14 +1147,14 @@ bool PassthroughRendererDX11::CheckInitViewData(const uint32_t viewIndex, const 
 
 	if (FAILED(m_d3dDevice->CreateBuffer(&bufferDesc, nullptr, &viewData.vsViewConstantBuffer)))
 	{
-		ErrorLog("m_vsViewConstantBuffer creation failure!\n");
+		g_logger->error("m_vsViewConstantBuffer creation failure!");
 		return false;
 	}
 
 	bufferDesc.ByteWidth = Align(sizeof(PSViewConstantBuffer), 16);
 	if (FAILED(m_d3dDevice->CreateBuffer(&bufferDesc, nullptr, &viewData.psViewConstantBuffer)))
 	{
-		ErrorLog("m_psViewConstantBuffer creation failure!\n");
+		g_logger->error("m_psViewConstantBuffer creation failure!");
 		return false;
 	}
 
@@ -1185,28 +1185,28 @@ bool PassthroughRendererDX11::CheckInitFrameData(const uint32_t imageIndex)
 	bufferDesc.ByteWidth = Align(sizeof(CSConstantBuffer), 16);
 	if (FAILED(m_d3dDevice->CreateBuffer(&bufferDesc, nullptr, &frameData.csConstantBuffer)))
 	{
-		ErrorLog("m_csConstantBuffer creation failure!\n");
+		g_logger->error("m_csConstantBuffer creation failure!");
 		return false;
 	}
 
 	bufferDesc.ByteWidth = Align(sizeof(VSPassConstantBuffer), 16);
 	if (FAILED(m_d3dDevice->CreateBuffer(&bufferDesc, nullptr, &frameData.vsPassConstantBuffer)))
 	{
-		ErrorLog("m_vsPassConstantBuffer creation failure!\n");
+		g_logger->error("m_vsPassConstantBuffer creation failure!");
 		return false;
 	}
 
 	bufferDesc.ByteWidth = Align(sizeof(PSPassConstantBuffer), 16);
 	if (FAILED(m_d3dDevice->CreateBuffer(&bufferDesc, nullptr, &frameData.psPassConstantBuffer)))
 	{
-		ErrorLog("m_psPassConstantBuffer creation failure!\n");
+		g_logger->error("m_psPassConstantBuffer creation failure!");
 		return false;
 	}
 
 	bufferDesc.ByteWidth = Align(sizeof(PSMaskedConstantBuffer), 16);
 	if (FAILED(m_d3dDevice->CreateBuffer(&bufferDesc, nullptr, &frameData.psMaskedConstantBuffer)))
 	{
-		ErrorLog("m_psMaskedConstantBuffer creation failure!\n");
+		g_logger->error("m_psMaskedConstantBuffer creation failure!");
 		return false;
 	}
 
@@ -1236,7 +1236,7 @@ void PassthroughRendererDX11::SetupTemporalUAV(const uint32_t viewIndex, const u
 
 	if (FAILED(m_d3dDevice->CreateTexture2D(&uavTextureDesc, nullptr, &m_cameraFilter[viewIndex][frameIndex].Texture)))
 	{
-		ErrorLog("UAV CreateTexture2D error!\n");
+		g_logger->error("UAV CreateTexture2D error!");
 		return;
 	}
 
@@ -1246,7 +1246,7 @@ void PassthroughRendererDX11::SetupTemporalUAV(const uint32_t viewIndex, const u
 
 	if (FAILED(m_d3dDevice->CreateUnorderedAccessView(m_cameraFilter[viewIndex][frameIndex].Texture.Get(), &uavDesc, &m_cameraFilter[viewIndex][frameIndex].UAV)))
 	{
-		ErrorLog("UAV CreateUnorderedAccessView error!\n");
+		g_logger->error("UAV CreateUnorderedAccessView error!");
 		return;
 	}
 
@@ -1257,7 +1257,7 @@ void PassthroughRendererDX11::SetupTemporalUAV(const uint32_t viewIndex, const u
 
 	if (FAILED(m_d3dDevice->CreateShaderResourceView(m_cameraFilter[viewIndex][frameIndex].Texture.Get(), &filterSRVDesc, &m_cameraFilter[viewIndex][frameIndex].SRV)))
 	{
-		ErrorLog("UAV CreateShaderResourceView error!\n");
+		g_logger->error("UAV CreateShaderResourceView error!");
 		return;
 	}
 }
@@ -1289,7 +1289,7 @@ void PassthroughRendererDX11::InitDepthBuffer(const ERenderEye eye, void* depthB
 
 	if (FAILED(m_d3dDevice->CreateDepthStencilView(bufferRes, &dsvDesc, depthData.depthStencilView.GetAddressOf())))
 	{
-		ErrorLog("Depth map CreateDepthStencilView error!\n");
+		g_logger->error("Depth map CreateDepthStencilView error!");
 		return;
 	}
 
@@ -1321,7 +1321,7 @@ void PassthroughRendererDX11::InitDepthBuffer(const ERenderEye eye, void* depthB
 
 	if (FAILED(m_d3dDevice->CreateShaderResourceView(bufferRes, &srvDesc, depthData.depthSRV.GetAddressOf())))
 	{
-		ErrorLog("Depth map CreateShaderResourceView error!\n");
+		g_logger->error("Depth map CreateShaderResourceView error!");
 		return;
 	}
 
@@ -1351,7 +1351,7 @@ void PassthroughRendererDX11::GenerateMesh()
 	CD3D11_BUFFER_DESC vertexBufferDesc((UINT)m_cylinderMesh.vertices.size() * sizeof(VertexFormatBasic), D3D11_BIND_VERTEX_BUFFER);
 	if (FAILED(m_d3dDevice->CreateBuffer(&vertexBufferDesc, &vertexBufferData, &m_cylinderMeshVertexBuffer)))
 	{
-		ErrorLog("Mesh vertex buffer creation error!\n");
+		g_logger->error("Mesh vertex buffer creation error!");
 		return;
 	}
 	SET_DXGI_DEBUGNAME(m_cylinderMeshVertexBuffer);
@@ -1362,7 +1362,7 @@ void PassthroughRendererDX11::GenerateMesh()
 	CD3D11_BUFFER_DESC indexBufferDesc((UINT)m_cylinderMesh.triangles.size() * sizeof(MeshTriangle), D3D11_BIND_INDEX_BUFFER);
 	if (FAILED(m_d3dDevice->CreateBuffer(&indexBufferDesc, &indexBufferData, &m_cylinderMeshIndexBuffer)))
 	{
-		ErrorLog("Mesh index buffer creation error!\n");
+		g_logger->error("Mesh index buffer creation error!");
 		return;
 	}
 	SET_DXGI_DEBUGNAME(m_cylinderMeshIndexBuffer);
@@ -1379,7 +1379,7 @@ void PassthroughRendererDX11::GenerateDepthMesh(uint32_t width, uint32_t height)
 	CD3D11_BUFFER_DESC vertexBufferDesc((UINT)m_gridMesh.vertices.size() * sizeof(VertexFormatBasic), D3D11_BIND_VERTEX_BUFFER);
 	if (FAILED(m_d3dDevice->CreateBuffer(&vertexBufferDesc, &vertexBufferData, &m_gridMeshVertexBuffer)))
 	{
-		ErrorLog("Depth mesh vertex buffer creation error!\n");
+		g_logger->error("Depth mesh vertex buffer creation error!");
 		return;
 	}
 	SET_DXGI_DEBUGNAME(m_gridMeshVertexBuffer);
@@ -1390,7 +1390,7 @@ void PassthroughRendererDX11::GenerateDepthMesh(uint32_t width, uint32_t height)
 	CD3D11_BUFFER_DESC indexBufferDesc((UINT)m_gridMesh.triangles.size() * sizeof(MeshTriangle), D3D11_BIND_INDEX_BUFFER);
 	if (FAILED(m_d3dDevice->CreateBuffer(&indexBufferDesc, &indexBufferData, &m_gridMeshIndexBuffer)))
 	{
-		ErrorLog("Depth mesh index buffer creation error!\n");
+		g_logger->error("Depth mesh index buffer creation error!");
 		return;
 	}
 	SET_DXGI_DEBUGNAME(m_gridMeshIndexBuffer);
@@ -1417,7 +1417,7 @@ void PassthroughRendererDX11::UpdateRenderModels(std::shared_ptr<CameraFrame> fr
 					CD3D11_BUFFER_DESC vertexBufferDesc((UINT)model.mesh.vertices.size() * sizeof(VertexFormatBasic), D3D11_BIND_VERTEX_BUFFER);
 					if (FAILED(m_d3dDevice->CreateBuffer(&vertexBufferDesc, &vertexBufferData, &dxModel.vertexBuffer)))
 					{
-						ErrorLog("Render model vertex buffer creation error!\n");
+						g_logger->error("Render model vertex buffer creation error!");
 					}
 
 					D3D11_SUBRESOURCE_DATA indexBufferData{};
@@ -1426,7 +1426,7 @@ void PassthroughRendererDX11::UpdateRenderModels(std::shared_ptr<CameraFrame> fr
 					CD3D11_BUFFER_DESC indexBufferDesc((UINT)model.mesh.triangles.size() * sizeof(MeshTriangle), D3D11_BIND_INDEX_BUFFER);
 					if (FAILED(m_d3dDevice->CreateBuffer(&indexBufferDesc, &indexBufferData, &dxModel.indexBuffer)))
 					{
-						ErrorLog("Render model index buffer creation error!\n");
+						g_logger->error("Render model index buffer creation error!");
 					}
 
 					dxModel.numIndices = (uint32_t)(model.mesh.triangles.size() * 3);
@@ -1451,7 +1451,7 @@ void PassthroughRendererDX11::UpdateRenderModels(std::shared_ptr<CameraFrame> fr
 			CD3D11_BUFFER_DESC vertexBufferDesc((UINT)model.mesh.vertices.size() * sizeof(VertexFormatBasic), D3D11_BIND_VERTEX_BUFFER);
 			if (FAILED(m_d3dDevice->CreateBuffer(&vertexBufferDesc, &vertexBufferData, &dxModel.vertexBuffer)))
 			{
-				ErrorLog("Render model vertex buffer creation error!\n");
+				g_logger->error("Render model vertex buffer creation error!");
 			}
 
 			D3D11_SUBRESOURCE_DATA indexBufferData{};
@@ -1460,7 +1460,7 @@ void PassthroughRendererDX11::UpdateRenderModels(std::shared_ptr<CameraFrame> fr
 			CD3D11_BUFFER_DESC indexBufferDesc((UINT)model.mesh.triangles.size() * sizeof(MeshTriangle), D3D11_BIND_INDEX_BUFFER);
 			if (FAILED(m_d3dDevice->CreateBuffer(&indexBufferDesc, &indexBufferData, &dxModel.indexBuffer)))
 			{
-				ErrorLog("Render model index buffer creation error!\n");
+				g_logger->error("Render model index buffer creation error!");
 			}
 
 			dxModel.numIndices = (uint32_t)(model.mesh.triangles.size() * 3);

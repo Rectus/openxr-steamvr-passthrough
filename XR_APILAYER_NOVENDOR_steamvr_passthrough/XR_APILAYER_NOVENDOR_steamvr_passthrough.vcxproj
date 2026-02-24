@@ -64,7 +64,7 @@
       <ConformanceMode>true</ConformanceMode>
       <PrecompiledHeader>Use</PrecompiledHeader>
       <PrecompiledHeaderFile>pch.h</PrecompiledHeaderFile>
-      <AdditionalIncludeDirectories>$(ProjectDir);$(SolutionDir)shared;$(ProjectDir)framework;$(SolutionDir)\external\OpenXR-SDK\include;$(SolutionDir)\external\OpenXR-SDK\src\common;$(SolutionDir)\external\openvr\headers;$(SolutionDir)\external\openvr\src;$(SolutionDir)\external\lodepng;$(SolutionDir)\external\imgui;$(SolutionDir)\external\imgui\backends;$(SolutionDir)\external\simpleini;$(SolutionDir)\external\opencv\build\include;$(VULKAN_SDK)\Include</AdditionalIncludeDirectories>
+      <AdditionalIncludeDirectories>$(ProjectDir);$(SolutionDir)shared;$(SolutionDir)external\spdlog\include;$(ProjectDir)framework;$(SolutionDir)\external\OpenXR-SDK\include;$(SolutionDir)\external\OpenXR-SDK\src\common;$(SolutionDir)\external\openvr\headers;$(SolutionDir)\external\openvr\src;$(SolutionDir)\external\lodepng;$(SolutionDir)\external\imgui;$(SolutionDir)\external\imgui\backends;$(SolutionDir)\external\simpleini;$(SolutionDir)\external\opencv\build\include;$(VULKAN_SDK)\Include</AdditionalIncludeDirectories>
       <LanguageStandard>stdcpp20</LanguageStandard>
       <AdditionalModuleDependencies>
       </AdditionalModuleDependencies>
@@ -134,7 +134,7 @@ copy $(SolutionDir)\readme.md $(OutDir)
       <ConformanceMode>true</ConformanceMode>
       <PrecompiledHeader>Use</PrecompiledHeader>
       <PrecompiledHeaderFile>pch.h</PrecompiledHeaderFile>
-      <AdditionalIncludeDirectories>$(ProjectDir);$(SolutionDir)shared;$(ProjectDir)shaders;$(ProjectDir)framework;$(SolutionDir)\external\OpenXR-SDK\include;$(SolutionDir)\external\OpenXR-SDK\src\common;$(SolutionDir)\external\openvr\headers;$(SolutionDir)\external\openvr\src;$(SolutionDir)\external\lodepng;$(SolutionDir)\external\imgui;$(SolutionDir)\external\imgui\backends;$(SolutionDir)\external\simpleini;$(SolutionDir)\external\opencv\build\include;$(VULKAN_SDK)\Include</AdditionalIncludeDirectories>
+      <AdditionalIncludeDirectories>$(ProjectDir);$(SolutionDir)shared;$(SolutionDir)external\spdlog\include;$(ProjectDir)shaders;$(ProjectDir)framework;$(SolutionDir)\external\OpenXR-SDK\include;$(SolutionDir)\external\OpenXR-SDK\src\common;$(SolutionDir)\external\openvr\headers;$(SolutionDir)\external\openvr\src;$(SolutionDir)\external\lodepng;$(SolutionDir)\external\imgui;$(SolutionDir)\external\imgui\backends;$(SolutionDir)\external\simpleini;$(SolutionDir)\external\opencv\build\include;$(VULKAN_SDK)\Include</AdditionalIncludeDirectories>
       <LanguageStandard>stdcpp20</LanguageStandard>
       <InlineFunctionExpansion>AnySuitable</InlineFunctionExpansion>
       <FavorSizeOrSpeed>Speed</FavorSizeOrSpeed>
@@ -196,6 +196,8 @@ copy $(SolutionDir)THIRD_PARTY $(OutDir)THIRD_PARTY.txt</Command>
     <ClInclude Include="..\shared\pathutil.h" />
     <ClInclude Include="..\shared\perfutil.h" />
     <ClInclude Include="..\shared\shared_structs.h" />
+    <ClInclude Include="..\shared\spdlog_ipc_sink.h" />
+    <ClInclude Include="..\shared\version.h" />
     <ClInclude Include="camera_manager.h" />
     <ClInclude Include="check.h" />
     <ClInclude Include="depth_reconstruction.h" />
@@ -211,7 +213,6 @@ copy $(SolutionDir)THIRD_PARTY $(OutDir)THIRD_PARTY.txt</Command>
     <ClInclude Include="layer.h" />
     <ClInclude Include="pch.h" />
     <ClInclude Include="resource.h" />
-    <ClInclude Include="version.h" />
   </ItemGroup>
   <ItemGroup>
     <ClCompile Include="..\external\imgui\backends\imgui_impl_dx11.cpp">

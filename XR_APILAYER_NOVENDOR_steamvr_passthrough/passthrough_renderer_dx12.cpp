@@ -251,7 +251,7 @@ bool PassthroughRendererDX12::InitRenderer()
 
 	if (!m_vsPassConstantBuffer || !m_vsViewConstantBuffer || !m_psPassConstantBuffer || !m_psViewConstantBuffer || !m_psMaskedConstantBuffer)
 	{
-		ErrorLog("Failed to create D3D12 constant buffers.\n");
+		g_logger->error("Failed to create D3D12 constant buffers.");
 		return false;
 	}
 
@@ -260,14 +260,14 @@ bool PassthroughRendererDX12::InitRenderer()
 	{
 		if (FAILED(m_d3dDevice->CreateCommandAllocator(D3D12_COMMAND_LIST_TYPE_DIRECT, IID_PPV_ARGS(&m_commandAllocators[i]))))
 		{
-			ErrorLog("Failed to create D3D12 command allocator.\n");
+			g_logger->error("Failed to create D3D12 command allocator.");
 			return false;
 		}
 	}
 
 	if (FAILED(m_d3dDevice->CreateCommandList(0, D3D12_COMMAND_LIST_TYPE_DIRECT, m_commandAllocators[0].Get(), nullptr, IID_PPV_ARGS(&m_commandList))))
 	{
-		ErrorLog("Failed to create D3D12 command list.\n");
+		g_logger->error("Failed to create D3D12 command list.");
 		return false;
 	}
 
@@ -664,13 +664,13 @@ bool PassthroughRendererDX12::CreateRootSignature()
 
 	if (FAILED(D3D12SerializeRootSignature(&rootSignatureDesc, D3D_ROOT_SIGNATURE_VERSION_1_0, &rootSignatureBlob, &errorBlob)))
 	{
-		ErrorLog("Error serializing root signature.\n");
+		g_logger->error("Error serializing root signature.");
 		return false;
 	}
 
 	if (FAILED(m_d3dDevice->CreateRootSignature(0, rootSignatureBlob->GetBufferPointer(), rootSignatureBlob->GetBufferSize(), IID_PPV_ARGS(&m_rootSignature))))
 	{
-		ErrorLog("Error creating root signature.\n");
+		g_logger->error("Error creating root signature.");
 		return false;
 	}
 
@@ -833,7 +833,7 @@ bool PassthroughRendererDX12::InitPipeline(bool bFlipTriangles)
 
 	if (FAILED(m_d3dDevice->CreateGraphicsPipelineState(&psoDesc, IID_PPV_ARGS(&m_psoMainPass))))
 	{
-		ErrorLog("Error creating main PSO.\n");
+		g_logger->error("Error creating main PSO.");
 		return false;
 	}
 
@@ -842,7 +842,7 @@ bool PassthroughRendererDX12::InitPipeline(bool bFlipTriangles)
 	psoDesc.BlendState = blendStateDestAlpha;
 	if (FAILED(m_d3dDevice->CreateGraphicsPipelineState(&psoDesc, IID_PPV_ARGS(&m_psoCutoutPass))))
 	{
-		ErrorLog("Error creating cutout PSO.\n");
+		g_logger->error("Error creating cutout PSO.");
 		return false;
 	}
 
@@ -869,14 +869,14 @@ bool PassthroughRendererDX12::InitPipeline(bool bFlipTriangles)
 
 	if (FAILED(m_d3dDevice->CreateGraphicsPipelineState(&psoDesc, IID_PPV_ARGS(&m_psoPrepass))))
 	{
-		ErrorLog("Error creating prepass PSO.\n");
+		g_logger->error("Error creating prepass PSO.");
 		return false;
 	}
 
 	psoDesc.VS = fullscreenQuadVS;
 	if (FAILED(m_d3dDevice->CreateGraphicsPipelineState(&psoDesc, IID_PPV_ARGS(&m_psoMaskedPrepassFullscreen))))
 	{
-		ErrorLog("Error creating prepass PSO.\n");
+		g_logger->error("Error creating prepass PSO.");
 		return false;
 	}
 
@@ -886,7 +886,7 @@ bool PassthroughRendererDX12::InitPipeline(bool bFlipTriangles)
 	psoDesc.PS = alphaCopyMaskedPS;
 	if (FAILED(m_d3dDevice->CreateGraphicsPipelineState(&psoDesc, IID_PPV_ARGS(&m_psoMaskedAlphaCopy))))
 	{
-		ErrorLog("Error creating masked alpha copy PSO.\n");
+		g_logger->error("Error creating masked alpha copy PSO.");
 		return false;
 	}
 
@@ -898,7 +898,7 @@ bool PassthroughRendererDX12::InitPipeline(bool bFlipTriangles)
 	psoDesc.PS = passthroughPS;
 	if (FAILED(m_d3dDevice->CreateGraphicsPipelineState(&psoDesc, IID_PPV_ARGS(&m_psoHoleFillPass))))
 	{
-		ErrorLog("Error creating hole fill PSO.\n");
+		g_logger->error("Error creating hole fill PSO.");
 		return false;
 	}
 

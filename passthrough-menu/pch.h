@@ -19,8 +19,6 @@
 
 using namespace std::chrono_literals;
 
-const std::string MenuVersionString = "0.3.6";
-
 #if true
 
 	#define WIN32_LEAN_AND_MEAN
@@ -57,7 +55,10 @@ const std::string MenuVersionString = "0.3.6";
 #define OPENVR_BUILD_STATIC
 #include <openvr.h>
 
-#include "log.h"
 
-using namespace steamvr_passthrough;
-using namespace steamvr_passthrough::logging;
+#define SPDLOG_WCHAR_TO_UTF8_SUPPORT
+#include "spdlog/spdlog.h"
+#include "spdlog_imgui_buffer_sink.h"
+
+extern std::shared_ptr<spdlog::logger> g_logger;
+extern std::shared_ptr<spdlog_imgui_buffer_sink_mt> g_logRingbuffer;

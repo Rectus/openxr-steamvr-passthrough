@@ -56,6 +56,8 @@ private:
 	std::shared_ptr<MenuIPCServer> m_IPCServer;
 	std::string m_imguiConfigPath;
 
+	std::unique_ptr<spdlog::logger> m_clientLogger;
+
 	VulkanMenuRenderer m_renderer;
 
 	bool m_bHasWindow = false;

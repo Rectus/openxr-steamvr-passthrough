@@ -1,6 +1,7 @@
 #include "pch.h"
 #include "menu_handler.h"
 #include "menu_ipc_client.h"
+#include "spdlog_ipc_sink.h"
 
 
 MenuHandler::MenuHandler(HMODULE dllModule, std::shared_ptr<ConfigManager> configManager, std::shared_ptr<MenuIPCClient> IPCClient)
@@ -9,16 +10,16 @@ MenuHandler::MenuHandler(HMODULE dllModule, std::shared_ptr<ConfigManager> confi
 	, m_IPCClient(IPCClient)
 	, m_clientData()
 {
-	m_bRunThread = true;
-	m_menuThread = std::thread(&MenuHandler::RunThread, this);
+	m_logIPCSink = std::make_shared<spdlog_ipc_sink_mt>(m_IPCClient, 32);
+	m_logIPCSink->set_pattern("%v");
+	g_logSinkAggregator->add_sink(m_logIPCSink);
 }
 
 MenuHandler::~MenuHandler()
 {
-	m_bRunThread = false;
-	if (m_menuThread.joinable())
+	if (g_logSinkAggregator.get())
 	{
-		m_menuThread.join();
+		g_logSinkAggregator->remove_sink(m_logIPCSink);
 	}
 }
 
@@ -30,6 +31,8 @@ void MenuHandler::DispatchClientDataValues()
 	message.Header.PayloadSize = sizeof(ClientDataValues); 
 	memcpy(message.Payload, &m_clientData.Values, sizeof(ClientDataValues));
 	m_IPCClient->WriteMessage(message, false);
+
+	g_logger->flush();
 }
 
 void MenuHandler::DispatchApplicationModuleName()
@@ -73,7 +76,7 @@ void inline CopyConfig(void* destination, MenuIPCMessage& message, size_t size)
 	}
 	else
 	{
-		ErrorLog("Incorrect payload size for config update: %d, expected %d\n", message.Header.PayloadSize, message.Payload);
+		g_logger->error("Incorrect payload size for config update: {}, expected {}", message.Header.PayloadSize, message.Payload);
 	}
 }
 
@@ -102,7 +105,7 @@ void MenuHandler::MenuIPCConnectedToServer()
 
 void MenuHandler::MenuIPCMessageReceived(MenuIPCMessage& message, int clientIndex)
 {
-	//Log("IPC message received: type %d, len %d\n", message.Header.Type, message.Header.PayloadSize);
+	//g_logger->info("IPC message received: type {}, len {}", message.Header.Type, message.Header.PayloadSize);
 
 	switch (message.Header.Type)
 	{
@@ -168,15 +171,8 @@ void MenuHandler::MenuIPCMessageReceived(MenuIPCMessage& message, int clientInde
 	}
 
 	default:
-		Log("Unhandled IPC message received: type %d, len %d\n", message.Header.Type, message.Header.PayloadSize);
+		g_logger->info("Unhandled IPC message received: type {}, len {}", static_cast<int32_t>(message.Header.Type), message.Header.PayloadSize);
 	}
 	
 }
 
-void MenuHandler::RunThread()
-{
-	while (m_bRunThread)
-	{
-		std::this_thread::sleep_for(std::chrono::milliseconds(1));
-	}
-}

@@ -64,11 +64,11 @@ bool CameraManagerOpenCV::InitCamera()
 
     if (!m_videoCapture.isOpened())
     {
-        ErrorLog("OpenCV VideoCapture failed to open!\n");
+        g_logger->error("OpenCV VideoCapture failed to open!");
         return false;
     }
 
-    Log("OpenCV Video capture opened using API: %s\n", m_videoCapture.getBackendName());
+    g_logger->info("OpenCV Video capture opened using API: {}", m_videoCapture.getBackendName());
 
     if (cameraConf.AutoExposureEnable)
     {
@@ -83,7 +83,7 @@ bool CameraManagerOpenCV::InitCamera()
 
     double fps = m_videoCapture.get(cv::CAP_PROP_FPS);
 
-    Log("Camera initalized: %d x %d @ %.1f\n", m_cameraFrameWidth, m_cameraFrameHeight, fps);
+    g_logger->info("Camera initalized: {} x {} @ {:.1f}", m_cameraFrameWidth, m_cameraFrameHeight, fps);
 
     m_bCameraInitialized = true;
     m_bRunThread = true;
@@ -266,7 +266,7 @@ void CameraManagerOpenCV::UpdateStaticCameraParameters()
 
     if (m_cameraTextureWidth == 0 || m_cameraTextureHeight == 0 || m_cameraFrameBufferSize == 0)
     {
-        ErrorLog("Invalid frame size received:Width = %u, Height = %u, Size = %u\n", m_cameraTextureWidth, m_cameraTextureHeight, m_cameraFrameBufferSize);
+        g_logger->error("Invalid frame size received: Width = {}, Height = {}, Size = {}", m_cameraTextureWidth, m_cameraTextureHeight, m_cameraFrameBufferSize);
     }
 
     m_cameraUndistortedTextureWidth = m_cameraTextureWidth;
@@ -383,7 +383,7 @@ void CameraManagerOpenCV::ServeFrames()
 
         if (!m_videoCapture.grab())
         {
-            ErrorLog("Failed to grab VideoCapture.\n");
+            g_logger->error("Failed to grab VideoCapture!");
             std::this_thread::sleep_for(FRAME_POLL_INTERVAL);
             continue;
         }
@@ -398,7 +398,7 @@ void CameraManagerOpenCV::ServeFrames()
 
         if (!m_videoCapture.retrieve(frameBuffer))
         {
-            ErrorLog("Failed to retrieve VideoCapture.\n");
+            g_logger->error("Failed to retrieve VideoCapture!");
             std::this_thread::sleep_for(FRAME_POLL_INTERVAL);
             continue;
         }

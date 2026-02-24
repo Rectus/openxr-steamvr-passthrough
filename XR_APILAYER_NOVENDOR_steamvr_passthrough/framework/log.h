@@ -26,8 +26,6 @@
 
 namespace LAYER_NAMESPACE::logging {
 
-#define LOG_FILE_DIR "\\OpenXR SteamVR Passthrough"
-
 #if USE_TRACELOGGING
     TRACELOGGING_DECLARE_PROVIDER(g_traceProvider);
 
@@ -41,17 +39,5 @@ namespace LAYER_NAMESPACE::logging {
 #define TLPArg(var, ...) TraceLoggingPointer(var, ##__VA_ARGS__)
 
 #endif
-
-    // General logging function.
-    void Log(const char* fmt, ...);
-
-    // Debug logging function. Can make things very slow (only enabled on Debug builds).
-    void DebugLog(const char* fmt, ...);
-
-    // Error logging function. Goes silent after too many errors.
-    void ErrorLog(const char* fmt, ...);
-
-    // Read buffer of log lines through passed function for display.
-    void ReadLogBuffer(void (*printFunc)(std::deque<std::string>& logBuffer));
 
 } // namespace LAYER_NAMESPACE::logging
