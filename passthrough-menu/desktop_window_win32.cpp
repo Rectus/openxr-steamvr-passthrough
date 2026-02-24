@@ -256,6 +256,11 @@ void DesktopWindowWin32::OnAllClientsDisconnected()
     }
 }
 
+void DesktopWindowWin32::SendQuitMessage()
+{
+    SendMessage(m_hSettingsWindow, WM_MENU_QUIT, 0, 0);
+}
+
 
 #ifndef DWMWA_USE_IMMERSIVE_DARK_MODE
 #define DWMWA_USE_IMMERSIVE_DARK_MODE 20

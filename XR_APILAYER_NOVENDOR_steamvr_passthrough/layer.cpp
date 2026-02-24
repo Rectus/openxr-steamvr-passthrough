@@ -37,8 +37,6 @@
 #include <util.h>
 #include <map>
 #include <queue>
-//#include <shlobj_core.h>
-//#include <pathcch.h>
 #include "psapi.h"
 #include "lodepng.h"
 #include "resource.h"
@@ -46,7 +44,7 @@
 HMODULE g_dllModule = NULL;
 
 // Directory under AppData to write config.
-#define CONFIG_FILE_DIR "\\OpenXR SteamVR Passthrough ああああテスト"
+#define CONFIG_FILE_DIR "\\OpenXR SteamVR Passthrough"
 #define CONFIG_FILE_NAME "\\config.ini"
 #define MENU_EXE_FILE_NAME L"\\passthrough-menu.exe"
 #define MENU_EXE_ARGUMENTS L" --fromlayer"
@@ -263,11 +261,8 @@ namespace
 				data.Values.bFBPassthroughExtensionActive = true;
 				Log("Extension XR_FB_passthrough enabled\n");
 			}
-
-			wchar_t buffer[MAX_PATH] = { 0 };
-			GetModuleFileNameW(NULL, buffer, MAX_PATH);
-			std::string exePath = ToUTF8String(buffer);		
-			data.ApplicationModuleName = exePath.substr(exePath.find_last_of("/\\") + 1);
+	
+			data.ApplicationModuleName = GetProcessFileName();
 			data.Values.ApplicationPID = GetCurrentProcessId();
 
 			data.ApplicationName = std::string(createInfo->applicationInfo.applicationName);

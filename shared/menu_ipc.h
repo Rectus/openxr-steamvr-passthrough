@@ -13,7 +13,6 @@ enum MenuIPCMessageType
 	MessageType_RequestConfig,
 	MessageType_SendConfig_Main,
 	MessageType_SendConfig_Camera,
-	MessageType_SendConfig_Camera_TrackedDeviceSerialNumber,
 	MessageType_SendConfig_Core,
 	MessageType_SendConfig_Extensions,
 	MessageType_SendConfig_Stereo,
@@ -29,7 +28,7 @@ struct MenuIPCMessageHeader
 	int PayloadSize;
 };
 
-#define IPC_BUFFER_SIZE 1024
+#define IPC_BUFFER_SIZE 512
 #define IPC_HEADER_SIZE (sizeof(MenuIPCMessageHeader))
 #define IPC_PAYLOAD_SIZE (IPC_BUFFER_SIZE - IPC_HEADER_SIZE)
 

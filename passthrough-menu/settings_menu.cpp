@@ -117,6 +117,9 @@ bool SettingsMenu::InitMenu()
 
 	ImGuiStyle& style = ImGui::GetStyle();
 	style.Colors[ImGuiCol_Text] = ImVec4(0.9f, 0.9f, 0.9f, 1.0f);
+	style.WindowRounding = 0.0f;
+	style.GrabMinSize = 20;
+	style.ScrollbarSize = 20;
 
 	m_mainFont = io.Fonts->AddFontFromMemoryCompressedTTF(roboto_medium_compressed_data, roboto_medium_compressed_size, 24);
 	m_smallFont = io.Fonts->AddFontFromMemoryCompressedTTF(roboto_medium_compressed_data, roboto_medium_compressed_size, 22);
@@ -127,7 +130,7 @@ bool SettingsMenu::InitMenu()
 	ImGui_ImplWin32_Init(m_window->GetWindowHandle());
 	m_renderer.InitImGui();
 
-	if (m_dashboardOverlay->IsRuntimeInitialized())
+	if (m_dashboardOverlay->InitRuntime())
 	{
 		m_dashboardOverlay->CreateOverlay(m_menuWidth, m_menuHeight);
 	}
@@ -235,6 +238,15 @@ std::string GetImageFormatName(ERenderAPI api, int64_t format)
 	default:
 		return "Unknown format";
 	}
+}
+
+
+inline bool BigButton(const char* label)
+{
+	ImGui::PushStyleVar(ImGuiStyleVar_FramePadding, ImVec2(20, 10));
+	bool result = ImGui::Button(label);
+	ImGui::PopStyleVar();
+	return result;
 }
 
 
@@ -499,16 +511,13 @@ void SettingsMenu::DrawMenu()
 	ImGui::SetNextWindowPos(ImVec2(0.0f, 0.0f));
 	ImGui::SetNextWindowSize(io.DisplaySize);
 
-	ImGui::PushStyleVar(ImGuiStyleVar_WindowRounding, 0.0f);
-	ImGui::PushStyleVar(ImGuiStyleVar_GrabMinSize, 20);
-	ImGui::PushStyleVar(ImGuiStyleVar_ScrollbarSize, 20);
 	ImGui::PushFont(m_mainFont);
 
 	ImGui::Begin("OpenXR Passthrough", NULL, ImGuiWindowFlags_NoDecoration | ImGuiWindowFlags_NoResize);
 
-	ImGui::BeginChild("Tab buttons", ImVec2(1200.0f * 0.18f, 0));
+	ImGui::BeginChild("Tab buttons", ImVec2(216, 0));
 
-	ImVec2 tabButtonSize(1200.0f * 0.17f, 55);
+	ImVec2 tabButtonSize(204, 55);
 	ImVec4 colorActiveTab(0.25f, 0.52f, 0.88f, 1.0f);
 	bool bIsActiveTab = false;
 
@@ -517,10 +526,10 @@ if (ImGui::Button(name, tabButtonSize)) { m_activeTab = tab; } \
 if (bIsActiveTab) { ImGui::PopStyleColor(1); bIsActiveTab = false; }
 
 	TAB_BUTTON("Main", TabMain);
-	TAB_BUTTON("Application", TabApplication);
-	TAB_BUTTON("Stereo", TabStereo);
-	TAB_BUTTON("Overrides", TabOverrides);
+	TAB_BUTTON("Image", TabImage);
+	TAB_BUTTON("Composition", TabComposition);
 	TAB_BUTTON("Camera", TabCamera);
+	TAB_BUTTON("Stereo", TabStereo);
 	TAB_BUTTON("Debug", TabDebug);
 
 	ImGui::PushFont(m_smallFont);
@@ -583,22 +592,15 @@ if (bIsActiveTab) { ImGui::PopStyleColor(1); bIsActiveTab = false; }
 				ImGui::TextColored(colorTextBlue, "VR");
 			}
 
-			if (mainConfig.EnablePassthrough && !bPassthoughActive && data.Values.CoreCurrentMode == 1)
-			{
-				ImGui::SameLine();
-				ImGui::TextColored(colorTextRed, "Opaque");
-			}
-
 			if (mainConfig.EnablePassthrough && !bPassthoughActive && data.Values.CoreCurrentMode == 3 && !(data.Values.FrameBufferFlags & XR_COMPOSITION_LAYER_BLEND_TEXTURE_SOURCE_ALPHA_BIT))
 			{
 				ImGui::SameLine();
 				ImGui::TextColored(colorTextRed, "No Alpha");
 			}
-
-			if (bPassthoughActive && data.Values.bDepthBlendingActive)
+			else if (bPassthoughActive && data.Values.bDepthBlendingActive)
 			{
 				ImGui::SameLine();
-				ImGui::TextColored(colorTextGreen, "Depth Blending");
+				ImGui::TextColored(colorTextGreen, "Depth");
 			}
 
 			labelStart += 54;
@@ -606,8 +608,6 @@ if (bIsActiveTab) { ImGui::PopStyleColor(1); bIsActiveTab = false; }
 			ImGui::PopID();
 		}
 		ImGui::EndListBox();
-
-		
 	}
 	else
 	{
@@ -618,84 +618,215 @@ if (bIsActiveTab) { ImGui::PopStyleColor(1); bIsActiveTab = false; }
 		ImGui::Unindent();
 	}
 	ImGui::PopFont();
-
-	
-	
-	
-
-	//ImGui::BeginChild("Sep2", ImVec2(0, -ImGui::GetFrameHeightWithSpacing() - 30));
-	//ImGui::EndChild();
-
-
-	/*if (ImGui::Button("Reset To Defaults", tabButtonSize))
-	{
-		EProjectionMode mode = mainConfig.ProjectionMode;
-		ECameraProvider cam = mainConfig.CameraProvider;
-
-		m_configManager->ResetToDefaults();
-
-		if (mainConfig.ProjectionMode != mode || mainConfig.CameraProvider != cam)
-		{
-			rendererResetPending = true;
-		}
-	}*/
-
 	ImGui::EndChild();
 	ImGui::SameLine();
 
 
 
-
 	if (m_activeTab == TabMain)
 	{
+		
 		ImGui::BeginChild("Main#TabMain");
+		ImGui::BeginChild("MainSettingsFill", ImVec2(0, -50));
 
-		if (CollapsingHeaderPersistent("Main Settings", ImGuiTreeNodeFlags_DefaultOpen))
+		if (CollapsingHeaderPersistent("Main###MainHeader", ImGuiTreeNodeFlags_DefaultOpen))
 		{
+			if (hasClients)
+			{
+				ImGui::PushFont(m_fixedFont);
+				const char* exeName = clientData.ApplicationModuleName.empty() ? "Unknown" : clientData.ApplicationModuleName.data();
+				const char* label = clientData.ApplicationName.empty() ? exeName : clientData.ApplicationName.data();
+				ImGui::Text("Selected Application: %s", label);
+
+				float timeSinceFrame = ((float)(frameStart.QuadPart - clientData.Values.LastFrameTimestamp)) / perfFrequency.QuadPart;
+
+				if (!clientData.Values.bSessionActive)
+				{
+					ImGui::Text("Application is not running an OpenXR session");
+				}
+				else if (clientData.Values.LastFrameTimestamp == 0)
+				{
+					ImGui::Text("Application has not submitted any frames");
+				}
+				else if (timeSinceFrame > 1.0f)
+				{
+					ImGui::Text("Application has not submitted frames for %.0f seconds", timeSinceFrame);
+				}
+				else if (clientData.Values.bCorePassthroughActive || clientData.Values.bFBPassthroughActive)
+				{
+					if (clientData.Values.CoreCurrentMode == 3 && !(clientData.Values.FrameBufferFlags & XR_COMPOSITION_LAYER_BLEND_TEXTURE_SOURCE_ALPHA_BIT))
+					{
+						ImGui::Text("Application has passthrough enabled, but is not submitting an alpha channel");
+					}
+					else if (clientData.Values.bDepthBlendingActive)
+					{
+						ImGui::Text("Application has passthrough active with depth testing");
+					}
+					else
+					{
+						ImGui::Text("Application has passthrough active");
+					}
+
+				}
+				else
+				{
+					ImGui::Text("Application does not have passthrough active");
+				}
+			}
+			else
+			{
+				ImGui::Text("No OpenXR applications running");
+				ImGui::Text("");
+			}
+			ImGui::PopFont();
+			IMGUI_BIG_SPACING;
+		}
+		
+		if (CollapsingHeaderPersistent("Quick Settings", ImGuiTreeNodeFlags_DefaultOpen))
+		{
+			ImGui::BeginGroup();
+
 			ImGui::Checkbox("Enable Passthrough", &mainConfig.EnablePassthrough);
 
-			IMGUI_BIG_SPACING;
+			ImGui::Dummy(ImVec2(min(300, ImGui::GetContentRegionAvail().x - 300), 95));
 
-			if (mainConfig.CameraProvider != CameraProvider_OpenVR) { ImGui::BeginDisabled(); }
+			bool bAllowRoomView = mainConfig.CameraProvider == CameraProvider_OpenVR;
+			bool bAllowCustom2D = mainConfig.CameraProvider != CameraProvider_Augmented;
+			bool bAllowCustom3D = mainConfig.CameraProvider != CameraProvider_OpenCV || cameraConfig.CameraFrameLayout != FrameLayout_Mono;
 
 			ImGui::Text("Projection Mode");
-			TextDescription("Method for projecting the passthrough cameras to the VR view.");
+
+			if (!bAllowRoomView) { ImGui::BeginDisabled(); }
 			if (ImGui::RadioButton("2D Room View", mainConfig.ProjectionMode == Projection_RoomView2D))
 			{
 				mainConfig.ProjectionMode = Projection_RoomView2D;
 			}
-			TextDescription("Cylindrical projection with floor. Matches the projection in the SteamVR Room View 2D mode.");
+			if (!bAllowRoomView) { ImGui::EndDisabled(); }
 
-			if (mainConfig.CameraProvider != CameraProvider_OpenVR) { ImGui::EndDisabled(); }
-
-			if (mainConfig.CameraProvider == CameraProvider_Augmented) { ImGui::BeginDisabled(); }
-
+			if (!bAllowCustom2D) { ImGui::BeginDisabled(); }
 			if (ImGui::RadioButton("2D Custom", mainConfig.ProjectionMode == Projection_Custom2D))
 			{
 				mainConfig.ProjectionMode = Projection_Custom2D;
 			}
-			TextDescription("Cylindrical projection with floor. Custom distortion correction and projection calculation.");
+			if (!bAllowCustom2D) { ImGui::EndDisabled(); }
 
-			if (mainConfig.CameraProvider == CameraProvider_Augmented) { ImGui::EndDisabled(); }
-
-			if (mainConfig.CameraProvider == CameraProvider_OpenCV && cameraConfig.CameraFrameLayout == FrameLayout_Mono) { ImGui::BeginDisabled(); }
-
+			if (!bAllowCustom3D) { ImGui::BeginDisabled(); }
 			if (ImGui::RadioButton("3D Stereo", mainConfig.ProjectionMode == Projection_StereoReconstruction))
 			{
 				mainConfig.ProjectionMode = Projection_StereoReconstruction;
 			}
-			TextDescriptionSpaced("Full depth estimation.");
+			if (!bAllowCustom3D) { ImGui::EndDisabled(); }
 
-			if (mainConfig.CameraProvider == CameraProvider_OpenCV && cameraConfig.CameraFrameLayout == FrameLayout_Mono) { ImGui::EndDisabled(); }
+			ImGui::Dummy(ImVec2(0, 0));
 
-			ImGui::Checkbox("Project onto Render Models", &mainConfig.ProjectToRenderModels);
-			TextDescriptionSpaced("Project the passthrough view to the correct distance on render models, such as controllers. Requires good camera calibration.");
+			ImGui::EndGroup();
+
+			ImGui::SameLine();
+			ImGui::SeparatorEx(ImGuiSeparatorFlags_Vertical);
+			ImGui::SameLine();
+
+			ImGui::BeginGroup();
+
+			ImGui::Checkbox("Force Passthrough Mode", &coreConfig.CoreForcePassthrough);
+
+			BeginSoftDisabled(!coreConfig.CoreForcePassthrough);
+
+			ImGui::BeginGroup();
+			if (ImGui::RadioButton("Alpha Blend###CoreForce3", coreConfig.CoreForceMode == 3))
+			{
+				coreConfig.CoreForceMode = 3;
+			}
+			if (ImGui::RadioButton("Additive###CoreForcef2", coreConfig.CoreForceMode == 2))
+			{
+				coreConfig.CoreForceMode = 2;
+			}
+			if (ImGui::RadioButton("Opaque###Coreforce1", coreConfig.CoreForceMode == 1))
+			{
+				coreConfig.CoreForceMode = 1;
+			}
+			if (ImGui::RadioButton("Masked (Chroma Key)###Coreforce0", coreConfig.CoreForceMode == 0))
+			{
+				coreConfig.CoreForceMode = 0;
+			}
+			ImGui::EndGroup();
+			EndSoftDisabled(!coreConfig.CoreForcePassthrough);
+
+			IMGUI_BIG_SPACING;
+
+			bool bAllowDepth = mainConfig.ProjectionMode == Projection_StereoReconstruction;
+
+			BeginSoftDisabled(!depthConfig.DepthReadFromApplication || !bAllowDepth);
+			ImGui::Checkbox("Force Depth Composition", &depthConfig.DepthForceComposition);
+			EndSoftDisabled(!depthConfig.DepthReadFromApplication || !bAllowDepth);
+
+			BeginSoftDisabled(!bAllowDepth);
+			ImGui::Checkbox("Force Depth Range Testing", &depthConfig.DepthForceRangeTest);
+			EndSoftDisabled(!bAllowDepth);
+
+			ImGui::EndGroup();
+			TextDescription("Complete settings and descriptions are available in the other tabs.");
+
+			IMGUI_BIG_SPACING;
+
+		}
 
 
+		if (CollapsingHeaderPersistent("Misc."))
+		{
+			ImGui::Checkbox("Show Descriptions", &mainConfig.ShowSettingDescriptions);
+
+			ImGui::Checkbox("Pause Passthrough When Idle", &mainConfig.PauseImageHandlingOnIdle);
+			TextDescription("Stops the camera passthrough stream from being processed when no passthrough is being rendered.");
+
+			BeginSoftDisabled(!mainConfig.PauseImageHandlingOnIdle);
+			ImGui::Checkbox("Close Camera Stream On Pause", &mainConfig.CloseCameraStreamOnPause);
+			TextDescription("Closes the camera provider when idle. It may take several seconds to start again.");
+			ScrollableSlider("Idle Time (s)", &mainConfig.IdleTimeSeconds, 1.0f, 30.0f, "%.0f", 1.0f);
+			TextDescription("How long to wait before stopping the processing when idle.");
+			EndSoftDisabled(!mainConfig.PauseImageHandlingOnIdle);
+
+			ImGui::Checkbox("Use legacy DirectX 12 renderer", &mainConfig.UseLegacyD3D12Renderer);
+			TextDescription("Uses the old native DirectX 12 renderer for DirectX 12 applications. Not recommended since it is missing rendering features. Requires restart.");
+			ImGui::Checkbox("Use legacy Vulkan renderer", &mainConfig.UseLegacyVulkanRenderer);
+			TextDescription("Uses the old native Vulkan renderer for Vulkan applications. Not recommended since it is missing rendering features. Requires restart.");
+		}
+		IMGUI_BIG_SPACING;
+
+		ImGui::EndChild(); // Fill
+
+		if (BigButton("Reset To Defaults"))
+		{
+			EProjectionMode mode = mainConfig.ProjectionMode;
+			ECameraProvider cam = mainConfig.CameraProvider;
+
+			m_configManager->ResetToDefaults();
+
+			if (mainConfig.ProjectionMode != mode || mainConfig.CameraProvider != cam)
+			{
+				rendererResetPending = true;
+			}
+		}
+
+		ImGui::SameLine();
+
+		if (BigButton("Quit Menu"))
+		{
+			m_window->SendQuitMessage();
+		}
+
+		ImGui::EndChild();
+	}
+
+
+	if (m_activeTab == TabImage)
+	{
+		ImGui::BeginChild("Image#TabImage");
+
+		if (CollapsingHeaderPersistent("Image Settings", ImGuiTreeNodeFlags_DefaultOpen))
+		{
 			if (TreeNodePersistent("Image Controls", ImGuiTreeNodeFlags_DefaultOpen))
 			{
 				ImGui::PushItemWidth(ImGui::GetContentRegionAvail().x * 0.45f);
-				bImmediateUpdate |= ScrollableSlider("Opacity", &mainConfig.PassthroughOpacity, 0.0f, 1.0f, "%.1f", 0.1f);
 				bImmediateUpdate |= ScrollableSlider("Brightness", &mainConfig.Brightness, -50.0f, 50.0f, "%.0f", 1.0f);
 				bImmediateUpdate |= ScrollableSlider("Contrast", &mainConfig.Contrast, 0.0f, 2.0f, "%.1f", 0.1f);
 				bImmediateUpdate |= ScrollableSlider("Saturation", &mainConfig.Saturation, 0.0f, 2.0f, "%.1f", 0.1f);
@@ -747,11 +878,51 @@ if (bIsActiveTab) { ImGui::PopStyleColor(1); bIsActiveTab = false; }
 
 		if (CollapsingHeaderPersistent("Projection Settings", ImGuiTreeNodeFlags_DefaultOpen))
 		{
+			bool bAllowRoomView = mainConfig.CameraProvider == CameraProvider_OpenVR;
+			bool bAllowCustom2D = mainConfig.CameraProvider != CameraProvider_Augmented;
+			bool bAllowCustom3D = mainConfig.CameraProvider != CameraProvider_OpenCV || cameraConfig.CameraFrameLayout != FrameLayout_Mono;
+
+			if (!bAllowRoomView) { ImGui::BeginDisabled(); }
+
+			ImGui::Text("Projection Mode");
+			TextDescription("Method for projecting the passthrough cameras to the VR view.");
+
+			if (ImGui::RadioButton("2D Room View", mainConfig.ProjectionMode == Projection_RoomView2D))
+			{
+				mainConfig.ProjectionMode = Projection_RoomView2D;
+			}
+			TextDescription("Cylindrical projection with floor. Matches the projection in the SteamVR Room View 2D mode.");
+
+			if (!bAllowRoomView) { ImGui::EndDisabled(); }
+
+			if (!bAllowCustom2D) { ImGui::BeginDisabled(); }
+
+			if (ImGui::RadioButton("2D Custom", mainConfig.ProjectionMode == Projection_Custom2D))
+			{
+				mainConfig.ProjectionMode = Projection_Custom2D;
+			}
+			TextDescription("Cylindrical projection with floor. Custom distortion correction and projection calculation.");
+
+			if (!bAllowCustom2D) { ImGui::EndDisabled(); }
+
+			if (!bAllowCustom3D) { ImGui::BeginDisabled(); }
+
+			if (ImGui::RadioButton("3D Stereo", mainConfig.ProjectionMode == Projection_StereoReconstruction))
+			{
+				mainConfig.ProjectionMode = Projection_StereoReconstruction;
+			}
+			TextDescriptionSpaced("Full depth estimation.");
+
+			if (!bAllowCustom3D) { ImGui::EndDisabled(); }
+
+			ImGui::Checkbox("Project onto Render Models", &mainConfig.ProjectToRenderModels);
+			TextDescriptionSpaced("Project the passthrough view to the correct distance on render models, such as controllers. Requires good camera calibration.");
+
 			IMGUI_BIG_SPACING;
 
-			ImGui::SetNextItemWidth(ImGui::GetContentRegionAvail().x * 0.45f);
+			/*ImGui::SetNextItemWidth(ImGui::GetContentRegionAvail().x * 0.45f);
 			bImmediateUpdate |= ScrollableSlider("Depth Offset Calibration", &mainConfig.DepthOffsetCalibration, 0.5f, 1.5f, "%.2f", 0.01f);
-			TextDescriptionSpaced("Calibration to compensate for incorrect distance between stereo cameras.");
+			TextDescriptionSpaced("Calibration to compensate for incorrect distance between stereo cameras.");*/
 
 			ImGui::SetNextItemWidth(ImGui::GetContentRegionAvail().x * 0.45f);
 			bImmediateUpdate |= ScrollableSlider("Projection Distance (m)", &mainConfig.ProjectionDistanceFar, 0.5f, 20.0f, "%.1f", 0.1f);
@@ -764,107 +935,49 @@ if (bIsActiveTab) { ImGui::PopStyleColor(1); bIsActiveTab = false; }
 			IMGUI_BIG_SPACING;
 		}
 
-		if (CollapsingHeaderPersistent("Misc.", ImGuiTreeNodeFlags_DefaultOpen))
-		{
-			ImGui::Checkbox("Show Descriptions", &mainConfig.ShowSettingDescriptions);
-
-			ImGui::Checkbox("Pause Passthrough When Idle", &mainConfig.PauseImageHandlingOnIdle);
-			TextDescription("Stops the camera passthrough stream from being processed when no passthrough is being rendered.");
-
-			BeginSoftDisabled(!mainConfig.PauseImageHandlingOnIdle);
-			ImGui::Checkbox("Close Camera Stream On Pause", &mainConfig.CloseCameraStreamOnPause);
-			TextDescription("Closes the camera provider when idle. It may take several seconds to start again.");
-			ScrollableSlider("Idle Time (s)", &mainConfig.IdleTimeSeconds, 1.0f, 30.0f, "%.0f", 1.0f);
-			TextDescription("How long to wait before stopping the processing when idle.");
-			EndSoftDisabled(!mainConfig.PauseImageHandlingOnIdle);
-
-			ImGui::Checkbox("Use legacy DirectX 12 renderer", &mainConfig.UseLegacyD3D12Renderer);
-			TextDescription("Uses the old native DirectX 12 renderer for DirectX 12 applications. Not recommended since it is missing rendering features. Requires restart.");
-			ImGui::Checkbox("Use legacy Vulkan renderer", &mainConfig.UseLegacyVulkanRenderer);
-			TextDescription("Uses the old native Vulkan renderer for Vulkan applications. Not recommended since it is missing rendering features. Requires restart.");
-		}
-		IMGUI_BIG_SPACING;
-
 		ImGui::EndChild();
 	}
 
 
-
-	if(m_activeTab == TabApplication)
+	if(m_activeTab == TabComposition)
 	{
-		ImGui::BeginChild("Setup#Tabsetup");
+		ImGui::BeginChild("Composition#TabComposition");
 
-		if (CollapsingHeaderPersistent("OpenXR Core", ImGuiTreeNodeFlags_DefaultOpen))
+		if (CollapsingHeaderPersistent("Application Controlled", ImGuiTreeNodeFlags_DefaultOpen))
 		{
-			TextDescriptionSpaced("Options for application controlled passthrough features built into the OpenXR core specification. Allows using the environment blend modes for passthrough.");
-
-			ImGui::PushFont(m_fixedFont);
-			ImGui::Text("Core passthrough:");
-			ImGui::SameLine();
-			if (displayValues.bCorePassthroughActive)
-			{
-				ImGui::TextColored(colorTextGreen, "Active");
-			}
-			else
-			{
-				ImGui::TextColored(colorTextRed, "Inactive");
-			}
-
-			ImGui::Text("Application requested mode:");
-			ImGui::SameLine();
-			if (displayValues.CoreCurrentMode == 3) { ImGui::Text("Alpha Blend"); }
-			else if (displayValues.CoreCurrentMode == 2) { ImGui::Text("Additive"); }
-			else if (displayValues.CoreCurrentMode == 1) { ImGui::Text("Opaque"); }
-			else { ImGui::Text("Unknown"); }
-
-			if(mainConfig.EnablePassthrough && !displayValues.bCorePassthroughActive && displayValues.CoreCurrentMode == 3 && !(displayValues.FrameBufferFlags& XR_COMPOSITION_LAYER_BLEND_TEXTURE_SOURCE_ALPHA_BIT))
-			{ ImGui::TextColored(colorTextRed, "No alpha channel provided!"); }
-
-			ImGui::PopFont();
-
-			IMGUI_BIG_SPACING;
-
-			ImGui::Checkbox("Enable###CoreEnable", &coreConfig.CorePassthroughEnable);
-			TextDescriptionSpaced("Allow OpenXR applications to enable passthrough.");
-			IMGUI_BIG_SPACING;
-
-			BeginSoftDisabled(!coreConfig.CorePassthroughEnable);
-			ImGui::BeginGroup();
-			ImGui::Text("Blend Modes");
-			TextDescription("Controls what blend modes are presented to the application. Requires a restart to apply.");
-			ImGui::Checkbox("Alpha Blend###CoreAlpha", &coreConfig.CoreAlphaBlend);
-			ImGui::Checkbox("Additive###CoreAdditive", &coreConfig.CoreAdditive);
-			ImGui::EndGroup();
-
-			IMGUI_BIG_SPACING;
-
-			ImGui::BeginGroup();
-			ImGui::Text("Preferred Mode");
-			TextDescription("Sets which blend mode the application should prefer. Most game engines will always use the preferred mode by default, even if the application does not support passthrough. Requires a restart to apply.");
-			if (ImGui::RadioButton("Alpha Blend###CorePref3", coreConfig.CorePreferredMode == 3))
-			{
-				coreConfig.CorePreferredMode = 3;
-			}
-			if (ImGui::RadioButton("Additive###CorePref2", coreConfig.CorePreferredMode == 2))
-			{
-				coreConfig.CorePreferredMode = 2;
-			}
-			if (ImGui::RadioButton("Opaque###CorePref1", coreConfig.CorePreferredMode == 1))
-			{
-				coreConfig.CorePreferredMode = 1;
-			}
-			ImGui::EndGroup();
-			EndSoftDisabled(!coreConfig.CorePassthroughEnable);
-
-			IMGUI_BIG_SPACING;
-		}
-
-		if (CollapsingHeaderPersistent("OpenXR Extensions", ImGuiTreeNodeFlags_DefaultOpen))
-		{
-			if (TreeNodePersistent("Multivendor", ImGuiTreeNodeFlags_DefaultOpen))
+			if (TreeNodePersistent("Status###CompositionStatus", ImGuiTreeNodeFlags_DefaultOpen))
 			{
 				ImGui::PushFont(m_fixedFont);
-				ImGui::Text("Composition Layer Inverted Alpha extension:");
+				ImGui::Text("Core passthrough:");
+				ImGui::Indent();
+				ImGui::SameLine();
+				if (displayValues.bCorePassthroughActive)
+				{
+					ImGui::TextColored(colorTextGreen, "Active");
+				}
+				else
+				{
+					ImGui::TextColored(colorTextRed, "Inactive");
+				}
+				ImGui::Indent();
+				ImGui::Text("Application requested mode:");
+				ImGui::SameLine();
+				if (displayValues.CoreCurrentMode == 3) { ImGui::Text("Alpha Blend"); }
+				else if (displayValues.CoreCurrentMode == 2) { ImGui::Text("Additive"); }
+				else if (displayValues.CoreCurrentMode == 1) { ImGui::Text("Opaque"); }
+				else { ImGui::Text("Unknown"); }
+
+				if (mainConfig.EnablePassthrough && !displayValues.bCorePassthroughActive && displayValues.CoreCurrentMode == 3 && !(displayValues.FrameBufferFlags & XR_COMPOSITION_LAYER_BLEND_TEXTURE_SOURCE_ALPHA_BIT))
+				{
+					ImGui::TextColored(colorTextRed, "No alpha channel provided!");
+				}
+				ImGui::Unindent();
+				ImGui::Unindent();
+
+				ImGui::Text("Extensions:");
+
+				ImGui::Indent();
+				ImGui::Text("XR_EXT_composition_layer_inverted_alpha:");
 				ImGui::SameLine();
 				if (displayValues.bExtInvertedAlphaActive)
 				{
@@ -874,16 +987,7 @@ if (bIsActiveTab) { ImGui::PopStyleColor(1); bIsActiveTab = false; }
 				{
 					ImGui::TextColored(colorTextRed, "Inactive");
 				}
-				ImGui::PopFont();
-
-				IMGUI_BIG_SPACING;
-				ImGui::TreePop();
-			}
-
-			if (TreeNodePersistent("Android", ImGuiTreeNodeFlags_DefaultOpen))
-			{
-				ImGui::PushFont(m_fixedFont);
-				ImGui::Text("Android Passthrough Camera State extension:");
+				ImGui::Text("XR_ANDROID_passthrough_camera_state:");
 				ImGui::SameLine();
 				if (displayValues.bAndroidPassthroughStateActive)
 				{
@@ -893,16 +997,7 @@ if (bIsActiveTab) { ImGui::PopStyleColor(1); bIsActiveTab = false; }
 				{
 					ImGui::TextColored(colorTextRed, "Inactive");
 				}
-				ImGui::PopFont();
-
-				IMGUI_BIG_SPACING;
-				ImGui::TreePop();
-			}
-
-			if (TreeNodePersistent("Facebook", ImGuiTreeNodeFlags_DefaultOpen))
-			{
-				ImGui::PushFont(m_fixedFont);
-				ImGui::Text("Facebook Passthrough extension:");
+				ImGui::Text("XR_FB_passthrough:");
 				ImGui::SameLine();
 				if (displayValues.bFBPassthroughExtensionActive)
 				{
@@ -912,7 +1007,7 @@ if (bIsActiveTab) { ImGui::PopStyleColor(1); bIsActiveTab = false; }
 				{
 					ImGui::TextColored(colorTextRed, "Inactive");
 				}
-
+				ImGui::Indent();
 				ImGui::Text("Facebook Passthrough:");
 				ImGui::SameLine();
 				if (displayValues.bFBPassthroughActive)
@@ -934,28 +1029,9 @@ if (bIsActiveTab) { ImGui::PopStyleColor(1); bIsActiveTab = false; }
 				{
 					ImGui::TextColored(colorTextRed, "Inactive");
 				}
-				ImGui::PopFont();
+				ImGui::Unindent();
 
-				ImGui::Checkbox("Enable Facebook Passthrough", &extConfig.ExtFBPassthrough);
-				TextDescription("Allow applications to use passthrough through the XR_FB_passthrough extension. Requires a restart to apply.");
-
-				BeginSoftDisabled(!extConfig.ExtFBPassthrough);
-				ImGui::Checkbox("Allow Facebook Passthrough Depth Composition", &extConfig.ExtFBPassthroughAllowDepth);
-				TextDescription("Allow applications to composite passthough using depth testing. Requires a restart to apply.");
-				ImGui::Checkbox("Allow Facebook Passthrough Color Settings", &extConfig.ExtFBPassthroughAllowColorSettings);
-				TextDescription("Allow applications to modify Brightness, Contrast and Saturation. Overrides the layer color settings when activated by application.");
-				ImGui::Checkbox("Fake Unsupported Extension Features", &extConfig.ExtFBPassthroughFakeUnsupportedFeatures);
-				TextDescription("Pretends that passthrough features unsupported by the layer are working, by reporting success to the application when it tries using them.");
-				EndSoftDisabled(!extConfig.ExtFBPassthrough);
-
-				IMGUI_BIG_SPACING;
-				ImGui::TreePop();
-			}
-
-			if (TreeNodePersistent("Varjo", ImGuiTreeNodeFlags_DefaultOpen))
-			{
-				ImGui::PushFont(m_fixedFont);
-				ImGui::Text("Varjo Depth Estimation extension:");
+				ImGui::Text("XR_VARJO_environment_depth_estimation:");
 				ImGui::SameLine();
 				if (displayValues.bVarjoDepthEstimationExtensionActive)
 				{
@@ -966,7 +1042,7 @@ if (bIsActiveTab) { ImGui::PopStyleColor(1); bIsActiveTab = false; }
 					ImGui::TextColored(colorTextRed, "Inactive");
 				}
 
-				ImGui::Text("Varjo Depth Composition extension:");
+				ImGui::Text("XR_VARJO_composition_layer_depth_test:");
 				ImGui::SameLine();
 				if (displayValues.bVarjoDepthCompositionExtensionActive)
 				{
@@ -976,17 +1052,566 @@ if (bIsActiveTab) { ImGui::PopStyleColor(1); bIsActiveTab = false; }
 				{
 					ImGui::TextColored(colorTextRed, "Inactive");
 				}
+				ImGui::Unindent();
+
 				ImGui::PopFont();
-
-				ImGui::Checkbox("Enable Varjo Depth estimation", &extConfig.ExtVarjoDepthEstimation);
-				TextDescription("Allow applications to use depth blending using the XR_VARJO_environment_depth_estimation extension. Requires a restart to apply.");
-
-				ImGui::Checkbox("Enable Varjo Composition layer depth testing", &extConfig.ExtVarjoDepthComposition);
-				TextDescription("Allow applications to compose submitted layers based on depth using the XR_VARJO_composition_layer_depth_test extension. Requires a restart to apply.");
 
 				IMGUI_BIG_SPACING;
 				ImGui::TreePop();
 			}
+
+			if (TreeNodePersistent("OpenXR Core"))
+			{
+				TextDescriptionSpaced("Options for application controlled passthrough features built into the OpenXR core specification. Allows using the environment blend modes for passthrough.");
+
+				ImGui::Checkbox("Enable###CoreEnable", &coreConfig.CorePassthroughEnable);
+				TextDescriptionSpaced("Allow OpenXR applications to enable passthrough.");
+				ImGui::Spacing();
+
+				BeginSoftDisabled(!coreConfig.CorePassthroughEnable);
+				ImGui::BeginGroup();
+				ImGui::Text("Blend Modes");
+				TextDescription("Controls what blend modes are presented to the application. Requires a restart to apply.");
+				ImGui::Checkbox("Alpha Blend###CoreAlpha", &coreConfig.CoreAlphaBlend);
+				ImGui::Checkbox("Additive###CoreAdditive", &coreConfig.CoreAdditive);
+				ImGui::EndGroup();
+
+				ImGui::Spacing();
+
+				ImGui::BeginGroup();
+				ImGui::Text("Preferred Mode");
+				TextDescription("Sets which blend mode the application should prefer. Most game engines will always use the preferred mode by default, even if the application does not support passthrough. Requires a restart to apply.");
+				if (ImGui::RadioButton("Alpha Blend###CorePref3", coreConfig.CorePreferredMode == 3))
+				{
+					coreConfig.CorePreferredMode = 3;
+				}
+				if (ImGui::RadioButton("Additive###CorePref2", coreConfig.CorePreferredMode == 2))
+				{
+					coreConfig.CorePreferredMode = 2;
+				}
+				if (ImGui::RadioButton("Opaque###CorePref1", coreConfig.CorePreferredMode == 1))
+				{
+					coreConfig.CorePreferredMode = 1;
+				}
+				ImGui::EndGroup();
+				EndSoftDisabled(!coreConfig.CorePassthroughEnable);
+
+				IMGUI_BIG_SPACING;
+				ImGui::TreePop();
+			}
+
+			if (TreeNodePersistent("OpenXR Extensions"))
+			{
+				if (TreeNodePersistent("Facebook", ImGuiTreeNodeFlags_DefaultOpen))
+				{
+					ImGui::Checkbox("Enable Facebook Passthrough", &extConfig.ExtFBPassthrough);
+					TextDescription("Allow applications to use passthrough through the XR_FB_passthrough extension. Requires a restart to apply.");
+
+					BeginSoftDisabled(!extConfig.ExtFBPassthrough);
+					ImGui::Checkbox("Allow Facebook Passthrough Depth Composition", &extConfig.ExtFBPassthroughAllowDepth);
+					TextDescription("Allow applications to composite passthough using depth testing. Requires a restart to apply.");
+					ImGui::Checkbox("Allow Facebook Passthrough Color Settings", &extConfig.ExtFBPassthroughAllowColorSettings);
+					TextDescription("Allow applications to modify Brightness, Contrast and Saturation. Overrides the layer color settings when activated by application.");
+					ImGui::Checkbox("Fake Unsupported Extension Features", &extConfig.ExtFBPassthroughFakeUnsupportedFeatures);
+					TextDescription("Pretends that passthrough features unsupported by the layer are working, by reporting success to the application when it tries using them.");
+					EndSoftDisabled(!extConfig.ExtFBPassthrough);
+
+					IMGUI_BIG_SPACING;
+					ImGui::TreePop();
+				}
+
+				if (TreeNodePersistent("Varjo", ImGuiTreeNodeFlags_DefaultOpen))
+				{
+					ImGui::Checkbox("Enable Varjo Depth estimation", &extConfig.ExtVarjoDepthEstimation);
+					TextDescription("Allow applications to use depth blending using the XR_VARJO_environment_depth_estimation extension. Requires a restart to apply.");
+
+					ImGui::Checkbox("Enable Varjo Composition layer depth testing", &extConfig.ExtVarjoDepthComposition);
+					TextDescription("Allow applications to compose submitted layers based on depth using the XR_VARJO_composition_layer_depth_test extension. Requires a restart to apply.");
+
+					IMGUI_BIG_SPACING;
+					ImGui::TreePop();
+				}
+				ImGui::TreePop();
+			}
+		}
+
+		if (CollapsingHeaderPersistent("User Overrides", ImGuiTreeNodeFlags_DefaultOpen))
+		{
+			if (TreeNodePersistent("Mode", ImGuiTreeNodeFlags_DefaultOpen))
+			{
+				ImGui::Checkbox("Force Passthrough Mode", &coreConfig.CoreForcePassthrough);
+				TextDescription("Forces passthrough on even if the application does not support it.");
+
+				BeginSoftDisabled(!coreConfig.CoreForcePassthrough);
+
+				IMGUI_BIG_SPACING;
+
+				ImGui::BeginGroup();
+				if (ImGui::RadioButton("Alpha Blend###CoreForce3", coreConfig.CoreForceMode == 3))
+				{
+					coreConfig.CoreForceMode = 3;
+				}
+				TextDescription("Blends passthrough with application provided alpha mask. This requires application support.");
+				if (ImGui::RadioButton("Additive###CoreForcef2", coreConfig.CoreForceMode == 2))
+				{
+					coreConfig.CoreForceMode = 2;
+				}
+				TextDescription("Adds passthrough and application output together.");
+				if (ImGui::RadioButton("Opaque###Coreforce1", coreConfig.CoreForceMode == 1))
+				{
+					coreConfig.CoreForceMode = 1;
+				}
+				TextDescription("Replaces the application output with passthrough.");
+				if (ImGui::RadioButton("Masked (Chroma Key)###Coreforce0", coreConfig.CoreForceMode == 0))
+				{
+					coreConfig.CoreForceMode = 0;
+				}
+				TextDescription("Blends passthrough with the application output using a chroma key mask.");
+				ImGui::EndGroup();
+				EndSoftDisabled(!coreConfig.CoreForcePassthrough);
+
+				IMGUI_BIG_SPACING;
+
+				BeginSoftDisabled(!depthConfig.DepthReadFromApplication);
+				ImGui::Checkbox("Force Depth Composition", &depthConfig.DepthForceComposition);
+				TextDescription("Enables composing the passthrough by depth for applications that submit a depth buffer.");
+				EndSoftDisabled(!depthConfig.DepthReadFromApplication);
+
+				IMGUI_BIG_SPACING;
+
+				ImGui::Checkbox("Force Depth Range Testing", &depthConfig.DepthForceRangeTest);
+				TextDescription("Force passthrough to only render in a certain depth range.");
+
+				ImGui::PushItemWidth(ImGui::GetContentRegionAvail().x * 0.45f);
+				bImmediateUpdate |= ScrollableSlider("Depth Range Min", &depthConfig.DepthForceRangeTestMin, 0.0f, 10.0f, "%.1f", 0.1f);
+				bImmediateUpdate |= ScrollableSlider("Depth Range Max", &depthConfig.DepthForceRangeTestMax, 0.0f, 10.0f, "%.1f", 0.1f);
+				ImGui::PopItemWidth();
+
+				IMGUI_BIG_SPACING;
+
+				if (TreeNodePersistent("Advanced"))
+				{
+					bImmediateUpdate |= ScrollableSlider("Passthrough Opacity", &mainConfig.PassthroughOpacity, 0.0f, 1.0f, "%.1f", 0.1f);
+					ImGui::Spacing();
+
+					ImGui::Text("Premultiplied Alpha");
+					ImGui::BeginGroup();
+					if (ImGui::RadioButton("Application Controlled", coreConfig.CoreForcePremultipliedAlpha == -1))
+					{
+						coreConfig.CoreForcePremultipliedAlpha = -1;
+					}
+					ImGui::SameLine();
+					if (ImGui::RadioButton("Force On", coreConfig.CoreForcePremultipliedAlpha == 1))
+					{
+						coreConfig.CoreForcePremultipliedAlpha = 1;
+					}
+					ImGui::SameLine();
+					if (ImGui::RadioButton("Force Off", coreConfig.CoreForcePremultipliedAlpha == 0))
+					{
+						coreConfig.CoreForcePremultipliedAlpha = 0;
+					}
+					TextDescription("Overrides alpha premultiplication handling for applications that report it incorrectly.");
+					ImGui::EndGroup();
+
+					ImGui::Checkbox("Read Depth Buffers", &depthConfig.DepthReadFromApplication);
+					TextDescription("Allow reading depth buffers submitted by the application.");
+
+					BeginSoftDisabled(!depthConfig.DepthReadFromApplication);
+					ImGui::Checkbox("Write Depth", &depthConfig.DepthWriteOutput);
+					TextDescription("Allows writing passthrough depth to depth buffers submitted to the runtime.");
+					EndSoftDisabled(!depthConfig.DepthReadFromApplication);
+
+					IMGUI_BIG_SPACING;
+
+					ImGui::TreePop();
+				}
+
+				
+				ImGui::TreePop();
+			}
+
+			BeginSoftDisabled(!coreConfig.CoreForcePassthrough);
+
+			if (TreeNodePersistent("Masked Croma Key Settings", ImGuiTreeNodeFlags_DefaultOpen))
+			{
+				ImGui::BeginGroup();
+				ImGui::PushItemWidth(min(ImGui::GetContentRegionAvail().x * 0.35f, 200.0f));
+				bImmediateUpdate |= ScrollableSlider("Chroma Range", &coreConfig.CoreForceMaskedFractionChroma, 0.0f, 1.0f, "%.2f", 0.01f);
+				bImmediateUpdate |= ScrollableSlider("Luma Range", &coreConfig.CoreForceMaskedFractionLuma, 0.0f, 1.0f, "%.2f", 0.01f);
+				bImmediateUpdate |= ScrollableSlider("Smoothing", &coreConfig.CoreForceMaskedSmoothing, 0.01f, 0.2f, "%.3f", 0.005f);
+				ImGui::Checkbox("Invert mask", &coreConfig.CoreForceMaskedInvertMask);
+				ImGui::Checkbox("Combine With Application Alpha", &coreConfig.CoreForceMaskedUseAppAlpha);
+
+				ImGui::BeginGroup();
+				ImGui::Text("Chroma Key Source");
+				if (ImGui::RadioButton("Application", !coreConfig.CoreForceMaskedUseCameraImage))
+				{
+					coreConfig.CoreForceMaskedUseCameraImage = false;
+				}
+				if (ImGui::RadioButton("Passthrough Camera", coreConfig.CoreForceMaskedUseCameraImage))
+				{
+					coreConfig.CoreForceMaskedUseCameraImage = true;
+				}
+				ImGui::EndGroup();
+				ImGui::PopItemWidth();
+
+				ImGui::EndGroup();
+
+				ImGui::SameLine();
+
+				ImGui::BeginGroup();
+				ImGui::SetNextItemWidth(min(ImGui::GetContentRegionAvail().x * 0.75f, 300.0f));
+				bImmediateUpdate |= ImGui::ColorPicker3("Key", coreConfig.CoreForceMaskedKeyColor, ImGuiColorEditFlags_Uint8 | ImGuiColorEditFlags_DisplayRGB | ImGuiColorEditFlags_DisplayHSV | ImGuiColorEditFlags_PickerHueBar);
+				ImGui::EndGroup();
+
+				ImGui::TreePop();
+			}
+
+			EndSoftDisabled(!coreConfig.CoreForcePassthrough);
+		}
+
+		ImGui::EndChild();
+	}
+
+
+
+	if (m_activeTab == TabCamera)
+	{
+		if (!m_cameraTabBeenOpened)
+		{
+			CameraEnumerator::EnumerateCameras(m_cameraDevices);
+			if (m_dashboardOverlay->IsRuntimeInitialized())
+			{
+				m_dashboardOverlay->GetDeviceIdentProperties(m_deviceIdentProps);
+			}
+			m_cameraTabBeenOpened = true;
+		}
+
+		ImGui::BeginChild("Camera Pane");
+
+		ImGui::BeginChild("Camera Settings", ImVec2(0, -60));
+
+
+		if (CollapsingHeaderPersistent("Status###CameraStatus", ImGuiTreeNodeFlags_DefaultOpen))
+		{
+			ImGui::PushFont(m_fixedFont);
+			if (displayValues.CameraProvider == CameraProvider_OpenVR)
+			{
+				if (displayValues.bCameraActive)
+				{
+					ImGui::Text("Current Camera API: OpenVR - %u x %u ", displayValues.CameraFrameWidth, displayValues.CameraFrameHeight);
+				}
+				else
+				{
+					ImGui::Text("Current Camera API: OpenVR - Inactive");
+				}
+			}
+			else if (displayValues.CameraProvider == CameraProvider_OpenCV)
+			{
+
+				if (displayValues.bCameraActive)
+				{
+					ImGui::Text("Current Camera API: OpenCV - %u x %u @ %.0f fps", displayValues.CameraFrameWidth, displayValues.CameraFrameHeight, displayValues.CameraFrameRate);
+				}
+				else
+				{
+					ImGui::Text("Current Camera API: OpenCV - Inactive");
+				}
+			}
+			else
+			{
+				ImGui::Text("Current Camera API: None");
+			}
+
+			IMGUI_BIG_SPACING;
+			ImGui::PopFont();
+		}
+
+		if (CollapsingHeaderPersistent("Common", ImGuiTreeNodeFlags_DefaultOpen))
+		{
+			ImGui::Text("Camera Provider");
+			TextDescription("Source for passthrough camera images.");
+			if (ImGui::RadioButton("SteamVR", mainConfig.CameraProvider == CameraProvider_OpenVR))
+			{
+				if (mainConfig.CameraProvider != CameraProvider_OpenVR)
+				{
+					mainConfig.CameraProvider = CameraProvider_OpenVR;
+					rendererResetPending = true;
+				}
+			}
+			TextDescription("Use the passthrough cameras on a compatible HMD. Uses the OpenVR Tracked Camera interface.");
+
+			if (ImGui::RadioButton("Webcam (Experimental)", mainConfig.CameraProvider == CameraProvider_OpenCV))
+			{
+				if (mainConfig.CameraProvider != CameraProvider_OpenCV)
+				{
+					mainConfig.CameraProvider = CameraProvider_OpenCV;
+					mainConfig.ProjectionMode = Projection_Custom2D;
+					rendererResetPending = true;
+				}
+			}
+			TextDescription("Use a regular webcam from the OpenCV camera interface. Requires manual configuration.");
+
+			if (ImGui::RadioButton("Augmented (Experimental)", mainConfig.CameraProvider == CameraProvider_Augmented))
+			{
+				if (mainConfig.CameraProvider != CameraProvider_Augmented)
+				{
+					mainConfig.CameraProvider = CameraProvider_Augmented;
+					mainConfig.ProjectionMode = Projection_StereoReconstruction;
+					rendererResetPending = true;
+				}
+			}
+			TextDescription("Use SteamVR for calculating depth, and a webcam for color data. Requires a HMD with a stereo camera and manual configuration.");
+
+			ImGui::Checkbox("Clamp Camera Frame", &cameraConfig.ClampCameraFrame);
+			TextDescription("Only draws passthrough in the actual frame area. When turned off the edge pixels are extended past the frame into a 360 degree view.");
+
+			ImGui::SetNextItemWidth(ImGui::GetContentRegionAvail().x * 0.45f);
+			bImmediateUpdate |= ScrollableSlider("Field of View Scale", &mainConfig.FieldOfViewScale, 0.1f, 2.0f, "%.2f", 0.01f);
+			TextDescription("Sets the size of the rendered area in the Custom 2D and Stereo 3D projection modes.");
+
+			IMGUI_BIG_SPACING;
+
+			ImGui::Text("Override Distortion Mode");
+			if (ImGui::RadioButton("Off", cameraConfig.CameraForceDistortionMode == CameraDistortionMode_NotSet))
+			{
+				cameraConfig.CameraForceDistortionMode = CameraDistortionMode_NotSet;
+			}
+			ImGui::SameLine();
+			if (ImGui::RadioButton("Normal Lens", cameraConfig.CameraForceDistortionMode == CameraDistortionMode_RegularLens))
+			{
+				cameraConfig.CameraForceDistortionMode = CameraDistortionMode_RegularLens;
+			}
+			ImGui::SameLine();
+			if (ImGui::RadioButton("Fisheye", cameraConfig.CameraForceDistortionMode == CameraDistortionMode_Fisheye))
+			{
+				cameraConfig.CameraForceDistortionMode = CameraDistortionMode_Fisheye;
+			}
+
+			IMGUI_BIG_SPACING;
+		}
+
+		if (CollapsingHeaderPersistent("Webcam Configuration", ImGuiTreeNodeFlags_DefaultOpen))
+		{
+			TextDescription("These settings are for the experimental webcam provider only.");
+
+			ImGui::Text("Camera Selection");
+			if (ImGui::Button("Refresh###RefreshCams"))
+			{
+				CameraEnumerator::EnumerateCameras(m_cameraDevices);
+			}
+
+			ImGui::SameLine();
+
+			std::string comboPreview = "No device";
+
+			if (m_cameraDevices.size() > cameraConfig.Camera0DeviceIndex)
+			{
+				comboPreview.assign(std::format("[{}] {}", cameraConfig.Camera0DeviceIndex, m_cameraDevices[cameraConfig.Camera0DeviceIndex]));
+			}
+
+
+			if (ImGui::BeginCombo("Devices", comboPreview.c_str()))
+			{
+				for (int i = 0; i < m_cameraDevices.size(); i++)
+				{
+					std::string comboValue = std::format("[{}] {}", i, m_cameraDevices[i]);
+
+					const bool bIsSelected = (cameraConfig.Camera0DeviceIndex == i);
+					if (ImGui::Selectable(comboValue.c_str(), bIsSelected))
+					{
+						cameraConfig.Camera0DeviceIndex = i;
+					}
+
+					if (bIsSelected)
+					{
+						ImGui::SetItemDefaultFocus();
+					}
+				}
+				ImGui::EndCombo();
+			}
+
+			IMGUI_BIG_SPACING;
+
+			ImGui::Checkbox("Camera is Attached to Tracked Device", &cameraConfig.UseTrackedDevice);
+			TextDescription("Enable if the camera is attached to to a tracked device, such as a HMD or tracker.");
+
+			BeginSoftDisabled(!cameraConfig.UseTrackedDevice);
+
+			ImGui::BeginDisabled(!m_dashboardOverlay->IsRuntimeInitialized());
+			if (ImGui::Button("Refresh"))
+			{
+				if (m_dashboardOverlay->IsRuntimeInitialized())
+				{
+					m_dashboardOverlay->GetDeviceIdentProperties(m_deviceIdentProps);
+				}
+			}
+			ImGui::EndDisabled();
+
+			ImGui::SameLine();
+
+			std::string camComboPreview = "No device";
+
+			if (m_deviceIdentProps.size() > m_currentIdentDevice)
+			{
+				camComboPreview.assign(std::format("[{}] {} - {}", m_currentIdentDevice, m_deviceIdentProps[m_currentIdentDevice].DeviceName, m_deviceIdentProps[m_currentIdentDevice].DeviceSerial));
+			}
+
+
+			if (ImGui::BeginCombo("Cameras", camComboPreview.c_str()))
+			{
+				for (int i = 0; i < m_deviceIdentProps.size(); i++)
+				{
+					std::string comboValue = std::format("[{}] {} - {}", i, m_deviceIdentProps[i].DeviceName, m_deviceIdentProps[m_currentIdentDevice].DeviceSerial);
+
+					const bool bIsSelected = (m_currentIdentDevice == i);
+					if (ImGui::Selectable(comboValue.c_str(), bIsSelected))
+					{
+						m_currentIdentDevice = i;
+						strncpy_s(cameraConfig.TrackedDeviceSerialNumber, m_deviceIdentProps[i].DeviceSerial.data(), MAX_CAMERA_SERIAL_NUMBER_SIZE);
+					}
+
+					if (bIsSelected)
+					{
+						ImGui::SetItemDefaultFocus();
+					}
+				}
+				ImGui::EndCombo();
+			}
+			ImGui::Text("Device Serial Number set: %s", cameraConfig.TrackedDeviceSerialNumber);
+
+			TextDescription("Select the device the camera is attached to. The device is tracked by its serial number.");
+
+			EndSoftDisabled(!cameraConfig.UseTrackedDevice);
+
+			IMGUI_BIG_SPACING;
+
+
+			ImGui::Checkbox("Auto Exposure", &cameraConfig.AutoExposureEnable);
+
+			bool prevAutoeExp = cameraConfig.AutoExposureEnable;
+			float prefExp = cameraConfig.ExposureValue;
+
+			BeginSoftDisabled(cameraConfig.AutoExposureEnable);
+			ImGui::DragFloat("Exposure", &cameraConfig.ExposureValue, 0.1f, 0.0f, 0.0f, "%.1f");
+			EndSoftDisabled(cameraConfig.AutoExposureEnable);
+
+			if (prevAutoeExp != cameraConfig.AutoExposureEnable || prefExp != cameraConfig.ExposureValue)
+			{
+				cameraParamChangesPending = true;
+			}
+
+			IMGUI_BIG_SPACING;
+
+			ImGui::DragFloat("Frame Delay Offset (s)", &cameraConfig.FrameDelayOffset, 0.001f, 0.0f, 1.0f, "%.3f");
+			TextDescription("The delay from the camera capturing the image to it being received by the application. This may vary between cameras. Adjust until the view stops lagging when moving your head.");
+
+			ImGui::Checkbox("Request Custom Resolution", &cameraConfig.RequestCustomFrameSize);
+			TextDescription("Set a resolution to use. The system may select the closest matching available one. If turned off, the system will attempt to select the best available resolution.");
+
+			BeginSoftDisabled(!cameraConfig.RequestCustomFrameSize);
+			ImGui::DragInt2("Width x Height###FrameWH", cameraConfig.CustomFrameDimensions, 1.0f, 1, 8192);
+			ImGui::DragInt("FPS###FrameFPS", &cameraConfig.CustomFrameRate, 1.0f, 1, 120);
+
+			EndSoftDisabled(!cameraConfig.RequestCustomFrameSize);
+
+			ImGui::Text("Camera Frame Layout");
+			if (ImGui::RadioButton("Monocular", cameraConfig.CameraFrameLayout == FrameLayout_Mono))
+			{
+				cameraConfig.CameraFrameLayout = FrameLayout_Mono;
+			}
+
+			if (ImGui::RadioButton("Stereo Vertical", cameraConfig.CameraFrameLayout == FrameLayout_StereoVertical))
+			{
+				cameraConfig.CameraFrameLayout = FrameLayout_StereoVertical;
+			}
+
+			if (ImGui::RadioButton("Stereo Horizontal", cameraConfig.CameraFrameLayout == FrameLayout_StereoHorizontal))
+			{
+				cameraConfig.CameraFrameLayout = FrameLayout_StereoHorizontal;
+			}
+			ImGui::Checkbox("Camera Has Fisheye Lens", &cameraConfig.CameraHasFisheyeLens);
+
+			IMGUI_BIG_SPACING;
+
+			if (CollapsingHeaderPersistent("Left Camera", ImGuiTreeNodeFlags_DefaultOpen))
+			{
+				ImGui::Text("Camera Extrinsics");
+				ImGui::DragFloat3("Camera Offset (m)", cameraConfig.Camera0_Translation, 0.001f, 0.0f, 0.0f, "%.3f");
+				ImGui::DragFloat3("Camera Rotation (degrees)", cameraConfig.Camera0_Rotation, 0.001f, -180.0f, 180.0f, "%.3f");
+				ImGui::Text("Camera Intrinsics");
+				ImGui::DragFloat2("Focal Length", cameraConfig.Camera0_IntrinsicsFocal, 0.001f, 0.0f, 0.0f, "%.5f");
+				ImGui::DragFloat2("Center", cameraConfig.Camera0_IntrinsicsCenter, 0.001f, 0.0f, 0.0f, "%.5f");
+				ImGui::DragInt2("Sensor Pixels", cameraConfig.Camera0_IntrinsicsSensorPixels, 1.0f, 1, 8192);
+				ImGui::DragFloat4("Distortion", cameraConfig.Camera0_IntrinsicsDist, 0.001f, 0.0f, 0.0f, "%.5f");
+
+			}
+
+			if (CollapsingHeaderPersistent("Right Camera", ImGuiTreeNodeFlags_DefaultOpen))
+			{
+				ImGui::Text("Camera Extrinsics");
+				ImGui::DragFloat3("Camera Offset (m)###RightOffset", cameraConfig.Camera1_Translation, 0.001f, 0.0f, 0.0f, "%.3f");
+				ImGui::DragFloat3("Camera Rotation (degrees)###RightRotation", cameraConfig.Camera1_Rotation, 0.001f, -180.0f, 180.0f, "%.3f");
+
+				ImGui::Text("Camera Intrinsics");
+				ImGui::DragFloat2("Focal Length###RightF", cameraConfig.Camera1_IntrinsicsFocal, 0.001f, 0.0f, 0.0f, "%.5f");
+				ImGui::DragFloat2("Center###RightC", cameraConfig.Camera1_IntrinsicsCenter, 0.001f, 0.0f, 0.0f, "%.5f");
+				ImGui::DragInt2("Sensor Pixels###RightPx", cameraConfig.Camera1_IntrinsicsSensorPixels, 1.0f, 1, 8192);
+				ImGui::DragFloat4("Distortion##RightDist", cameraConfig.Camera1_IntrinsicsDist, 0.001f, 0.0f, 0.0f, "%.5f");
+			}
+
+			IMGUI_BIG_SPACING;
+		}
+
+		if (CollapsingHeaderPersistent("SteamVR Camera Configuration", ImGuiTreeNodeFlags_DefaultOpen))
+		{
+			IMGUI_BIG_SPACING;
+
+			ImGui::Checkbox("Enable Custom Calibration for SteamVR Camera", &cameraConfig.OpenVRCustomCalibration);
+
+			IMGUI_BIG_SPACING;
+
+			BeginSoftDisabled(!cameraConfig.OpenVRCustomCalibration);
+
+			ImGui::Checkbox("SteamVR Camera Has Fisheye Lens", &cameraConfig.OpenVR_CameraHasFisheyeLens);
+
+			IMGUI_BIG_SPACING;
+
+			if (CollapsingHeaderPersistent("SteamVR Camera 0", ImGuiTreeNodeFlags_DefaultOpen))
+			{
+				ImGui::Text("Camera Extrinsics");
+				ImGui::DragFloat3("Camera Offset (m)###OpenVROffset", cameraConfig.OpenVR_Camera0_Translation, 0.001f, 0.0f, 0.0f, "%.3f");
+				ImGui::DragFloat3("Camera Rotation (degrees)###OpenVRRot", cameraConfig.OpenVR_Camera0_Rotation, 0.001f, -180.0f, 180.0f, "%.3f");
+				ImGui::Text("Camera Intrinsics");
+				ImGui::DragFloat2("Focal Length###OpenVRF", cameraConfig.OpenVR_Camera0_IntrinsicsFocal, 0.001f, 0.0f, 0.0f, "%.5f");
+				ImGui::DragFloat2("Center###OpenVRC", cameraConfig.OpenVR_Camera0_IntrinsicsCenter, 0.001f, 0.0f, 0.0f, "%.5f");
+				ImGui::DragInt2("Sensor Pixels###OpenVRPx", cameraConfig.OpenVR_Camera0_IntrinsicsSensorPixels, 1.0f, 1, 8192);
+				ImGui::DragFloat4("Distortion###OpenVRDist", cameraConfig.OpenVR_Camera0_IntrinsicsDist, 0.001f, 0.0f, 0.0f, "%.5f");
+			}
+
+			if (CollapsingHeaderPersistent("SteamVR Camera 1", ImGuiTreeNodeFlags_DefaultOpen))
+			{
+				ImGui::Text("Camera Extrinsics");
+				ImGui::DragFloat3("Camera Offset (m)###OpenVRRightOffset", cameraConfig.OpenVR_Camera1_Translation, 0.001f, 0.0f, 0.0f, "%.3f");
+				ImGui::DragFloat3("Camera Rotation (degrees)###OpenVRRightRotation", cameraConfig.OpenVR_Camera1_Rotation, 0.001f, -180.0f, 180.0f, "%.3f");
+				ImGui::Text("Camera Intrinsics");
+				ImGui::DragFloat2("Focal Length###OpenVRRightF", cameraConfig.OpenVR_Camera1_IntrinsicsFocal, 0.001f, 0.0f, 0.0f, "%.5f");
+				ImGui::DragFloat2("Center###OpenVRRightC", cameraConfig.OpenVR_Camera1_IntrinsicsCenter, 0.001f, 0.0f, 0.0f, "%.5f");
+				ImGui::DragInt2("Sensor Pixels###OpenVRRightPx", cameraConfig.OpenVR_Camera1_IntrinsicsSensorPixels, 1.0f, 1, 8192);
+				ImGui::DragFloat4("Distortion##OpenVRRightDist", cameraConfig.OpenVR_Camera1_IntrinsicsDist, 0.001f, 0.0f, 0.0f, "%.5f");
+			}
+
+			EndSoftDisabled(!cameraConfig.OpenVRCustomCalibration);
+		}
+
+		ImGui::EndChild();
+
+		ImGui::Spacing();
+		ImGui::Spacing();
+
+		if (BigButton("Apply Camera Parameters"))
+		{
+			rendererResetPending = true;
 		}
 
 		ImGui::EndChild();
@@ -1354,487 +1979,6 @@ if (bIsActiveTab) { ImGui::PopStyleColor(1); bIsActiveTab = false; }
 
 
 
-	if (m_activeTab == TabOverrides)
-	{
-		ImGui::BeginChild("Overrides Pane");
-
-		if (CollapsingHeaderPersistent("Depth", ImGuiTreeNodeFlags_DefaultOpen))
-		{
-			BeginSoftDisabled(!depthConfig.DepthReadFromApplication);
-			ImGui::Checkbox("Force Depth Composition", &depthConfig.DepthForceComposition);
-			TextDescription("Enables composing the passthrough by depth for applications that submit a depth buffer.");
-			EndSoftDisabled(!depthConfig.DepthReadFromApplication);
-
-			if (TreeNodePersistent("Depth Range", ImGuiTreeNodeFlags_DefaultOpen))
-			{
-				ImGui::Checkbox("Force Depth Range testing", &depthConfig.DepthForceRangeTest);
-				TextDescription("Force passthrough to only render in a certain depth range.");
-
-				ImGui::PushItemWidth(ImGui::GetContentRegionAvail().x * 0.45f);
-				bImmediateUpdate |= ScrollableSlider("Depth Range Min", &depthConfig.DepthForceRangeTestMin, 0.0f, 10.0f, "%.1f", 0.1f);
-				bImmediateUpdate |= ScrollableSlider("Depth Range Max", &depthConfig.DepthForceRangeTestMax, 0.0f, 10.0f, "%.1f", 0.1f);
-				ImGui::PopItemWidth();
-
-				ImGui::TreePop();
-			}
-
-			if (TreeNodePersistent("Advanced"))
-			{
-				ImGui::Checkbox("Read Depth Buffers", &depthConfig.DepthReadFromApplication);
-				TextDescription("Allow reading depth buffers submitted by the application.");
-
-				BeginSoftDisabled(!depthConfig.DepthReadFromApplication);
-				ImGui::Checkbox("Write Depth", &depthConfig.DepthWriteOutput);
-				TextDescription("Allows writing passthrough depth to depth buffers submitted to the runtime.");
-				EndSoftDisabled(!depthConfig.DepthReadFromApplication);
-
-				ImGui::TreePop();
-			}
-			IMGUI_BIG_SPACING;
-		}
-
-		if (CollapsingHeaderPersistent("Mode", ImGuiTreeNodeFlags_DefaultOpen))
-		{
-			ImGui::Checkbox("Force Passthrough Mode", &coreConfig.CoreForcePassthrough);
-			TextDescription("Forces passthrough on even if the application does not support it.");
-
-			BeginSoftDisabled(!coreConfig.CoreForcePassthrough);
-
-			ImGui::BeginGroup();
-			if (ImGui::RadioButton("Alpha Blend###CoreForce3", coreConfig.CoreForceMode == 3))
-			{
-				coreConfig.CoreForceMode = 3;
-			}
-			TextDescription("Blends passthrough with application provided alpha mask. This requires application support.");
-			if (ImGui::RadioButton("Additive###CoreForcef2", coreConfig.CoreForceMode == 2))
-			{
-				coreConfig.CoreForceMode = 2;
-			}
-			TextDescription("Adds passthrough and application output together.");
-			if (ImGui::RadioButton("Opaque###Coreforce1", coreConfig.CoreForceMode == 1))
-			{
-				coreConfig.CoreForceMode = 1;
-			}
-			TextDescription("Replaces the application output with passthrough.");
-			if (ImGui::RadioButton("Masked###Coreforce0", coreConfig.CoreForceMode == 0))
-			{
-				coreConfig.CoreForceMode = 0;
-			}
-			TextDescription("Blends passthrough with the application output using a chroma key mask.");
-			ImGui::EndGroup();
-			
-			ImGui::Spacing();
-
-			ImGui::Text("Premultiplied Alpha");
-			ImGui::BeginGroup();
-			if (ImGui::RadioButton("Application Controlled", coreConfig.CoreForcePremultipliedAlpha == -1))
-			{
-				coreConfig.CoreForcePremultipliedAlpha = -1;
-			}
-			ImGui::SameLine();
-			if (ImGui::RadioButton("Force On", coreConfig.CoreForcePremultipliedAlpha == 1))
-			{
-				coreConfig.CoreForcePremultipliedAlpha = 1;
-			}
-			ImGui::SameLine();
-			if (ImGui::RadioButton("Force Off", coreConfig.CoreForcePremultipliedAlpha == 0))
-			{
-				coreConfig.CoreForcePremultipliedAlpha = 0;
-			}
-			TextDescription("Overrides alpha premultiplication handling for applications that report it incorrectly.");
-			ImGui::EndGroup();
-
-			IMGUI_BIG_SPACING;
-
-			EndSoftDisabled(!coreConfig.CoreForcePassthrough);
-		}
-
-		BeginSoftDisabled(!coreConfig.CoreForcePassthrough);
-
-		if (CollapsingHeaderPersistent("Masked Croma Key Settings", ImGuiTreeNodeFlags_DefaultOpen))
-		{
-			ImGui::BeginGroup();
-			ImGui::PushItemWidth(min(ImGui::GetContentRegionAvail().x * 0.35f, 200.0f));
-			bImmediateUpdate |= ScrollableSlider("Chroma Range", &coreConfig.CoreForceMaskedFractionChroma, 0.0f, 1.0f, "%.2f", 0.01f);
-			bImmediateUpdate |= ScrollableSlider("Luma Range", &coreConfig.CoreForceMaskedFractionLuma, 0.0f, 1.0f, "%.2f", 0.01f);
-			bImmediateUpdate |= ScrollableSlider("Smoothing", &coreConfig.CoreForceMaskedSmoothing, 0.01f, 0.2f, "%.3f", 0.005f);
-			ImGui::Checkbox("Invert mask", &coreConfig.CoreForceMaskedInvertMask);
-			ImGui::Checkbox("Combine With Application Alpha", &coreConfig.CoreForceMaskedUseAppAlpha);
-
-			ImGui::BeginGroup();
-			ImGui::Text("Chroma Key Source");
-			if (ImGui::RadioButton("Application", !coreConfig.CoreForceMaskedUseCameraImage))
-			{
-				coreConfig.CoreForceMaskedUseCameraImage = false;
-			}
-			if (ImGui::RadioButton("Passthrough Camera", coreConfig.CoreForceMaskedUseCameraImage))
-			{
-				coreConfig.CoreForceMaskedUseCameraImage = true;
-			}
-			ImGui::EndGroup();
-			ImGui::PopItemWidth();
-
-			ImGui::EndGroup();
-
-			ImGui::SameLine();
-
-			ImGui::BeginGroup();
-			ImGui::SetNextItemWidth(min(ImGui::GetContentRegionAvail().x * 0.75f, 300.0f));
-			bImmediateUpdate |= ImGui::ColorPicker3("Key", coreConfig.CoreForceMaskedKeyColor, ImGuiColorEditFlags_Uint8 | ImGuiColorEditFlags_DisplayRGB | ImGuiColorEditFlags_DisplayHSV | ImGuiColorEditFlags_PickerHueBar);
-			ImGui::EndGroup();
-		}
-
-		EndSoftDisabled(!coreConfig.CoreForcePassthrough);
-
-		ImGui::EndChild();
-	}
-
-
-
-	if (m_activeTab == TabCamera)
-	{
-		if (!m_cameraTabBeenOpened)
-		{
-			CameraEnumerator::EnumerateCameras(m_cameraDevices);
-			if (m_dashboardOverlay->IsRuntimeInitialized())
-			{
-				m_dashboardOverlay->GetDeviceIdentProperties(m_deviceIdentProps);
-			}
-			m_cameraTabBeenOpened = true;
-		}
-
-		ImGui::BeginChild("Camera Pane");
-
-		ImGui::BeginChild("Camera Settings", ImVec2(0, -60));
-
-
-		if (CollapsingHeaderPersistent("Status###CameraStatus", ImGuiTreeNodeFlags_DefaultOpen))
-		{
-			ImGui::PushFont(m_fixedFont);
-			if (displayValues.CameraProvider == CameraProvider_OpenVR)
-			{
-				if (displayValues.bCameraActive)
-				{
-					ImGui::Text("Current Camera API: OpenVR - %u x %u ", displayValues.CameraFrameWidth, displayValues.CameraFrameHeight);
-				}
-				else
-				{
-					ImGui::Text("Current Camera API: OpenVR - Inactive");
-				}
-			}
-			else if (displayValues.CameraProvider == CameraProvider_OpenCV)
-			{
-				
-				if (displayValues.bCameraActive)
-				{
-					ImGui::Text("Current Camera API: OpenCV - %u x %u @ %.0f fps", displayValues.CameraFrameWidth, displayValues.CameraFrameHeight, displayValues.CameraFrameRate);
-				}
-				else
-				{
-					ImGui::Text("Current Camera API: OpenCV - Inactive");
-				}
-			}
-			else
-			{
-				ImGui::Text("Current Camera API: None");
-			}
-			
-			IMGUI_BIG_SPACING;
-			ImGui::PopFont();
-		}
-
-		if (CollapsingHeaderPersistent("Common", ImGuiTreeNodeFlags_DefaultOpen))
-		{
-			ImGui::Text("Camera Provider");
-			TextDescription("Source for passthrough camera images.");
-			if (ImGui::RadioButton("SteamVR", mainConfig.CameraProvider == CameraProvider_OpenVR))
-			{
-				if (mainConfig.CameraProvider != CameraProvider_OpenVR)
-				{
-					mainConfig.CameraProvider = CameraProvider_OpenVR;
-					rendererResetPending = true;
-				}
-			}
-			TextDescription("Use the passthrough cameras on a compatible HMD. Uses the OpenVR Tracked Camera interface.");
-
-			if (ImGui::RadioButton("Webcam (Experimental)", mainConfig.CameraProvider == CameraProvider_OpenCV))
-			{
-				if (mainConfig.CameraProvider != CameraProvider_OpenCV)
-				{
-					mainConfig.CameraProvider = CameraProvider_OpenCV;
-					mainConfig.ProjectionMode = Projection_Custom2D;
-					rendererResetPending = true;
-				}
-			}
-			TextDescription("Use a regular webcam from the OpenCV camera interface. Requires manual configuration.");
-
-			if (ImGui::RadioButton("Augmented (Experimental)", mainConfig.CameraProvider == CameraProvider_Augmented))
-			{
-				if (mainConfig.CameraProvider != CameraProvider_Augmented)
-				{
-					mainConfig.CameraProvider = CameraProvider_Augmented;
-					mainConfig.ProjectionMode = Projection_StereoReconstruction;
-					rendererResetPending = true;
-				}
-			}
-			TextDescription("Use SteamVR for calculating depth, and a webcam for color data. Requires a HMD with a stereo camera and manual configuration.");
-
-			ImGui::Checkbox("Clamp Camera Frame", &cameraConfig.ClampCameraFrame);
-			TextDescription("Only draws passthrough in the actual frame area. When turned off the edge pixels are extended past the frame into a 360 degree view.");
-
-			ImGui::SetNextItemWidth(ImGui::GetContentRegionAvail().x * 0.45f);
-			bImmediateUpdate |= ScrollableSlider("Field of View Scale", &mainConfig.FieldOfViewScale, 0.1f, 2.0f, "%.2f", 0.01f);
-			TextDescription("Sets the size of the rendered area in the Custom 2D and Stereo 3D projection modes.");
-
-			IMGUI_BIG_SPACING;
-
-			ImGui::Text("Override Distortion Mode");
-			if (ImGui::RadioButton("Off", cameraConfig.CameraForceDistortionMode == CameraDistortionMode_NotSet))
-			{
-				cameraConfig.CameraForceDistortionMode = CameraDistortionMode_NotSet;
-			}
-			ImGui::SameLine();
-			if (ImGui::RadioButton("Normal Lens", cameraConfig.CameraForceDistortionMode == CameraDistortionMode_RegularLens))
-			{
-				cameraConfig.CameraForceDistortionMode = CameraDistortionMode_RegularLens;
-			}
-			ImGui::SameLine();
-			if (ImGui::RadioButton("Fisheye", cameraConfig.CameraForceDistortionMode == CameraDistortionMode_Fisheye))
-			{
-				cameraConfig.CameraForceDistortionMode = CameraDistortionMode_Fisheye;
-			}
-
-			IMGUI_BIG_SPACING;
-		}
-
-		if (CollapsingHeaderPersistent("Webcam Configuration", ImGuiTreeNodeFlags_DefaultOpen))
-		{
-			TextDescription("These settings are for the experimental webcam provider only.");
-
-			ImGui::Text("Camera Selection");
-			if (ImGui::Button("Refresh###RefreshCams"))
-			{
-				CameraEnumerator::EnumerateCameras(m_cameraDevices);
-			}
-
-			ImGui::SameLine();
-
-			std::string comboPreview = "No device";
-
-			if (m_cameraDevices.size() > cameraConfig.Camera0DeviceIndex)
-			{
-				comboPreview.assign(std::format("[{}] {}", cameraConfig.Camera0DeviceIndex, m_cameraDevices[cameraConfig.Camera0DeviceIndex]));
-			}
-
-
-			if (ImGui::BeginCombo("Devices", comboPreview.c_str()))
-			{
-				for (int i = 0; i < m_cameraDevices.size(); i++)
-				{
-					std::string comboValue = std::format("[{}] {}", i, m_cameraDevices[i]);
-
-					const bool bIsSelected = (cameraConfig.Camera0DeviceIndex == i);
-					if (ImGui::Selectable(comboValue.c_str(), bIsSelected))
-					{
-						cameraConfig.Camera0DeviceIndex = i;
-					}
-
-					if (bIsSelected)
-					{
-						ImGui::SetItemDefaultFocus();
-					}
-				}
-				ImGui::EndCombo();
-			}
-
-			IMGUI_BIG_SPACING;
-
-			ImGui::Checkbox("Camera is Attached to Tracked Device", &cameraConfig.UseTrackedDevice);
-			TextDescription("Enable if the camera is attached to to a tracked device, such as a HMD or tracker.");
-
-			BeginSoftDisabled(!cameraConfig.UseTrackedDevice);
-
-			ImGui::BeginDisabled(m_dashboardOverlay->IsRuntimeInitialized());
-			if (ImGui::Button("Refresh"))
-			{
-				if (m_dashboardOverlay->IsRuntimeInitialized())
-				{
-					m_dashboardOverlay->GetDeviceIdentProperties(m_deviceIdentProps);
-				}
-			}
-			ImGui::EndDisabled();
-
-			ImGui::SameLine();
-
-			std::string camComboPreview = "No device";
-
-			if (m_deviceIdentProps.size() > m_currentIdentDevice)
-			{
-				camComboPreview.assign(std::format("[{}] {} - {}", m_currentIdentDevice, m_deviceIdentProps[m_currentIdentDevice].DeviceName, m_deviceIdentProps[m_currentIdentDevice].DeviceSerial));
-			}
-
-
-			if (ImGui::BeginCombo("Cameras", camComboPreview.c_str()))
-			{
-				for (int i = 0; i < m_deviceIdentProps.size(); i++)
-				{
-					std::string comboValue = std::format("[{}] {} - {}", i, m_deviceIdentProps[i].DeviceName, m_deviceIdentProps[m_currentIdentDevice].DeviceSerial);
-
-					const bool bIsSelected = (m_currentIdentDevice == i);
-					if (ImGui::Selectable(comboValue.c_str(), bIsSelected))
-					{
-						m_currentIdentDevice = i;
-
-						cameraConfig.TrackedDeviceSerialNumber = m_deviceIdentProps[i].DeviceSerial;
-					}
-
-					if (bIsSelected)
-					{
-						ImGui::SetItemDefaultFocus();
-					}
-				}
-				ImGui::EndCombo();
-			}
-			ImGui::Text("Device Serial Number set: %s", cameraConfig.TrackedDeviceSerialNumber);
-
-			TextDescription("Select the device the camera is attached to. The device is tracked by its serial number.");
-
-			EndSoftDisabled(!cameraConfig.UseTrackedDevice);
-
-			IMGUI_BIG_SPACING;
-
-
-			ImGui::Checkbox("Auto Exposure", &cameraConfig.AutoExposureEnable);
-
-			bool prevAutoeExp = cameraConfig.AutoExposureEnable;
-			float prefExp = cameraConfig.ExposureValue;
-
-			BeginSoftDisabled(cameraConfig.AutoExposureEnable);
-			ImGui::DragFloat("Exposure", &cameraConfig.ExposureValue, 0.1f, 0.0f, 0.0f, "%.1f");
-			EndSoftDisabled(cameraConfig.AutoExposureEnable);
-
-			if (prevAutoeExp != cameraConfig.AutoExposureEnable || prefExp != cameraConfig.ExposureValue)
-			{
-				cameraParamChangesPending = true;
-			}
-
-			IMGUI_BIG_SPACING;
-
-			ImGui::DragFloat("Frame Delay Offset (s)", &cameraConfig.FrameDelayOffset, 0.001f, 0.0f, 1.0f, "%.3f");
-			TextDescription("The delay from the camera capturing the image to it being received by the application. This may vary between cameras. Adjust until the view stops lagging when moving your head.");
-
-			ImGui::Checkbox("Request Custom Resolution", &cameraConfig.RequestCustomFrameSize);
-			TextDescription("Set a resolution to use. The system may select the closest matching available one. If turned off, the system will attempt to select the best available resolution.");
-
-			BeginSoftDisabled(!cameraConfig.RequestCustomFrameSize);
-			ImGui::DragInt2("Width x Height###FrameWH", cameraConfig.CustomFrameDimensions, 1.0f, 1, 8192);
-			ImGui::DragInt("FPS###FrameFPS", &cameraConfig.CustomFrameRate, 1.0f, 1, 120);
-
-			EndSoftDisabled(!cameraConfig.RequestCustomFrameSize);
-
-			ImGui::Text("Camera Frame Layout");
-			if (ImGui::RadioButton("Monocular", cameraConfig.CameraFrameLayout == FrameLayout_Mono))
-			{
-				cameraConfig.CameraFrameLayout = FrameLayout_Mono;
-			}
-
-			if (ImGui::RadioButton("Stereo Vertical", cameraConfig.CameraFrameLayout == FrameLayout_StereoVertical))
-			{
-				cameraConfig.CameraFrameLayout = FrameLayout_StereoVertical;
-			}
-
-			if (ImGui::RadioButton("Stereo Horizontal", cameraConfig.CameraFrameLayout == FrameLayout_StereoHorizontal))
-			{
-				cameraConfig.CameraFrameLayout = FrameLayout_StereoHorizontal;
-			}
-			ImGui::Checkbox("Camera Has Fisheye Lens", &cameraConfig.CameraHasFisheyeLens);
-
-			IMGUI_BIG_SPACING;
-
-			if (CollapsingHeaderPersistent("Left Camera", ImGuiTreeNodeFlags_DefaultOpen))
-			{
-				ImGui::Text("Camera Extrinsics");
-				ImGui::DragFloat3("Camera Offset (m)", cameraConfig.Camera0_Translation, 0.001f, 0.0f, 0.0f, "%.3f");
-				ImGui::DragFloat3("Camera Rotation (degrees)", cameraConfig.Camera0_Rotation, 0.001f, -180.0f, 180.0f, "%.3f");
-				ImGui::Text("Camera Intrinsics");
-				ImGui::DragFloat2("Focal Length", cameraConfig.Camera0_IntrinsicsFocal, 0.001f, 0.0f, 0.0f, "%.5f");
-				ImGui::DragFloat2("Center", cameraConfig.Camera0_IntrinsicsCenter, 0.001f, 0.0f, 0.0f, "%.5f");
-				ImGui::DragInt2("Sensor Pixels", cameraConfig.Camera0_IntrinsicsSensorPixels, 1.0f, 1, 8192);
-				ImGui::DragFloat4("Distortion", cameraConfig.Camera0_IntrinsicsDist, 0.001f, 0.0f, 0.0f, "%.5f");
-
-			}
-
-			if (CollapsingHeaderPersistent("Right Camera", ImGuiTreeNodeFlags_DefaultOpen))
-			{
-				ImGui::Text("Camera Extrinsics");
-				ImGui::DragFloat3("Camera Offset (m)###RightOffset", cameraConfig.Camera1_Translation, 0.001f, 0.0f, 0.0f, "%.3f");
-				ImGui::DragFloat3("Camera Rotation (degrees)###RightRotation", cameraConfig.Camera1_Rotation, 0.001f, -180.0f, 180.0f, "%.3f");
-
-				ImGui::Text("Camera Intrinsics");
-				ImGui::DragFloat2("Focal Length###RightF", cameraConfig.Camera1_IntrinsicsFocal, 0.001f, 0.0f, 0.0f, "%.5f");
-				ImGui::DragFloat2("Center###RightC", cameraConfig.Camera1_IntrinsicsCenter, 0.001f, 0.0f, 0.0f, "%.5f");
-				ImGui::DragInt2("Sensor Pixels###RightPx", cameraConfig.Camera1_IntrinsicsSensorPixels, 1.0f, 1, 8192);
-				ImGui::DragFloat4("Distortion##RightDist", cameraConfig.Camera1_IntrinsicsDist, 0.001f, 0.0f, 0.0f, "%.5f");
-			}
-
-			IMGUI_BIG_SPACING;
-		}	
-
-		if (CollapsingHeaderPersistent("SteamVR Camera Configuration", ImGuiTreeNodeFlags_DefaultOpen))
-		{
-			IMGUI_BIG_SPACING;
-
-			ImGui::Checkbox("Enable Custom Calibration for SteamVR Camera", &cameraConfig.OpenVRCustomCalibration);
-
-			IMGUI_BIG_SPACING;
-
-			BeginSoftDisabled(!cameraConfig.OpenVRCustomCalibration);
-
-			ImGui::Checkbox("SteamVR Camera Has Fisheye Lens", &cameraConfig.OpenVR_CameraHasFisheyeLens);
-
-			IMGUI_BIG_SPACING;
-
-			if (CollapsingHeaderPersistent("SteamVR Camera 0", ImGuiTreeNodeFlags_DefaultOpen))
-			{
-				ImGui::Text("Camera Extrinsics");
-				ImGui::DragFloat3("Camera Offset (m)###OpenVROffset", cameraConfig.OpenVR_Camera0_Translation, 0.001f, 0.0f, 0.0f, "%.3f");
-				ImGui::DragFloat3("Camera Rotation (degrees)###OpenVRRot", cameraConfig.OpenVR_Camera0_Rotation, 0.001f, -180.0f, 180.0f, "%.3f");
-				ImGui::Text("Camera Intrinsics");
-				ImGui::DragFloat2("Focal Length###OpenVRF", cameraConfig.OpenVR_Camera0_IntrinsicsFocal, 0.001f, 0.0f, 0.0f, "%.5f");
-				ImGui::DragFloat2("Center###OpenVRC", cameraConfig.OpenVR_Camera0_IntrinsicsCenter, 0.001f, 0.0f, 0.0f, "%.5f");
-				ImGui::DragInt2("Sensor Pixels###OpenVRPx", cameraConfig.OpenVR_Camera0_IntrinsicsSensorPixels, 1.0f, 1, 8192);
-				ImGui::DragFloat4("Distortion###OpenVRDist", cameraConfig.OpenVR_Camera0_IntrinsicsDist, 0.001f, 0.0f, 0.0f, "%.5f");
-			}
-
-			if (CollapsingHeaderPersistent("SteamVR Camera 1", ImGuiTreeNodeFlags_DefaultOpen))
-			{
-				ImGui::Text("Camera Extrinsics");
-				ImGui::DragFloat3("Camera Offset (m)###OpenVRRightOffset", cameraConfig.OpenVR_Camera1_Translation, 0.001f, 0.0f, 0.0f, "%.3f");
-				ImGui::DragFloat3("Camera Rotation (degrees)###OpenVRRightRotation", cameraConfig.OpenVR_Camera1_Rotation, 0.001f, -180.0f, 180.0f, "%.3f");
-				ImGui::Text("Camera Intrinsics");
-				ImGui::DragFloat2("Focal Length###OpenVRRightF", cameraConfig.OpenVR_Camera1_IntrinsicsFocal, 0.001f, 0.0f, 0.0f, "%.5f");
-				ImGui::DragFloat2("Center###OpenVRRightC", cameraConfig.OpenVR_Camera1_IntrinsicsCenter, 0.001f, 0.0f, 0.0f, "%.5f");
-				ImGui::DragInt2("Sensor Pixels###OpenVRRightPx", cameraConfig.OpenVR_Camera1_IntrinsicsSensorPixels, 1.0f, 1, 8192);
-				ImGui::DragFloat4("Distortion##OpenVRRightDist", cameraConfig.OpenVR_Camera1_IntrinsicsDist, 0.001f, 0.0f, 0.0f, "%.5f");
-			}
-
-			EndSoftDisabled(!cameraConfig.OpenVRCustomCalibration);
-		}
-
-		ImGui::EndChild();
-
-		ImGui::Spacing();
-		ImGui::Spacing();
-
-		if (ImGui::Button("Apply Camera Parameters"))
-		{
-			rendererResetPending = true;
-		}
-
-		ImGui::EndChild();
-	}
-
-
 
 	if (m_activeTab == TabDebug)
 	{
@@ -1954,7 +2098,6 @@ if (bIsActiveTab) { ImGui::PopStyleColor(1); bIsActiveTab = false; }
 			{
 				ImGui::Text("OpenXR API Version requested: %d.%d.%d", XR_VERSION_MAJOR(clientData.Values.XRVersion), XR_VERSION_MINOR(clientData.Values.XRVersion), XR_VERSION_PATCH(clientData.Values.XRVersion));
 			}
-			IMGUI_BIG_SPACING;
 
 			switch (displayValues.AppRenderAPI)
 			{
@@ -2074,7 +2217,7 @@ if (bIsActiveTab) { ImGui::PopStyleColor(1); bIsActiveTab = false; }
 
 			IMGUI_BIG_SPACING;
 
-			if (ImGui::Button("Dump Camera Frame to File"))
+			if (BigButton("Dump Camera Frame to File"))
 			{
 				frameDumpPending = true;
 			}
@@ -2390,10 +2533,25 @@ if (bIsActiveTab) { ImGui::PopStyleColor(1); bIsActiveTab = false; }
 			memcpy(message.Payload, &mainConfig, sizeof(Config_Main));
 			m_IPCServer->BroadcastMessage(message);
 
+			message.Header.Type = MessageType_SendConfig_Core;
+			message.Header.PayloadSize = sizeof(Config_Core);
+			memcpy(message.Payload, &coreConfig, sizeof(Config_Core));
+			m_IPCServer->BroadcastMessage(message);
+
+			message.Header.Type = MessageType_SendConfig_Depth;
+			message.Header.PayloadSize = sizeof(Config_Depth);
+			memcpy(message.Payload, &depthConfig, sizeof(Config_Depth));
+			m_IPCServer->BroadcastMessage(message);
+
 			break;
 		}
-		case TabApplication:
+		case TabComposition:
 		{
+			message.Header.Type = MessageType_SendConfig_Main;
+			message.Header.PayloadSize = sizeof(Config_Main);
+			memcpy(message.Payload, &mainConfig, sizeof(Config_Main));
+			m_IPCServer->BroadcastMessage(message);
+
 			message.Header.Type = MessageType_SendConfig_Core;
 			message.Header.PayloadSize = sizeof(Config_Core);
 			memcpy(message.Payload, &coreConfig, sizeof(Config_Core));
@@ -2402,6 +2560,20 @@ if (bIsActiveTab) { ImGui::PopStyleColor(1); bIsActiveTab = false; }
 			message.Header.Type = MessageType_SendConfig_Extensions;
 			message.Header.PayloadSize = sizeof(Config_Extensions);
 			memcpy(message.Payload, &extConfig, sizeof(Config_Extensions));
+			m_IPCServer->BroadcastMessage(message);
+
+			message.Header.Type = MessageType_SendConfig_Depth;
+			message.Header.PayloadSize = sizeof(Config_Depth);
+			memcpy(message.Payload, &depthConfig, sizeof(Config_Depth));
+			m_IPCServer->BroadcastMessage(message);
+
+			break;
+		}
+		case TabImage:
+		{
+			message.Header.Type = MessageType_SendConfig_Main;
+			message.Header.PayloadSize = sizeof(Config_Main);
+			memcpy(message.Payload, &mainConfig, sizeof(Config_Main));
 			m_IPCServer->BroadcastMessage(message);
 
 			break;
@@ -2430,20 +2602,6 @@ if (bIsActiveTab) { ImGui::PopStyleColor(1); bIsActiveTab = false; }
 			message.Header.Type = MessageType_SendConfig_Stereo;
 			message.Header.PayloadSize = sizeof(Config_Stereo);
 			memcpy(message.Payload, &stereoCustomConfig, sizeof(Config_Stereo));
-			m_IPCServer->BroadcastMessage(message);
-
-			break;
-		}
-		case TabOverrides:
-		{
-			message.Header.Type = MessageType_SendConfig_Core;
-			message.Header.PayloadSize = sizeof(Config_Core);
-			memcpy(message.Payload, &coreConfig, sizeof(Config_Core));
-			m_IPCServer->BroadcastMessage(message);
-
-			message.Header.Type = MessageType_SendConfig_Depth;
-			message.Header.PayloadSize = sizeof(Config_Depth);
-			memcpy(message.Payload, &depthConfig, sizeof(Config_Depth));
 			m_IPCServer->BroadcastMessage(message);
 
 			break;
@@ -2488,8 +2646,6 @@ if (bIsActiveTab) { ImGui::PopStyleColor(1); bIsActiveTab = false; }
 	}
 
 	ImGui::PopFont();
-	ImGui::PopStyleVar(3);
-
 }
 
 
@@ -2607,7 +2763,7 @@ void SettingsMenu::MenuIPCMessageReceived(MenuIPCMessage& message, int clientInd
 {
 	if (clientIndex >= m_clientData.size())
 	{
-		ErrorLog("Invalid client message: %d >= %d\n", clientIndex, m_clientData.size());
+		ErrorLog("IPC message from invalid client index: %d >= %d\n", clientIndex, m_clientData.size());
 		return;
 	}
 

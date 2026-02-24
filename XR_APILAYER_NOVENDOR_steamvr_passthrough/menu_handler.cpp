@@ -163,22 +163,7 @@ void MenuHandler::MenuIPCMessageReceived(MenuIPCMessage& message, int clientInde
 	case MessageType_SendConfig_Camera:
 	{
 		Config_Camera& config = m_configManager->GetConfig_Camera();
-		std::string deviceSerialNumber = config.TrackedDeviceSerialNumber;
 		CopyConfig(&config, message, sizeof(Config_Camera));
-		config.TrackedDeviceSerialNumber = deviceSerialNumber;
-		break;
-	}
-
-	case MessageType_SendConfig_Camera_TrackedDeviceSerialNumber:
-	{
-		if (strnlen_s(reinterpret_cast<const char*>(message.Payload), IPC_PAYLOAD_SIZE) < message.Header.PayloadSize)
-		{
-			m_configManager->GetConfig_Camera().TrackedDeviceSerialNumber = std::string(reinterpret_cast<const char*>(message.Payload));
-		}
-		else
-		{
-			ErrorLog("Invalid string for config update Camera_TrackedDeviceSerialNumber!\n");
-		}
 		break;
 	}
 

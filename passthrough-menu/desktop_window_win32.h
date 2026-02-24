@@ -24,6 +24,7 @@ public:
 	bool CreateVulkanSurface(VkInstance instance, VkSurfaceKHR& surface);
 	void OnClientConnected();
 	void OnAllClientsDisconnected();
+	void SendQuitMessage();
 
 protected:
 	bool AddTrayIcon();

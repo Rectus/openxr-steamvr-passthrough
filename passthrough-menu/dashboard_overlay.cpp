@@ -11,7 +11,7 @@ DashboardOverlay::DashboardOverlay()
 	: m_overlayHandle(vr::k_ulOverlayHandleInvalid)
 	, m_thumbnailHandle(vr::k_ulOverlayHandleInvalid)
 {
-	InitRuntime();
+	
 }
 
 DashboardOverlay::~DashboardOverlay()

@@ -319,25 +319,45 @@ void MenuIPCServer::Listen()
 				m_clientConnections[clIdx]->bReadPending = false;
 				m_clientConnections[clIdx]->LastMessageTime = currentTime;
 
-				auto message = reinterpret_cast<MenuIPCMessage*>(m_clientConnections[clIdx]->ReadBuffer);
+				int offset = 0;
+				bool bReply = false;
 
-				if (message->Header.Type == MessageType_KeepAlive && !m_clientConnections[clIdx]->bWritePending)
+				while (numBytes > 0)
+				{
+					auto message = reinterpret_cast<MenuIPCMessage*>(m_clientConnections[clIdx]->ReadBuffer + offset);
+					int messageSize = IPC_HEADER_SIZE + message->Header.PayloadSize;
+
+					if (numBytes < IPC_HEADER_SIZE)
+					{
+						ErrorLog("Menu IPC Server: Incomplete IPC message: size %d, expected %d\n", numBytes);
+						break;
+					}
+					else if (message->Header.Type == MessageType_KeepAlive && !m_clientConnections[clIdx]->bWritePending)
+					{
+						bReply = true;
+					}
+					else if (numBytes < messageSize)
+					{
+						ErrorLog("Menu IPC Server: Invalid IPC message size: %d, expected %d, type %d\n", numBytes, messageSize, message->Header.Type);
+						break;
+					}
+					else if (auto callback = m_callback.lock())
+					{
+						callback->MenuIPCMessageReceived(*message, 0);
+					}
+					offset += messageSize;
+					numBytes -= messageSize;
+				}
+
+				if (bReply)
 				{
 					MenuIPCMessage sendMessage = {};
 					sendMessage.Header.Type = MessageType_KeepAlive;
 					clientLock.unlock();
 					WriteMessage(sendMessage, clIdx);
+					CueRead(clIdx);
 					continue;
 				}
-				else if (numBytes < IPC_HEADER_SIZE || numBytes != IPC_HEADER_SIZE + message->Header.PayloadSize)
-				{
-					ErrorLog("Menu IPC Server: Invalid IPC message size: %d, expected %d\n", numBytes, IPC_HEADER_SIZE + message->Header.PayloadSize);
-				}
-				else if (auto callback = m_callback.lock())
-				{
-					callback->MenuIPCMessageReceived(*message, clIdx);
-				}
-
 
 				CueRead(clIdx);
 			}

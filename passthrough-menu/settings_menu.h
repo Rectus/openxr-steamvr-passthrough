@@ -17,10 +17,10 @@ class DashboardOverlay;
 enum EMenuTab
 {
 	TabMain,
-	TabApplication,
-	TabStereo,
-	TabOverrides,
+	TabComposition,
+	TabImage,
 	TabCamera,
+	TabStereo,
 	TabDebug
 };
 

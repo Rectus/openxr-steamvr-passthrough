@@ -441,7 +441,7 @@ void CameraManagerOpenCV::ServeFrames()
                     break;
                 }
                 vrSystem->GetStringTrackedDeviceProperty(i, vr::Prop_SerialNumber_String, buffer, 127);
-                if (strncmp(buffer, cameraConf.TrackedDeviceSerialNumber.data(), cameraConf.TrackedDeviceSerialNumber.size()) == 0)
+                if (strncmp(buffer, cameraConf.TrackedDeviceSerialNumber, MAX_CAMERA_SERIAL_NUMBER_SIZE) == 0)
                 {
                     trackedDeviceIndex = i;
                     break;

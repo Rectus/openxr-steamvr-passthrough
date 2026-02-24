@@ -17,7 +17,7 @@
 #define CONFIG_FILE_DIR "\\OpenXR SteamVR Passthrough"
 #define CONFIG_FILE_NAME "\\config.ini"
 #define WINDOW_CONFIG_FILE_NAME "\\imgui.ini"
-#define LOG_FILE_NAME "\\XR_APILAYER_NOVENDOR_steamvr_passthrough_menu.txt"
+#define LOG_FILE_NAME "\\menu.log"
 
 #define MUTEX_APP_KEY L"Global\\XR_APILAYER_NOVENDOR_steamvr_passthrough_menu"
 
@@ -86,7 +86,8 @@ int APIENTRY wWinMain(_In_ HINSTANCE hInstance, _In_opt_ HINSTANCE hPrevInstance
 
     if (!logStream.is_open())
     {
-        std::string logFile = GetLocalAppData() + LOG_FILE_NAME;
+        std::string logFile = GetLocalAppData() + LOG_FILE_DIR + LOG_FILE_NAME;
+        CreateDirectoryPath(GetLocalAppData() + LOG_FILE_DIR);
         logStream.open(ToWideString(logFile), std::ios_base::ate);
     }
 

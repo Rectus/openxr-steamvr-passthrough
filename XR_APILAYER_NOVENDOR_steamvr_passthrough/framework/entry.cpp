@@ -26,18 +26,13 @@
 
 #include "dispatch.h"
 #include "log.h"
+#include "pathutil.h"
 
 #ifndef LAYER_NAMESPACE
 #error Must define LAYER_NAMESPACE
 #endif
 
 namespace LAYER_NAMESPACE {
-    // The path where the DLL is loaded from (eg: to load data files).
-    std::filesystem::path dllHome;
-
-    // The path that is writable (eg: to store logs).
-    std::filesystem::path localAppData;
-
     namespace logging {
         // The file logger.
         std::ofstream logStream;
@@ -58,24 +53,11 @@ XrResult __declspec(dllexport) XRAPI_CALL
     TraceLoggingWrite(g_traceProvider, "xrNegotiateLoaderApiLayerInterface");
 #endif
 
-    // Retrieve the path of the DLL.
-    if (dllHome.empty()) {
-        HMODULE module;
-        if (GetModuleHandleExA(GET_MODULE_HANDLE_EX_FLAG_FROM_ADDRESS | GET_MODULE_HANDLE_EX_FLAG_UNCHANGED_REFCOUNT,
-                               (LPCSTR)&dllHome,
-                               &module)) {
-            char path[_MAX_PATH];
-            GetModuleFileNameA(module, path, sizeof(path));
-            dllHome = std::filesystem::path(path).parent_path();
-        }
-    }
-
     // Start logging to file.
     if (!logStream.is_open()) {
-#pragma warning(disable: 4996)// for getenv
-        std::string logFile = (std::filesystem::path(getenv("LOCALAPPDATA")) / (LayerName + ".log")).string();
-        logStream.open(logFile, std::ios_base::ate);
-#pragma warning(default: 4996)
+        std::string logFile = GetLocalAppData() + LOG_FILE_DIR +  "\\client_" + GetProcessFileName(false) + ".log";
+        CreateDirectoryPath(GetLocalAppData() + LOG_FILE_DIR);
+        logStream.open(ToWideString(logFile), std::ios_base::ate);
     }
 
     DebugLog("--> xrNegotiateLoaderApiLayerInterface\n");

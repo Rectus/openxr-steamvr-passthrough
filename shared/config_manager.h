@@ -89,7 +89,7 @@ enum EStereoPreset
 	StereoPreset_VeryHigh = 5
 };
 
-struct Config_Main
+struct alignas(4) Config_Main
 {
 	bool EnablePassthrough = true;
 	ECameraProvider CameraProvider = CameraProvider_OpenVR;
@@ -201,12 +201,14 @@ struct Config_Main
 	}
 };
 
-struct Config_Camera
+#define MAX_CAMERA_SERIAL_NUMBER_SIZE 127
+
+struct alignas(4) Config_Camera
 {
 	bool ClampCameraFrame = true;
 
 	bool UseTrackedDevice = true;
-	std::string TrackedDeviceSerialNumber = "";
+	char TrackedDeviceSerialNumber[MAX_CAMERA_SERIAL_NUMBER_SIZE + 1] = "";
 
 	bool RequestCustomFrameSize = false;
 	int CustomFrameDimensions[2] = { 0 };
@@ -259,7 +261,10 @@ struct Config_Camera
 		ClampCameraFrame = ini.GetBoolValue(section, "ClampCameraFrame", ClampCameraFrame);
 
 		UseTrackedDevice = ini.GetBoolValue(section, "UseTrackedDevice", UseTrackedDevice);
-		TrackedDeviceSerialNumber = ini.GetValue(section, "TrackedDeviceSerialNumber", TrackedDeviceSerialNumber.data());
+
+		const char* val = ini.GetValue(section, "TrackedDeviceSerialNumber", TrackedDeviceSerialNumber);
+		strncpy_s(TrackedDeviceSerialNumber, val, MAX_CAMERA_SERIAL_NUMBER_SIZE);
+		
 
 		RequestCustomFrameSize = ini.GetBoolValue(section, "RequestCustomFrameSize", RequestCustomFrameSize);
 		CustomFrameDimensions[0] = (int)ini.GetLongValue(section, "CustomFrameWidth", CustomFrameDimensions[0]);
@@ -357,7 +362,7 @@ struct Config_Camera
 		ini.SetBoolValue(section, "ClampCameraFrame", ClampCameraFrame);
 
 		ini.SetBoolValue(section, "UseTrackedDevice", UseTrackedDevice);
-		ini.SetValue(section, "TrackedDeviceSerialNumber", TrackedDeviceSerialNumber.data());
+		ini.SetValue(section, "TrackedDeviceSerialNumber", TrackedDeviceSerialNumber);
 
 		ini.SetBoolValue(section, "RequestCustomFrameSize", RequestCustomFrameSize);
 		ini.SetLongValue(section, "CustomFrameWidth", (long)CustomFrameDimensions[0]);
@@ -452,7 +457,7 @@ struct Config_Camera
 };
 
 // Configuration for core-spec passthrough
-struct Config_Core
+struct alignas(4) Config_Core
 {
 	bool CorePassthroughEnable = true;
 	bool CoreAlphaBlend = true;
@@ -519,7 +524,7 @@ struct Config_Core
 	}
 };
 
-struct Config_Extensions
+struct alignas(4) Config_Extensions
 {
 	bool ExtFBPassthrough = true;
 	bool ExtFBPassthroughAllowDepth = true;
@@ -569,7 +574,7 @@ enum EStereoFiltering
 };
 
 // Configuration for stereo reconstruction
-struct Config_Stereo
+struct alignas(4) Config_Stereo
 {
 	bool StereoUseMulticore = true;
 	bool StereoRectificationFiltering = false;
@@ -744,7 +749,7 @@ struct Config_Stereo
 	}
 };
 
-struct Config_Depth
+struct alignas(4) Config_Depth
 {
 	bool DepthReadFromApplication = true;
 	bool DepthWriteOutput = true;

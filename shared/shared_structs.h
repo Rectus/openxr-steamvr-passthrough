@@ -102,7 +102,7 @@ struct DeviceIdentProperties
 	std::string DeviceSerial;
 };
 
-struct ClientDataValues
+struct alignas(8) ClientDataValues
 {
 	uint32_t ApplicationVersion = 0;
 	uint32_t EngineVersion = 0;

@@ -185,15 +185,30 @@ void MenuIPCClient::Listen()
 			{
 				m_bReadPending = false;
 
-				auto message = reinterpret_cast<MenuIPCMessage*>(m_readBuffer);
+				int offset = 0;
 
-				if (numBytes < IPC_HEADER_SIZE || numBytes != IPC_HEADER_SIZE + message->Header.PayloadSize)
+				while (numBytes > 0)
 				{
-					ErrorLog("Invalid IPC message size: %d, expected %d\n", numBytes, IPC_HEADER_SIZE + message->Header.PayloadSize);
-				}
-				else if (auto callback = m_callback.lock())
-				{
-					callback->MenuIPCMessageReceived(*message, 0);
+					auto message = reinterpret_cast<MenuIPCMessage*>(m_readBuffer + offset);
+					int messageSize = IPC_HEADER_SIZE + message->Header.PayloadSize;
+
+					if (numBytes < IPC_HEADER_SIZE)
+					{
+						ErrorLog("Incomplete IPC message: size %d, expected %d\n", numBytes);
+						break;
+					}
+					else if (numBytes < messageSize)
+					{
+						ErrorLog("Invalid IPC message size: %d, expected %d, type %d\n", numBytes, messageSize, message->Header.Type);
+						break;
+					}
+
+					if (auto callback = m_callback.lock())
+					{
+						callback->MenuIPCMessageReceived(*message, 0);
+					}
+					offset += messageSize;
+					numBytes -= messageSize;
 				}
 
 				CueRead();

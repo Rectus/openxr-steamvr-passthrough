@@ -26,6 +26,8 @@
 
 namespace LAYER_NAMESPACE::logging {
 
+#define LOG_FILE_DIR "\\OpenXR SteamVR Passthrough"
+
 #if USE_TRACELOGGING
     TRACELOGGING_DECLARE_PROVIDER(g_traceProvider);
 
