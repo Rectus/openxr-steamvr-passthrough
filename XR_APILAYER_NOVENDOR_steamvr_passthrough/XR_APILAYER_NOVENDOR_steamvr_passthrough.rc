@@ -89,8 +89,6 @@ END
 // PNG
 //
 
-IDB_PNG_DASHBOARD_ICON  PNG                     "passthrough_icon.png"
-
 IDB_PNG_TESTPATTERN     PNG                     "testpattern.png"
 
 #endif    // Swedish (Sweden) resources

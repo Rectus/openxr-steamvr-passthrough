@@ -2,7 +2,7 @@
 #include "pch.h"
 #include "menu_ipc_server.h"
 
-#define CLIENT_TIMEOUT_MS 1000
+#define CLIENT_TIMEOUT_MS 5000
 
 MenuIPCServer::MenuIPCServer()
 {
@@ -330,6 +330,11 @@ void MenuIPCServer::Listen()
 					if (numBytes < IPC_HEADER_SIZE)
 					{
 						g_logger->error("Menu IPC Server: Incomplete IPC message: size {}, expected {}", numBytes, messageSize);
+						break;
+					}
+					else if (memcmp(message->Header.Magic, MENU_IPC_MAGIG_STR, 4) != 0 || message->Header.Version != MENU_IPC_VERSION || message->Header.Type >= MessageType_MAX || message->Header.Type <= MessageType_Invalid)
+					{
+						g_logger->error("Menu IPC Server: Invalid IPC message header!");
 						break;
 					}
 					else if (message->Header.Type == MessageType_KeepAlive && !m_clientConnections[clIdx]->bWritePending)

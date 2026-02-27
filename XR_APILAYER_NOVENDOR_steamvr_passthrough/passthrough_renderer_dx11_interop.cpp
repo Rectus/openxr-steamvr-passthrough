@@ -1609,6 +1609,11 @@ bool PassthroughRendererDX11Interop::DownloadTextureToCPU(void* textureSRV, cons
 	case RenderAPI_Vulkan:
 	case RenderAPI_OpenGL: // Use Vulkan context for OpenGL apps, since OpenGL doesn't support multithreading with separate rendering contexts on Windows.
 	{
+		if (!m_vulkanDownloadDevice)
+		{
+			g_logger->error("Attempted to download texture without valid Vulkan device!");
+			return false;
+		}
 
 		vkResetFences(m_vulkanDownloadDevice, 1, &m_vulkanDownloadFence);
 

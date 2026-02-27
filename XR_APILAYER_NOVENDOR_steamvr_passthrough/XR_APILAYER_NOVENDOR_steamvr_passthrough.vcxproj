@@ -516,7 +516,6 @@ copy $(SolutionDir)THIRD_PARTY $(OutDir)THIRD_PARTY.txt</Command>
     <ResourceCompile Include="XR_APILAYER_NOVENDOR_steamvr_passthrough.rc" />
   </ItemGroup>
   <ItemGroup>
-    <Image Include="passthrough_icon.png" />
     <Image Include="testpattern.png" />
   </ItemGroup>
   <Import Project="$(VCTargetsPath)\Microsoft.Cpp.targets" />

@@ -31,8 +31,12 @@ DesktopWindowWin32::~DesktopWindowWin32()
 
 bool DesktopWindowWin32::InitWindow(bool bStartOpen, int cmdShow)
 {
-    m_iconOn = LoadIconW(m_hInstance, MAKEINTRESOURCE(IDI_PASSTHROUGHMENU));
-    //m_iconOff = LoadIconW(m_hInstance, MAKEINTRESOURCE(IDI_ICON2_OFF));
+    m_iconBase = LoadIconW(m_hInstance, MAKEINTRESOURCE(IDI_ICON1_BASE));
+    m_iconPlay = LoadIconW(m_hInstance, MAKEINTRESOURCE(IDI_ICON2_PLAY));
+    m_iconPause = LoadIconW(m_hInstance, MAKEINTRESOURCE(IDI_ICON3_PAUSE));
+    m_iconOverride = LoadIconW(m_hInstance, MAKEINTRESOURCE(IDI_ICON4_OVERRIDE));
+    m_currentIcon = m_iconBase;
+
     LoadStringW(m_hInstance, IDS_APP_TITLE, m_titleString, MAX_LOADSTRING);
     LoadStringW(m_hInstance, IDC_PASSTHROUGHMENU, m_windowClass, MAX_LOADSTRING);
 
@@ -45,10 +49,10 @@ bool DesktopWindowWin32::InitWindow(bool bStartOpen, int cmdShow)
     wcex.cbClsExtra = 0;
     wcex.cbWndExtra = 0;
     wcex.hInstance = m_hInstance;
-    wcex.hIcon = m_iconOn;
+    wcex.hIcon = m_iconBase;
     wcex.hbrBackground = (HBRUSH)GetStockObject(BLACK_BRUSH);
     wcex.lpszClassName = m_windowClass;
-    wcex.hIconSm = m_iconOn;
+    wcex.hIconSm = m_iconBase;
     RegisterClassExW(&wcex);
 
     RECT windowSize;
@@ -261,6 +265,30 @@ void DesktopWindowWin32::SendQuitMessage()
     SendMessage(m_hSettingsWindow, WM_MENU_QUIT, 0, 0);
 }
 
+void DesktopWindowWin32::SetIcon(EWindowIcon icon)
+{
+    if (m_iconState == icon) { return; }
+    m_iconState = icon;
+
+    switch (icon)
+    {
+    case WindowIcon_Play:
+        m_currentIcon = m_iconPlay;
+        break;
+    case WindowIcon_Pause:
+        m_currentIcon = m_iconPause;
+        break;
+    case WindowIcon_Override:
+        m_currentIcon = m_iconOverride;
+        break;
+    default:
+        m_currentIcon = m_iconBase;
+    }
+    SendMessage(m_hSettingsWindow, WM_SETICON, ICON_BIG, (LPARAM)m_currentIcon);
+    SendMessage(m_hSettingsWindow, WM_SETICON, ICON_SMALL, (LPARAM)m_currentIcon);
+    ModifyTrayIcon();
+}
+
 
 #ifndef DWMWA_USE_IMMERSIVE_DARK_MODE
 #define DWMWA_USE_IMMERSIVE_DARK_MODE 20
@@ -273,9 +301,9 @@ bool DesktopWindowWin32::AddTrayIcon()
 
     iconData.cbSize = sizeof(NOTIFYICONDATA);
     iconData.hWnd = m_hSettingsWindow;
-    iconData.uID = IDI_PASSTHROUGHMENU;
+    iconData.uID = IDI_ICON1_BASE;
     iconData.uVersion = NOTIFYICON_VERSION;
-    iconData.hIcon = m_iconOn;
+    iconData.hIcon = m_currentIcon;
     LoadString(m_hInstance, IDS_APP_TITLE, iconData.szTip, 128);
     iconData.uCallbackMessage = WM_TRAYMESSAGE;
     iconData.uFlags = NIF_MESSAGE | NIF_ICON | NIF_TIP;
@@ -294,9 +322,9 @@ bool DesktopWindowWin32::ModifyTrayIcon()
 
     iconData.cbSize = sizeof(NOTIFYICONDATA);
     iconData.hWnd = m_hSettingsWindow;
-    iconData.uID = IDI_PASSTHROUGHMENU;
+    iconData.uID = IDI_ICON1_BASE;
     iconData.uVersion = NOTIFYICON_VERSION;
-    iconData.hIcon = m_iconOn;
+    iconData.hIcon = m_currentIcon;
     LoadString(m_hInstance, IDS_APP_TITLE, iconData.szTip, 128);
     iconData.uCallbackMessage = WM_TRAYMESSAGE;
     iconData.uFlags = NIF_MESSAGE | NIF_ICON | NIF_TIP;
@@ -314,7 +342,7 @@ void DesktopWindowWin32::RemoveTrayIcon()
     NOTIFYICONDATA iconData = {};
     iconData.cbSize = sizeof(NOTIFYICONDATA);
     iconData.hWnd = m_hSettingsWindow;
-    iconData.uID = IDI_PASSTHROUGHMENU;
+    iconData.uID = IDI_ICON1_BASE;
 
     Shell_NotifyIcon(NIM_DELETE, &iconData);
 }

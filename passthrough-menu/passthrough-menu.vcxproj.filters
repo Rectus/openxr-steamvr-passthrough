@@ -159,16 +159,19 @@
     </ResourceCompile>
   </ItemGroup>
   <ItemGroup>
-    <Image Include="small.ico">
-      <Filter>Resource Files</Filter>
-    </Image>
-    <Image Include="passthrough-menu.ico">
-      <Filter>Resource Files</Filter>
-    </Image>
-    <Image Include="icon1.ico">
-      <Filter>Resource Files</Filter>
-    </Image>
     <Image Include="passthrough_icon.png">
+      <Filter>Resource Files</Filter>
+    </Image>
+    <Image Include="passthrough_icon_base_opaque.ico">
+      <Filter>Resource Files</Filter>
+    </Image>
+    <Image Include="passthrough_icon_override_opaque.ico">
+      <Filter>Resource Files</Filter>
+    </Image>
+    <Image Include="passthrough_icon_pause_opaque.ico">
+      <Filter>Resource Files</Filter>
+    </Image>
+    <Image Include="passthrough_icon_play_opaque.ico">
       <Filter>Resource Files</Filter>
     </Image>
   </ItemGroup>

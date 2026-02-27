@@ -16,6 +16,7 @@
 #include "spdlog/sinks/basic_file_sink.h"
 #include "spdlog/sinks/dup_filter_sink.h"
 #include "spdlog/sinks/msvc_sink.h"
+#include "spdlog_imgui_buffer_sink.h"
 
 
 // Directory under AppData to write config.
@@ -29,7 +30,7 @@
 
 
 std::shared_ptr<spdlog::logger> g_logger;
-std::shared_ptr<spdlog_imgui_buffer_sink_mt> g_logRingbuffer;
+std::shared_ptr<spdlog_imgui_buffer_sink_mt> g_logDisplayBuffer;
 
 
 int APIENTRY wWinMain(_In_ HINSTANCE hInstance, _In_opt_ HINSTANCE hPrevInstance, _In_ LPWSTR lpCmdLine, _In_ int       nCmdShow)
@@ -86,20 +87,20 @@ int APIENTRY wWinMain(_In_ HINSTANCE hInstance, _In_opt_ HINSTANCE hPrevInstance
     }
 
     {
-        std::shared_ptr<spdlog::sinks::dup_filter_sink_mt> duplicateFilter = std::make_shared<spdlog::sinks::dup_filter_sink_mt>(std::chrono::minutes(10));
-
-        g_logRingbuffer = std::make_shared<spdlog_imgui_buffer_sink_mt>(500);
-        g_logRingbuffer->set_pattern("%v");
-        duplicateFilter->add_sink(g_logRingbuffer);
+        std::shared_ptr<spdlog::sinks::dup_filter_sink_mt> logSinkAggregator = std::make_shared<spdlog::sinks::dup_filter_sink_mt>(std::chrono::minutes(10));
+        g_logDisplayBuffer = std::make_shared<spdlog_imgui_buffer_sink_mt>(500);
 
         std::string logFilePath = GetLocalAppData() + LOG_FILE_DIR + LOG_FILE_NAME;
         CreateDirectoryPath(GetLocalAppData() + LOG_FILE_DIR);
-
-        duplicateFilter->add_sink(std::make_shared<spdlog::sinks::basic_file_sink_mt>(logFilePath, true));
-        duplicateFilter->add_sink(std::make_shared<spdlog::sinks::msvc_sink_mt>());
-
-        g_logger = std::make_shared<spdlog::logger>("menu", duplicateFilter);
-        g_logger->set_pattern("[%Y-%m-%d %H:%M:%S.%e] [%l] %v");
+        std::shared_ptr<spdlog::sinks::basic_file_sink_mt> fileSink = std::make_shared<spdlog::sinks::basic_file_sink_mt>(logFilePath, true);
+        
+        logSinkAggregator->add_sink(g_logDisplayBuffer);
+        logSinkAggregator->add_sink(fileSink);
+        logSinkAggregator->add_sink(std::make_shared<spdlog::sinks::msvc_sink_mt>());
+        
+        g_logger = std::make_shared<spdlog::logger>("menu", logSinkAggregator);
+        g_logger->set_pattern("%v");
+        fileSink->set_pattern("[%Y-%m-%d %H:%M:%S.%e] [%l] %v");
         g_logger->flush_on(spdlog::level::err);
         spdlog::flush_every(std::chrono::seconds(10));
 

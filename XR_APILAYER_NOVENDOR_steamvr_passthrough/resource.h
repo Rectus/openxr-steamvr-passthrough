@@ -2,7 +2,6 @@
 // Microsoft Visual C++ generated include file.
 // Used by XR_APILAYER_NOVENDOR_steamvr_passthrough.rc
 //
-#define IDB_PNG_DASHBOARD_ICON          101
 #define IDB_PNG_TESTPATTERN             102
 
 // Next default values for new objects

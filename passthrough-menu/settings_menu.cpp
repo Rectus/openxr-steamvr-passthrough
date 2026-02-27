@@ -16,6 +16,7 @@
 #include "resource.h"
 #include "camera_enumerator.h"
 #include "mathutil.h"
+#include "spdlog_imgui_buffer_sink.h"
 
 #include "fonts/roboto_medium.cpp"
 #include "fonts/cousine_regular.cpp"
@@ -33,7 +34,7 @@ SettingsMenu::SettingsMenu(std::shared_ptr<ConfigManager> configManager, std::sh
 	m_renderer = VulkanMenuRenderer();
 	m_defaultClientData.ApplicationName = "No application";
 
-	m_clientLogger = std::make_unique<spdlog::logger>("clients", g_logRingbuffer);
+	m_clientLogger = std::make_unique<spdlog::logger>("clients", g_logDisplayBuffer);
 	m_clientLogger->set_pattern("%v");
 }
 
@@ -396,6 +397,46 @@ bool SettingsMenu::TickMenu()
 		return false;
 	}
 
+	if (m_bClientFullUpdatePending)
+	{
+		m_bClientFullUpdatePending = false;
+		DispatchFullClientUpdate();
+	}
+
+	bool hasClients = m_clientData.size() > 0;
+	if (hasClients && m_activeClient >= m_clientData.size())
+	{
+		m_activeClient = (int)m_clientData.size() - 1;
+	}
+	else if (hasClients && m_activeClient < 0)
+	{
+		m_activeClient = 0;
+	}
+
+
+	if (!hasClients || !m_clientData[m_activeClient]->Values.bSessionActive)
+	{
+		m_window->SetIcon(WindowIcon_Base);
+	}
+	else if(m_clientData[m_activeClient]->Values.bCorePassthroughActive || m_clientData[m_activeClient]->Values.bFBPassthroughActive)
+	{
+		Config_Core& coreConfig = m_configManager->GetConfig_Core();
+		Config_Depth& depthConfig = m_configManager->GetConfig_Depth();
+		if (coreConfig.CoreForcePassthrough || depthConfig.DepthForceComposition || depthConfig.DepthForceRangeTest)
+		{
+			m_window->SetIcon(WindowIcon_Override);
+		}
+		else
+		{
+			m_window->SetIcon(WindowIcon_Play);
+		}
+	}
+	else
+	{
+		m_window->SetIcon(WindowIcon_Pause);
+	}	
+
+
 	bool bHasOverlay = m_dashboardOverlay->HasOverlay();
 	if (m_dashboardOverlay->IsRuntimeInitialized() && !bHasOverlay)
 	{
@@ -471,14 +512,6 @@ void SettingsMenu::DrawMenu()
 	Config_Camera& cameraConfig = m_configManager->GetConfig_Camera();
 
 	bool hasClients = m_clientData.size() > 0;
-	if (hasClients && m_activeClient >= m_clientData.size())
-	{
-		m_activeClient = (int)m_clientData.size() - 1;
-	}
-	else if(hasClients && m_activeClient < 0)
-	{
-		m_activeClient = 0;
-	}
 
 	ClientData& clientData = hasClients ? *m_clientData[m_activeClient] : m_defaultClientData;
 	ClientDataValues& displayValues = clientData.Values;
@@ -645,15 +678,15 @@ if (bIsActiveTab) { ImGui::PopStyleColor(1); bIsActiveTab = false; }
 
 				if (!clientData.Values.bSessionActive)
 				{
-					ImGui::Text("Application is not running an OpenXR session");
+					ImGui::Text("Application is idle (no acive OpenXR session)");
 				}
 				else if (clientData.Values.LastFrameTimestamp == 0)
 				{
-					ImGui::Text("Application has not submitted any frames");
+					ImGui::Text("Application hang (no submitted frames)");
 				}
 				else if (timeSinceFrame > 1.0f)
 				{
-					ImGui::Text("Application has not submitted frames for %.0f seconds", timeSinceFrame);
+					ImGui::Text("Application hang (last frame submitted %.0f seconds ago)", timeSinceFrame);
 				}
 				else if (clientData.Values.bCorePassthroughActive || clientData.Values.bFBPassthroughActive)
 				{
@@ -663,17 +696,17 @@ if (bIsActiveTab) { ImGui::PopStyleColor(1); bIsActiveTab = false; }
 					}
 					else if (clientData.Values.bDepthBlendingActive)
 					{
-						ImGui::Text("Application has passthrough active with depth testing");
+						ImGui::Text("Passthrough active with depth testing");
 					}
 					else
 					{
-						ImGui::Text("Application has passthrough active");
+						ImGui::Text("Passthrough active");
 					}
 
 				}
 				else
 				{
-					ImGui::Text("Application does not have passthrough active");
+					ImGui::Text("Passthrough inactive");
 				}
 			}
 			else
@@ -2205,7 +2238,7 @@ if (bIsActiveTab) { ImGui::PopStyleColor(1); bIsActiveTab = false; }
 			ImGui::Text("Camera frame retrieval duration: %.2fms", displayValues.FrameRetrievalTimeMS);
 			ImGui::Text("Menu framerate: %.1fHz", io.Framerate);
 
-			static int frameIdx = 0;
+			/*static int frameIdx = 0;
 			if (frameIdx == 0)		{ ImGui::Text("Frame Index: 1       "); }
 			else if (frameIdx == 1) { ImGui::Text("Frame Index:  2      "); }
 			else if (frameIdx == 2) { ImGui::Text("Frame Index:   3     "); }
@@ -2214,7 +2247,7 @@ if (bIsActiveTab) { ImGui::PopStyleColor(1); bIsActiveTab = false; }
 			else if (frameIdx == 5) { ImGui::Text("Frame Index:      6  "); }
 			else if (frameIdx == 6) { ImGui::Text("Frame Index:       7 "); }
 			else if (frameIdx == 7) { ImGui::Text("Frame Index:        8"); }
-			frameIdx = (frameIdx + 1) % 8;
+			frameIdx = (frameIdx + 1) % 8;*/
 
 			ImGui::PopFont();
 
@@ -2498,7 +2531,7 @@ if (bIsActiveTab) { ImGui::PopStyleColor(1); bIsActiveTab = false; }
 			ImGui::PushFont(m_fixedFont);
 			ImGui::PushTextWrapPos(ImGui::GetContentRegionAvail().x);
 
-			g_logRingbuffer->draw_log("clients");
+			g_logDisplayBuffer->draw_log("clients");
 
 			/*std::vector<spdlog::details::log_msg_buffer> logMessages = g_logRingbuffer->last_raw();
 
@@ -2725,39 +2758,63 @@ void SettingsMenu::MenuIPCClientConnected(int clientIndex)
 
 	if (m_bSettingsUpdatedThisSession)
 	{
+		m_bClientFullUpdatePending = true;
+		m_clientData[clientIndex]->bFullUpdatePending = true;
+	}
+}
+
+
+void SettingsMenu::DispatchFullClientUpdate()
+{
+	for (int i = 0; i < m_clientData.size(); i++)
+	{
+		if (!m_clientData[i]->bFullUpdatePending)
+		{
+			continue;
+		}
+		m_clientData[i]->bFullUpdatePending = false;
+
 		MenuIPCMessage message = {};
 
 		message.Header.Type = MessageType_SendConfig_Main;
 		message.Header.PayloadSize = sizeof(Config_Main);
 		memcpy(message.Payload, &m_configManager->GetConfig_Main(), sizeof(Config_Main));
-		m_IPCServer->WriteMessage(message, clientIndex);
+		m_IPCServer->WriteMessage(message, i);
+		std::this_thread::yield();
 
 		message.Header.Type = MessageType_SendConfig_Core;
 		message.Header.PayloadSize = sizeof(Config_Core);
 		memcpy(message.Payload, &m_configManager->GetConfig_Core(), sizeof(Config_Core));
-		m_IPCServer->WriteMessage(message, clientIndex);
+		m_IPCServer->WriteMessage(message, i);
+		std::this_thread::yield();
 
 		message.Header.Type = MessageType_SendConfig_Extensions;
 		message.Header.PayloadSize = sizeof(Config_Extensions);
 		memcpy(message.Payload, &m_configManager->GetConfig_Extensions(), sizeof(Config_Extensions));
-		m_IPCServer->WriteMessage(message, clientIndex);
+		m_IPCServer->WriteMessage(message, i);
+		std::this_thread::yield();
 
 		message.Header.Type = MessageType_SendConfig_Camera;
 		message.Header.PayloadSize = sizeof(Config_Camera);
 		memcpy(message.Payload, &m_configManager->GetConfig_Camera(), sizeof(Config_Camera));
-		m_IPCServer->WriteMessage(message, clientIndex);
+		m_IPCServer->WriteMessage(message, i);
+		std::this_thread::yield();
 
 		message.Header.Type = MessageType_SendConfig_Stereo;
 		message.Header.PayloadSize = sizeof(Config_Stereo);
 		memcpy(message.Payload, &m_configManager->GetConfig_Stereo(), sizeof(Config_Stereo));
-		m_IPCServer->WriteMessage(message, clientIndex);
+		m_IPCServer->WriteMessage(message, i);
+		std::this_thread::yield();
 
 		message.Header.Type = MessageType_SendConfig_Depth;
 		message.Header.PayloadSize = sizeof(Config_Depth);
 		memcpy(message.Payload, &m_configManager->GetConfig_Depth(), sizeof(Config_Depth));
-		m_IPCServer->WriteMessage(message, clientIndex);
+		m_IPCServer->WriteMessage(message, i);
+		std::this_thread::yield();
 	}
 }
+
+
 
 void SettingsMenu::MenuIPCClientDisconnected(int clientIndex)
 {

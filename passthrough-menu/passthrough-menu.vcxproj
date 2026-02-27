@@ -241,10 +241,11 @@
     <ResourceCompile Include="passthrough-menu.rc" />
   </ItemGroup>
   <ItemGroup>
-    <Image Include="icon1.ico" />
-    <Image Include="passthrough-menu.ico" />
     <Image Include="passthrough_icon.png" />
-    <Image Include="small.ico" />
+    <Image Include="passthrough_icon_base_opaque.ico" />
+    <Image Include="passthrough_icon_override_opaque.ico" />
+    <Image Include="passthrough_icon_pause_opaque.ico" />
+    <Image Include="passthrough_icon_play_opaque.ico" />
   </ItemGroup>
   <Import Project="$(VCTargetsPath)\Microsoft.Cpp.targets" />
   <ImportGroup Label="ExtensionTargets">

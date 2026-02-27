@@ -306,7 +306,6 @@
     <ResourceCompile Include="XR_APILAYER_NOVENDOR_steamvr_passthrough.rc" />
   </ItemGroup>
   <ItemGroup>
-    <Image Include="passthrough_icon.png" />
     <Image Include="testpattern.png" />
   </ItemGroup>
 </Project>

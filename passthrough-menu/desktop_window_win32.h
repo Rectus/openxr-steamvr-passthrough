@@ -5,6 +5,14 @@
 
 #define MAX_LOADSTRING 100
 
+enum EWindowIcon
+{
+	WindowIcon_Base,
+	WindowIcon_Play,
+	WindowIcon_Pause,
+	WindowIcon_Override,
+};
+
 class DesktopWindowWin32
 {
 public:
@@ -25,6 +33,7 @@ public:
 	void OnClientConnected();
 	void OnAllClientsDisconnected();
 	void SendQuitMessage();
+	void SetIcon(EWindowIcon icon);
 
 protected:
 	bool AddTrayIcon();
@@ -44,8 +53,13 @@ protected:
 	HANDLE m_instanceMutex = NULL;
 	HWND m_hSettingsWindow = NULL;
 	HACCEL m_hAccelTable = NULL;
-	HICON m_iconOn = NULL;
-	HICON m_iconOff = NULL;
+	HICON m_iconBase = NULL;
+	HICON m_iconPlay = NULL;
+	HICON m_iconPause = NULL;
+	HICON m_iconOverride = NULL;
+	HICON m_currentIcon = NULL;
+	EWindowIcon m_iconState = WindowIcon_Base;
+
 	bool m_bIsSettingsWindowShown = false;
 	bool m_bIsDoubleClicking = false;
 	POINT m_trayCursorPos = { 0 };

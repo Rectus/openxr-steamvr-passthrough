@@ -58,7 +58,9 @@ using namespace std::chrono_literals;
 
 #define SPDLOG_WCHAR_TO_UTF8_SUPPORT
 #include "spdlog/spdlog.h"
-#include "spdlog_imgui_buffer_sink.h"
+
+template<typename Mutex> class spdlog_imgui_buffer_sink;
+using spdlog_imgui_buffer_sink_mt = spdlog_imgui_buffer_sink<std::mutex>;
 
 extern std::shared_ptr<spdlog::logger> g_logger;
-extern std::shared_ptr<spdlog_imgui_buffer_sink_mt> g_logRingbuffer;
+extern std::shared_ptr<spdlog_imgui_buffer_sink_mt> g_logDisplayBuffer;
