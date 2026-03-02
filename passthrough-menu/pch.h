@@ -64,3 +64,12 @@ using spdlog_imgui_buffer_sink_mt = spdlog_imgui_buffer_sink<std::mutex>;
 
 extern std::shared_ptr<spdlog::logger> g_logger;
 extern std::shared_ptr<spdlog_imgui_buffer_sink_mt> g_logDisplayBuffer;
+
+enum EWindowIcon
+{
+	WindowIcon_Invalid = -1,
+	WindowIcon_Base,
+	WindowIcon_Play,
+	WindowIcon_Pause,
+	WindowIcon_Override,
+};

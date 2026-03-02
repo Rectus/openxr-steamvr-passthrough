@@ -154,6 +154,6 @@ struct ClientData
 	std::string ApplicationName;
 	std::string EngineName;
 	ClientDataValues Values = {};
-	bool bFullUpdatePending = false;
+	bool bTransientUpdatePending = false;
 };
 

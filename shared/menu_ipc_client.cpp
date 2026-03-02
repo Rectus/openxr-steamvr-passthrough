@@ -199,7 +199,7 @@ void MenuIPCClient::Listen()
 					}
 					else if (memcmp(message->Header.Magic, MENU_IPC_MAGIG_STR, 4) != 0 || message->Header.Version != MENU_IPC_VERSION || message->Header.Type >= MessageType_MAX || message->Header.Type <= MessageType_Invalid)
 					{
-						g_logger->error("Menu IPC Server: Invalid IPC message header!");
+						g_logger->error("Invalid IPC message header!");
 						break;
 					}
 					else if (numBytes < messageSize)

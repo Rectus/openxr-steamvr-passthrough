@@ -121,6 +121,8 @@ struct alignas(4) Config_Main
 	bool PauseImageHandlingOnIdle = true;
 	float IdleTimeSeconds = 10.0f;
 	bool CloseCameraStreamOnPause = false;
+	bool LaunchMenuOnStartup = true;
+	bool ShutdownMenuOnAppExit = true;
 
 	EStereoPreset StereoPreset = StereoPreset_Medium;
 
@@ -161,6 +163,8 @@ struct alignas(4) Config_Main
 		PauseImageHandlingOnIdle = ini.GetBoolValue(section, "PauseImageHandlingOnIdle", PauseImageHandlingOnIdle);
 		IdleTimeSeconds = (float)ini.GetDoubleValue(section, "IdleTimeSeconds", IdleTimeSeconds);
 		CloseCameraStreamOnPause = ini.GetBoolValue(section, "CloseCameraStreamOnPause", CloseCameraStreamOnPause);
+		LaunchMenuOnStartup = ini.GetBoolValue(section, "LaunchMenuOnStartup", LaunchMenuOnStartup);
+		ShutdownMenuOnAppExit = ini.GetBoolValue(section, "ShutdownMenuOnAppExit", ShutdownMenuOnAppExit);
 
 		StereoPreset = (EStereoPreset)ini.GetLongValue(section, "StereoPreset", StereoPreset);
 	}
@@ -196,6 +200,8 @@ struct alignas(4) Config_Main
 		ini.SetBoolValue(section, "PauseImageHandlingOnIdle", PauseImageHandlingOnIdle);
 		ini.SetDoubleValue(section, "IdleTimeSeconds", IdleTimeSeconds);
 		ini.SetBoolValue(section, "CloseCameraStreamOnPause", CloseCameraStreamOnPause);
+		ini.SetBoolValue(section, "LaunchMenuOnStartup", LaunchMenuOnStartup);
+		ini.SetBoolValue(section, "ShutdownMenuOnAppExit", ShutdownMenuOnAppExit);
 
 		ini.SetLongValue(section, "StereoPreset", StereoPreset);
 	}
@@ -792,6 +798,7 @@ public:
 
 	bool ReadConfigFile();
 	void ConfigUpdated();
+	bool IsUpdatePending() { return m_bConfigUpdated; }
 	void DispatchUpdate();
 	void ResetToDefaults();
 

@@ -5,13 +5,7 @@
 
 #define MAX_LOADSTRING 100
 
-enum EWindowIcon
-{
-	WindowIcon_Base,
-	WindowIcon_Play,
-	WindowIcon_Pause,
-	WindowIcon_Override,
-};
+
 
 class DesktopWindowWin32
 {
@@ -31,9 +25,10 @@ public:
 	bool GetWindowDimensions(uint32_t& width, uint32_t& height);
 	bool CreateVulkanSurface(VkInstance instance, VkSurfaceKHR& surface);
 	void OnClientConnected();
-	void OnAllClientsDisconnected();
+	void OnAllClientsDisconnected(bool bAllowExit);
 	void SendQuitMessage();
 	void SetIcon(EWindowIcon icon);
+	bool LoadDashboardThumbnails(std::vector<std::vector<uint8_t>>& thumbnailData, uint32_t& width, uint32_t& height);
 
 protected:
 	bool AddTrayIcon();

@@ -131,7 +131,7 @@ bool PassthroughRendererDX11::InitRenderer()
 
 	if (FAILED(m_d3dDevice->CreateVertexShader(g_PassthroughStereoTemporalVS, sizeof(g_PassthroughStereoTemporalVS), nullptr, &m_passthroughStereoTemporalVS)))
 	{
-		g_logger->error("g_PassthroughStereoTemporalVS creation failure, temporal disparity filter disabled!");
+		g_logger->warn("g_PassthroughStereoTemporalVS creation failure, temporal disparity filter disabled!");
 		m_bIsVSUAVSupported = false;
 	}
 	else

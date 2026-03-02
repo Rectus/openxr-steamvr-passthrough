@@ -47,21 +47,6 @@
     <ClInclude Include="camera_manager.h">
       <Filter>Header Files</Filter>
     </ClInclude>
-    <ClInclude Include="..\external\imgui\imconfig.h">
-      <Filter>Libraries</Filter>
-    </ClInclude>
-    <ClInclude Include="..\external\imgui\imgui.h">
-      <Filter>Libraries</Filter>
-    </ClInclude>
-    <ClInclude Include="..\external\imgui\backends\imgui_impl_dx11.h">
-      <Filter>Libraries</Filter>
-    </ClInclude>
-    <ClInclude Include="..\external\imgui\backends\imgui_impl_dx12.h">
-      <Filter>Libraries</Filter>
-    </ClInclude>
-    <ClInclude Include="..\external\imgui\imgui_internal.h">
-      <Filter>Libraries</Filter>
-    </ClInclude>
     <ClInclude Include="..\external\lodepng\lodepng.h">
       <Filter>Libraries</Filter>
     </ClInclude>
@@ -142,24 +127,6 @@
     <ClCompile Include="passthrough_renderer_dx11.cpp">
       <Filter>Source Files</Filter>
     </ClCompile>
-    <ClCompile Include="..\external\imgui\imgui.cpp">
-      <Filter>Libraries</Filter>
-    </ClCompile>
-    <ClCompile Include="..\external\imgui\imgui_draw.cpp">
-      <Filter>Libraries</Filter>
-    </ClCompile>
-    <ClCompile Include="..\external\imgui\backends\imgui_impl_dx11.cpp">
-      <Filter>Libraries</Filter>
-    </ClCompile>
-    <ClCompile Include="..\external\imgui\backends\imgui_impl_dx12.cpp">
-      <Filter>Libraries</Filter>
-    </ClCompile>
-    <ClCompile Include="..\external\imgui\imgui_tables.cpp">
-      <Filter>Libraries</Filter>
-    </ClCompile>
-    <ClCompile Include="..\external\imgui\imgui_widgets.cpp">
-      <Filter>Libraries</Filter>
-    </ClCompile>
     <ClCompile Include="..\external\lodepng\lodepng.cpp">
       <Filter>Libraries</Filter>
     </ClCompile>
@@ -194,12 +161,6 @@
       <Filter>Shared</Filter>
     </ClCompile>
     <ClCompile Include="..\shared\pathutil.cpp">
-      <Filter>Shared</Filter>
-    </ClCompile>
-    <ClCompile Include="..\shared\fonts\cousine_regular.cpp">
-      <Filter>Shared</Filter>
-    </ClCompile>
-    <ClCompile Include="..\shared\fonts\roboto_medium.cpp">
       <Filter>Shared</Filter>
     </ClCompile>
   </ItemGroup>

@@ -26,7 +26,7 @@ public:
 	bool InitRuntime();
 	bool CreateOverlay(uint32_t width, uint32_t height);
 	void DestroyOverlay();
-	void CreateThumbnail();
+	void SetThumbnail(vr::VRVulkanTextureData_t* textureData);
 
 	void OverlayFrameSync();
 	void HandleOverlayEvents(ImGuiIO& io);

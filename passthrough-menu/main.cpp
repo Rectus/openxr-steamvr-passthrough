@@ -102,6 +102,7 @@ int APIENTRY wWinMain(_In_ HINSTANCE hInstance, _In_opt_ HINSTANCE hPrevInstance
         g_logger->set_pattern("%v");
         fileSink->set_pattern("[%Y-%m-%d %H:%M:%S.%e] [%l] %v");
         g_logger->flush_on(spdlog::level::err);
+        spdlog::set_default_logger(g_logger);
         spdlog::flush_every(std::chrono::seconds(10));
 
         g_logger->info("Starting Passthrough Wenu version {}", VersionString);
@@ -116,6 +117,10 @@ int APIENTRY wWinMain(_In_ HINSTANCE hInstance, _In_opt_ HINSTANCE hPrevInstance
         g_logger->info("Reading config file from {}", filePath);
         configManager = std::make_shared<ConfigManager>(filePath, true);
         bIsInitialConfig = configManager->ReadConfigFile(); 
+        if (!configManager->GetConfig_Main().ShutdownMenuOnAppExit)
+        {
+            bExitOnClose = false;
+        }
     }
 
 
@@ -191,6 +196,7 @@ int APIENTRY wWinMain(_In_ HINSTANCE hInstance, _In_opt_ HINSTANCE hPrevInstance
 
     IPCServer.reset();
     configManager.reset();
+    spdlog::shutdown();
 
     return (int)quitMessage.wParam;
 }

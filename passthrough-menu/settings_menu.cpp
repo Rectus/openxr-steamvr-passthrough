@@ -134,9 +134,17 @@ bool SettingsMenu::InitMenu()
 	ImGui_ImplWin32_Init(m_window->GetWindowHandle());
 	m_renderer.InitImGui();
 
+	std::vector<std::vector<uint8_t>> thumbnailData = {};
+	uint32_t width, height;
+	m_window->LoadDashboardThumbnails(thumbnailData, width, height);
+	m_renderer.CreateDashboardThumbnails(thumbnailData, width, height);
+
 	if (m_dashboardOverlay->InitRuntime())
 	{
-		m_dashboardOverlay->CreateOverlay(m_menuWidth, m_menuHeight);
+		if (m_dashboardOverlay->CreateOverlay(m_menuWidth, m_menuHeight))
+		{
+			m_dashboardOverlay->SetThumbnail(m_renderer.GetThumbnailTextureData(WindowIcon_Base));
+		}
 	}
 
 	return true;
@@ -397,10 +405,10 @@ bool SettingsMenu::TickMenu()
 		return false;
 	}
 
-	if (m_bClientFullUpdatePending)
+	if (m_bClientTransientUpdatePending)
 	{
-		m_bClientFullUpdatePending = false;
-		DispatchFullClientUpdate();
+		m_bClientTransientUpdatePending = false;
+		DispatchTransientClientUpdate();
 	}
 
 	bool hasClients = m_clientData.size() > 0;
@@ -413,30 +421,6 @@ bool SettingsMenu::TickMenu()
 		m_activeClient = 0;
 	}
 
-
-	if (!hasClients || !m_clientData[m_activeClient]->Values.bSessionActive)
-	{
-		m_window->SetIcon(WindowIcon_Base);
-	}
-	else if(m_clientData[m_activeClient]->Values.bCorePassthroughActive || m_clientData[m_activeClient]->Values.bFBPassthroughActive)
-	{
-		Config_Core& coreConfig = m_configManager->GetConfig_Core();
-		Config_Depth& depthConfig = m_configManager->GetConfig_Depth();
-		if (coreConfig.CoreForcePassthrough || depthConfig.DepthForceComposition || depthConfig.DepthForceRangeTest)
-		{
-			m_window->SetIcon(WindowIcon_Override);
-		}
-		else
-		{
-			m_window->SetIcon(WindowIcon_Play);
-		}
-	}
-	else
-	{
-		m_window->SetIcon(WindowIcon_Pause);
-	}	
-
-
 	bool bHasOverlay = m_dashboardOverlay->HasOverlay();
 	if (m_dashboardOverlay->IsRuntimeInitialized() && !bHasOverlay)
 	{
@@ -444,7 +428,50 @@ bool SettingsMenu::TickMenu()
 		m_window->GetWindowDimensions(width, height);
 
 		bHasOverlay = m_dashboardOverlay->CreateOverlay(width, height);
+
+		if (bHasOverlay)
+		{
+			m_dashboardOverlay->SetThumbnail(m_renderer.GetThumbnailTextureData(WindowIcon_Base));
+		}
 	}
+
+	EWindowIcon setIcon;
+	
+	if (!hasClients || !m_clientData[m_activeClient]->Values.bSessionActive)
+	{
+		setIcon = WindowIcon_Base;
+		
+	}
+	else if(m_clientData[m_activeClient]->Values.bCorePassthroughActive || m_clientData[m_activeClient]->Values.bFBPassthroughActive)
+	{
+		Config_Core& coreConfig = m_configManager->GetConfig_Core();
+		Config_Depth& depthConfig = m_configManager->GetConfig_Depth();
+		if (coreConfig.CoreForcePassthrough || depthConfig.DepthForceComposition || depthConfig.DepthForceRangeTest)
+		{
+			setIcon = WindowIcon_Override;
+		}
+		else
+		{
+			setIcon = WindowIcon_Play;
+		}
+	}
+	else
+	{
+		setIcon = WindowIcon_Pause;
+	}
+
+	if (m_currentIcon != setIcon)
+	{
+		m_currentIcon = setIcon;
+		m_window->SetIcon(m_currentIcon);
+
+		// TODO: Updating dashboard thumbnails seems to be broken in SteamVR.
+		/*if (bHasOverlay)
+		{
+			m_dashboardOverlay->SetThumbnail(m_renderer.GetThumbnailTextureData(m_currentIcon));
+		}*/
+	}
+	
 
 	if (bHasOverlay)
 	{
@@ -825,6 +852,11 @@ if (bIsActiveTab) { ImGui::PopStyleColor(1); bIsActiveTab = false; }
 			TextDescription("Uses the old native DirectX 12 renderer for DirectX 12 applications. Not recommended since it is missing rendering features. Requires restart.");
 			ImGui::Checkbox("Use legacy Vulkan renderer", &mainConfig.UseLegacyVulkanRenderer);
 			TextDescription("Uses the old native Vulkan renderer for Vulkan applications. Not recommended since it is missing rendering features. Requires restart.");
+
+			ImGui::Checkbox("Launch settings menu process automatically", &mainConfig.LaunchMenuOnStartup);
+			TextDescription("Adds the settings menu to the systray and dashboard when an OpenXR application starts. If this is off, the settings menu can still be launched manually from the installation folder.");
+			ImGui::Checkbox("Shutdown settings menu on application exit", &mainConfig.ShutdownMenuOnAppExit);
+			TextDescription("Exits the settings menu when all OpenXR applications have exited. This will not affect instances of the menu launched manually. The menu will always stay open as long as the desktop window is open.");
 		}
 		IMGUI_BIG_SPACING;
 
@@ -2533,29 +2565,6 @@ if (bIsActiveTab) { ImGui::PopStyleColor(1); bIsActiveTab = false; }
 
 			g_logDisplayBuffer->draw_log("clients");
 
-			/*std::vector<spdlog::details::log_msg_buffer> logMessages = g_logRingbuffer->last_raw();
-
-			for (auto it = logMessages.begin(); it != logMessages.end(); it++)
-			{
-				if (it->level == spdlog::level::warn)
-				{
-					ImGui::TextColored(ImVec4(0.9f, 0.7f, 0.2f, 1.0f), it->payload.data());
-				}
-				else if (it->level == spdlog::level::err)
-				{
-					ImGui::TextColored(ImVec4(0.8f, 0.2f, 0.2f, 1.0f), it->payload.data());
-				}
-				else if (it->logger_name == "clients")
-				{
-					ImGui::TextColored(ImVec4(0.8f, 0.8f, 0.95f, 1.0f), it->payload.data());
-				}
-				else
-				{
-					ImGui::Text(it->payload.data());
-				}
-				
-			}*/
-
 			ImGui::PopTextWrapPos();
 			ImGui::PopFont();
 		}
@@ -2735,6 +2744,8 @@ LRESULT SettingsMenu::HandleWin32Events(HWND hWnd, UINT msg, WPARAM wParam, LPAR
 void SettingsMenu::MenuIPCClientConnected(int clientIndex)
 {
 	{
+		m_configManager->DispatchUpdate();
+
 		std::lock_guard<std::mutex> lock(m_menuWriteMutex);
 
 		if (m_clientData.size() != clientIndex)
@@ -2756,61 +2767,37 @@ void SettingsMenu::MenuIPCClientConnected(int clientIndex)
 		m_dashboardOverlay->InitRuntime();
 	}
 
-	if (m_bSettingsUpdatedThisSession)
+	if (m_bSettingsUpdatedThisSession && m_configManager->IsUpdatePending())
 	{
-		m_bClientFullUpdatePending = true;
-		m_clientData[clientIndex]->bFullUpdatePending = true;
+		MenuIPCMessage message = {};
+		message.Header.Type = MessageType_InformReloadConfigFile;
+		message.Header.PayloadSize = 0;
+		m_IPCServer->WriteMessage(message, clientIndex);
+	}
+
+	if (m_bSettingsUpdatedThisSession && m_configManager->IsUpdatePending())
+	{
+		m_bClientTransientUpdatePending = true;
+		m_clientData[clientIndex]->bTransientUpdatePending = true;
 	}
 }
 
 
-void SettingsMenu::DispatchFullClientUpdate()
+void SettingsMenu::DispatchTransientClientUpdate()
 {
 	for (int i = 0; i < m_clientData.size(); i++)
 	{
-		if (!m_clientData[i]->bFullUpdatePending)
+		if (!m_clientData[i]->bTransientUpdatePending)
 		{
 			continue;
 		}
-		m_clientData[i]->bFullUpdatePending = false;
+		m_clientData[i]->bTransientUpdatePending = false;
 
 		MenuIPCMessage message = {};
-
 		message.Header.Type = MessageType_SendConfig_Main;
 		message.Header.PayloadSize = sizeof(Config_Main);
 		memcpy(message.Payload, &m_configManager->GetConfig_Main(), sizeof(Config_Main));
 		m_IPCServer->WriteMessage(message, i);
-		std::this_thread::yield();
-
-		message.Header.Type = MessageType_SendConfig_Core;
-		message.Header.PayloadSize = sizeof(Config_Core);
-		memcpy(message.Payload, &m_configManager->GetConfig_Core(), sizeof(Config_Core));
-		m_IPCServer->WriteMessage(message, i);
-		std::this_thread::yield();
-
-		message.Header.Type = MessageType_SendConfig_Extensions;
-		message.Header.PayloadSize = sizeof(Config_Extensions);
-		memcpy(message.Payload, &m_configManager->GetConfig_Extensions(), sizeof(Config_Extensions));
-		m_IPCServer->WriteMessage(message, i);
-		std::this_thread::yield();
-
-		message.Header.Type = MessageType_SendConfig_Camera;
-		message.Header.PayloadSize = sizeof(Config_Camera);
-		memcpy(message.Payload, &m_configManager->GetConfig_Camera(), sizeof(Config_Camera));
-		m_IPCServer->WriteMessage(message, i);
-		std::this_thread::yield();
-
-		message.Header.Type = MessageType_SendConfig_Stereo;
-		message.Header.PayloadSize = sizeof(Config_Stereo);
-		memcpy(message.Payload, &m_configManager->GetConfig_Stereo(), sizeof(Config_Stereo));
-		m_IPCServer->WriteMessage(message, i);
-		std::this_thread::yield();
-
-		message.Header.Type = MessageType_SendConfig_Depth;
-		message.Header.PayloadSize = sizeof(Config_Depth);
-		memcpy(message.Payload, &m_configManager->GetConfig_Depth(), sizeof(Config_Depth));
-		m_IPCServer->WriteMessage(message, i);
-		std::this_thread::yield();
 	}
 }
 
@@ -2830,7 +2817,7 @@ void SettingsMenu::MenuIPCClientDisconnected(int clientIndex)
 
 	if (m_IPCServer->GetNumClients() == 0)
 	{
-		m_window->OnAllClientsDisconnected();
+		m_window->OnAllClientsDisconnected(m_configManager->GetConfig_Main().ShutdownMenuOnAppExit);
 	}
 }
 

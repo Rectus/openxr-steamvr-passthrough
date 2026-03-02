@@ -455,6 +455,14 @@ bool MenuIPCServer::CueRead(int index)
 		m_clientConnections[index]->bReadPending = true;
 		return true;
 	}
+	else if (GetLastError() == ERROR_BROKEN_PIPE)
+	{
+		g_logger->info("Menu IPC Server: Client {} disconnected", index);
+		m_clientConnections[index]->bConnected = false;
+		m_clientConnections[index]->bShuttingDown = true;
+		SetEvent(m_clientConnections[index]->ReadOverlap.hEvent);
+		return false;
+	}
 	g_logger->error("Menu IPC Server: ReadFile failed: {}", GetLastError());
 	return false;
 }

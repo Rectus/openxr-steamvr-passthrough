@@ -1,3 +1,6 @@
+
+powershell -Command "(Get-Content ..\shared\version.h) |ForEach-Object { if($_ -match '#define VERSION_BUILD (?<Ver>\d*)'){$_ = $_ -replace '#define VERSION_BUILD \d*', \"#define VERSION_BUILD $(([int]$matches[\"Ver\"])+1)\" } $_} | Set-Content ..\shared\version.h"
+
 python framework\dispatch_generator.py
 
 %VULKAN_SDK%\Bin\glslangValidator.exe -D -V -S vert -e main --vn g_FullscreenQuadVS shaders/fullscreen_quad_vs.hlsl  -o shaders\fullscreen_quad_vs.spv.h

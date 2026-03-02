@@ -16,7 +16,7 @@ enum MenuIPCMessageType
 	MessageType_SetAppName,
 	MessageType_SetAppEngineName,
 	MessageType_SetClientDataValues,
-	MessageType_RequestConfig,
+	MessageType_InformReloadConfigFile,
 	MessageType_SendConfig_Main,
 	MessageType_SendConfig_Camera,
 	MessageType_SendConfig_Core,

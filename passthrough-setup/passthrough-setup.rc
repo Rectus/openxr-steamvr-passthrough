@@ -3,6 +3,11 @@
 #include "resource.h"
 
 #define APSTUDIO_READONLY_SYMBOLS
+#define APSTUDIO_HIDDEN_SYMBOLS
+#include "../shared/version.h"
+#undef APSTUDIO_HIDDEN_SYMBOLS
+
+
 /////////////////////////////////////////////////////////////////////////////
 //
 // Generated from the TEXTINCLUDE 2 resource.
@@ -51,8 +56,10 @@ END
 //
 
 VS_VERSION_INFO VERSIONINFO
- FILEVERSION 0,3,6,0
- PRODUCTVERSION 0,3,6,0
+#define APSTUDIO_READONLY_SYMBOLS
+FILEVERSION VERSION_WITH_BUILD
+PRODUCTVERSION VERSION_WITHOUT_BUILD
+#undef APSTUDIO_READONLY_SYMBOLS
  FILEFLAGSMASK 0x3fL
 #ifdef _DEBUG
  FILEFLAGS 0x1L
@@ -69,12 +76,14 @@ BEGIN
         BEGIN
             VALUE "CompanyName", "N/A"
             VALUE "FileDescription", "Passthrough API Layer Setup"
-            VALUE "FileVersion", "0.3.6.0"
             VALUE "InternalName", "passthrough-setup.exe"
             VALUE "LegalCopyright", "Copyright (C) Rectus 2026"
             VALUE "OriginalFilename", "passthrough-setup.exe"
             VALUE "ProductName", "OpenXR SteamVR Passthrough API Layer"
-            VALUE "ProductVersion", "0.3.6"
+#define APSTUDIO_READONLY_SYMBOLS
+            VALUE "FileVersion", VERSION_STRING_WITH_BUILD
+            VALUE "ProductVersion", VERSION_STRING_WITHOUT_BUILD
+#undef APSTUDIO_READONLY_SYMBOLS
         END
     END
     BLOCK "VarFileInfo"

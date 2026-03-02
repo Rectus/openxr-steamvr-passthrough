@@ -128,6 +128,11 @@ void MenuHandler::MenuIPCMessageReceived(MenuIPCMessage& message, int clientInde
 		m_configManager->SetFrameTextureDumpPending();
 		break;
 
+	case MessageType_InformReloadConfigFile:
+
+		m_configManager->ReadConfigFile();
+		break;
+
 	case MessageType_SendConfig_Main:
 
 		CopyConfig(&m_configManager->GetConfig_Main(), message, sizeof(Config_Main));

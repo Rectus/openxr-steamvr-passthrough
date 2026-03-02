@@ -3,8 +3,6 @@
 #include "dashboard_overlay.h"
 #include "resource.h"
 
-#include <lodepng.h>
-
 
 
 DashboardOverlay::DashboardOverlay()
@@ -102,8 +100,6 @@ bool DashboardOverlay::CreateOverlay(uint32_t width, uint32_t height)
 		vrOverlay->SetOverlayTextureColorSpace(m_overlayHandle, vr::ColorSpace_Gamma);
 
 		vrOverlay->SetOverlayWidthInMeters(m_overlayHandle, 2.775f);
-
-		CreateThumbnail();
 	}
 	m_bHasOverlay = true;
 	return true;
@@ -132,40 +128,18 @@ void DashboardOverlay::DestroyOverlay()
 	m_overlayHandle = vr::k_ulOverlayHandleInvalid;
 }
 
-void DashboardOverlay::CreateThumbnail()
+void DashboardOverlay::SetThumbnail(vr::VRVulkanTextureData_t* textureData)
 {
-	HRSRC resInfo = FindResource(NULL, MAKEINTRESOURCE(IDB_PNG_DASHBOARD_ICON), L"PNG");
-	if (resInfo == nullptr)
-	{
-		g_logger->error("Error finding icon resource!");
-		return;
-	}
-	HGLOBAL memory = LoadResource(NULL, resInfo);
-	if (memory == nullptr)
-	{
-		g_logger->error("Error loading icon resource!");
-		return;
-	}
-	size_t data_size = SizeofResource(NULL, resInfo);
-	void* data = LockResource(memory);
+	vr::Texture_t texture;
+	texture.handle = textureData;
+	texture.eColorSpace = vr::ColorSpace_Auto;
+	texture.eType = vr::TextureType_Vulkan;
 
-	if (data == nullptr)
+	vr::EVROverlayError error = vr::VROverlay()->SetOverlayTexture(m_thumbnailHandle, &texture);
+	if (error != vr::VROverlayError_None)
 	{
-		g_logger->error("Error reading icon resource!");
-		return;
+		g_logger->error("SteamVR had an error on updating overlay thumbnail: {}", static_cast<int32_t>(error));
 	}
-	std::vector<uint8_t> buffer;
-
-	uint32_t width, height;
-	uint32_t error = lodepng::decode(buffer, width, height, (uint8_t*)data, data_size);
-
-	if (error)
-	{
-		g_logger->error("Error decoding icon!");
-		return;
-	}
-
-	vr::VROverlay()->SetOverlayRaw(m_thumbnailHandle, &buffer[0], width, height, 4);
 }
 
 void DashboardOverlay::OverlayFrameSync()

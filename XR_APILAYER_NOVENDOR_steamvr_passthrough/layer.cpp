@@ -69,11 +69,12 @@ namespace
 			m_augmentedDepthReconstruction.reset();
 			m_cameraManager.reset();
 			m_augmentedCameraManager.reset();
+
+			g_logger->flush();
 			m_menuHandler.reset();
 			m_menuIPCClient.reset();
 			m_openVRManager.reset();
-
-			spdlog::shutdown();
+			g_logger->flush();
 		}
 
 		XrResult xrCreateInstance(const XrInstanceCreateInfo* createInfo) override
@@ -200,20 +201,27 @@ namespace
 				}
 			}
 
-			// Launch settings menu to the systray and dashboard.
-			std::wstring menuEXEPath = dllPath.substr(0, dllPath.find_last_of(L"/\\")) + MENU_EXE_FILE_NAME;
-			std::wstring menuEXECmdLine = menuEXEPath + MENU_EXE_ARGUMENTS;
-			STARTUPINFOW startupInfo = { sizeof(STARTUPINFOW) };
-			PROCESS_INFORMATION processInfo;
-
-			if (CreateProcessW(menuEXEPath.data(), menuEXECmdLine.data(), NULL, NULL, false, 0, NULL, NULL, &startupInfo, &processInfo))
+			if (m_configManager->GetConfig_Main().LaunchMenuOnStartup)
 			{
-				CloseHandle(processInfo.hProcess);
-				CloseHandle(processInfo.hThread);
+				// Launch settings menu to the systray and dashboard.
+				std::wstring menuEXEPath = dllPath.substr(0, dllPath.find_last_of(L"/\\")) + MENU_EXE_FILE_NAME;
+				std::wstring menuEXECmdLine = menuEXEPath + MENU_EXE_ARGUMENTS;
+				STARTUPINFOW startupInfo = { sizeof(STARTUPINFOW) };
+				PROCESS_INFORMATION processInfo;
+
+				if (CreateProcessW(menuEXEPath.data(), menuEXECmdLine.data(), NULL, NULL, false, 0, NULL, NULL, &startupInfo, &processInfo))
+				{
+					CloseHandle(processInfo.hProcess);
+					CloseHandle(processInfo.hThread);
+				}
+				else
+				{
+					g_logger->error("Failed to launch settings menu process: {}", GetLastError());
+				}
 			}
 			else
 			{
-				g_logger->error("Failed to launch settings menu process: {}", GetLastError());
+				g_logger->info("Automatic settings menu launch disabled");
 			}
 
 			m_openVRManager = std::make_shared<OpenVRManager>();
@@ -850,6 +858,7 @@ namespace
 				m_currentSession = XR_NULL_HANDLE;
 				m_currentInstance = XR_NULL_HANDLE;
 			}
+			g_logger->flush();
 
 			XrResult result = OpenXrApi::xrDestroySession(session);
 

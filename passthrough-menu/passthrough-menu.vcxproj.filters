@@ -159,7 +159,7 @@
     </ResourceCompile>
   </ItemGroup>
   <ItemGroup>
-    <Image Include="passthrough_icon.png">
+    <Image Include="passthrough_icon_base_dashboard.png">
       <Filter>Resource Files</Filter>
     </Image>
     <Image Include="passthrough_icon_base_opaque.ico">
@@ -172,6 +172,18 @@
       <Filter>Resource Files</Filter>
     </Image>
     <Image Include="passthrough_icon_play_opaque.ico">
+      <Filter>Resource Files</Filter>
+    </Image>
+    <Image Include="passthrough_icon_override_dashboard.png">
+      <Filter>Resource Files</Filter>
+    </Image>
+    <Image Include="passthrough_icon_pause_dashboard.png">
+      <Filter>Resource Files</Filter>
+    </Image>
+    <Image Include="passthrough_icon_play_dashboard.png">
+      <Filter>Resource Files</Filter>
+    </Image>
+    <Image Include="passthrough_icon_base_dashboard.png">
       <Filter>Resource Files</Filter>
     </Image>
   </ItemGroup>

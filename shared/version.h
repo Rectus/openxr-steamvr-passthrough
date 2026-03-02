@@ -1,5 +1,20 @@
+
 #pragma once
+
+#define VERSION_MAJOR 0
+#define VERSION_MINOR 4
+#define VERSION_PATCH 0
+#define VERSION_BUILD 0
+
+#define stringify_(x) #x
+#define stringify(x) stringify_(x)
+
+#define VERSION_WITH_BUILD VERSION_MAJOR,VERSION_MINOR,VERSION_PATCH,VERSION_BUILD
+#define VERSION_WITHOUT_BUILD VERSION_MAJOR,VERSION_MINOR,VERSION_PATCH
+
+#define VERSION_STRING_WITH_BUILD stringify(VERSION_MAJOR.VERSION_MINOR.VERSION_PATCH.VERSION_BUILD)
+#define VERSION_STRING_WITHOUT_BUILD stringify(VERSION_MAJOR.VERSION_MINOR.VERSION_PATCH)
 
 
 const std::string LayerName = "XR_APILAYER_NOVENDOR_steamvr_passthrough";
-const std::string VersionString = "0.4.0_dev";
+const std::string VersionString = VERSION_STRING_WITHOUT_BUILD;

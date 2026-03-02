@@ -67,6 +67,7 @@ XrResult __declspec(dllexport) XRAPI_CALL
         g_logger = std::make_shared<spdlog::async_logger>("menu", g_logSinkAggregator, spdlog::thread_pool(), spdlog::async_overflow_policy::discard_new);
         g_logger->set_pattern("[%Y-%m-%d %H:%M:%S.%e] [%l] %v");
         g_logger->flush_on(spdlog::level::err);
+        spdlog::set_default_logger(g_logger);
         spdlog::flush_every(std::chrono::seconds(10));
     }
 

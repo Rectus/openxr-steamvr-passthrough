@@ -166,19 +166,13 @@ bool VulkanMenuRenderer::SetupRenderer(std::shared_ptr<DesktopWindowWin32> windo
 	}
 
 	// Dear ImGUI renders in gamma space, and requires (incorrect) linear textures to not autoconvert to gamma on write.
-	const VkFormat requestSurfaceImageFormat[] =
-	//{ VK_FORMAT_B8G8R8A8_UNORM, VK_FORMAT_R8G8B8A8_UNORM, VK_FORMAT_B8G8R8_UNORM, VK_FORMAT_R8G8B8_UNORM };
-	{ VK_FORMAT_R8G8B8A8_UNORM };
+	const VkFormat requestSurfaceImageFormat[] ={ VK_FORMAT_R8G8B8A8_UNORM };
 
 	m_windowData.Surface = m_surface;
 	m_windowData.SurfaceFormat = ImGui_ImplVulkanH_SelectSurfaceFormat(m_physicalDevice, m_surface, requestSurfaceImageFormat, 4, VK_COLOR_SPACE_SRGB_NONLINEAR_KHR);
 
-
-#ifdef APP_USE_UNLIMITED_FRAME_RATE
-	VkPresentModeKHR present_modes[] = { VK_PRESENT_MODE_MAILBOX_KHR, VK_PRESENT_MODE_IMMEDIATE_KHR, VK_PRESENT_MODE_FIFO_KHR };
-#else
 	VkPresentModeKHR presentModes[] = { VK_PRESENT_MODE_FIFO_KHR };
-#endif
+
 	m_windowData.PresentMode = ImGui_ImplVulkanH_SelectPresentMode(m_physicalDevice, m_surface, &presentModes[0], 1);
 
 	uint32_t width, height = 0;
@@ -218,6 +212,311 @@ void VulkanMenuRenderer::InitImGui()
 	initInfo.PipelineInfoMain.MSAASamples = VK_SAMPLE_COUNT_1_BIT;
 	initInfo.CheckVkResultFn = nullptr;
 	ImGui_ImplVulkan_Init(&initInfo);
+}
+
+void VulkanMenuRenderer::CreateDashboardThumbnails(std::vector<std::vector<uint8_t>>& imageData, uint32_t width, uint32_t height)
+{
+	VkBuffer uploadBuffers[4] = {};
+	VkDeviceMemory uploadMemories[4] = {};
+
+	VkPhysicalDeviceMemoryProperties memProperties = {};
+	vkGetPhysicalDeviceMemoryProperties(m_physicalDevice, &memProperties);
+
+	VkResult result;
+	VkImageCreateInfo imageInfo = {};
+	imageInfo.sType = VK_STRUCTURE_TYPE_IMAGE_CREATE_INFO;
+	imageInfo.imageType = VK_IMAGE_TYPE_2D;
+	imageInfo.format = VK_FORMAT_R8G8B8A8_UNORM;
+	imageInfo.extent.width = width;
+	imageInfo.extent.height = height;
+	imageInfo.extent.depth = 1;
+	imageInfo.mipLevels = 1;
+	imageInfo.arrayLayers = 1;
+	imageInfo.samples = VK_SAMPLE_COUNT_1_BIT;
+	imageInfo.tiling = VK_IMAGE_TILING_OPTIMAL;
+	imageInfo.usage = VK_IMAGE_USAGE_SAMPLED_BIT | VK_IMAGE_USAGE_TRANSFER_DST_BIT;
+	imageInfo.sharingMode = VK_SHARING_MODE_EXCLUSIVE;
+	imageInfo.initialLayout = VK_IMAGE_LAYOUT_UNDEFINED;
+
+	for (int i = 0; i < imageData.size(); i++)
+	{
+		m_thumbnailData[i].TextureData.m_pDevice = m_device;
+		m_thumbnailData[i].TextureData.m_pPhysicalDevice = m_physicalDevice;
+		m_thumbnailData[i].TextureData.m_pInstance = m_instance;
+		m_thumbnailData[i].TextureData.m_pQueue = m_queue;
+		m_thumbnailData[i].TextureData.m_nQueueFamilyIndex = m_queueFamily;
+		m_thumbnailData[i].TextureData.m_nWidth = width;
+		m_thumbnailData[i].TextureData.m_nHeight = height;
+		m_thumbnailData[i].TextureData.m_nFormat = VK_FORMAT_R8G8B8A8_SRGB;
+		m_thumbnailData[i].TextureData.m_nSampleCount = 1;
+
+		VkImage* imagePtr = reinterpret_cast<VkImage*>(&m_thumbnailData[i].TextureData.m_nImage);
+
+		result = vkCreateImage(m_device, &imageInfo, nullptr, imagePtr);
+		if (result != VK_SUCCESS)
+		{
+			g_logger->error("vkCreateImage failed: {}", static_cast<int32_t>(result));
+			return;
+		}
+
+		VkMemoryRequirements imageReq = {};
+		vkGetImageMemoryRequirements(m_device, *imagePtr, &imageReq);
+		VkMemoryAllocateInfo allocInfo = {};
+		allocInfo.sType = VK_STRUCTURE_TYPE_MEMORY_ALLOCATE_INFO;
+		allocInfo.allocationSize = imageReq.size;
+
+		{
+			bool bFoundType = false;
+			for (uint32_t i = 0; i < memProperties.memoryTypeCount; i++)
+			{
+				if ((imageReq.memoryTypeBits & (1 << i)) && (memProperties.memoryTypes[i].propertyFlags & VK_MEMORY_PROPERTY_DEVICE_LOCAL_BIT) == VK_MEMORY_PROPERTY_DEVICE_LOCAL_BIT)
+				{
+					allocInfo.memoryTypeIndex = i;
+					bFoundType = true;
+					break;
+				}
+			}
+			if (!bFoundType)
+			{
+				g_logger->error("Failed to find vulkan memory type for thumbnails!");
+				return;
+			}
+		}
+		result = vkAllocateMemory(m_device, &allocInfo, nullptr, &m_thumbnailData[i].ImageMemory);
+		if (result != VK_SUCCESS)
+		{
+			g_logger->error("vkAllocateMemory failed: {}", static_cast<int32_t>(result));
+			return;
+		}
+
+		result = vkBindImageMemory(m_device, *imagePtr, m_thumbnailData[i].ImageMemory, 0);
+		if (result != VK_SUCCESS)
+		{
+			g_logger->error("vkBindImageMemory failed: {}", static_cast<int32_t>(result));
+			return;
+		}
+
+
+		//// Create the Image View
+		//{
+		//	VkImageViewCreateInfo info = {};
+		//	info.sType = VK_STRUCTURE_TYPE_IMAGE_VIEW_CREATE_INFO;
+		//	info.image = *imagePtr;
+		//	info.viewType = VK_IMAGE_VIEW_TYPE_2D;
+		//	info.format = VK_FORMAT_R8G8B8A8_UNORM;
+		//	info.subresourceRange.aspectMask = VK_IMAGE_ASPECT_COLOR_BIT;
+		//	info.subresourceRange.levelCount = 1;
+		//	info.subresourceRange.layerCount = 1;
+		//	result = vkCreateImageView(m_device, &info, nullptr, &tex_data->ImageView);
+		//	check_vk_result(err);
+		//}
+
+		//// Create Sampler
+		//{
+		//	VkSamplerCreateInfo sampler_info{};
+		//	sampler_info.sType = VK_STRUCTURE_TYPE_SAMPLER_CREATE_INFO;
+		//	sampler_info.magFilter = VK_FILTER_LINEAR;
+		//	sampler_info.minFilter = VK_FILTER_LINEAR;
+		//	sampler_info.mipmapMode = VK_SAMPLER_MIPMAP_MODE_LINEAR;
+		//	sampler_info.addressModeU = VK_SAMPLER_ADDRESS_MODE_REPEAT; // outside image bounds just use border color
+		//	sampler_info.addressModeV = VK_SAMPLER_ADDRESS_MODE_REPEAT;
+		//	sampler_info.addressModeW = VK_SAMPLER_ADDRESS_MODE_REPEAT;
+		//	sampler_info.minLod = -1000;
+		//	sampler_info.maxLod = 1000;
+		//	sampler_info.maxAnisotropy = 1.0f;
+		//	result = vkCreateSampler(m_device, &sampler_info, nullptr, &tex_data->Sampler);
+		//	check_vk_result(err);
+		//}
+
+		//// Create Descriptor Set using ImGUI's implementation
+		//tex_data->DS = ImGui_ImplVulkan_AddTexture(tex_data->Sampler, tex_data->ImageView, VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL);
+
+		// Create Upload Buffer
+
+		VkBufferCreateInfo bufferInfo = {};
+		bufferInfo.sType = VK_STRUCTURE_TYPE_BUFFER_CREATE_INFO;
+		bufferInfo.size = imageData[i].size();
+		bufferInfo.usage = VK_BUFFER_USAGE_TRANSFER_SRC_BIT;
+		bufferInfo.sharingMode = VK_SHARING_MODE_EXCLUSIVE;
+
+		result = vkCreateBuffer(m_device, &bufferInfo, nullptr, &uploadBuffers[i]);
+		if (result != VK_SUCCESS)
+		{
+			g_logger->error("vkCreateBuffer failed: {}", static_cast<int32_t>(result));
+			return;
+		}
+
+		VkMemoryRequirements bufferReq;
+		vkGetBufferMemoryRequirements(m_device, uploadBuffers[i], &bufferReq);
+		VkMemoryAllocateInfo bufferAllocInfo = {};
+		bufferAllocInfo.sType = VK_STRUCTURE_TYPE_MEMORY_ALLOCATE_INFO;
+		bufferAllocInfo.allocationSize = bufferReq.size;
+
+		{
+			bool bFoundType = false;
+			for (uint32_t i = 0; i < memProperties.memoryTypeCount; i++)
+			{
+				if ((bufferReq.memoryTypeBits & (1 << i)) && (memProperties.memoryTypes[i].propertyFlags & VK_MEMORY_PROPERTY_HOST_VISIBLE_BIT) == VK_MEMORY_PROPERTY_HOST_VISIBLE_BIT)
+				{
+					bufferAllocInfo.memoryTypeIndex = i;
+					bFoundType = true;
+					break;
+				}
+			}
+			if (!bFoundType)
+			{
+				g_logger->error("Failed to find vulkan memory type for thumbnails!");
+				return;
+			}
+		}
+
+		result = vkAllocateMemory(m_device, &bufferAllocInfo, nullptr, &uploadMemories[i]);
+		if (result != VK_SUCCESS)
+		{
+			g_logger->error("vkAllocateMemory failed: {}", static_cast<int32_t>(result));
+			return;
+		}
+
+		result = vkBindBufferMemory(m_device, uploadBuffers[i], uploadMemories[i], 0);
+		if (result != VK_SUCCESS)
+		{
+			g_logger->error("vkBindBufferMemory failed: {}", static_cast<int32_t>(result));
+			return;
+		}
+		
+		void* map = NULL;
+
+		result = vkMapMemory(m_device, uploadMemories[i], 0, imageData[i].size(), 0, &map);
+		if (result != VK_SUCCESS)
+		{
+			g_logger->error("vkMapMemory failed: {}", static_cast<int32_t>(result));
+			return;
+		}
+
+		memcpy(map, imageData[i].data(), imageData[i].size());
+		VkMappedMemoryRange range[1] = {};
+		range[0].sType = VK_STRUCTURE_TYPE_MAPPED_MEMORY_RANGE;
+		range[0].memory = uploadMemories[i];
+		range[0].size = imageData[i].size();
+
+		result = vkFlushMappedMemoryRanges(m_device, 1, range);
+		if (result != VK_SUCCESS)
+		{
+			g_logger->error("vkFlushMappedMemoryRanges failed: {}", static_cast<int32_t>(result));
+			return;
+		}
+
+		vkUnmapMemory(m_device, uploadMemories[i]);
+
+	}
+
+	// Create a command buffer that will perform following steps when hit in the command queue.
+	// TODO: this works in the example, but may need input if this is an acceptable way to access the pool/create the command buffer.
+	/*VkCommandPool command_pool = g_MainWindowData.Frames[g_MainWindowData.FrameIndex].CommandPool;
+	VkCommandBuffer command_buffer;
+	{
+		VkCommandBufferAllocateInfo alloc_info{};
+		alloc_info.sType = VK_STRUCTURE_TYPE_COMMAND_BUFFER_ALLOCATE_INFO;
+		alloc_info.level = VK_COMMAND_BUFFER_LEVEL_PRIMARY;
+		alloc_info.commandPool = command_pool;
+		alloc_info.commandBufferCount = 1;
+
+		result = vkAllocateCommandBuffers(m_device, &alloc_info, &command_buffer);
+		if (result != VK_SUCCESS)
+		{
+			g_logger->error("vkAllocateCommandBuffers failed: {}", static_cast<int32_t>(result));
+			return;
+		}*/
+
+	VkCommandBuffer commandBuffer = m_windowData.Frames[0].CommandBuffer;
+
+	VkCommandBufferBeginInfo beginInfo = {};
+	beginInfo.sType = VK_STRUCTURE_TYPE_COMMAND_BUFFER_BEGIN_INFO;
+	beginInfo.flags |= VK_COMMAND_BUFFER_USAGE_ONE_TIME_SUBMIT_BIT;
+
+	result = vkBeginCommandBuffer(commandBuffer, &beginInfo);
+	if (result != VK_SUCCESS)
+	{
+		g_logger->error("vkBeginCommandBuffer failed: {}", static_cast<int32_t>(result));
+		return;
+	}
+	//}
+
+	
+	for (int i = 0; i < imageData.size(); i++)
+	{
+		VkImage image = *reinterpret_cast<VkImage*>(&m_thumbnailData[i].TextureData.m_nImage);
+
+		VkImageMemoryBarrier copyBarrier = {};
+		copyBarrier.sType = VK_STRUCTURE_TYPE_IMAGE_MEMORY_BARRIER;
+		copyBarrier.dstAccessMask = VK_ACCESS_TRANSFER_WRITE_BIT;
+		copyBarrier.oldLayout = VK_IMAGE_LAYOUT_UNDEFINED;
+		copyBarrier.newLayout = VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL;
+		copyBarrier.srcQueueFamilyIndex = VK_QUEUE_FAMILY_IGNORED;
+		copyBarrier.dstQueueFamilyIndex = VK_QUEUE_FAMILY_IGNORED;
+		copyBarrier.image = image;
+		copyBarrier.subresourceRange.aspectMask = VK_IMAGE_ASPECT_COLOR_BIT;
+		copyBarrier.subresourceRange.levelCount = 1;
+		copyBarrier.subresourceRange.layerCount = 1;
+
+		vkCmdPipelineBarrier(commandBuffer, VK_PIPELINE_STAGE_HOST_BIT, VK_PIPELINE_STAGE_TRANSFER_BIT, 0, 0, NULL, 0, NULL, 1, &copyBarrier);
+
+		VkBufferImageCopy region = {};
+		region.imageSubresource.aspectMask = VK_IMAGE_ASPECT_COLOR_BIT;
+		region.imageSubresource.layerCount = 1;
+		region.imageExtent.width = width;
+		region.imageExtent.height = height;
+		region.imageExtent.depth = 1;
+
+		vkCmdCopyBufferToImage(commandBuffer, uploadBuffers[i], image, VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL, 1, &region);
+
+		VkImageMemoryBarrier useBarrier = {};
+		useBarrier.sType = VK_STRUCTURE_TYPE_IMAGE_MEMORY_BARRIER;
+		useBarrier.srcAccessMask = VK_ACCESS_TRANSFER_WRITE_BIT;
+		useBarrier.dstAccessMask = VK_ACCESS_SHADER_READ_BIT;
+		useBarrier.oldLayout = VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL;
+		useBarrier.newLayout = VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL;
+		useBarrier.srcQueueFamilyIndex = VK_QUEUE_FAMILY_IGNORED;
+		useBarrier.dstQueueFamilyIndex = VK_QUEUE_FAMILY_IGNORED;
+		useBarrier.image = image;
+		useBarrier.subresourceRange.aspectMask = VK_IMAGE_ASPECT_COLOR_BIT;
+		useBarrier.subresourceRange.levelCount = 1;
+		useBarrier.subresourceRange.layerCount = 1;
+
+		vkCmdPipelineBarrier(commandBuffer, VK_PIPELINE_STAGE_TRANSFER_BIT, VK_PIPELINE_STAGE_FRAGMENT_SHADER_BIT, 0, 0, NULL, 0, NULL, 1, &useBarrier);
+	}
+
+	result = vkEndCommandBuffer(commandBuffer);
+	if (result != VK_SUCCESS)
+	{
+		g_logger->error("vkEndCommandBuffer failed: {}", static_cast<int32_t>(result));
+		return;
+	}
+
+	VkSubmitInfo submitInfo = {};
+	submitInfo.sType = VK_STRUCTURE_TYPE_SUBMIT_INFO;
+	submitInfo.commandBufferCount = 1;
+	submitInfo.pCommandBuffers = &commandBuffer;
+
+	result = vkQueueSubmit(m_queue, 1, &submitInfo, VK_NULL_HANDLE);
+	if (result != VK_SUCCESS)
+	{
+		g_logger->error("vkQueueSubmit failed: {}", static_cast<int32_t>(result));
+		return;
+	}
+		
+	result = vkDeviceWaitIdle(m_device);
+	if (result != VK_SUCCESS)
+	{
+		g_logger->error("vkDeviceWaitIdle failed: {}", static_cast<int32_t>(result));
+		return;
+	}
+
+	for (int i = 0; i < imageData.size(); i++)
+	{
+		vkFreeMemory(m_device, uploadMemories[i], nullptr);
+		vkDestroyBuffer(m_device, uploadBuffers[i], nullptr);
+	}
 }
 
 void VulkanMenuRenderer::ResizeWindow(uint32_t width, uint32_t height)
@@ -410,6 +709,11 @@ void VulkanMenuRenderer::WaitDeinitImGui()
 
 void VulkanMenuRenderer::CleanupRenderer()
 {
+	for (int i = 0; i < 4; i++)
+	{
+		vkDestroyImage(m_device, *reinterpret_cast<VkImage*>(&m_thumbnailData[i].TextureData.m_nImage), nullptr);
+		vkFreeMemory(m_device, m_thumbnailData[i].ImageMemory, nullptr);
+	}
 	ImGui_ImplVulkanH_DestroyWindow(m_instance, m_device, &m_windowData, nullptr);
 	vkDestroySurfaceKHR(m_instance, m_surface, nullptr);
 	vkDestroyDescriptorPool(m_device, m_descriptorPool, nullptr);

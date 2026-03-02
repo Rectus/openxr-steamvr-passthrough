@@ -11,6 +11,7 @@
 #include <Uxtheme.h>
 #include <shellapi.h>
 #include <shlobj_core.h>
+#include <lodepng.h>
 
 #define WINDOW_WIDTH 1200
 #define WINDOW_HEIGHT 700
@@ -247,14 +248,14 @@ void DesktopWindowWin32::OnClientConnected()
     m_shutdownDelayTimer = NULL;
 }
 
-void DesktopWindowWin32::OnAllClientsDisconnected()
+void DesktopWindowWin32::OnAllClientsDisconnected(bool bAllowExit)
 {
-    if (m_bExitOnNoClients && !m_bIsSettingsWindowShown)
+    if (bAllowExit && m_bExitOnNoClients && !m_bIsSettingsWindowShown)
     {
         m_shutdownDelayTimer = SetTimer(m_hSettingsWindow, IDT_TIMER_EXITDELAY, 1000, DesktopWindowWin32::TimerCallback);
     }
 
-    if (m_bExitChangedByClients)
+    if (bAllowExit && m_bExitChangedByClients)
     {
         m_bExitOnClose = true;
     }
@@ -287,6 +288,50 @@ void DesktopWindowWin32::SetIcon(EWindowIcon icon)
     SendMessage(m_hSettingsWindow, WM_SETICON, ICON_BIG, (LPARAM)m_currentIcon);
     SendMessage(m_hSettingsWindow, WM_SETICON, ICON_SMALL, (LPARAM)m_currentIcon);
     ModifyTrayIcon();
+}
+
+bool DesktopWindowWin32::LoadDashboardThumbnails(std::vector<std::vector<uint8_t>>& thumbnailData, uint32_t& width, uint32_t& height)
+{
+    LPWSTR imageRes[4] = { 
+        MAKEINTRESOURCE(IDB_PNG_DASHBOARD_ICON1_BASE),
+        MAKEINTRESOURCE(IDB_PNG_DASHBOARD_ICON2_PLAY),
+        MAKEINTRESOURCE(IDB_PNG_DASHBOARD_ICON3_PAUSE),
+        MAKEINTRESOURCE(IDB_PNG_DASHBOARD_ICON4_OVERRIDE) };
+
+    for (int i = 0; i < 4; i++)
+    {
+        HRSRC resInfo = FindResource(NULL, imageRes[i], L"PNG");
+        if (resInfo == nullptr)
+        {
+            g_logger->error("Error finding icon resource!");
+            return false;
+        }
+        HGLOBAL memory = LoadResource(NULL, resInfo);
+        if (memory == nullptr)
+        {
+            g_logger->error("Error loading icon resource!");
+            return false;
+        }
+        size_t dataSize = SizeofResource(NULL, resInfo);
+        void* data = LockResource(memory);
+
+        if (data == nullptr)
+        {
+            g_logger->error("Error reading icon resource!");
+            return false;
+        }
+        thumbnailData.push_back({});
+
+        uint32_t error = lodepng::decode(thumbnailData[i], width, height, (uint8_t*)data, dataSize);
+
+        if (error)
+        {
+            g_logger->error("Error decoding icon!");
+            return false;
+        }
+    }
+
+    return true;
 }
 
 
@@ -414,10 +459,6 @@ LRESULT CALLBACK DesktopWindowWin32::WndProcImpl(HWND hWnd, UINT message, WPARAM
             InvalidateRect(m_hSettingsWindow, NULL, NULL);
             break;
 
-        case IDM_ABOUT:
-            DialogBox(m_hInstance, MAKEINTRESOURCE(IDD_ABOUTBOX), hWnd, About);
-            break;
-
         case IDM_EXIT:
 
             m_runWindow = false;
@@ -514,12 +555,6 @@ LRESULT CALLBACK DesktopWindowWin32::WndProcImpl(HWND hWnd, UINT message, WPARAM
         default:
             return DefWindowProc(hWnd, message, wParam, lParam);
         }
-        break;
-
-    case WM_SETTINGS_UPDATED:
-
-        //DispatchSettingsUpdated(LOWORD(wParam));
-
         break;
 
     case WM_MENU_QUIT:

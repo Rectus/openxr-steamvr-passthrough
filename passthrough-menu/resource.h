@@ -4,10 +4,14 @@
 //
 #define IDC_MYICON                      2
 #define IDB_PNG_DASHBOARD_ICON          101
+#define IDB_PNG_DASHBOARD_ICON1_BASE    101
 #define IDD_PASSTHROUGHMENU_DIALOG      102
+#define IDB_PNG_DASHBOARD_ICON2_PLAY    102
 #define IDS_APP_TITLE                   103
-#define IDD_ABOUTBOX                    103
+#define IDB_PNG_DASHBOARD_ICON3_PAUSE   103
 #define IDM_ABOUT                       104
+#define IDB_PNG_DASHBOARD_ICON_BASE3    104
+#define IDB_PNG_DASHBOARD_ICON4_OVERRIDE 104
 #define IDM_EXIT                        105
 #define IDC_PASSTHROUGHMENU             109
 #define IDM_TRAYOPEN                    110

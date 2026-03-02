@@ -49,7 +49,7 @@ private:
 	bool CollapsingHeaderPersistent(const char* label, ImGuiTreeNodeFlags flags = 0);
 
 	void DrawMenu();
-	void DispatchFullClientUpdate();
+	void DispatchTransientClientUpdate();
 
 	std::shared_ptr<ConfigManager> m_configManager;
 	std::unique_ptr<DashboardOverlay> m_dashboardOverlay;
@@ -63,6 +63,7 @@ private:
 
 	bool m_bHasWindow = false;
 	bool m_bHasOverlay = false;
+	EWindowIcon m_currentIcon = WindowIcon_Base;
 
 	LARGE_INTEGER m_lastFrameStart;
 
@@ -92,7 +93,7 @@ private:
 	bool m_bIsKeyboardOpen = false;
 	bool m_bElementActiveLastFrame = false;
 	bool m_bSettingsUpdatedThisSession = false;
-	bool m_bClientFullUpdatePending = false;
+	bool m_bClientTransientUpdatePending = false;
 	std::atomic<bool> m_bIsRendering = false;
 	uint32_t m_menuWidth = 0;
 	uint32_t m_menuHeight = 0;

@@ -64,7 +64,7 @@
       <ConformanceMode>true</ConformanceMode>
       <PrecompiledHeader>Use</PrecompiledHeader>
       <PrecompiledHeaderFile>pch.h</PrecompiledHeaderFile>
-      <AdditionalIncludeDirectories>$(ProjectDir);$(SolutionDir)shared;$(SolutionDir)external\spdlog\include;$(ProjectDir)framework;$(SolutionDir)\external\OpenXR-SDK\include;$(SolutionDir)\external\OpenXR-SDK\src\common;$(SolutionDir)\external\openvr\headers;$(SolutionDir)\external\openvr\src;$(SolutionDir)\external\lodepng;$(SolutionDir)\external\imgui;$(SolutionDir)\external\imgui\backends;$(SolutionDir)\external\simpleini;$(SolutionDir)\external\opencv\build\include;$(VULKAN_SDK)\Include</AdditionalIncludeDirectories>
+      <AdditionalIncludeDirectories>$(ProjectDir);$(SolutionDir)shared;$(SolutionDir)external\spdlog\include;$(ProjectDir)framework;$(SolutionDir)external\OpenXR-SDK\include;$(SolutionDir)external\OpenXR-SDK\src\common;$(SolutionDir)external\openvr\headers;$(SolutionDir)external\openvr\src;$(SolutionDir)external\lodepng;$(SolutionDir)external\simpleini;$(SolutionDir)external\opencv\build\include;$(VULKAN_SDK)\Include</AdditionalIncludeDirectories>
       <LanguageStandard>stdcpp20</LanguageStandard>
       <AdditionalModuleDependencies>
       </AdditionalModuleDependencies>
@@ -134,7 +134,7 @@ copy $(SolutionDir)\readme.md $(OutDir)
       <ConformanceMode>true</ConformanceMode>
       <PrecompiledHeader>Use</PrecompiledHeader>
       <PrecompiledHeaderFile>pch.h</PrecompiledHeaderFile>
-      <AdditionalIncludeDirectories>$(ProjectDir);$(SolutionDir)shared;$(SolutionDir)external\spdlog\include;$(ProjectDir)shaders;$(ProjectDir)framework;$(SolutionDir)\external\OpenXR-SDK\include;$(SolutionDir)\external\OpenXR-SDK\src\common;$(SolutionDir)\external\openvr\headers;$(SolutionDir)\external\openvr\src;$(SolutionDir)\external\lodepng;$(SolutionDir)\external\imgui;$(SolutionDir)\external\imgui\backends;$(SolutionDir)\external\simpleini;$(SolutionDir)\external\opencv\build\include;$(VULKAN_SDK)\Include</AdditionalIncludeDirectories>
+      <AdditionalIncludeDirectories>$(ProjectDir);$(SolutionDir)shared;$(SolutionDir)external\spdlog\include;$(ProjectDir)shaders;$(ProjectDir)framework;$(SolutionDir)external\OpenXR-SDK\include;$(SolutionDir)external\OpenXR-SDK\src\common;$(SolutionDir)external\openvr\headers;$(SolutionDir)external\openvr\src;$(SolutionDir)external\lodepng;$(SolutionDir)external\simpleini;$(SolutionDir)external\opencv\build\include;$(VULKAN_SDK)\Include</AdditionalIncludeDirectories>
       <LanguageStandard>stdcpp20</LanguageStandard>
       <InlineFunctionExpansion>AnySuitable</InlineFunctionExpansion>
       <FavorSizeOrSpeed>Speed</FavorSizeOrSpeed>
@@ -183,11 +183,6 @@ copy $(SolutionDir)THIRD_PARTY $(OutDir)THIRD_PARTY.txt</Command>
     </FxCompile>
   </ItemDefinitionGroup>
   <ItemGroup>
-    <ClInclude Include="..\external\imgui\backends\imgui_impl_dx11.h" />
-    <ClInclude Include="..\external\imgui\backends\imgui_impl_dx12.h" />
-    <ClInclude Include="..\external\imgui\imconfig.h" />
-    <ClInclude Include="..\external\imgui\imgui.h" />
-    <ClInclude Include="..\external\imgui\imgui_internal.h" />
     <ClInclude Include="..\external\lodepng\lodepng.h" />
     <ClInclude Include="..\shared\config_manager.h" />
     <ClInclude Include="..\shared\mathutil.h" />
@@ -215,43 +210,11 @@ copy $(SolutionDir)THIRD_PARTY $(OutDir)THIRD_PARTY.txt</Command>
     <ClInclude Include="resource.h" />
   </ItemGroup>
   <ItemGroup>
-    <ClCompile Include="..\external\imgui\backends\imgui_impl_dx11.cpp">
-      <PrecompiledHeader Condition="'$(Configuration)|$(Platform)'=='Debug|x64'">NotUsing</PrecompiledHeader>
-      <PrecompiledHeader Condition="'$(Configuration)|$(Platform)'=='Release|x64'">NotUsing</PrecompiledHeader>
-    </ClCompile>
-    <ClCompile Include="..\external\imgui\backends\imgui_impl_dx12.cpp">
-      <PrecompiledHeader Condition="'$(Configuration)|$(Platform)'=='Debug|x64'">NotUsing</PrecompiledHeader>
-      <PrecompiledHeader Condition="'$(Configuration)|$(Platform)'=='Release|x64'">NotUsing</PrecompiledHeader>
-    </ClCompile>
-    <ClCompile Include="..\external\imgui\imgui.cpp">
-      <PrecompiledHeader Condition="'$(Configuration)|$(Platform)'=='Debug|x64'">NotUsing</PrecompiledHeader>
-      <PrecompiledHeader Condition="'$(Configuration)|$(Platform)'=='Release|x64'">NotUsing</PrecompiledHeader>
-    </ClCompile>
-    <ClCompile Include="..\external\imgui\imgui_draw.cpp">
-      <PrecompiledHeader Condition="'$(Configuration)|$(Platform)'=='Debug|x64'">NotUsing</PrecompiledHeader>
-      <PrecompiledHeader Condition="'$(Configuration)|$(Platform)'=='Release|x64'">NotUsing</PrecompiledHeader>
-    </ClCompile>
-    <ClCompile Include="..\external\imgui\imgui_tables.cpp">
-      <PrecompiledHeader Condition="'$(Configuration)|$(Platform)'=='Debug|x64'">NotUsing</PrecompiledHeader>
-      <PrecompiledHeader Condition="'$(Configuration)|$(Platform)'=='Release|x64'">NotUsing</PrecompiledHeader>
-    </ClCompile>
-    <ClCompile Include="..\external\imgui\imgui_widgets.cpp">
-      <PrecompiledHeader Condition="'$(Configuration)|$(Platform)'=='Debug|x64'">NotUsing</PrecompiledHeader>
-      <PrecompiledHeader Condition="'$(Configuration)|$(Platform)'=='Release|x64'">NotUsing</PrecompiledHeader>
-    </ClCompile>
     <ClCompile Include="..\external\lodepng\lodepng.cpp">
       <PrecompiledHeader Condition="'$(Configuration)|$(Platform)'=='Debug|x64'">NotUsing</PrecompiledHeader>
       <PrecompiledHeader Condition="'$(Configuration)|$(Platform)'=='Release|x64'">NotUsing</PrecompiledHeader>
     </ClCompile>
     <ClCompile Include="..\shared\config_manager.cpp" />
-    <ClCompile Include="..\shared\fonts\cousine_regular.cpp">
-      <PrecompiledHeader Condition="'$(Configuration)|$(Platform)'=='Debug|x64'">NotUsing</PrecompiledHeader>
-      <PrecompiledHeader Condition="'$(Configuration)|$(Platform)'=='Release|x64'">NotUsing</PrecompiledHeader>
-    </ClCompile>
-    <ClCompile Include="..\shared\fonts\roboto_medium.cpp">
-      <PrecompiledHeader Condition="'$(Configuration)|$(Platform)'=='Debug|x64'">NotUsing</PrecompiledHeader>
-      <PrecompiledHeader Condition="'$(Configuration)|$(Platform)'=='Release|x64'">NotUsing</PrecompiledHeader>
-    </ClCompile>
     <ClCompile Include="..\shared\menu_ipc.cpp" />
     <ClCompile Include="..\shared\menu_ipc_client.cpp" />
     <ClCompile Include="..\shared\pathutil.cpp" />
