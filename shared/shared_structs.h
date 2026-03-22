@@ -41,6 +41,15 @@ enum EStereoFrameLayout
 	FrameLayout_StereoHorizontal = 2 // Stereo frames are Left/Right
 };
 
+enum EPassthroughCameraState
+{
+	CameraState_Uninitialized = 0,
+	CameraState_Idle,
+	CameraState_Waiting,
+	CameraState_Active,
+	CameraState_Error
+};
+
 
 struct CameraDebugProperties
 {
@@ -129,6 +138,7 @@ struct alignas(8) ClientDataValues
 	float StereoReconstructionTimeMS = 0.0f;
 	float FrameRetrievalTimeMS = 0.0f;
 	uint64_t LastFrameTimestamp = 0;
+	uint64_t LastCameraTimestamp = 0;
 
 	bool bCorePassthroughActive = false;
 	bool bFBPassthroughActive = false;
@@ -146,6 +156,7 @@ struct alignas(8) ClientDataValues
 	float CameraFrameRate = 0.0f;
 	ECameraProvider CameraProvider = CameraProvider_None;
 	bool bCameraActive = false;
+	EPassthroughCameraState CameraState = CameraState_Uninitialized;
 };
 
 struct ClientData

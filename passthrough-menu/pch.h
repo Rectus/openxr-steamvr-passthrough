@@ -55,7 +55,7 @@ using namespace std::chrono_literals;
 #define OPENVR_BUILD_STATIC
 #include <openvr.h>
 
-
+#define SPDLOG_WCHAR_FILENAMES
 #define SPDLOG_WCHAR_TO_UTF8_SUPPORT
 #include "spdlog/spdlog.h"
 

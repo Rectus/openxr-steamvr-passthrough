@@ -95,6 +95,7 @@ using namespace std::chrono_literals;
 #include <XrToString.h>
 #endif
 
+#define SPDLOG_WCHAR_FILENAMES
 #define SPDLOG_WCHAR_TO_UTF8_SUPPORT
 #include "spdlog/spdlog.h"
 #include "spdlog/sinks/dup_filter_sink.h"

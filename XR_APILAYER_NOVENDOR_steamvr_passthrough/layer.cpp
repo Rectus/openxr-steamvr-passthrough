@@ -1489,7 +1489,9 @@ namespace
 			{
 				g_logger->error("Error: No swapchains found!");
 				return;
-			}			
+			}
+
+			clientData.Values.LastCameraTimestamp = frame->header.ulFrameExposureTime;
 
 			if (coreConf.CoreForcePassthrough && coreConf.CoreForceMode >= 0)
 			{
@@ -1633,7 +1635,7 @@ namespace
 
 			bool bResetPending = false;
 
-			if (m_Renderer.get() &&m_configManager->CheckResetRendererResetPending())
+			if (m_Renderer.get() && m_configManager->CheckResetRendererResetPending())
 			{
 				bResetPending = true;
 			}
@@ -1644,6 +1646,11 @@ namespace
 			if (m_menuHandler.get())
 			{
 				ClientData& data = m_menuHandler->GetClientData();
+
+				if (m_cameraManager.get())
+				{
+					data.Values.CameraState = m_cameraManager->GetCameraState();
+				}
 
 				data.Values.CoreCurrentMode = frameEndInfo->environmentBlendMode;
 				data.Values.NumCompositionLayers = frameEndInfo->layerCount;

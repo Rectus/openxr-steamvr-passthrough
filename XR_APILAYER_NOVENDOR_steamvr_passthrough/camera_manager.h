@@ -12,15 +12,6 @@
 #include "pathutil.h"
 
 
-enum EPassthroughCameraState
-{
-	CameraState_Uninitialized = 0,
-	CameraState_Idle,
-	CameraState_Waiting,
-	CameraState_Active,
-	CameraState_Error
-};
-
 enum ETrackedCameraFrameType
 {
 	VRFrameType_Distorted = 0,
@@ -66,6 +57,12 @@ public:
 
 	const void DumpCameraFrameTexture(const std::shared_ptr<std::vector<uint8_t>> frameBuffer, const uint32_t width, const uint32_t height, const std::string cameraProvider)
 	{
+		if (!frameBuffer.get() || frameBuffer->size() == 0)
+		{
+			g_logger->warn("No framebuffer to write!");
+			return;
+		}
+
 		const auto time = std::chrono::current_zone()->to_local(std::chrono::system_clock::now());
 
 		const std::string fileName = GetLocalAppData() + std::format("\\{} Camera Frame {:%Y-%m-%d %H-%M-%S}.png", cameraProvider, time);

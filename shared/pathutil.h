@@ -9,3 +9,4 @@ std::string GetLocalAppData();
 std::string GetRoamingAppData();
 std::string GetProcessFileName(bool bIncludeExtension = true);
 bool CreateDirectoryPath(const std::string_view& path);
+bool EnsurePathForFile(const std::string_view& filePath, std::error_code* errorCode = nullptr);

@@ -1,4 +1,4 @@
-// MIT License
+﻿// MIT License
 //
 // Copyright(c) 2021-2022 Matthieu Bucchianeri
 //
@@ -60,7 +60,7 @@ XrResult __declspec(dllexport) XRAPI_CALL
         std::string logFilePath = GetLocalAppData() + LOG_FILE_DIR +"\\client_" + GetProcessFileName(false) + ".log";
         CreateDirectoryPath(GetLocalAppData() + LOG_FILE_DIR);
 
-        g_logSinkAggregator->add_sink(std::make_shared<spdlog::sinks::basic_file_sink_mt>(logFilePath, true));
+        g_logSinkAggregator->add_sink(std::make_shared<spdlog::sinks::basic_file_sink_mt>(ToWideString(logFilePath), true));
         g_logSinkAggregator->add_sink(std::make_shared<spdlog::sinks::msvc_sink_mt>());
 
         spdlog::init_thread_pool(100, 1);

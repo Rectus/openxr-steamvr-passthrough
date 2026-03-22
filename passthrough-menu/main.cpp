@@ -92,7 +92,7 @@ int APIENTRY wWinMain(_In_ HINSTANCE hInstance, _In_opt_ HINSTANCE hPrevInstance
 
         std::string logFilePath = GetLocalAppData() + LOG_FILE_DIR + LOG_FILE_NAME;
         CreateDirectoryPath(GetLocalAppData() + LOG_FILE_DIR);
-        std::shared_ptr<spdlog::sinks::basic_file_sink_mt> fileSink = std::make_shared<spdlog::sinks::basic_file_sink_mt>(logFilePath, true);
+        std::shared_ptr<spdlog::sinks::basic_file_sink_mt> fileSink = std::make_shared<spdlog::sinks::basic_file_sink_mt>(ToWideString(logFilePath), true);
         
         logSinkAggregator->add_sink(g_logDisplayBuffer);
         logSinkAggregator->add_sink(fileSink);

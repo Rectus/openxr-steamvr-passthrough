@@ -67,5 +67,25 @@ std::string GetProcessFileName(bool bIncludeExtension)
 
 bool CreateDirectoryPath(const std::string_view& path)
 {
-    return std::filesystem::create_directories(path);
+    return std::filesystem::create_directories((char8_t const*)path.data());
+}
+
+bool EnsurePathForFile(const std::string_view& filePath, std::error_code* errorCode)
+{
+    std::filesystem::path dirPath((char8_t const*)filePath.data());
+    dirPath.remove_filename();
+
+    std::error_code retCode;
+
+    if(std::filesystem::create_directories(dirPath, retCode) || retCode.value() == 0)
+    {
+        return true;
+    }
+
+    if (errorCode != nullptr)
+    {
+        *errorCode = retCode;
+    }
+
+    return false;
 }

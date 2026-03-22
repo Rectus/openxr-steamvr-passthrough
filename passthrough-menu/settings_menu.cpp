@@ -2206,12 +2206,13 @@ if (bIsActiveTab) { ImGui::PopStyleColor(1); bIsActiveTab = false; }
 				float timeSinceFrame = ((float)(frameStart.QuadPart - displayValues.LastFrameTimestamp)) / perfFrequency.QuadPart;
 				if (timeSinceFrame > 1.0f)
 				{
-					ImGui::Text("Last frame submitted %.0fs ago", timeSinceFrame);
+					ImGui::Text("Last application frame submitted %.0fs ago", timeSinceFrame);
 				}
 				else
 				{
-					ImGui::Text("Last frame submitted %4.0fms ago", timeSinceFrame * 1000.0f);
+					ImGui::Text("Last application frame submitted %4.0fms ago", timeSinceFrame * 1000.0f);
 				}
+
 				ImGui::Text("Submitted %i composition layers, %s", displayValues.NumCompositionLayers, displayValues.bDepthLayerSubmitted ? "depth submitted" : "depth NOT submitted");
 				ImGui::Text("Resolution: %i x %i", displayValues.FrameBufferWidth, displayValues.FrameBufferHeight);
 				ImGui::Text("Framebuffer Flags: 0x%x", displayValues.FrameBufferFlags);
@@ -2254,7 +2255,7 @@ if (bIsActiveTab) { ImGui::PopStyleColor(1); bIsActiveTab = false; }
 			}
 			else
 			{
-				ImGui::Text("No frames submitted");
+				ImGui::Text("No application frames submitted");
 			}
 
 			ImGui::Text("Framebuffer format: %s (%li)", GetImageFormatName(displayValues.AppRenderAPI, displayValues.FrameBufferFormat).c_str(), displayValues.FrameBufferFormat);
@@ -2262,12 +2263,52 @@ if (bIsActiveTab) { ImGui::PopStyleColor(1); bIsActiveTab = false; }
 			std::isinf(displayValues.NearZ) ? ImGui::Text("Near Z: Infinity") : ImGui::Text("Near Z: %.3f", displayValues.NearZ);
 			std::isinf(displayValues.FarZ) ? ImGui::Text("Far Z: Infinity") : ImGui::Text("Far Z: %.3f", displayValues.FarZ);
 
+			ImGui::Spacing();
 
-			ImGui::Text("Exposure to render latency: %.1fms", displayValues.FrameToRenderLatencyMS);
-			ImGui::Text("Exposure to photons latency: %.1fms", displayValues.FrameToPhotonsLatencyMS);
-			ImGui::Text("Passthrough CPU render duration: %.2fms", displayValues.RenderTimeMS);
-			ImGui::Text("Stereo reconstruction duration: %.2fms", displayValues.StereoReconstructionTimeMS);
-			ImGui::Text("Camera frame retrieval duration: %.2fms", displayValues.FrameRetrievalTimeMS);
+			switch (displayValues.CameraState)
+			{
+			case CameraState_Uninitialized:
+				ImGui::Text("Camera state: Uninitialized");
+				break;
+			case CameraState_Idle:
+				ImGui::Text("Camera state: Idle");
+				break;
+			case CameraState_Waiting:
+				ImGui::Text("Camera state: Waiting");
+				break;
+			case CameraState_Active:
+				ImGui::Text("Camera state: Active");
+				break;
+			case CameraState_Error:
+				ImGui::Text("Camera state: Error");
+				break;
+			default:
+				ImGui::Text("Camera state: Invalid state!");
+			}
+
+			if (displayValues.LastCameraTimestamp != 0)
+			{
+				float timeSinceCameraFrame = ((float)(frameStart.QuadPart - displayValues.LastCameraTimestamp)) / perfFrequency.QuadPart;
+				if (timeSinceCameraFrame > 1.0f)
+				{
+					ImGui::Text("Last camera frame submitted %.0fs ago", timeSinceCameraFrame);
+				}
+				else
+				{
+					ImGui::Text("Last camera frame submitted %4.0fms ago", timeSinceCameraFrame * 1000.0f);
+				}
+				ImGui::Text("Exposure to render latency: %.1fms", displayValues.FrameToRenderLatencyMS);
+				ImGui::Text("Exposure to photons latency: %.1fms", displayValues.FrameToPhotonsLatencyMS);
+				ImGui::Text("Passthrough CPU render duration: %.2fms", displayValues.RenderTimeMS);
+				ImGui::Text("Stereo reconstruction duration: %.2fms", displayValues.StereoReconstructionTimeMS);
+				ImGui::Text("Camera frame retrieval duration: %.2fms", displayValues.FrameRetrievalTimeMS);
+			}
+			else
+			{
+				ImGui::Text("No camera frames submitted");
+			}
+
+			
 			ImGui::Text("Menu framerate: %.1fHz", io.Framerate);
 
 			/*static int frameIdx = 0;

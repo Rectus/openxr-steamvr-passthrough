@@ -65,10 +65,29 @@ void ConfigManager::UpdateConfigFile()
 		m_configCustomStereo.UpdateConfig(m_iniData, "StereoCustom");
 		m_configDepth.UpdateConfig(m_iniData, "Depth");
 
-		SI_Error result = m_iniData.SaveFile(m_configFile.c_str());
-		if (result < 0)
+		std::error_code errCode;
+		if (!EnsurePathForFile(m_configFile, &errCode))
 		{
-			g_logger->error("Failed to save config file, {}", errno);
+			g_logger->error("Failed create folder for config file, {}", errCode.value());
+		}
+		else
+		{
+			SI_Error result = m_iniData.SaveFile(ToWideString(m_configFile).c_str());
+			if (result < 0)
+			{
+				if (result == -3)
+				{
+					g_logger->error("Failed to save config file, file system error {}", errno);
+				}
+				else if (result == -2)
+				{
+					g_logger->error("Failed to save config file, out of memory!");
+				}
+				else
+				{
+					g_logger->error("Failed to save config file, error {}", result);
+				}
+			}
 		}
 	}
 
