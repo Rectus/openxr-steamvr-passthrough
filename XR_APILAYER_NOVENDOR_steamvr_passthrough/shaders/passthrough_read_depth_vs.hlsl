@@ -15,17 +15,17 @@ float2 sobel_discontinuity_contour(in Texture2D<float> tex, inout float depth, i
     tex.GetDimensions(texW, texH);
     float2 invTexSize = 1.0 / float2(texW, texH);
     
-    uint2 pixelPos = saturate(uvs) * float2(texW, texH);
+    int2 pixelPos = saturate(uvs) * float2(texW, texH);
     
-    float dispU = tex.Load(int3(pixelPos + uint2(0, -1), 0));
-    float dispD = tex.Load(int3(pixelPos + uint2(0, 1), 0));
-    float dispL = tex.Load(int3(pixelPos + uint2(-1, 0), 0));
-    float dispR = tex.Load(int3(pixelPos + uint2(1, 0), 0));
+    float dispU = tex.Load(int3(pixelPos + int2(0, -1), 0));
+    float dispD = tex.Load(int3(pixelPos + int2(0, 1), 0));
+    float dispL = tex.Load(int3(pixelPos + int2(-1, 0), 0));
+    float dispR = tex.Load(int3(pixelPos + int2(1, 0), 0));
             
-    float dispUL = tex.Load(int3(pixelPos + uint2(-1, -1), 0));
-    float dispDL = tex.Load(int3(pixelPos + uint2(-1, 1), 0));
-    float dispUR = tex.Load(int3(pixelPos + uint2(1, -1), 0));
-    float dispDR = tex.Load(int3(pixelPos + uint2(1, 1), 0));
+    float dispUL = tex.Load(int3(pixelPos + int2(-1, -1), 0));
+    float dispDL = tex.Load(int3(pixelPos + int2(-1, 1), 0));
+    float dispUR = tex.Load(int3(pixelPos + int2(1, -1), 0));
+    float dispDR = tex.Load(int3(pixelPos + int2(1, 1), 0));
     
     float filterX = dispUL + dispL * 2 + dispDL - dispUR - dispR * 2 - dispDR; 
     float filterY = dispUL + dispU * 2 + dispUR - dispDL - dispD * 2 - dispDR;

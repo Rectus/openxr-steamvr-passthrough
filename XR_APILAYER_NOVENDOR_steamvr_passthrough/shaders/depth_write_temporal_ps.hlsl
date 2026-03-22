@@ -14,17 +14,17 @@ float sobel_discontinuity_adjust(in Texture2D<float> depthTex, in SamplerState t
 {
     float outDepth = depth;
     
-    uint2 pixelPos = floor(saturate(uvs) * texSize);
+    int2 pixelPos = floor(saturate(uvs) * texSize);
     
-    float dispU = depthTex.Load(int3(pixelPos + uint2(0, -1), 0));
-    float dispD = depthTex.Load(int3(pixelPos + uint2(0, 1), 0));
-    float dispL = depthTex.Load(int3(pixelPos + uint2(-1, 0), 0));
-    float dispR = depthTex.Load(int3(pixelPos + uint2(1, 0), 0));
+    float dispU = depthTex.Load(int3(pixelPos + int2(0, -1), 0));
+    float dispD = depthTex.Load(int3(pixelPos + int2(0, 1), 0));
+    float dispL = depthTex.Load(int3(pixelPos + int2(-1, 0), 0));
+    float dispR = depthTex.Load(int3(pixelPos + int2(1, 0), 0));
             
-    float dispUL = depthTex.Load(int3(pixelPos + uint2(-1, -1), 0));
-    float dispDL = depthTex.Load(int3(pixelPos + uint2(-1, 1), 0));
-    float dispUR = depthTex.Load(int3(pixelPos + uint2(1, -1), 0));
-    float dispDR = depthTex.Load(int3(pixelPos + uint2(1, 1), 0));
+    float dispUL = depthTex.Load(int3(pixelPos + int2(-1, -1), 0));
+    float dispDL = depthTex.Load(int3(pixelPos + int2(-1, 1), 0));
+    float dispUR = depthTex.Load(int3(pixelPos + int2(1, -1), 0));
+    float dispDR = depthTex.Load(int3(pixelPos + int2(1, 1), 0));
     
     float filterX = dispUL + dispL * 2 + dispDL - dispUR - dispR * 2 - dispDR; 
     float filterY = dispUL + dispU * 2 + dispUR - dispDL - dispD * 2 - dispDR;

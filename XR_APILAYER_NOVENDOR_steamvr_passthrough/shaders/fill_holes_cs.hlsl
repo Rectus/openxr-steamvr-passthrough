@@ -26,10 +26,10 @@ void main(uint3 pos : SV_DispatchThreadID)
     // Sample neighbors and temporarily store furthest disparity in the confidence map as a negative value.
     if (dispConf.y <= 0.0 && (dispConf.x <= g_minDisparity || dispConf.x >= maxDisp))
     {
-        float2 dispConfU = g_disparityTexture.Load(pos.xy + uint2(0, -1));
-        float2 dispConfD = g_disparityTexture.Load(pos.xy + uint2(0, 1));
-        float2 dispConfL = g_disparityTexture.Load(pos.xy + uint2(-1, 0));
-        float2 dispConfR = g_disparityTexture.Load(pos.xy + uint2(1, 0));
+        float2 dispConfU = g_disparityTexture.Load((uint2)(pos.xy + int2(0, -1)));
+        float2 dispConfD = g_disparityTexture.Load((uint2)(pos.xy + int2(0, 1)));
+        float2 dispConfL = g_disparityTexture.Load((uint2)(pos.xy + int2(-1, 0)));
+        float2 dispConfR = g_disparityTexture.Load((uint2)(pos.xy + int2(1, 0)));
         
         if (dispConf.y == 0.0)
         {      
