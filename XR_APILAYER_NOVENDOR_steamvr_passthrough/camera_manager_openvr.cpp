@@ -484,13 +484,7 @@ void CameraManagerOpenVR::UpdateStaticCameraParameters()
     XrMatrix4x4f_Invert(&m_HMDToCameraLeft, &m_cameraToHMDLeft);
     XrMatrix4x4f_Invert(&m_HMDToCameraRight, &m_cameraToHMDRight);
 
-    XrMatrix4x4f camToHMDLeftOrig, camToHMDRightOrig;
-    GetTrackedCameraEyePoses(camToHMDLeftOrig, camToHMDRightOrig, true);
-    XrMatrix4x4f_Invert(&m_HMDToCameraLeftOriginal, &camToHMDLeftOrig);
-    XrMatrix4x4f_Invert(&m_HMDToCameraRightOriginal, &camToHMDRightOrig);
-
-    XrMatrix4x4f_Multiply(&m_cameraLeftToRightPose, &m_cameraToHMDLeft, &m_HMDToCameraRight);
-    XrMatrix4x4f_Multiply(&m_cameraRightToLeftPose, &m_cameraToHMDRight, &m_HMDToCameraLeft);
+    XrMatrix4x4f_Multiply(&m_cameraLeftToRightPose, &m_HMDToCameraRight, &m_cameraToHMDLeft);
 }
 
 bool CameraManagerOpenVR::GetCameraFrame(std::shared_ptr<CameraFrame>& frame)
@@ -701,59 +695,26 @@ void CameraManagerOpenVR::ServeFrames()
         }
         m_underConstructionFrame->renderModels = m_renderModels;
 
-        // Apply offset calibration to camera positions.
-        XrMatrix4x4f origCamera0ToTrackingPose = ToXRMatrix4x4(m_underConstructionFrame->header.trackedDevicePose.mDeviceToAbsoluteTracking);
-        XrMatrix4x4f headToTrackingPose, correctedCamera0ToHMDPose;
+        vr::TrackedDevicePose_t hmdPose;
 
-        // For vertical layouts the device pose is for the right camera.
-        if (m_frameLayout == EStereoFrameLayout::FrameLayout_StereoVertical)
+        LARGE_INTEGER time, freq;
+        QueryPerformanceCounter(&time);
+        QueryPerformanceFrequency(&freq);
+
+        float exposureRelativeTime = -(float)(time.QuadPart - m_underConstructionFrame->header.ulFrameExposureTime);
+        exposureRelativeTime /= ((float)freq.QuadPart);
+
+        m_openVRManager->GetVRSystem()->GetDeviceToAbsoluteTrackingPose(vr::TrackingUniverseStanding, exposureRelativeTime, &hmdPose, 1);
+
+        if (!hmdPose.bPoseIsValid)
         {
-            if (m_configManager->GetConfig_Camera().OpenVRCustomCalibration)
-            {
-                // Strip original OpenVR calibration from pose if custom calibration used.
-                XrMatrix4x4f_Multiply(&headToTrackingPose, &origCamera0ToTrackingPose, &m_HMDToCameraRightOriginal);
-            }
-            else
-            {
-                XrMatrix4x4f_Multiply(&headToTrackingPose, &origCamera0ToTrackingPose, &m_HMDToCameraRight);
-            }
-            correctedCamera0ToHMDPose = m_cameraToHMDRight;
-            correctedCamera0ToHMDPose.m[12] *= mainConf.DepthOffsetCalibration;
-            correctedCamera0ToHMDPose.m[13] *= mainConf.DepthOffsetCalibration;
-            correctedCamera0ToHMDPose.m[14] *= mainConf.DepthOffsetCalibration;
-            XrMatrix4x4f_Multiply(&m_underConstructionFrame->cameraViewToWorldRight, &headToTrackingPose, &correctedCamera0ToHMDPose);
-
-            XrMatrix4x4f leftToRightPose = m_cameraLeftToRightPose;
-            leftToRightPose.m[12] *= mainConf.DepthOffsetCalibration;
-            leftToRightPose.m[13] *= mainConf.DepthOffsetCalibration;
-            leftToRightPose.m[14] *= mainConf.DepthOffsetCalibration;
-
-            XrMatrix4x4f_Multiply(&m_underConstructionFrame->cameraViewToWorldLeft, &m_underConstructionFrame->cameraViewToWorldRight, &leftToRightPose);
+            g_logger->error("No HMD pose for camera projection found: {}", (uint32_t)hmdPose.eTrackingResult);
         }
-        else
-        {
-            if (m_configManager->GetConfig_Camera().OpenVRCustomCalibration)
-            {
-                // Strip original OpenVR calibration from pose if custom calibration used.
-                XrMatrix4x4f_Multiply(&headToTrackingPose, &origCamera0ToTrackingPose, &m_HMDToCameraLeftOriginal);
-            }
-            else
-            {
-                XrMatrix4x4f_Multiply(&headToTrackingPose, &origCamera0ToTrackingPose, &m_HMDToCameraLeft);
-            }
-            correctedCamera0ToHMDPose = m_cameraToHMDLeft;
-            correctedCamera0ToHMDPose.m[12] *= mainConf.DepthOffsetCalibration;
-            correctedCamera0ToHMDPose.m[13] *= mainConf.DepthOffsetCalibration;
-            correctedCamera0ToHMDPose.m[14] *= mainConf.DepthOffsetCalibration;
-            XrMatrix4x4f_Multiply(&m_underConstructionFrame->cameraViewToWorldLeft, &headToTrackingPose, &correctedCamera0ToHMDPose);
 
-            XrMatrix4x4f rightToLeftPose = m_cameraRightToLeftPose;
-            rightToLeftPose.m[12] *= mainConf.DepthOffsetCalibration;
-            rightToLeftPose.m[13] *= mainConf.DepthOffsetCalibration;
-            rightToLeftPose.m[14] *= mainConf.DepthOffsetCalibration;
+        XrMatrix4x4f headToTrackingPose = ToXRMatrix4x4(hmdPose.mDeviceToAbsoluteTracking);
 
-            XrMatrix4x4f_Multiply(&m_underConstructionFrame->cameraViewToWorldRight, &m_underConstructionFrame->cameraViewToWorldLeft, &rightToLeftPose);
-        }
+        XrMatrix4x4f_Multiply(&m_underConstructionFrame->cameraViewToWorldLeft, &headToTrackingPose, &m_cameraToHMDLeft);
+        XrMatrix4x4f_Multiply(&m_underConstructionFrame->cameraViewToWorldRight, &headToTrackingPose, &m_cameraToHMDRight);
 
         {
             std::lock_guard<std::mutex> lock(m_serveMutex);
@@ -903,7 +864,7 @@ void CameraManagerOpenVR::UpdateProjectionMatrix(std::shared_ptr<CameraFrame>& f
         }
 
         XrMatrix4x4f projectionMatrix = ToXRMatrix4x4Inverted(vrProjection);
-        XrMatrix4x4f_Multiply(&m_cameraProjectionInvFarLeft, &projectionMatrix, &transMatrix);
+        XrMatrix4x4f_Multiply(&m_cameraProjectionInvLeft, &projectionMatrix, &transMatrix);
 
         if (bIsStereo)
         {
@@ -920,7 +881,7 @@ void CameraManagerOpenVR::UpdateProjectionMatrix(std::shared_ptr<CameraFrame>& f
 
 
             XrMatrix4x4f projectionMatrix = ToXRMatrix4x4Inverted(vrProjection);
-            XrMatrix4x4f_Multiply(&m_cameraProjectionInvFarRight, &projectionMatrix, &transMatrix);
+            XrMatrix4x4f_Multiply(&m_cameraProjectionInvRight, &projectionMatrix, &transMatrix);
 
         }
     }
@@ -958,9 +919,7 @@ void CameraManagerOpenVR::CalculateFrameProjection(std::shared_ptr<CameraFrame>&
 
     if (frame->header.nFrameSequence != m_lastFrameSequence)
     {
-        frame->prevCameraProjectionToWorldLeft = m_lastCameraProjectionToWorldLeft;
         frame->prevWorldToCameraProjectionLeft = m_lastWorldToCameraProjectionLeft;
-        frame->prevCameraProjectionToWorldRight = m_lastCameraProjectionToWorldRight;
         frame->prevWorldToCameraProjectionRight = m_lastWorldToCameraProjectionRight;
         frame->prevCameraFrame_WorldToHMDProjectionLeft = m_lastCameraFrame_WorldToHMDProjectionLeft;
         frame->prevCameraFrame_WorldToHMDProjectionRight = m_lastCameraFrame_WorldToHMDProjectionRight;
@@ -968,9 +927,7 @@ void CameraManagerOpenVR::CalculateFrameProjection(std::shared_ptr<CameraFrame>&
         m_lastCameraFrame_WorldToHMDProjectionLeft = frame->worldToHMDProjectionLeft;
         m_lastCameraFrame_WorldToHMDProjectionRight = frame->worldToHMDProjectionRight;
 
-        m_lastCameraProjectionToWorldLeft = frame->cameraProjectionToWorldLeft;
         m_lastWorldToCameraProjectionLeft = frame->worldToCameraProjectionLeft;
-        m_lastCameraProjectionToWorldRight = frame->cameraProjectionToWorldRight;
         m_lastWorldToCameraProjectionRight = frame->worldToCameraProjectionRight;
 
         m_lastFrameSequence = frame->header.nFrameSequence;
@@ -980,9 +937,7 @@ void CameraManagerOpenVR::CalculateFrameProjection(std::shared_ptr<CameraFrame>&
     else
     {
         // Previous HMD frame was rendered from the same camera frame
-        frame->prevCameraProjectionToWorldLeft = frame->cameraProjectionToWorldLeft;
         frame->prevWorldToCameraProjectionLeft = frame->worldToCameraProjectionLeft;
-        frame->prevCameraProjectionToWorldRight = frame->cameraProjectionToWorldRight;
         frame->prevWorldToCameraProjectionRight = frame->worldToCameraProjectionRight;
 
         frame->bIsFirstRender = false;
@@ -1110,95 +1065,73 @@ void CameraManagerOpenVR::CalculateFrameProjectionForEye(const ERenderEye eye, s
     {
         if (eye == RenderEye_Left)
         {
+            XrMatrix4x4f worldToCameraProjectionLeft;
+            XrMatrix4x4f_Multiply(&worldToCameraProjectionLeft, &frame->cameraViewToWorldLeft, &m_cameraProjectionInvLeft);
 
-            XrMatrix4x4f_Multiply(&frame->cameraProjectionToWorldLeft, &frame->cameraViewToWorldLeft, &m_cameraProjectionInvFarLeft);
-
-            XrMatrix4x4f_Invert(&frame->worldToCameraProjectionLeft, &frame->cameraProjectionToWorldLeft);
+            XrMatrix4x4f_Invert(&frame->worldToCameraProjectionLeft, &worldToCameraProjectionLeft);
         }
         else
         {
+            XrMatrix4x4f worldToCameraProjectionRight;
             if (bIsStereo)
             {
-                XrMatrix4x4f_Multiply(&frame->cameraProjectionToWorldRight, &frame->cameraViewToWorldRight, &m_cameraProjectionInvFarRight);
+                XrMatrix4x4f_Multiply(&worldToCameraProjectionRight, &frame->cameraViewToWorldRight, &m_cameraProjectionInvRight);
             }
             else
             {
-                XrMatrix4x4f_Multiply(&frame->cameraProjectionToWorldRight, &frame->cameraViewToWorldLeft, &m_cameraProjectionInvFarLeft);
+                XrMatrix4x4f_Multiply(&worldToCameraProjectionRight, &frame->cameraViewToWorldLeft, &m_cameraProjectionInvLeft);
             }
 
-            XrMatrix4x4f_Invert(&frame->worldToCameraProjectionRight, &frame->cameraProjectionToWorldRight);
+            XrMatrix4x4f_Invert(&frame->worldToCameraProjectionRight, &worldToCameraProjectionRight);
         }
     }
     else
     {
         std::shared_lock readLock(distortionParams.readWriteMutex);
 
-        XrMatrix4x4f frameProjection;
-        XrMatrix4x4f_Transpose(&frameProjection, (cameraId == 0) ? &distortionParams.cameraProjectionLeft : &distortionParams.cameraProjectionRight);
+        XrMatrix4x4f frameProjection = (cameraId == 0) ? 
+            distortionParams.cameraProjectionLeft : distortionParams.cameraProjectionRight;
 
-        // Adjust camera space projection matrix to project to clip space.
-        frameProjection.m[0] = 2.0f * frameProjection.m[0] / (float)m_cameraFrameWidth;
-        frameProjection.m[5] = -2.0f * frameProjection.m[5] / (float)m_cameraFrameHeight;
-        frameProjection.m[8] = (1.0f - 2.0f * frameProjection.m[8] / (float)m_cameraFrameWidth);
-        frameProjection.m[9] = (1.0f - 2.0f * frameProjection.m[9] / (float)m_cameraFrameHeight);
+        XrMatrix4x4f worldToCameraView;
+        XrMatrix4x4f_Invert(&worldToCameraView, (cameraId == 0) ? 
+            &frame->cameraViewToWorldLeft : &frame->cameraViewToWorldRight);
 
-        frameProjection.m[10] = -m_projectionDistanceFar / (m_projectionDistanceFar - NEAR_PROJECTION_DISTANCE);
-        frameProjection.m[11] = -1.0f;
-        frameProjection.m[12] = 0.0f;// 2.0f * frameProjection.m[12] / (float)m_cameraFrameWidth; // This would add the raight to left transform.
-        frameProjection.m[13] = 0.0f;
-        frameProjection.m[14] = -(m_projectionDistanceFar * NEAR_PROJECTION_DISTANCE) / (m_projectionDistanceFar - NEAR_PROJECTION_DISTANCE);
-        frameProjection.m[15] = 0.0f;
+        XrMatrix4x4f rectifiedRotation = (cameraId == 0) ? 
+            distortionParams.rectifiedRotationLeft : distortionParams.rectifiedRotationRight;
 
-        XrMatrix4x4f frameProjectionInverse;
-        XrMatrix4x4f_Invert(&frameProjectionInverse, &frameProjection);
 
-        XrMatrix4x4f leftCameraFromTrackingPose;
-        XrMatrix4x4f_Invert(&leftCameraFromTrackingPose, &frame->cameraViewToWorldLeft);
+        XrMatrix4x4f& worldToCameraProjection = (eye == RenderEye_Left) ? 
+            frame->worldToCameraProjectionLeft : frame->worldToCameraProjectionRight;
 
-        if (eye == RenderEye_Left)
+        XrMatrix4x4f worldToRectView;
+        XrMatrix4x4f_Multiply(&worldToRectView, &rectifiedRotation, &worldToCameraView);
+        XrMatrix4x4f_Multiply(&worldToCameraProjection, &frameProjection, &worldToRectView);
+
+        /* if (eye == RenderEye_Left)
         {
-            XrMatrix4x4f rectifiedRotation = distortionParams.rectifiedRotationLeft;
+            float rx = atan2f(rectifiedRotation.m[9], rectifiedRotation.m[10]);
+            float ry = atan2f(-rectifiedRotation.m[8], sqrtf(powf(rectifiedRotation.m[4], 2) + powf(rectifiedRotation.m[0], 2)));
+            float rz = atan2f(rectifiedRotation.m[4], rectifiedRotation.m[0]);
 
-            // The right eye rotation matrices work for some reason with the y(?) axis rotation reversed.
-            rectifiedRotation.m[4] *= -1;
-            rectifiedRotation.m[6] *= -1;
-
-
-            XrMatrix4x4f rectifiedRotationInverse;
-            XrMatrix4x4f_Transpose(&rectifiedRotationInverse, &rectifiedRotation);
+            XrMatrix4x4f a;
+            XrMatrix4x4f_CreateRotationRadians(&a, -rx * 4.0f, -ry + 0.01f, -rz);
 
             XrMatrix4x4f tempMatrix;
-            XrMatrix4x4f_Multiply(&tempMatrix, &rectifiedRotationInverse, &leftCameraFromTrackingPose);
+            XrMatrix4x4f_Multiply(&tempMatrix, &a, &worldToCameraView);
             XrMatrix4x4f_Multiply(&frame->worldToCameraProjectionLeft, &frameProjection, &tempMatrix);
-
-            XrMatrix4x4f_Multiply(&tempMatrix, &rectifiedRotation, &frameProjectionInverse);
-            XrMatrix4x4f_Multiply(&frame->cameraProjectionToWorldLeft, &frame->cameraViewToWorldLeft, &tempMatrix);
         }
         else
         {
-            XrMatrix4x4f rightCameraFromTrackingPose;
-            XrMatrix4x4f_Invert(&rightCameraFromTrackingPose, &frame->cameraViewToWorldRight);
+            float rx = atan2f(rectifiedRotation.m[9], rectifiedRotation.m[10]);
+            float ry = atan2f(-rectifiedRotation.m[8], sqrtf(powf(rectifiedRotation.m[4], 2) + powf(rectifiedRotation.m[0], 2)));
+            float rz = atan2f(rectifiedRotation.m[4], rectifiedRotation.m[0]);
 
-            XrMatrix4x4f rectifiedRotation = distortionParams.rectifiedRotationRight;
-
-            XrMatrix4x4f rectifiedRotationInverse;
-            XrMatrix4x4f_Transpose(&rectifiedRotationInverse, &rectifiedRotation);       
+            XrMatrix4x4f a;
+            XrMatrix4x4f_CreateRotationRadians(&a, rx * 2.0f, -ry, -rz);
             
             XrMatrix4x4f tempMatrix;
-            XrMatrix4x4f_Multiply(&tempMatrix, &rectifiedRotationInverse, &rightCameraFromTrackingPose);
+            XrMatrix4x4f_Multiply(&tempMatrix, &a, &worldToCameraView);
             XrMatrix4x4f_Multiply(&frame->worldToCameraProjectionRight, &frameProjection, &tempMatrix);
-            
-
-            if (bIsStereo)
-            {           
-                XrMatrix4x4f_Multiply(&tempMatrix, &rectifiedRotation, &frameProjectionInverse);
-                XrMatrix4x4f_Multiply(&frame->cameraProjectionToWorldRight, &frame->cameraViewToWorldRight, &tempMatrix);
-            }
-            else
-            {
-                XrMatrix4x4f_Multiply(&tempMatrix, &distortionParams.rectifiedRotationLeft, &frameProjectionInverse);
-                XrMatrix4x4f_Multiply(&frame->cameraProjectionToWorldRight, &frame->cameraViewToWorldLeft, &tempMatrix);
-            }
-        }
+        }*/
     }
 }

@@ -988,10 +988,6 @@ if (bIsActiveTab) { ImGui::PopStyleColor(1); bIsActiveTab = false; }
 
 			IMGUI_BIG_SPACING;
 
-			/*ImGui::SetNextItemWidth(ImGui::GetContentRegionAvail().x * 0.45f);
-			bImmediateUpdate |= ScrollableSlider("Depth Offset Calibration", &mainConfig.DepthOffsetCalibration, 0.5f, 1.5f, "%.2f", 0.01f);
-			TextDescriptionSpaced("Calibration to compensate for incorrect distance between stereo cameras.");*/
-
 			ImGui::SetNextItemWidth(ImGui::GetContentRegionAvail().x * 0.45f);
 			bImmediateUpdate |= ScrollableSlider("Projection Distance (m)", &mainConfig.ProjectionDistanceFar, 0.5f, 20.0f, "%.1f", 0.1f);
 			TextDescriptionSpaced("The horizontal projection distance in 2D modes, and maximum projection distance in the 3D mode.");

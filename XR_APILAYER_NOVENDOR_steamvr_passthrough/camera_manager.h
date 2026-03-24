@@ -165,21 +165,16 @@ private:
 	XrMatrix4x4f m_HMDToViewLeft{};
 	XrMatrix4x4f m_HMDToViewRight{};
 
-	XrMatrix4x4f m_cameraProjectionInvFarLeft{};
-	XrMatrix4x4f m_cameraProjectionInvFarRight{};
+	XrMatrix4x4f m_cameraProjectionInvLeft{};
+	XrMatrix4x4f m_cameraProjectionInvRight{};
 
 	XrMatrix4x4f m_cameraToHMDLeft{};
 	XrMatrix4x4f m_cameraToHMDRight{};
 	XrMatrix4x4f m_HMDToCameraLeft{};
 	XrMatrix4x4f m_HMDToCameraRight{};
-	XrMatrix4x4f m_HMDToCameraLeftOriginal{};
-	XrMatrix4x4f m_HMDToCameraRightOriginal{};
 
 	XrMatrix4x4f m_cameraLeftToRightPose{};
-	XrMatrix4x4f m_cameraRightToLeftPose{};
 
-	XrMatrix4x4f m_lastCameraProjectionToWorldLeft;
-	XrMatrix4x4f m_lastCameraProjectionToWorldRight;
 	XrMatrix4x4f m_lastWorldToCameraProjectionLeft;
 	XrMatrix4x4f m_lastWorldToCameraProjectionRight;
 	XrMatrix4x4f m_lastCameraFrame_WorldToHMDProjectionLeft;
@@ -286,11 +281,9 @@ private:
 	XrMatrix4x4f m_HMDToViewLeft{};
 	XrMatrix4x4f m_HMDToViewRight{};
 
-	XrMatrix4x4f m_cameraProjectionInvFarLeft{};
-	XrMatrix4x4f m_cameraProjectionInvFarRight{};
+	XrMatrix4x4f m_cameraProjectionInvLeft{};
+	XrMatrix4x4f m_cameraProjectionInvRight{};
 
-	XrMatrix4x4f m_lastCameraProjectionToWorldLeft;
-	XrMatrix4x4f m_lastCameraProjectionToWorldRight;
 	XrMatrix4x4f m_lastWorldToCameraProjectionLeft;
 	XrMatrix4x4f m_lastWorldToCameraProjectionRight;
 	XrMatrix4x4f m_lastCameraFrame_WorldToHMDProjectionLeft;

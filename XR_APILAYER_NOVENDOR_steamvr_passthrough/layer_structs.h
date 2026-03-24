@@ -36,14 +36,10 @@ struct CameraFrame
 		, frameTextureResource(nullptr)
 		, cameraViewToWorldLeft()
 		, cameraViewToWorldRight()
-		, cameraProjectionToWorldLeft()
-		, cameraProjectionToWorldRight()
 		, worldToCameraProjectionLeft()
 		, worldToCameraProjectionRight()
 		, worldToHMDProjectionLeft()
 		, worldToHMDProjectionRight()
-		, prevCameraProjectionToWorldLeft()
-		, prevCameraProjectionToWorldRight()
 		, prevWorldToCameraProjectionLeft()
 		, prevWorldToCameraProjectionRight()
 		, prevCameraFrame_WorldToHMDProjectionLeft()
@@ -68,16 +64,12 @@ struct CameraFrame
 	std::shared_ptr<std::vector<uint8_t>> rectifiedFrameBuffer;
 	XrMatrix4x4f cameraViewToWorldLeft;
 	XrMatrix4x4f cameraViewToWorldRight;
-	XrMatrix4x4f cameraProjectionToWorldLeft;
-	XrMatrix4x4f cameraProjectionToWorldRight;
 	XrMatrix4x4f worldToCameraProjectionLeft;
 	XrMatrix4x4f worldToCameraProjectionRight;
 	XrMatrix4x4f worldToHMDProjectionLeft;
 	XrMatrix4x4f worldToHMDProjectionRight;
 
 	// relative to the previous camera frame
-	XrMatrix4x4f prevCameraProjectionToWorldLeft;
-	XrMatrix4x4f prevCameraProjectionToWorldRight;
 	XrMatrix4x4f prevWorldToCameraProjectionLeft;
 	XrMatrix4x4f prevWorldToCameraProjectionRight;
 	XrMatrix4x4f prevCameraFrame_WorldToHMDProjectionLeft;

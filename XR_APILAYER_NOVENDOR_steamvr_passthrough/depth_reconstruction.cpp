@@ -26,7 +26,6 @@ DepthReconstruction::DepthReconstruction(std::shared_ptr<ConfigManager> configMa
     m_underConstructionDepthFrame = std::make_shared<DepthFrame>();
 
     m_fovScale = m_configManager->GetConfig_Main().FieldOfViewScale;
-    m_depthOffsetCalibration = m_configManager->GetConfig_Main().DepthOffsetCalibration;
     m_bUseColor = stereoConfig.StereoUseColor;
     m_bDisparityBothEyes = stereoConfig.StereoDisparityBothEyes;
 
@@ -71,7 +70,6 @@ void DepthReconstruction::InitReconstruction()
 
     m_cameraManager->GetIntrinsics(RenderEye_Left, m_cameraFocalLength[0], m_cameraCenter[0]);
     m_cameraManager->GetIntrinsics(RenderEye_Right, m_cameraFocalLength[1], m_cameraCenter[1]);
-    m_cameraLeftToRightTransform = m_cameraManager->GetLeftToRightCameraTransform();
 
     ECameraDistortionCoefficients distCoeffs = { 0 };
     m_cameraManager->GetDistortionCoefficients(distCoeffs);
@@ -103,25 +101,16 @@ void DepthReconstruction::InitReconstruction()
     m_distortionParamsRight.at<double>(1, 0) = distCoeffs.v[9];
     m_distortionParamsRight.at<double>(2, 0) = distCoeffs.v[10];
     m_distortionParamsRight.at<double>(3, 0) = distCoeffs.v[11];
-   
-    XrMatrix4x4f rotateX180Matrix, tempMatrix, leftToRightMatrix, leftToRightTransposed;
-    XrMatrix4x4f_CreateRotation(&rotateX180Matrix, 180.0f, 0.0f, 0.0f);
 
-    XrMatrix4x4f_Multiply(&tempMatrix, &m_cameraLeftToRightTransform, &rotateX180Matrix);
-    XrMatrix4x4f_Multiply(&leftToRightMatrix, &rotateX180Matrix, &tempMatrix);
 
-    double leftToRightTranslation[3] = { leftToRightMatrix.m[12], leftToRightMatrix.m[13], leftToRightMatrix.m[14] };
-
-    leftToRightTranslation[0] *= m_depthOffsetCalibration;
-    leftToRightTranslation[1] *= m_depthOffsetCalibration;
-    leftToRightTranslation[2] *= m_depthOffsetCalibration;
-
-    XrMatrix4x4f_Transpose(&leftToRightTransposed, &leftToRightMatrix);
+    XrMatrix4x4f leftToRightMatrix = ChangeBasisToFromOpenCV(m_cameraManager->GetLeftToRightCameraTransform());
+    
+    double leftToRightTranslation[3] = { leftToRightMatrix.m[3], leftToRightMatrix.m[7], leftToRightMatrix.m[11] };
 
     double leftToRightRotation[9] = {
-        leftToRightTransposed.m[0], leftToRightTransposed.m[1], leftToRightTransposed.m[2],
-        leftToRightTransposed.m[4], leftToRightTransposed.m[5], leftToRightTransposed.m[6],
-        leftToRightTransposed.m[8], leftToRightTransposed.m[9], leftToRightTransposed.m[10] };
+        leftToRightMatrix.m[0], leftToRightMatrix.m[1], leftToRightMatrix.m[2],
+        leftToRightMatrix.m[4], leftToRightMatrix.m[5], leftToRightMatrix.m[6],
+        leftToRightMatrix.m[8], leftToRightMatrix.m[9], leftToRightMatrix.m[10] };
 
     cv::Mat R(cv::Size(3, 3), CV_64F, leftToRightRotation);
     cv::Mat T(3, 1, CV_64F, leftToRightTranslation);
@@ -171,10 +160,8 @@ void DepthReconstruction::InitReconstruction()
     m_fishEyeProjectionLeft = CVMatToXrMatrix(P1);
     m_fishEyeProjectionRight = CVMatToXrMatrix(P2);
 
-    XrMatrix4x4f XR_R1 = CVMatToXrMatrix(R1);
-    XrMatrix4x4f_Transpose(&m_rectifiedRotationLeft, &XR_R1);
-    XrMatrix4x4f XR_R2 = CVMatToXrMatrix(R2);
-    XrMatrix4x4f_Transpose(&m_rectifiedRotationRight, &XR_R2);
+    m_rectifiedRotationLeft = CVMatToXrMatrix(R1);
+    m_rectifiedRotationRight = CVMatToXrMatrix(R2);
 
     XrMatrix4x4f XR_Q = CVMatToXrMatrix(Q);
     XrMatrix4x4f_Transpose(&m_disparityToDepth, &XR_Q);
@@ -223,10 +210,37 @@ void DepthReconstruction::CreateDistortionMap()
         m_distortionParams.uvDistortionMap = std::make_shared<std::vector<float>>();
     }
 
-    m_distortionParams.cameraProjectionLeft = m_fishEyeProjectionLeft;
-    m_distortionParams.cameraProjectionRight = m_fishEyeProjectionRight;
-    m_distortionParams.rectifiedRotationLeft = m_rectifiedRotationLeft;
-    m_distortionParams.rectifiedRotationRight = m_rectifiedRotationRight;
+    XrMatrix4x4f frameProjectionLeft, frameProjectionRight;
+    XrMatrix4x4f_Transpose(&frameProjectionLeft, &m_fishEyeProjectionLeft);
+    XrMatrix4x4f_Transpose(&frameProjectionRight, &m_fishEyeProjectionRight);
+
+    // Adjust camera space projection matrix to project to clip space.
+    frameProjectionLeft.m[0] = 2.0f * frameProjectionLeft.m[0] / (float)m_cameraFrameWidth;
+    frameProjectionLeft.m[5] = -2.0f * frameProjectionLeft.m[5] / (float)m_cameraFrameHeight;
+    frameProjectionLeft.m[8] = (1.0f - 2.0f * frameProjectionLeft.m[8] / (float)m_cameraFrameWidth);
+    frameProjectionLeft.m[9] = (1.0f - 2.0f * frameProjectionLeft.m[9] / (float)m_cameraFrameHeight);
+    frameProjectionLeft.m[10] = 0.0f;
+    frameProjectionLeft.m[11] = -1.0f;
+    frameProjectionLeft.m[12] = 0.0f;
+    frameProjectionLeft.m[13] = 0.0f;
+    frameProjectionLeft.m[14] = -NEAR_PROJECTION_DISTANCE;
+    frameProjectionLeft.m[15] = 0.0f;
+
+    frameProjectionRight.m[0] = 2.0f * frameProjectionRight.m[0] / (float)m_cameraFrameWidth;
+    frameProjectionRight.m[5] = -2.0f * frameProjectionRight.m[5] / (float)m_cameraFrameHeight;
+    frameProjectionRight.m[8] = (1.0f - 2.0f * frameProjectionRight.m[8] / (float)m_cameraFrameWidth);
+    frameProjectionRight.m[9] = (1.0f - 2.0f * frameProjectionRight.m[9] / (float)m_cameraFrameHeight);
+    frameProjectionRight.m[10] = 0.0f;
+    frameProjectionRight.m[11] = -1.0f;
+    frameProjectionRight.m[12] = 0.0f;
+    frameProjectionRight.m[13] = 0.0f;
+    frameProjectionRight.m[14] = -NEAR_PROJECTION_DISTANCE;
+    frameProjectionRight.m[15] = 0.0f;
+
+    m_distortionParams.cameraProjectionLeft = frameProjectionLeft;
+    m_distortionParams.cameraProjectionRight = frameProjectionRight;
+    m_distortionParams.rectifiedRotationLeft = ChangeBasisToFromOpenCV(m_rectifiedRotationLeft);
+    m_distortionParams.rectifiedRotationRight = ChangeBasisToFromOpenCV(m_rectifiedRotationRight);
 
     m_distortionParams.fovScale = m_fovScale;
 
@@ -358,14 +372,12 @@ void DepthReconstruction::RunThread()
         if (m_maxDisparity != stereoConfig.StereoMaxDisparity ||
             m_downscaleFactor != stereoConfig.StereoDownscaleFactor ||
             m_fovScale != mainConfig.FieldOfViewScale ||
-            m_depthOffsetCalibration != mainConfig.DepthOffsetCalibration ||
             m_bUseColor != stereoConfig.StereoUseColor ||
             m_bDisparityBothEyes != stereoConfig.StereoDisparityBothEyes)
         {
             m_maxDisparity = stereoConfig.StereoMaxDisparity;
             m_downscaleFactor = stereoConfig.StereoDownscaleFactor;
             m_fovScale = mainConfig.FieldOfViewScale;
-            m_depthOffsetCalibration = mainConfig.DepthOffsetCalibration;
             m_bUseColor = stereoConfig.StereoUseColor;
             m_bDisparityBothEyes = stereoConfig.StereoDisparityBothEyes;
 
@@ -675,11 +687,15 @@ void DepthReconstruction::RunThread()
                 });
             }
             
+            XrMatrix4x4f rectifiedRotationInvLeft;
+            XrMatrix4x4f_Transpose(&rectifiedRotationInvLeft, &m_rectifiedRotationLeft);
+            XrMatrix4x4f_Multiply(&m_underConstructionDepthFrame->disparityViewToWorldLeft, &viewToWorldLeft, &rectifiedRotationInvLeft);
 
-            XrMatrix4x4f_Multiply(&m_underConstructionDepthFrame->disparityViewToWorldLeft, &viewToWorldLeft, &m_rectifiedRotationLeft);
             if (m_bDisparityBothEyes)
             {
-                XrMatrix4x4f_Multiply(&m_underConstructionDepthFrame->disparityViewToWorldRight, &viewToWorldRight, &m_rectifiedRotationRight);
+                XrMatrix4x4f rectifiedRotationInvRight;
+                XrMatrix4x4f_Transpose(&rectifiedRotationInvRight, &m_rectifiedRotationRight);
+                XrMatrix4x4f_Multiply(&m_underConstructionDepthFrame->disparityViewToWorldRight, &viewToWorldRight, &rectifiedRotationInvRight);
             }
             else
             {

@@ -50,13 +50,11 @@ private:
 	uint32_t m_cameraFrameHeight;
 	uint32_t m_cvImageWidth;
 	uint32_t m_cvImageHeight;
-	XrMatrix4x4f m_cameraLeftToRightTransform;
 	EStereoFrameLayout m_frameLayout;
 
 	uint32_t m_lastFrameSequence;
 	uint32_t m_downscaleFactor;
 	float m_fovScale;
-	float m_depthOffsetCalibration;
 	int m_maxDisparity;
 	bool m_bUseMulticore;
 	bool m_bUseColor;

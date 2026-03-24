@@ -23,27 +23,27 @@ struct EulerAngles
     double Z;
 };
 
-inline double RadToDeg(double r)
+inline double RadToDeg(const double r)
 {
     return r * 180.0 / M_PI;
 }
 
-inline double DegToRad(double d)
+inline double DegToRad(const double d)
 {
     return d * M_PI / 180.0;
 }
 
-inline float RadToDeg(float r)
+inline float RadToDeg(const float r)
 {
     return r * 180.0f / (float)M_PI;
 }
 
-inline float DegToRad(float d)
+inline float DegToRad(const float d)
 {
     return d * (float)M_PI / 180.0f;
 }
 
-inline EulerAngles HMDMatRotationToEuler(vr::HmdMatrix34_t& R)
+inline EulerAngles HMDMatRotationToEuler(const vr::HmdMatrix34_t& R)
 {
     double sy = sqrt(R.m[0][0] * R.m[0][0] + R.m[1][0] * R.m[1][0]);
 
@@ -64,7 +64,7 @@ inline EulerAngles HMDMatRotationToEuler(vr::HmdMatrix34_t& R)
     return angles;
 }
 
-inline EulerAngles CVMatRotationToEuler(cv::Mat& R)
+inline EulerAngles CVMatRotationToEuler(const cv::Mat& R)
 {
     double sy = sqrt(R.at<double>(0, 0) * R.at<double>(0, 0) + R.at<double>(1, 0) * R.at<double>(1, 0));
 
@@ -85,7 +85,7 @@ inline EulerAngles CVMatRotationToEuler(cv::Mat& R)
     return angles;
 }
 
-inline cv::Mat EulerToCVMatRotation(EulerAngles angles)
+inline cv::Mat EulerToCVMatRotation(const EulerAngles angles)
 {
     double rx = DegToRad(angles.X);
     double ry = DegToRad(angles.Y);
@@ -98,7 +98,7 @@ inline cv::Mat EulerToCVMatRotation(EulerAngles angles)
     return Z * Y * X;
 }
 
-inline XrMatrix4x4f ToXRMatrix4x4(vr::HmdMatrix44_t& input)
+inline XrMatrix4x4f ToXRMatrix4x4(const vr::HmdMatrix44_t& input)
 {
     XrMatrix4x4f output =
     {
@@ -110,7 +110,7 @@ inline XrMatrix4x4f ToXRMatrix4x4(vr::HmdMatrix44_t& input)
     return output;
 }
 
-inline XrMatrix4x4f ToXRMatrix4x4(vr::HmdMatrix34_t& input)
+inline XrMatrix4x4f ToXRMatrix4x4(const vr::HmdMatrix34_t& input)
 {
     XrMatrix4x4f output =
     {
@@ -122,7 +122,7 @@ inline XrMatrix4x4f ToXRMatrix4x4(vr::HmdMatrix34_t& input)
     return output;
 }
 
-inline XrMatrix4x4f ToXRMatrix4x4Inverted(vr::HmdMatrix44_t& input)
+inline XrMatrix4x4f ToXRMatrix4x4Inverted(const vr::HmdMatrix44_t& input)
 {
     XrMatrix4x4f temp =
     {
@@ -137,7 +137,7 @@ inline XrMatrix4x4f ToXRMatrix4x4Inverted(vr::HmdMatrix44_t& input)
 }
 
 
-inline XrMatrix4x4f ToXRMatrix4x4Inverted(vr::HmdMatrix34_t& input)
+inline XrMatrix4x4f ToXRMatrix4x4Inverted(const vr::HmdMatrix34_t& input)
 {
     XrMatrix4x4f temp =
     {
@@ -152,7 +152,7 @@ inline XrMatrix4x4f ToXRMatrix4x4Inverted(vr::HmdMatrix34_t& input)
 }
 
 
-inline XrMatrix4x4f CVMatToXrMatrix(cv::Mat& inMatrix)
+inline XrMatrix4x4f CVMatToXrMatrix(const cv::Mat& inMatrix)
 {
     XrMatrix4x4f outMatrix;
     XrMatrix4x4f_CreateIdentity(&outMatrix);
@@ -163,5 +163,20 @@ inline XrMatrix4x4f CVMatToXrMatrix(cv::Mat& inMatrix)
             outMatrix.m[x + y * 4] = (float)inMatrix.at<double>(y, x);
         }
     }
+    return outMatrix;
+}
+
+// Changes basis between [Y=Up, -Z=Forward] and [-Y=Up, Z=Forward]
+inline XrMatrix4x4f ChangeBasisToFromOpenCV(const XrMatrix4x4f& inMatrix)
+{
+    XrMatrix4x4f tempMatrix, rotateX180Matrix, outMatrix;
+
+    XrMatrix4x4f_CreateRotation(&rotateX180Matrix, 180.0f, 0.0f, 0.0f);
+
+    XrMatrix4x4f_Multiply(&outMatrix, &inMatrix, &rotateX180Matrix);
+    XrMatrix4x4f_Multiply(&tempMatrix, &rotateX180Matrix, &outMatrix);
+
+    XrMatrix4x4f_Transpose(&outMatrix, &tempMatrix);
+
     return outMatrix;
 }

@@ -101,7 +101,6 @@ struct alignas(4) Config_Main
 	float ProjectionDistanceFar = 10.0f;
 	float FloorHeightOffset = 0.0f;
 	float FieldOfViewScale = 1.0f;
-	float DepthOffsetCalibration = 1.0f;
 
 	float Brightness = 0.0f;
 	float Contrast = 1.0f;
@@ -143,7 +142,6 @@ struct alignas(4) Config_Main
 		ProjectionDistanceFar = (float)ini.GetDoubleValue(section, "ProjectionDistanceFar", ProjectionDistanceFar);
 		FloorHeightOffset = (float)ini.GetDoubleValue(section, "FloorHeightOffset", FloorHeightOffset);
 		FieldOfViewScale = (float)ini.GetDoubleValue(section, "FieldOfViewScale", FieldOfViewScale);
-		DepthOffsetCalibration = (float)ini.GetDoubleValue(section, "DepthOffsetCalibration", DepthOffsetCalibration);
 
 		Brightness = (float)ini.GetDoubleValue(section, "Brightness", Brightness);
 		Contrast = (float)ini.GetDoubleValue(section, "Contrast", Contrast);
@@ -180,7 +178,6 @@ struct alignas(4) Config_Main
 		ini.SetDoubleValue(section, "ProjectionDistanceFar", ProjectionDistanceFar);
 		ini.SetDoubleValue(section, "FloorHeightOffset", FloorHeightOffset);
 		ini.SetDoubleValue(section, "FieldOfViewScale", FieldOfViewScale);
-		ini.SetDoubleValue(section, "DepthOffsetCalibration", DepthOffsetCalibration);
 
 		ini.SetDoubleValue(section, "Brightness", Brightness);
 		ini.SetDoubleValue(section, "Contrast", Contrast);
