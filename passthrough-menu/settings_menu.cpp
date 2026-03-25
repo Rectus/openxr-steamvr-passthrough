@@ -65,12 +65,15 @@ static void* TreeNodeHandler_ReadOpen(ImGuiContext*, ImGuiSettingsHandler* handl
 	{
 		treeNodeData->emplace(id, false);
 	}
-	return (void*)id;
+	uint64_t idPadded = id;
+	return reinterpret_cast<void*>(idPadded);
 }
 
 static void TreeNodeHandler_ReadLine(ImGuiContext*, ImGuiSettingsHandler* handler, void* entry, const char* line)
 {
-	ImGuiID id = (ImGuiID)entry;
+	uint64_t idPadded = reinterpret_cast<uint64_t>(entry);
+	ImGuiID id = static_cast<ImGuiID>(idPadded);
+
 	auto treeNodeData = reinterpret_cast<std::map<ImGuiID, bool>*>(handler->UserData);
 
 	int i;
@@ -1387,6 +1390,27 @@ if (bIsActiveTab) { ImGui::PopStyleColor(1); bIsActiveTab = false; }
 				ImGui::Text("Current Camera API: None");
 			}
 
+			switch (displayValues.CameraState)
+			{
+			case CameraState_Uninitialized:
+				ImGui::Text("Camera state: Uninitialized");
+				break;
+			case CameraState_Idle:
+				ImGui::Text("Camera state: Idle");
+				break;
+			case CameraState_Waiting:
+				ImGui::Text("Camera state: Waiting");
+				break;
+			case CameraState_Active:
+				ImGui::Text("Camera state: Active");
+				break;
+			case CameraState_Error:
+				ImGui::Text("Camera state: Error");
+				break;
+			default:
+				ImGui::Text("Camera state: Invalid state!");
+			}
+
 			IMGUI_BIG_SPACING;
 			ImGui::PopFont();
 		}
@@ -1436,18 +1460,18 @@ if (bIsActiveTab) { ImGui::PopStyleColor(1); bIsActiveTab = false; }
 
 			IMGUI_BIG_SPACING;
 
-			ImGui::Text("Override Distortion Mode");
+			ImGui::Text("Override Lens Distortion Model");
 			if (ImGui::RadioButton("Off", cameraConfig.CameraForceDistortionMode == CameraDistortionMode_NotSet))
 			{
 				cameraConfig.CameraForceDistortionMode = CameraDistortionMode_NotSet;
 			}
 			ImGui::SameLine();
-			if (ImGui::RadioButton("Normal Lens", cameraConfig.CameraForceDistortionMode == CameraDistortionMode_RegularLens))
+			if (ImGui::RadioButton("Normal Lens (Pinhole Camera)", cameraConfig.CameraForceDistortionMode == CameraDistortionMode_RegularLens))
 			{
 				cameraConfig.CameraForceDistortionMode = CameraDistortionMode_RegularLens;
 			}
 			ImGui::SameLine();
-			if (ImGui::RadioButton("Fisheye", cameraConfig.CameraForceDistortionMode == CameraDistortionMode_Fisheye))
+			if (ImGui::RadioButton("Fisheye Lens (F-Theta)", cameraConfig.CameraForceDistortionMode == CameraDistortionMode_Fisheye))
 			{
 				cameraConfig.CameraForceDistortionMode = CameraDistortionMode_Fisheye;
 			}
@@ -1594,11 +1618,23 @@ if (bIsActiveTab) { ImGui::PopStyleColor(1); bIsActiveTab = false; }
 			{
 				cameraConfig.CameraFrameLayout = FrameLayout_StereoHorizontal;
 			}
-			ImGui::Checkbox("Camera Has Fisheye Lens", &cameraConfig.CameraHasFisheyeLens);
 
 			IMGUI_BIG_SPACING;
 
-			if (CollapsingHeaderPersistent("Left Camera", ImGuiTreeNodeFlags_DefaultOpen))
+			ImGui::Text("Lens Distortion Model");
+			if (ImGui::RadioButton("Normal Lens (Pinhole Camera)###CamFTanTheta", !cameraConfig.CameraHasFisheyeLens))
+			{
+				cameraConfig.CameraHasFisheyeLens = false;
+			}
+			ImGui::SameLine();
+			if (ImGui::RadioButton("Fisheye Lens (F-Theta)###CamFTheta", cameraConfig.CameraHasFisheyeLens))
+			{
+				cameraConfig.CameraHasFisheyeLens = true;
+			}
+
+			IMGUI_BIG_SPACING;
+
+			if (TreeNodePersistent("Left Camera", ImGuiTreeNodeFlags_DefaultOpen))
 			{
 				ImGui::Text("Camera Extrinsics");
 				ImGui::DragFloat3("Camera Offset (m)", cameraConfig.Camera0_Translation, 0.001f, 0.0f, 0.0f, "%.3f");
@@ -1608,10 +1644,14 @@ if (bIsActiveTab) { ImGui::PopStyleColor(1); bIsActiveTab = false; }
 				ImGui::DragFloat2("Center", cameraConfig.Camera0_IntrinsicsCenter, 0.001f, 0.0f, 0.0f, "%.5f");
 				ImGui::DragInt2("Sensor Pixels", cameraConfig.Camera0_IntrinsicsSensorPixels, 1.0f, 1, 8192);
 				ImGui::DragFloat4("Distortion", cameraConfig.Camera0_IntrinsicsDist, 0.001f, 0.0f, 0.0f, "%.5f");
+				ImGui::SameLine();
+				ImGui::Text(cameraConfig.CameraHasFisheyeLens ? "k1, k2, k3, k4" : "k1, k2, p1, p2");
 
+				IMGUI_BIG_SPACING;
+				ImGui::TreePop();
 			}
 
-			if (CollapsingHeaderPersistent("Right Camera", ImGuiTreeNodeFlags_DefaultOpen))
+			if (TreeNodePersistent("Right Camera", ImGuiTreeNodeFlags_DefaultOpen))
 			{
 				ImGui::Text("Camera Extrinsics");
 				ImGui::DragFloat3("Camera Offset (m)###RightOffset", cameraConfig.Camera1_Translation, 0.001f, 0.0f, 0.0f, "%.3f");
@@ -1621,7 +1661,12 @@ if (bIsActiveTab) { ImGui::PopStyleColor(1); bIsActiveTab = false; }
 				ImGui::DragFloat2("Focal Length###RightF", cameraConfig.Camera1_IntrinsicsFocal, 0.001f, 0.0f, 0.0f, "%.5f");
 				ImGui::DragFloat2("Center###RightC", cameraConfig.Camera1_IntrinsicsCenter, 0.001f, 0.0f, 0.0f, "%.5f");
 				ImGui::DragInt2("Sensor Pixels###RightPx", cameraConfig.Camera1_IntrinsicsSensorPixels, 1.0f, 1, 8192);
-				ImGui::DragFloat4("Distortion##RightDist", cameraConfig.Camera1_IntrinsicsDist, 0.001f, 0.0f, 0.0f, "%.5f");
+				ImGui::DragFloat4("Distortion###RightDist", cameraConfig.Camera1_IntrinsicsDist, 0.001f, 0.0f, 0.0f, "%.5f");
+				ImGui::SameLine();
+				ImGui::Text(cameraConfig.CameraHasFisheyeLens ? "k1, k2, k3, k4" : "k1, k2, p1, p2");
+
+				IMGUI_BIG_SPACING;
+				ImGui::TreePop();
 			}
 
 			IMGUI_BIG_SPACING;
@@ -1635,13 +1680,166 @@ if (bIsActiveTab) { ImGui::PopStyleColor(1); bIsActiveTab = false; }
 
 			IMGUI_BIG_SPACING;
 
-			BeginSoftDisabled(!cameraConfig.OpenVRCustomCalibration);
+			ImGui::BeginDisabled(!m_dashboardOverlay->IsRuntimeInitialized());
+			if (BigButton("Copy SteamVR Camera Parameters to Custom Calibration"))
+			{
+				m_dashboardOverlay->GetCameraDebugProperties(m_deviceDebugProps);
 
-			ImGui::Checkbox("SteamVR Camera Has Fisheye Lens", &cameraConfig.OpenVR_CameraHasFisheyeLens);
+				if (m_deviceDebugProps.size() > 0)
+				{
+					DeviceDebugProperties& props = m_deviceDebugProps[0];
+
+					cameraConfig.OpenVR_CameraHasFisheyeLens = props.CameraProps[0].DistortionFunction != vr::VRDistortionFunctionType_None;
+
+					{
+						CameraDebugProperties& camera0Props = props.CameraProps[0];
+						vr::HmdMatrix34_t cam0InvView = camera0Props.CameraToHeadTransform;
+
+						cameraConfig.OpenVR_Camera0_Translation[0] = cam0InvView.m[0][3];
+						cameraConfig.OpenVR_Camera0_Translation[1] = cam0InvView.m[1][3];
+						cameraConfig.OpenVR_Camera0_Translation[2] = cam0InvView.m[2][3];
+
+						EulerAngles angles = HMDMatRotationToEuler(cam0InvView);
+						cameraConfig.OpenVR_Camera0_Rotation[0] = (float)angles.X;
+						cameraConfig.OpenVR_Camera0_Rotation[1] = (float)angles.Y;
+						cameraConfig.OpenVR_Camera0_Rotation[2] = (float)angles.Z;
+
+						// Assuming the regular undistorted frame size matches the distorted for FTheta,
+						// and max undistorted matches for FTheta Extended and None (true for Index and Vive).
+						if (camera0Props.DistortionFunction == vr::VRDistortionFunctionType_FTheta)
+						{
+							cameraConfig.OpenVR_Camera0_IntrinsicsFocal[0] = 
+								camera0Props.UndistortedFocalLength.v[0];
+							cameraConfig.OpenVR_Camera0_IntrinsicsFocal[1] = 
+								camera0Props.UndistortedFocalLength.v[1];
+							cameraConfig.OpenVR_Camera0_IntrinsicsCenter[0] = 
+								camera0Props.UndistortedOpticalCenter.v[0];
+							cameraConfig.OpenVR_Camera0_IntrinsicsCenter[1] = 
+								camera0Props.UndistortedOpticalCenter.v[1];
+						}
+						else
+						{
+							cameraConfig.OpenVR_Camera0_IntrinsicsFocal[0] = 
+								camera0Props.MaximumUndistortedFocalLength.v[0];
+							cameraConfig.OpenVR_Camera0_IntrinsicsFocal[1] = 
+								camera0Props.MaximumUndistortedFocalLength.v[1];
+							cameraConfig.OpenVR_Camera0_IntrinsicsCenter[0] = 
+								camera0Props.MaximumUndistortedOpticalCenter.v[0];
+							cameraConfig.OpenVR_Camera0_IntrinsicsCenter[1] = 
+								camera0Props.MaximumUndistortedOpticalCenter.v[1];
+						}
+
+						cameraConfig.OpenVR_Camera0_IntrinsicsSensorPixels[0] = props.DistortedFrameWidth;
+						cameraConfig.OpenVR_Camera0_IntrinsicsSensorPixels[1] = props.DistortedFrameHeight;
+
+						if (props.CameraFrameLayout & vr::EVRTrackedCameraFrameLayout_HorizontalLayout)
+						{
+							cameraConfig.OpenVR_Camera0_IntrinsicsSensorPixels[0] /= 2;
+						}
+						else if (props.CameraFrameLayout & vr::EVRTrackedCameraFrameLayout_VerticalLayout)
+						{
+							cameraConfig.OpenVR_Camera0_IntrinsicsSensorPixels[1] /= 2;
+						}
+
+						cameraConfig.OpenVR_Camera0_IntrinsicsDist[0] = 
+							(float)camera0Props.DistortionCoefficients[0];
+						cameraConfig.OpenVR_Camera0_IntrinsicsDist[1] = 
+							(float)camera0Props.DistortionCoefficients[1];
+						cameraConfig.OpenVR_Camera0_IntrinsicsDist[2] = 
+							(float)camera0Props.DistortionCoefficients[2];
+						cameraConfig.OpenVR_Camera0_IntrinsicsDist[3] = 
+							(float)camera0Props.DistortionCoefficients[3];
+					}
+
+					if (props.CameraFrameLayout & vr::EVRTrackedCameraFrameLayout_Stereo)
+					{
+						CameraDebugProperties& camera1Props = props.CameraProps[1];
+						vr::HmdMatrix34_t cam1InvView = camera1Props.CameraToHeadTransform;
+
+						cameraConfig.OpenVR_Camera1_Translation[0] = cam1InvView.m[0][3];
+						cameraConfig.OpenVR_Camera1_Translation[1] = cam1InvView.m[1][3];
+						cameraConfig.OpenVR_Camera1_Translation[2] = cam1InvView.m[2][3];
+
+						EulerAngles angles = HMDMatRotationToEuler(cam1InvView);
+						cameraConfig.OpenVR_Camera1_Rotation[0] = (float)angles.X;
+						cameraConfig.OpenVR_Camera1_Rotation[1] = (float)angles.Y;
+						cameraConfig.OpenVR_Camera1_Rotation[2] = (float)angles.Z;
+
+						// Assuming the regular undistorted frame size matches the distorted for FTheta,
+						// and max undistorted matches for FTheta Extended and None (true for Index and Vive).
+						if (camera1Props.DistortionFunction == vr::VRDistortionFunctionType_FTheta)
+						{
+							cameraConfig.OpenVR_Camera1_IntrinsicsFocal[0] = 
+								camera1Props.UndistortedFocalLength.v[0];
+							cameraConfig.OpenVR_Camera1_IntrinsicsFocal[1] = 
+								camera1Props.UndistortedFocalLength.v[1];
+							cameraConfig.OpenVR_Camera1_IntrinsicsCenter[0] = 
+								camera1Props.UndistortedOpticalCenter.v[0];
+							cameraConfig.OpenVR_Camera1_IntrinsicsCenter[1] = 
+								camera1Props.UndistortedOpticalCenter.v[1];
+						}
+						else
+						{
+							cameraConfig.OpenVR_Camera1_IntrinsicsFocal[0] = 
+								camera1Props.MaximumUndistortedFocalLength.v[0];
+							cameraConfig.OpenVR_Camera1_IntrinsicsFocal[1] = 
+								camera1Props.MaximumUndistortedFocalLength.v[1];
+							cameraConfig.OpenVR_Camera1_IntrinsicsCenter[0] = 
+								camera1Props.MaximumUndistortedOpticalCenter.v[0];
+							cameraConfig.OpenVR_Camera1_IntrinsicsCenter[1] = 
+								camera1Props.MaximumUndistortedOpticalCenter.v[1];
+						}
+
+						cameraConfig.OpenVR_Camera1_IntrinsicsSensorPixels[0] = props.DistortedFrameWidth;
+						cameraConfig.OpenVR_Camera1_IntrinsicsSensorPixels[1] = props.DistortedFrameHeight;
+
+						if (props.CameraFrameLayout & vr::EVRTrackedCameraFrameLayout_HorizontalLayout)
+						{
+							cameraConfig.OpenVR_Camera1_IntrinsicsSensorPixels[0] /= 2;
+						}
+						else if (props.CameraFrameLayout & vr::EVRTrackedCameraFrameLayout_VerticalLayout)
+						{
+							cameraConfig.OpenVR_Camera1_IntrinsicsSensorPixels[1] /= 2;
+						}
+
+						cameraConfig.OpenVR_Camera1_IntrinsicsDist[0] = 
+							(float)camera1Props.DistortionCoefficients[0];
+						cameraConfig.OpenVR_Camera1_IntrinsicsDist[1] = 
+							(float)camera1Props.DistortionCoefficients[1];
+						cameraConfig.OpenVR_Camera1_IntrinsicsDist[2] = 
+							(float)camera1Props.DistortionCoefficients[2];
+						cameraConfig.OpenVR_Camera1_IntrinsicsDist[3] = 
+							(float)camera1Props.DistortionCoefficients[3];
+					}
+
+					g_logger->info("Stock SteamVR camera parameters written to custom calibration");
+				}
+				else
+				{
+					g_logger->warn("No SteamVR camera parameters available!");
+				}
+
+			}
+			ImGui::EndDisabled();
 
 			IMGUI_BIG_SPACING;
 
-			if (CollapsingHeaderPersistent("SteamVR Camera 0", ImGuiTreeNodeFlags_DefaultOpen))
+			BeginSoftDisabled(!cameraConfig.OpenVRCustomCalibration);
+
+			ImGui::Text("Lens Distortion Model");
+			if (ImGui::RadioButton("Normal Lens (Pinhole Camera)###SteamVRCamFTanTheta", !cameraConfig.OpenVR_CameraHasFisheyeLens))
+			{
+				cameraConfig.OpenVR_CameraHasFisheyeLens = false;
+			}
+			ImGui::SameLine();
+			if (ImGui::RadioButton("Fisheye Lens (F-Theta)###SteamVRCamFTheta", cameraConfig.OpenVR_CameraHasFisheyeLens))
+			{
+				cameraConfig.OpenVR_CameraHasFisheyeLens = true;
+			}
+
+			IMGUI_BIG_SPACING;
+
+			if (TreeNodePersistent("SteamVR Camera 0", ImGuiTreeNodeFlags_DefaultOpen))
 			{
 				ImGui::Text("Camera Extrinsics");
 				ImGui::DragFloat3("Camera Offset (m)###OpenVROffset", cameraConfig.OpenVR_Camera0_Translation, 0.001f, 0.0f, 0.0f, "%.3f");
@@ -1651,9 +1849,14 @@ if (bIsActiveTab) { ImGui::PopStyleColor(1); bIsActiveTab = false; }
 				ImGui::DragFloat2("Center###OpenVRC", cameraConfig.OpenVR_Camera0_IntrinsicsCenter, 0.001f, 0.0f, 0.0f, "%.5f");
 				ImGui::DragInt2("Sensor Pixels###OpenVRPx", cameraConfig.OpenVR_Camera0_IntrinsicsSensorPixels, 1.0f, 1, 8192);
 				ImGui::DragFloat4("Distortion###OpenVRDist", cameraConfig.OpenVR_Camera0_IntrinsicsDist, 0.001f, 0.0f, 0.0f, "%.5f");
+				ImGui::SameLine();
+				ImGui::Text(cameraConfig.OpenVR_CameraHasFisheyeLens ? "k1, k2, k3, k4" : "k1, k2, p1, p2");
+
+				IMGUI_BIG_SPACING;
+				ImGui::TreePop();
 			}
 
-			if (CollapsingHeaderPersistent("SteamVR Camera 1", ImGuiTreeNodeFlags_DefaultOpen))
+			if (TreeNodePersistent("SteamVR Camera 1", ImGuiTreeNodeFlags_DefaultOpen))
 			{
 				ImGui::Text("Camera Extrinsics");
 				ImGui::DragFloat3("Camera Offset (m)###OpenVRRightOffset", cameraConfig.OpenVR_Camera1_Translation, 0.001f, 0.0f, 0.0f, "%.3f");
@@ -1662,7 +1865,12 @@ if (bIsActiveTab) { ImGui::PopStyleColor(1); bIsActiveTab = false; }
 				ImGui::DragFloat2("Focal Length###OpenVRRightF", cameraConfig.OpenVR_Camera1_IntrinsicsFocal, 0.001f, 0.0f, 0.0f, "%.5f");
 				ImGui::DragFloat2("Center###OpenVRRightC", cameraConfig.OpenVR_Camera1_IntrinsicsCenter, 0.001f, 0.0f, 0.0f, "%.5f");
 				ImGui::DragInt2("Sensor Pixels###OpenVRRightPx", cameraConfig.OpenVR_Camera1_IntrinsicsSensorPixels, 1.0f, 1, 8192);
-				ImGui::DragFloat4("Distortion##OpenVRRightDist", cameraConfig.OpenVR_Camera1_IntrinsicsDist, 0.001f, 0.0f, 0.0f, "%.5f");
+				ImGui::DragFloat4("Distortion###OpenVRRightDist", cameraConfig.OpenVR_Camera1_IntrinsicsDist, 0.001f, 0.0f, 0.0f, "%.5f");
+				ImGui::SameLine();
+				ImGui::Text(cameraConfig.OpenVR_CameraHasFisheyeLens ? "k1, k2, k3, k4" : "k1, k2, p1, p2");
+
+				IMGUI_BIG_SPACING;
+				ImGui::TreePop();
 			}
 
 			EndSoftDisabled(!cameraConfig.OpenVRCustomCalibration);
@@ -2333,7 +2541,7 @@ if (bIsActiveTab) { ImGui::PopStyleColor(1); bIsActiveTab = false; }
 		if (CollapsingHeaderPersistent("Device Properties", ImGuiTreeNodeFlags_DefaultOpen))
 		{
 
-			ImGui::BeginDisabled(m_dashboardOverlay->IsRuntimeInitialized());
+			ImGui::BeginDisabled(!m_dashboardOverlay->IsRuntimeInitialized());
 			if (ImGui::Button("Refresh"))
 			{
 				if (m_dashboardOverlay->IsRuntimeInitialized())

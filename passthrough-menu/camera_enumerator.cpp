@@ -66,4 +66,10 @@ void CameraEnumerator::EnumerateCameras(std::vector<std::string>& deviceList)
     }
     CoTaskMemFree(devices);
     attributes->Release();
+
+    // Add dummy devices to allow selecting cameras not enumerated by media foundation.
+    while (deviceList.size() < 16)
+    {
+        deviceList.push_back("None");
+    }
 }

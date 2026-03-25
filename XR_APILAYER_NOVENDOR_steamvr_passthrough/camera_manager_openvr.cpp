@@ -371,12 +371,12 @@ void CameraManagerOpenVR::GetTrackedCameraEyePoses(XrMatrix4x4f& LeftPose, XrMat
     {
         XrMatrix4x4f camera0Pose, camera1Pose, transMatrix, rotMatrix;
 
-        XrMatrix4x4f_CreateTranslation(&transMatrix, cameraConf.OpenVR_Camera0_Translation[0], cameraConf.OpenVR_Camera0_Translation[1], cameraConf.OpenVR_Camera0_Translation[2]);
+        XrMatrix4x4f_CreateTranslation(&transMatrix, -cameraConf.OpenVR_Camera0_Translation[0], -cameraConf.OpenVR_Camera0_Translation[1], -cameraConf.OpenVR_Camera0_Translation[2]);
         XrMatrix4x4f_CreateRotation(&rotMatrix, -cameraConf.OpenVR_Camera0_Rotation[0], -cameraConf.OpenVR_Camera0_Rotation[1], -cameraConf.OpenVR_Camera0_Rotation[2]);
 
         XrMatrix4x4f_Multiply(&camera0Pose, &rotMatrix, &transMatrix);
 
-        XrMatrix4x4f_CreateTranslation(&transMatrix, cameraConf.OpenVR_Camera1_Translation[0], cameraConf.OpenVR_Camera1_Translation[1], cameraConf.OpenVR_Camera1_Translation[2]);
+        XrMatrix4x4f_CreateTranslation(&transMatrix, -cameraConf.OpenVR_Camera1_Translation[0], -cameraConf.OpenVR_Camera1_Translation[1], -cameraConf.OpenVR_Camera1_Translation[2]);
         XrMatrix4x4f_CreateRotation(&rotMatrix, -cameraConf.OpenVR_Camera1_Rotation[0], -cameraConf.OpenVR_Camera1_Rotation[1], -cameraConf.OpenVR_Camera1_Rotation[2]);
 
         XrMatrix4x4f_Multiply(&camera1Pose, &rotMatrix, &transMatrix); 
@@ -629,12 +629,13 @@ void CameraManagerOpenVR::ServeFrames()
         }
 
         m_underConstructionFrame->bHasFrameBuffer = false;
+        bool bDoFrameDump = m_configManager->CheckFrameTextureDumpPending();
+        bool bWantsCPUFrameBuffer = (mainConf.ProjectionMode == Projection_StereoReconstruction || bDoFrameDump);
 
         // Get the CPU frame for depth reconstruction, or the legacy D3D12 renderer.
         // GetVideoStreamFrameBuffer crashes when used with Vulkan and OpenGL apps,
         // for those APIs we manually copy it from the GPU texture instead.
-        if(m_renderAPI == RenderAPI_Direct3D12 || (mainConf.ProjectionMode == Projection_StereoReconstruction 
-            && (m_appRenderAPI == RenderAPI_Direct3D11 || m_appRenderAPI == RenderAPI_Direct3D12)))
+        if(m_renderAPI == RenderAPI_Direct3D12 || (bWantsCPUFrameBuffer && (m_appRenderAPI == RenderAPI_Direct3D11 || m_appRenderAPI == RenderAPI_Direct3D12)))
         {
             if (m_underConstructionFrame->frameBuffer.get() == nullptr)
             {
@@ -650,7 +651,7 @@ void CameraManagerOpenVR::ServeFrames()
 
             m_underConstructionFrame->bHasFrameBuffer = true;
         }
-        else if (mainConf.ProjectionMode == Projection_StereoReconstruction && m_renderAPI == RenderAPI_Direct3D11 && m_underConstructionFrame->frameTextureResource != nullptr)
+        else if (bWantsCPUFrameBuffer && m_renderAPI == RenderAPI_Direct3D11 && m_underConstructionFrame->frameTextureResource != nullptr)
         {
             if (m_underConstructionFrame->frameBuffer.get() == nullptr)
             {
@@ -677,8 +678,12 @@ void CameraManagerOpenVR::ServeFrames()
                 m_underConstructionFrame->bHasFrameBuffer = true;
             }
         }
+        else
+        {
+            bDoFrameDump = false;
+        }
 
-        if (m_configManager->CheckFrameTextureDumpPending())
+        if (bDoFrameDump)
         {
             DumpCameraFrameTexture(m_underConstructionFrame->frameBuffer, m_cameraTextureWidth, m_cameraTextureHeight, "OpenVR");
         }
@@ -1106,32 +1111,5 @@ void CameraManagerOpenVR::CalculateFrameProjectionForEye(const ERenderEye eye, s
         XrMatrix4x4f worldToRectView;
         XrMatrix4x4f_Multiply(&worldToRectView, &rectifiedRotation, &worldToCameraView);
         XrMatrix4x4f_Multiply(&worldToCameraProjection, &frameProjection, &worldToRectView);
-
-        /* if (eye == RenderEye_Left)
-        {
-            float rx = atan2f(rectifiedRotation.m[9], rectifiedRotation.m[10]);
-            float ry = atan2f(-rectifiedRotation.m[8], sqrtf(powf(rectifiedRotation.m[4], 2) + powf(rectifiedRotation.m[0], 2)));
-            float rz = atan2f(rectifiedRotation.m[4], rectifiedRotation.m[0]);
-
-            XrMatrix4x4f a;
-            XrMatrix4x4f_CreateRotationRadians(&a, -rx * 4.0f, -ry + 0.01f, -rz);
-
-            XrMatrix4x4f tempMatrix;
-            XrMatrix4x4f_Multiply(&tempMatrix, &a, &worldToCameraView);
-            XrMatrix4x4f_Multiply(&frame->worldToCameraProjectionLeft, &frameProjection, &tempMatrix);
-        }
-        else
-        {
-            float rx = atan2f(rectifiedRotation.m[9], rectifiedRotation.m[10]);
-            float ry = atan2f(-rectifiedRotation.m[8], sqrtf(powf(rectifiedRotation.m[4], 2) + powf(rectifiedRotation.m[0], 2)));
-            float rz = atan2f(rectifiedRotation.m[4], rectifiedRotation.m[0]);
-
-            XrMatrix4x4f a;
-            XrMatrix4x4f_CreateRotationRadians(&a, rx * 2.0f, -ry, -rz);
-            
-            XrMatrix4x4f tempMatrix;
-            XrMatrix4x4f_Multiply(&tempMatrix, &a, &worldToCameraView);
-            XrMatrix4x4f_Multiply(&frame->worldToCameraProjectionRight, &frameProjection, &tempMatrix);
-        }*/
     }
 }

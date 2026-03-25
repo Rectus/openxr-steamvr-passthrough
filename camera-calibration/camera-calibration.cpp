@@ -1604,9 +1604,9 @@ void DrawTrackingSpaceOriginAxis(CalibrationData& calibData, cv::Mat& image, cv:
     cv::Mat camearRot = EulerToRotationMatrix(rotVec);
     camearRot.convertTo(cameraMat(cv::Rect(0, 0, 3, 3)), CV_32F);
 
-    cameraMat.at<float>(0, 3) = (float)-calibData.ExtrinsicsTranslation[0];
-    cameraMat.at<float>(1, 3) = (float)calibData.ExtrinsicsTranslation[1];
-    cameraMat.at<float>(2, 3) = (float)calibData.ExtrinsicsTranslation[2];
+    cameraMat.at<float>(0, 3) = (float)calibData.ExtrinsicsTranslation[0];
+    cameraMat.at<float>(1, 3) = (float)-calibData.ExtrinsicsTranslation[1];
+    cameraMat.at<float>(2, 3) = (float)-calibData.ExtrinsicsTranslation[2];
 
     cv::Mat combined = deviceMat * cameraMat;
     combined = combined.inv(cv::DECOMP_SVD);
@@ -1942,8 +1942,9 @@ bool CalibrateSingleCamera(CalibrationData& calibData, bool bRightCamera)
         calibData.ExtrinsicsRotation[1] *= -1.0;
         calibData.ExtrinsicsRotation[2] *= -1.0;
 
-        outTranslation.at<double>(0, 0) = outTranslation.at<double>(0, 0) * -1.0;
         calibData.ExtrinsicsTranslation = outTranslation;
+        calibData.ExtrinsicsTranslation[1] *= -1.0;
+        calibData.ExtrinsicsTranslation[2] *= -1.0;
     }
 
 
@@ -2007,8 +2008,8 @@ void ApplyStereoCalibration(CalibrationData& calibDataLeft, CalibrationData& cal
 
     cv::Vec<double, 3> translationLeftToRight(stereoData.LeftToRightTranslation[0], stereoData.LeftToRightTranslation[1], stereoData.LeftToRightTranslation[2]);
 
-    cv::Vec<double, 3> prevWorldTranslationLeft = cv::Vec<double, 3>(calibDataLeft.ExtrinsicsTranslation[0], calibDataLeft.ExtrinsicsTranslation[1], calibDataLeft.ExtrinsicsTranslation[2]);
-    cv::Vec<double, 3> prevWorldTranslationRight = cv::Vec<double, 3>(calibDataRight.ExtrinsicsTranslation[0], calibDataRight.ExtrinsicsTranslation[1], calibDataRight.ExtrinsicsTranslation[2]);
+    cv::Vec<double, 3> prevWorldTranslationLeft = cv::Vec<double, 3>(-calibDataLeft.ExtrinsicsTranslation[0], -calibDataLeft.ExtrinsicsTranslation[1], -calibDataLeft.ExtrinsicsTranslation[2]);
+    cv::Vec<double, 3> prevWorldTranslationRight = cv::Vec<double, 3>(-calibDataRight.ExtrinsicsTranslation[0], -calibDataRight.ExtrinsicsTranslation[1], -calibDataRight.ExtrinsicsTranslation[2]);
 
     cv::Vec<double, 3> prevWorldTranslationAverage = prevWorldTranslationLeft + (prevWorldTranslationRight - prevWorldTranslationLeft) * 0.5;
 
@@ -2044,6 +2045,14 @@ void ApplyStereoCalibration(CalibrationData& calibDataLeft, CalibrationData& cal
 
     calibDataRight.ExtrinsicsTranslation = rightCorrectedTrans;
     calibDataLeft.ExtrinsicsTranslation = leftCorrectedTrans;
+
+    calibDataRight.ExtrinsicsTranslation[0] *= -1.0;
+    calibDataRight.ExtrinsicsTranslation[1] *= -1.0;
+    calibDataRight.ExtrinsicsTranslation[2] *= -1.0;
+
+    calibDataLeft.ExtrinsicsTranslation[0] *= -1.0;
+    calibDataLeft.ExtrinsicsTranslation[1] *= -1.0;
+    calibDataLeft.ExtrinsicsTranslation[2] *= -1.0;
 
     
     calibDataRight.ExtrinsicsRotation = RotationToEuler(rotRight);
@@ -2107,6 +2116,12 @@ void EnumerateCameras(std::vector<std::string>& deviceList)
         devices[i]->Release();
     }
     CoTaskMemFree(devices);
+
+    // Add dummy devices to allow selecting cameras not enumerated by media foundation.
+    while (deviceList.size() < 16)
+    {
+        deviceList.push_back("None");
+    }
 }
 
 
