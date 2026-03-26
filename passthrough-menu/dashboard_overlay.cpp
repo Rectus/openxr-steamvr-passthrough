@@ -152,13 +152,13 @@ void DashboardOverlay::OverlayFrameSync()
 	}
 }
 
-void DashboardOverlay::HandleOverlayEvents(ImGuiIO& io)
+bool DashboardOverlay::HandleOverlayEvents(ImGuiIO& io)
 {
 	vr::IVROverlay* vrOverlay = vr::VROverlay();
 
 	if (!vrOverlay || m_overlayHandle == vr::k_ulOverlayHandleInvalid)
 	{
-		return;
+		return true;
 	}
 
 	vr::VREvent_t event;
@@ -298,9 +298,24 @@ void DashboardOverlay::HandleOverlayEvents(ImGuiIO& io)
 
 			vr::VRSystem()->AcknowledgeQuit_Exiting();
 			g_logger->info("SteamVR telling application to quit");
-			break;
+
+			m_bHasOverlay = false;
+			m_bOverlayVisible = false;
+			m_bHasFocus = false;
+			m_bIsKeyboardOpen = false;
+			m_overlayHandle = vr::k_ulOverlayHandleInvalid;
+			m_thumbnailHandle = vr::k_ulOverlayHandleInvalid;
+
+			if (m_bRuntimeInitialized)
+			{
+				m_bRuntimeInitialized = false;
+				vr::VR_Shutdown();
+			}
+			return false;
 		}
 	}
+
+	return true;
 }
 
 void DashboardOverlay::UpdateOverlay(vr::VRVulkanTextureData_t* textureData, ImGuiIO& io)

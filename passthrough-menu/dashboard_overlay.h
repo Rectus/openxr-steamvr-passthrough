@@ -29,7 +29,7 @@ public:
 	void SetThumbnail(vr::VRVulkanTextureData_t* textureData);
 
 	void OverlayFrameSync();
-	void HandleOverlayEvents(ImGuiIO& io);
+	bool HandleOverlayEvents(ImGuiIO& io);
 	void UpdateOverlay(vr::VRVulkanTextureData_t* textureData, ImGuiIO& io);
 
 	void GetCameraDebugProperties(std::vector<DeviceDebugProperties>& properties);

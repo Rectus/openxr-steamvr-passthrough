@@ -611,7 +611,17 @@ int APIENTRY wWinMain(_In_ HINSTANCE hInstance, _In_opt_ HINSTANCE hPrevInstance
             SetFrameGeometry(calibDataLeft, false);
             SetFrameGeometry(calibDataRight, true);
         }
-        ImGui::Checkbox("Camera has fisheye lens", &g_bFisheyeLens);
+
+        ImGui::Text("Camera lens model");
+        if (ImGui::RadioButton("Normal - f-tan-theta pinhole, Brown-Conrady distortion", !g_bFisheyeLens))
+        {
+            g_bFisheyeLens = false;
+        }
+
+        if (ImGui::RadioButton("Fisheye - f-theta, Kannala-Brandt distortion", g_bFisheyeLens))
+        {
+            g_bFisheyeLens = true;
+        }
 
         ImGui::Separator();
         ImGui::Text("Extrinsics");
@@ -753,10 +763,20 @@ int APIENTRY wWinMain(_In_ HINSTANCE hInstance, _In_opt_ HINSTANCE hPrevInstance
             ImGui::InputDouble("Center X", &calibData.CameraIntrinsics.at<double>(0, 2));
             ImGui::InputDouble("Center Y", &calibData.CameraIntrinsics.at<double>(1, 2));
 
-            ImGui::InputDouble("Distortion 1", &calibData.CameraDistortion[0]);
-            ImGui::InputDouble("Distortion 2", &calibData.CameraDistortion[1]);
-            ImGui::InputDouble("Distortion 3", &calibData.CameraDistortion[2]);
-            ImGui::InputDouble("Distortion 4", &calibData.CameraDistortion[3]);
+            if (g_bFisheyeLens)
+            {
+                ImGui::InputDouble("Distortion radial 1", &calibData.CameraDistortion[0]);
+                ImGui::InputDouble("Distortion radial 2", &calibData.CameraDistortion[1]);
+                ImGui::InputDouble("Distortion radial 3", &calibData.CameraDistortion[2]);
+                ImGui::InputDouble("Distortion radial 4", &calibData.CameraDistortion[3]);
+            }
+            else
+            {
+                ImGui::InputDouble("Distortion radial 1", &calibData.CameraDistortion[0]);
+                ImGui::InputDouble("Distortion radial 2", &calibData.CameraDistortion[1]);
+                ImGui::InputDouble("Distortion tangent 1", &calibData.CameraDistortion[2]);
+                ImGui::InputDouble("Distortion tangent 2", &calibData.CameraDistortion[3]);
+            }
 
             ImGui::InputInt("Sensor Width", &calibData.SensorWidth);
             ImGui::InputInt("Sensor Height", &calibData.SensorHeight);

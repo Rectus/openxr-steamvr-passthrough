@@ -478,7 +478,7 @@ bool SettingsMenu::TickMenu()
 
 	if (bHasOverlay)
 	{
-		m_dashboardOverlay->HandleOverlayEvents(ImGui::GetIO());
+		bHasOverlay = m_dashboardOverlay->HandleOverlayEvents(ImGui::GetIO());
 	}
 
 	bool bIsWindowVisible = m_window->IsVisible();
@@ -1550,7 +1550,7 @@ if (bIsActiveTab) { ImGui::PopStyleColor(1); bIsActiveTab = false; }
 			{
 				for (int i = 0; i < m_deviceIdentProps.size(); i++)
 				{
-					std::string comboValue = std::format("[{}] {} - {}", i, m_deviceIdentProps[i].DeviceName, m_deviceIdentProps[m_currentIdentDevice].DeviceSerial);
+					std::string comboValue = std::format("[{}] {} - {}", i, m_deviceIdentProps[i].DeviceName, m_deviceIdentProps[i].DeviceSerial);
 
 					const bool bIsSelected = (m_currentIdentDevice == i);
 					if (ImGui::Selectable(comboValue.c_str(), bIsSelected))
@@ -3050,6 +3050,8 @@ void SettingsMenu::DispatchTransientClientUpdate()
 
 void SettingsMenu::MenuIPCClientDisconnected(int clientIndex)
 {
+	m_configManager->DispatchUpdate();
+
 	std::lock_guard<std::mutex> lock(m_menuWriteMutex);
 	if (clientIndex < m_clientData.size())
 	{

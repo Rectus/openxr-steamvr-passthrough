@@ -65,7 +65,7 @@ private:
 	bool m_bHasOverlay = false;
 	EWindowIcon m_currentIcon = WindowIcon_Base;
 
-	LARGE_INTEGER m_lastFrameStart;
+	LARGE_INTEGER m_lastFrameStart = {};
 
 	bool m_bMenuIsVisible = false;
 	EMenuTab m_activeTab = TabMain;
@@ -78,10 +78,10 @@ private:
 	ImFont* m_fixedFont;
 
 	std::vector<DeviceDebugProperties> m_deviceDebugProps;
-	int m_currentDebugDevice;
+	int m_currentDebugDevice = 0;
 
 	std::vector<DeviceIdentProperties> m_deviceIdentProps;
-	int m_currentIdentDevice;
+	int m_currentIdentDevice = 0;
 
 	std::vector<std::string> m_cameraDevices;
 
