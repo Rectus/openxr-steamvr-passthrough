@@ -80,7 +80,7 @@ PS_Output main(VS_OUTPUT input)
 
     if (g_bClampCameraFrame)
     {
-        clip(cameraClipSpacePos.z);
+        clip(cameraClipSpacePos.w);
         clip(outUvs);
         clip(1 - outUvs);
     }

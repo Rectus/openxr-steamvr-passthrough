@@ -42,7 +42,7 @@ float4 main(VS_OUTPUT input) : SV_TARGET
 
     if (g_bClampCameraFrame)
     {
-        clip(input.cameraReprojectedPos.z);
+        clip(input.cameraReprojectedPos.w);
         clip(outUvs);
         clip(1 - outUvs);
     }

@@ -767,11 +767,11 @@ namespace
 			}
 
 
-			m_depthReconstruction = std::make_shared<DepthReconstruction>(m_configManager, m_openVRManager, m_cameraManager);
+			m_depthReconstruction = std::make_shared<DepthReconstruction>(m_configManager, m_openVRManager, m_cameraManager, m_Renderer);
 
 			if (m_configManager->GetConfig_Main().CameraProvider == CameraProvider_Augmented)
 			{
-				m_augmentedDepthReconstruction = std::make_shared<DepthReconstruction>(m_configManager, m_openVRManager, m_augmentedCameraManager);
+				m_augmentedDepthReconstruction = std::make_shared<DepthReconstruction>(m_configManager, m_openVRManager, m_augmentedCameraManager, m_Renderer);
 			}
 
 			return true;

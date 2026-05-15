@@ -23,6 +23,11 @@ struct EulerAngles
     double Z;
 };
 
+inline int DivRoundUp(int num, int den)
+{
+    return num / den + (((num % den) != 0) ? 1 : 0);
+}
+
 inline double RadToDeg(const double r)
 {
     return r * 180.0 / M_PI;

@@ -41,11 +41,11 @@ VS_OUTPUT main(float3 inPosition : POSITION, uint vertexID : SV_VertexID)
     float2 dispConf = g_disparityTexture.SampleLevel(g_samplerState, disparityUVs, 0);
 
 	// Disparity at the max projection distance
-    float minDisparity = max(g_minDisparity, g_disparityToDepth[2][3] /
-        (g_projectionDistance * 2048.0 * g_disparityDownscaleFactor * g_disparityToDepth[3][2]));
+    float minDisparity = max(g_minDisparity, g_disparityToDepth[3][2] /
+        (g_projectionDistance * 2048.0 * g_disparityDownscaleFactor * g_disparityToDepth[2][3]));
     
-    float defaultDisparity = g_disparityToDepth[2][3] /
-    (min(2.0, g_projectionDistance) * 2048.0 * g_disparityDownscaleFactor * g_disparityToDepth[3][2]); 
+    float defaultDisparity = g_disparityToDepth[3][2] /
+    (min(2.0, g_projectionDistance) * 2048.0 * g_disparityDownscaleFactor * g_disparityToDepth[2][3]); 
     
     uint maxFilterWidth = max(g_disparityFilterWidth, (int)ceil(g_cutoutFilterWidth));
     

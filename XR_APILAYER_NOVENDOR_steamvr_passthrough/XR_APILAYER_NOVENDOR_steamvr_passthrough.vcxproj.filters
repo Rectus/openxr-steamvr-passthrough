@@ -5,10 +5,6 @@
       <UniqueIdentifier>{4FC737F1-C7A5-4376-A066-2A32D752A2FF}</UniqueIdentifier>
       <Extensions>cpp;c;cc;cxx;c++;cppm;ixx;def;odl;idl;hpj;bat;asm;asmx</Extensions>
     </Filter>
-    <Filter Include="Header Files">
-      <UniqueIdentifier>{93995380-89BD-4b04-88EB-625FBE52EBFB}</UniqueIdentifier>
-      <Extensions>h;hh;hpp;hxx;h++;hm;inl;inc;ipp;xsd</Extensions>
-    </Filter>
     <Filter Include="Framework">
       <UniqueIdentifier>{060fbbc6-44b1-4494-b904-cb9719cec138}</UniqueIdentifier>
     </Filter>
@@ -20,6 +16,10 @@
     </Filter>
     <Filter Include="Shared">
       <UniqueIdentifier>{dce32d9d-f95f-468c-a350-a475523b0bed}</UniqueIdentifier>
+    </Filter>
+    <Filter Include="Header Files">
+      <UniqueIdentifier>{93995380-89BD-4b04-88EB-625FBE52EBFB}</UniqueIdentifier>
+      <Extensions>h;hh;hpp;hxx;h++;hm;inl;inc;ipp;xsd</Extensions>
     </Filter>
   </ItemGroup>
   <ItemGroup>
@@ -98,6 +98,12 @@
     <ClInclude Include="..\shared\spdlog_ipc_sink.h">
       <Filter>Shared</Filter>
     </ClInclude>
+    <ClInclude Include="async_renderer.h">
+      <Filter>Header Files</Filter>
+    </ClInclude>
+    <ClInclude Include="..\shared\renderutil.h">
+      <Filter>Shared</Filter>
+    </ClInclude>
   </ItemGroup>
   <ItemGroup>
     <ClCompile Include="pch.cpp">
@@ -163,6 +169,9 @@
     <ClCompile Include="..\shared\pathutil.cpp">
       <Filter>Shared</Filter>
     </ClCompile>
+    <ClCompile Include="async_renderer.cpp">
+      <Filter>Source Files</Filter>
+    </ClCompile>
   </ItemGroup>
   <ItemGroup>
     <None Include="framework\dispatch_generator.py">
@@ -184,6 +193,12 @@
       <Filter>Shaders</Filter>
     </None>
     <None Include="shaders\fullscreen_util.hlsl">
+      <Filter>Shaders</Filter>
+    </None>
+    <None Include="shaders\fill_holes_vulkan_cs.hlsl">
+      <Filter>Shaders</Filter>
+    </None>
+    <None Include="shaders\joint_bilateral_vulkan_cs.hlsl">
       <Filter>Shaders</Filter>
     </None>
   </ItemGroup>

@@ -4,6 +4,7 @@
 #include "openvr_manager.h"
 #include "config_manager.h"
 #include "camera_manager.h"
+#include "async_renderer.h"
 
 #include <opencv2/imgproc/types_c.h>
 #include <opencv2/calib3d.hpp>
@@ -13,7 +14,7 @@
 class DepthReconstruction
 {
 public:
-	DepthReconstruction(std::shared_ptr<ConfigManager> configManager, std::shared_ptr<OpenVRManager> openVRManager, std::shared_ptr<ICameraManager> cameraManager);
+	DepthReconstruction(std::shared_ptr<ConfigManager> configManager, std::shared_ptr<OpenVRManager> openVRManager, std::shared_ptr<ICameraManager> cameraManager, std::shared_ptr<IPassthroughRenderer> baseRenderer);
 	~DepthReconstruction();
 
 	std::shared_ptr<DepthFrame> GetDepthFrame();
@@ -27,6 +28,8 @@ private:
 	void InitReconstruction();
 	void RunThread();
 	void CreateDistortionMap();
+
+	AsyncRenderer m_renderer;
 
 	std::thread m_thread;
 	std::atomic_bool m_bRunThread;
@@ -111,6 +114,14 @@ private:
 	cv::Mat m_outputDisparity;
 	cv::Mat m_outputDisparityLeft;
 	cv::Mat m_outputDisparityRight;
+
+	cv::Mat m_outputConfidence;
+	cv::Mat m_outputConfidenceLeft;
+	cv::Mat m_outputConfidenceRight;
+
+	cv::Mat m_outputCameraFrame;
+	cv::Mat m_outputCameraFrameLeft;
+	cv::Mat m_outputCameraFrameRight;
 
 	std::deque<float> m_reconstructionTimes;
 	float m_averageReconstructionTime;

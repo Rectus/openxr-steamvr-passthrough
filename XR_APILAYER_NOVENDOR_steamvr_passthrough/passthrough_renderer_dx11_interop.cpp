@@ -1,37 +1,7 @@
 #include "pch.h"
 #include "passthrough_renderer.h"
 #include "comdef.h"
-
-
-
-#define HANDLE_TYPE_D3D11_IMAGE_EXT 0x958B
-#define HANDLE_TYPE_D3D11_IMAGE_KMT_EXT 0x958C
-#define HANDLE_TYPE_OPAQUE_WIN32_EXT 0x9587
-#define HANDLE_TYPE_OPAQUE_WIN32_KMT_EXT 0x9588
-#define HANDLE_TYPE_D3D12_FENCE_EXT 0x9594
-#define D3D12_FENCE_VALUE_EXT 0x9595
-
-#define TEXTURE_TILING_EXT 0x9580
-#define OPTIMAL_TILING_EXT 0x9584
-#define LINEAR_TILING_EXT 0x9585
-
-#define GL_LAYOUT_GENERAL_EXT 38285
-#define GL_LAYOUT_COLOR_ATTACHMENT_EXT 38286
-#define GL_LAYOUT_DEPTH_STENCIL_ATTACHMENT_EXT 38287
-
-#define GL_SRGB8 0x8C41
-#define GL_SRGB8_ALPHA8 0x8C43
-#define GL_RGBA8_SNORM 0x8F97
-#define GL_RGBA32F 0x8814
-#define GL_RGB32F 0x8815
-#define GL_RGBA16F 0x881A
-#define GL_DEPTH_COMPONENT32F 0x8CAC
-#define GL_DEPTH_COMPONENT32 0x81A7
-#define GL_DEPTH_COMPONENT24 0x81A6
-#define GL_DEPTH_COMPONENT16 0x81A5
-#define GL_DEPTH24_STENCIL8 0x88F0
-#define GL_DEPTH32F_STENCIL8 0x8CAD
-#define GL_DEPTH32F_STENCIL8_NV 0x8DAC
+#include "renderutil.h"
 
 
 
@@ -68,118 +38,6 @@ static PFN_glCopyImageSubData glCopyImageSubData = nullptr;
 
 #define CAST_TEXTURE_TO_OPENGL_NAME(input) (static_cast<uint32_t>(reinterpret_cast<uint64_t>(input)))
 
-
-bool IsDepthFormat(DXGI_FORMAT in)
-{
-	switch (in)
-	{
-	case DXGI_FORMAT_D32_FLOAT:
-	case DXGI_FORMAT_D32_FLOAT_S8X24_UINT:
-	case DXGI_FORMAT_D24_UNORM_S8_UINT:
-	case DXGI_FORMAT_D16_UNORM:
-		return true;
-
-	default:
-		return false;
-	}
-}
-
-DXGI_FORMAT DXGI_DepthFormatToTypeless(DXGI_FORMAT in)
-{
-	switch (in)
-	{
-	case DXGI_FORMAT_D32_FLOAT:
-		return DXGI_FORMAT_R32_TYPELESS;
-	case DXGI_FORMAT_D32_FLOAT_S8X24_UINT:
-		return DXGI_FORMAT_R32_FLOAT_X8X24_TYPELESS;
-	case DXGI_FORMAT_D24_UNORM_S8_UINT:
-		return DXGI_FORMAT_R24G8_TYPELESS;
-	case DXGI_FORMAT_D16_UNORM:
-		return DXGI_FORMAT_R16_TYPELESS;
-
-	default:
-		return DXGI_FORMAT_UNKNOWN;
-	}
-}
-
-DXGI_FORMAT VulkanImageFormatToDXGI(VkFormat in)
-{
-	switch (in)
-	{
-	case VK_FORMAT_R8G8B8A8_SRGB:
-		return DXGI_FORMAT_R8G8B8A8_UNORM_SRGB;
-	case VK_FORMAT_B8G8R8A8_SRGB:
-		return DXGI_FORMAT_B8G8R8A8_UNORM_SRGB;
-	case VK_FORMAT_R32G32B32A32_SFLOAT:
-		return DXGI_FORMAT_R32G32B32A32_FLOAT;
-	case VK_FORMAT_R32G32B32_SFLOAT:
-		return DXGI_FORMAT_R32G32B32_FLOAT;
-	case VK_FORMAT_R16G16B16A16_SFLOAT:
-		return DXGI_FORMAT_R16G16B16A16_FLOAT;
-	case VK_FORMAT_A2B10G10R10_UNORM_PACK32:
-		return DXGI_FORMAT_R10G10B10A2_UNORM;
-	case VK_FORMAT_D32_SFLOAT:
-		return DXGI_FORMAT_D32_FLOAT;
-	case VK_FORMAT_D32_SFLOAT_S8_UINT:
-		return DXGI_FORMAT_D32_FLOAT_S8X24_UINT;
-	case VK_FORMAT_D24_UNORM_S8_UINT:
-		return DXGI_FORMAT_D24_UNORM_S8_UINT;
-	case VK_FORMAT_D16_UNORM:
-		return DXGI_FORMAT_D16_UNORM;
-
-	case VK_FORMAT_UNDEFINED:
-		return DXGI_FORMAT_UNKNOWN;
-
-	default:
-		g_logger->error("Unhandled Vulkan image format {}", static_cast<int32_t>(in));
-		return DXGI_FORMAT_UNKNOWN;
-	}
-}
-
-DXGI_FORMAT OpenGLImageFormatToDXGI(int64_t in)
-{
-	switch (in)
-	{
-	case GL_SRGB8_ALPHA8:
-		return DXGI_FORMAT_R8G8B8A8_UNORM_SRGB;
-	//case ?: There seems to be no way of specifying a BRGA foramt
-	//	return DXGI_FORMAT_B8G8R8A8_UNORM_SRGB;
-	case GL_RGBA8:
-		return DXGI_FORMAT_R8G8B8A8_UNORM;
-	case GL_RGBA8_SNORM:
-		return DXGI_FORMAT_R8G8B8A8_SNORM;
-	case GL_RGBA32F:
-		return DXGI_FORMAT_R32G32B32A32_FLOAT;
-	case GL_RGB32F:
-		return DXGI_FORMAT_R32G32B32_FLOAT;
-	case GL_RGBA16F:
-		return DXGI_FORMAT_R16G16B16A16_FLOAT;
-	case GL_RGBA16:
-		return DXGI_FORMAT_R16G16B16A16_UNORM;
-	case GL_RGB10_A2:
-		return DXGI_FORMAT_R10G10B10A2_UNORM;
-	case GL_DEPTH_COMPONENT32F:
-	case GL_DEPTH_COMPONENT32: // Assuming float for 32 bit depth buffers
-		return DXGI_FORMAT_D32_FLOAT;
-	case GL_DEPTH32F_STENCIL8:
-	case GL_DEPTH32F_STENCIL8_NV:
-		return DXGI_FORMAT_D32_FLOAT_S8X24_UINT;
-	case GL_DEPTH24_STENCIL8:	
-		return DXGI_FORMAT_D24_UNORM_S8_UINT;
-	case GL_DEPTH_COMPONENT16:
-		return DXGI_FORMAT_D16_UNORM;
-
-	case GL_NONE:
-		return DXGI_FORMAT_UNKNOWN;
-
-	//case GL_RGB8:
-	//case GL_DEPTH_COMPONENT24:
-
-	default:
-		g_logger->error("Unhandled OpenGL image format 0x{:x}", in);
-		return DXGI_FORMAT_UNKNOWN;
-	}
-}
 
 
 PassthroughRendererDX11Interop::PassthroughRendererDX11Interop(ID3D12Device* device, ID3D12CommandQueue* commandQueue, HMODULE dllModule, std::shared_ptr<ConfigManager> configManager)
@@ -449,6 +307,12 @@ bool PassthroughRendererDX11Interop::InitRenderer()
 
 		factory->Release();
 
+		if (!bFoundAdapter)
+		{
+			g_logger->error("D3D11 Interop: No adapter with matching LUID found!");
+			return false;
+		}
+
 		std::vector<D3D_FEATURE_LEVEL> featureLevels = { D3D_FEATURE_LEVEL_12_1, D3D_FEATURE_LEVEL_12_0, D3D_FEATURE_LEVEL_11_1 };
 
 		HRESULT res = D3D11CreateDevice(adapter, D3D_DRIVER_TYPE_UNKNOWN, NULL, 0, featureLevels.data(), (uint32_t)featureLevels.size(), D3D11_SDK_VERSION, &m_d3dDevice, NULL, &m_deviceContext);
@@ -457,7 +321,7 @@ bool PassthroughRendererDX11Interop::InitRenderer()
 
 		if (FAILED(res))
 		{
-			g_logger->error("D3D11CreateDevice failure: 0x{:x}", static_cast<int32_t>(res));
+			g_logger->error("D3D11CreateDevice failure: 0x{:x}", static_cast<uint32_t>(res));
 			return false;
 		}
 
@@ -565,7 +429,7 @@ bool PassthroughRendererDX11Interop::InitRenderer()
 
 		if (res != S_OK)
 		{
-			g_logger->error("EnumAdapters failure: 0x{:x}", static_cast<int32_t>(res));
+			g_logger->error("EnumAdapters failure: 0x{:x}", static_cast<uint32_t>(res));
 			return false;	
 		}
 
@@ -585,7 +449,7 @@ bool PassthroughRendererDX11Interop::InitRenderer()
 
 		if (FAILED(res))
 		{
-			g_logger->error("D3D11CreateDevice failure: 0x{:x}", static_cast<int32_t>(res));
+			g_logger->error("D3D11CreateDevice failure: 0x{:x}", static_cast<uint32_t>(res));
 			return false;
 		}
 
@@ -611,7 +475,7 @@ bool PassthroughRendererDX11Interop::InitRenderer()
 
 		if (FAILED(result))
 		{
-			g_logger->error("CreateSharedHandle failure: 0x{:x}", static_cast<int32_t>(result));
+			g_logger->error("CreateSharedHandle failure: 0x{:x}", static_cast<uint32_t>(result));
 			return false;
 		}
 
@@ -981,7 +845,7 @@ bool PassthroughRendererDX11Interop::CreateLocalTextureVulkan(VkImage& localVulk
 	HRESULT res = m_d3dDevice->CreateTexture2D(&textureDesc, nullptr, localD3DTexture);
 	if (res != S_OK)
 	{
-		g_logger->error("Shared texture CreateTexture2D failure: 0x{:x}", static_cast<int32_t>(res));
+		g_logger->error("Shared texture CreateTexture2D failure: 0x{:x}", static_cast<uint32_t>(res));
 		return false;
 	}
 
@@ -1085,7 +949,7 @@ bool PassthroughRendererDX11Interop::CreateLocalTextureOpenGL(uint32_t& localOpe
 	HRESULT res = m_d3dDevice->CreateTexture2D(&textureDesc, nullptr, localD3DTexture);
 	if (res != S_OK)
 	{
-		g_logger->error("Shared texture CreateTexture2D failure: 0x{:x}", static_cast<int32_t>(res));
+		g_logger->error("Shared texture CreateTexture2D failure: 0x{:x}", static_cast<uint32_t>(res));
 		return false;
 	}
 

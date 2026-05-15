@@ -107,14 +107,22 @@ struct DepthFrame
 		, maxDisparity(0.0f)
 		, bIsValid(false)
 		, bIsFirstRender(true)
+		, outputDisparityMapNativeTexture(nullptr)
+		, disparityTextureIndex(-1)
 	{
 		disparityMap = std::make_shared<std::vector<uint16_t>>();
+		cameraFrameRectifiedBW = std::make_shared<std::vector<uint8_t>>();
 		disparityTextureSize[0] = 0;
 		disparityTextureSize[1] = 0;
+		cameraFrameTextureSize[0] = 0;
+		cameraFrameTextureSize[1] = 0;
 	}
 
 	std::shared_mutex readWriteMutex;
 	std::shared_ptr<std::vector<uint16_t>> disparityMap;
+	std::shared_ptr<std::vector<uint8_t>> cameraFrameRectifiedBW;
+	void* outputDisparityMapNativeTexture;
+	int disparityTextureIndex;
 	XrMatrix4x4f disparityViewToWorldLeft;
 	XrMatrix4x4f disparityViewToWorldRight;
 	XrMatrix4x4f disparityToDepth;
@@ -123,6 +131,7 @@ struct DepthFrame
 	XrMatrix4x4f prevDispWorldToCameraProjectionLeft;
 	XrMatrix4x4f prevDispWorldToCameraProjectionRight;
 	uint32_t disparityTextureSize[2];
+	uint32_t cameraFrameTextureSize[2];
 	float disparityDownscaleFactor;
 	float minDisparity;
 	float maxDisparity;

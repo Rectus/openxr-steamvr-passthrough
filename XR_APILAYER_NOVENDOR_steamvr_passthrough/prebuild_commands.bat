@@ -12,3 +12,5 @@ python framework\dispatch_generator.py
 %VULKAN_SDK%\Bin\glslangValidator.exe -D -V -S frag -e main --vn g_AlphaCopyMaskedPS shaders/alpha_copy_masked_ps.hlsl  -o shaders\alpha_copy_masked_ps.spv.h
 %VULKAN_SDK%\Bin\glslangValidator.exe -D -V -S frag -e main --vn g_PassthroughPS shaders/passthrough_ps.hlsl  -o shaders\passthrough_ps.spv.h
 
+%VULKAN_SDK%\Bin\glslangValidator.exe -D -V -S comp -e main --vn g_FillHolesCS shaders/fill_holes_vulkan_cs.hlsl  -o shaders\fill_holes_vulkan_cs.spv.h
+%VULKAN_SDK%\Bin\glslangValidator.exe -D -V -S comp -e main --vn g_JointBilateralCS shaders/joint_bilateral_vulkan_cs.hlsl  -o shaders\joint_bilateral_vulkan_cs.spv.h

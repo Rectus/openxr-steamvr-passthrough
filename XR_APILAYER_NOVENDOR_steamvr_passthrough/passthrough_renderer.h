@@ -299,8 +299,10 @@ public:
 	virtual void SetFrameSize(const uint32_t width, const uint32_t height, const uint32_t bufferSize, const uint32_t undistortedWidth, const uint32_t undistortedHeight, const uint32_t undistortedBufferSize) = 0;
 	virtual void RenderPassthroughFrame(const XrCompositionLayerProjection* layer, std::shared_ptr<CameraFrame> frame, FrameRenderParameters& renderParams, std::shared_ptr<DepthFrame> depthFrame, UVDistortionParameters& distortionParams) = 0;
 	virtual void* GetRenderDevice() = 0;
+	virtual uint64_t GetRenderDeviceLUID() { return 0; };
 	virtual bool DownloadTextureToCPU(void* textureSRV, const uint32_t width, const uint32_t height, const uint32_t bufferSize, uint8_t* buffer) { return false; }
 	virtual std::shared_timed_mutex& GetAccessMutex() = 0;
+	virtual bool CreateSharedDisparityMap(HANDLE* sharedHandle, void* nativeTexture, VkExtent2D extent, VkFormat format) { return false; };
 };
 
 
@@ -317,7 +319,9 @@ public:
 
 	void RenderPassthroughFrame(const XrCompositionLayerProjection* layer, std::shared_ptr<CameraFrame> frame, FrameRenderParameters& renderParams, std::shared_ptr<DepthFrame> depthFrame, UVDistortionParameters& distortionParams);
 	void* GetRenderDevice();
+	uint64_t GetRenderDeviceLUID();
 	std::shared_timed_mutex& GetAccessMutex() { return m_accessRendererMutex; }
+	bool CreateSharedDisparityMap(HANDLE* sharedHandle, void* nativeTexture, VkExtent2D extent, VkFormat format);
 
 protected:
 
@@ -327,6 +331,7 @@ protected:
 	bool CheckInitViewData(const uint32_t viewIndex, const uint32_t swapchainIndex);
 	bool CheckInitFrameData(const uint32_t imageIndex);
 	void SetupDisparityMap(uint32_t width, uint32_t height);
+	//void SetupDisparityMapExternal(HANDLE handle, uint32_t width, uint32_t height);
 	void SetupPassthroughDepthStencil(uint32_t viewIndex, uint32_t swapchainIndex, uint32_t width, uint32_t height);
 	void SetupUVDistortionMap(std::shared_ptr<std::vector<float>> uvDistortionMap);
 	DX11TemporaryRenderTarget& GetTemporaryRenderTarget(const uint32_t swapchainIndex, const uint32_t eyeIndex);
@@ -371,12 +376,15 @@ protected:
 
 
 	ComPtr<ID3D11Device> m_d3dDevice;
+	ComPtr<ID3D11Device1> m_d3dDevice1;
 	ComPtr<ID3D11DeviceContext> m_deviceContext;
 	ComPtr<ID3D11DeviceContext> m_renderContext;
 
 	std::vector<DX11ViewData> m_viewData[2];
 	std::vector<DX11ViewDepthData> m_viewDepthData[2];
 	std::vector<DX11FrameData> m_frameData;
+	std::vector<DX11UAVSRVTexture> m_sharedDisparityMaps;
+	
 
 	DX11UAVSRVTexture m_cameraFilter[2][2];
 	int m_currentCameraFilterIndex = 0;

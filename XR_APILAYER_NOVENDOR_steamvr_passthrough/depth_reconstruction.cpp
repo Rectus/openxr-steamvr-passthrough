@@ -8,8 +8,8 @@
 
 
 
-DepthReconstruction::DepthReconstruction(std::shared_ptr<ConfigManager> configManager, std::shared_ptr<OpenVRManager> openVRManager, std::shared_ptr<ICameraManager> cameraManager)
-    : m_bRunThread(true)
+DepthReconstruction::DepthReconstruction(std::shared_ptr<ConfigManager> configManager, std::shared_ptr<OpenVRManager> openVRManager, std::shared_ptr<ICameraManager> cameraManager,std::shared_ptr<IPassthroughRenderer> baseRenderer)
+    : m_renderer(configManager, baseRenderer)
     , m_configManager(configManager)
     , m_openVRManager(openVRManager)
     , m_cameraManager(cameraManager)
@@ -32,9 +32,13 @@ DepthReconstruction::DepthReconstruction(std::shared_ptr<ConfigManager> configMa
     m_bUseMulticore = stereoConfig.StereoUseMulticore;
     cv::setNumThreads(m_bUseMulticore ? -1 : 0);
 
-    InitReconstruction();
+    if (m_renderer.InitRenderer())
+    {
+        InitReconstruction();
 
-    m_thread = std::thread(&DepthReconstruction::RunThread, this);
+        m_bRunThread = true;
+        m_thread = std::thread(&DepthReconstruction::RunThread, this);
+    }
 }
 
 DepthReconstruction::~DepthReconstruction()
@@ -193,6 +197,10 @@ void DepthReconstruction::InitReconstruction()
         std::unique_lock writeLock(m_depthFrame->readWriteMutex);
         std::unique_lock writeLock2(m_servedDepthFrame->readWriteMutex);
         std::unique_lock writeLock3(m_underConstructionDepthFrame->readWriteMutex);
+
+        m_depthFrame->disparityTextureIndex = 0;
+        m_servedDepthFrame->disparityTextureIndex = 1;
+        m_underConstructionDepthFrame->disparityTextureIndex = 2;
 
         m_depthFrame->disparityMap->resize(m_cvImageWidth * m_cvImageHeight * 2 * 2);
         m_servedDepthFrame->disparityMap->resize(m_cvImageWidth * m_cvImageHeight * 2 * 2);
@@ -615,78 +623,6 @@ void DepthReconstruction::RunThread()
         {
             std::unique_lock writeLock(m_underConstructionDepthFrame->readWriteMutex);
 
-            // Write disparity and confidence to texture
-
-            m_outputDisparity = cv::Mat(m_cvImageHeight, m_cvImageWidth * 2, CV_16SC2, m_underConstructionDepthFrame->disparityMap->data());
-
-            m_outputDisparityLeft = m_outputDisparity(cv::Rect(0, 0, m_cvImageWidth, m_cvImageHeight));
-            m_outputDisparityRight = m_outputDisparity(cv::Rect(m_cvImageWidth, 0, m_cvImageWidth, m_cvImageHeight));
-
-            cv::Mat leftIn[2];
-            cv::Mat rightIn[2];
-
-            leftIn[0] = (*outputMatrixLeft)(cv::Rect(numDisparities, 0, m_cvImageWidth, m_cvImageHeight));
-            rightIn[0] = (*outputMatrixRight)(cv::Rect(numDisparities, 0, m_cvImageWidth, m_cvImageHeight));
-
-            if (stereoConfig.StereoFiltering != StereoFiltering_None || stereoConfig.StereoFillHoles)
-            {
-                float confFactor = (stereoConfig.StereoFiltering != StereoFiltering_None) ? 32768.0f / 255.0f : 32768.0f;
-
-                if ((uint32_t)outputConfMatrixLeft->size().width >= m_cvImageWidth + numDisparities)
-                {
-                    (*outputConfMatrixLeft)(cv::Rect(numDisparities, 0, m_cvImageWidth, m_cvImageHeight)).convertTo(leftIn[1], CV_16S, confFactor);
-
-                    if (!m_bDisparityBothEyes)
-                    {
-                        (*outputConfMatrixLeft)(cv::Rect(numDisparities, 0, m_cvImageWidth, m_cvImageHeight)).convertTo(rightIn[1], CV_16S, confFactor);
-                    }
-                }
-                else
-                {
-                    leftIn[1] = cv::Mat::zeros(m_cvImageHeight, m_cvImageWidth, CV_16S);
-
-                    if (!m_bDisparityBothEyes)
-                    {
-                        rightIn[1] = cv::Mat::zeros(m_cvImageHeight, m_cvImageWidth, CV_16S);
-                    }
-                }
-
-                if (m_bDisparityBothEyes)
-                {
-                    if ((uint32_t)(*outputConfMatrixRight).size().width >= m_cvImageWidth + numDisparities)
-                    {
-                        (*outputConfMatrixRight)(cv::Rect(numDisparities, 0, m_cvImageWidth, m_cvImageHeight)).convertTo(rightIn[1], CV_16S, confFactor);
-                    }
-                    else
-                    {
-                        rightIn[1] = cv::Mat::zeros(m_cvImageHeight, m_cvImageWidth, CV_16S);
-                    }
-                }
-
-                int fromTo[4] = { 0,0 , 1,1 };
-                cv::mixChannels(leftIn, 2, &m_outputDisparityLeft, 1, fromTo, 2);
-                cv::mixChannels(rightIn, 2, &m_outputDisparityRight, 1, fromTo, 2);
-
-            }
-            else
-            {
-                leftIn[1] = cv::Mat::zeros(m_cvImageHeight, m_cvImageWidth, CV_16S);
-                rightIn[1] = cv::Mat::zeros(m_cvImageHeight, m_cvImageWidth, CV_16S);
-
-                int fromTo[4] = { 0,0 , 1,1 };
-                cv::mixChannels(leftIn, 2, &m_outputDisparityLeft, 1, fromTo, 2);
-                cv::mixChannels(rightIn, 2, &m_outputDisparityRight, 1, fromTo, 2);
-            }
-
-            if (m_bDisparityBothEyes)
-            {
-                // Invert right eye disparity
-                m_outputDisparityRight.forEach<cv::Vec2s>([this](cv::Vec2s& element, const int* position) -> void
-                {
-                    element[0] *= -1;
-                });
-            }
-            
             XrMatrix4x4f rectifiedRotationInvLeft;
             XrMatrix4x4f_Transpose(&rectifiedRotationInvLeft, &m_rectifiedRotationLeft);
             XrMatrix4x4f_Multiply(&m_underConstructionDepthFrame->disparityViewToWorldLeft, &viewToWorldLeft, &rectifiedRotationInvLeft);
@@ -704,11 +640,150 @@ void DepthReconstruction::RunThread()
             m_underConstructionDepthFrame->disparityToDepth = m_disparityToDepth;
             m_underConstructionDepthFrame->disparityTextureSize[0] = m_cvImageWidth * 2;
             m_underConstructionDepthFrame->disparityTextureSize[1] = m_cvImageHeight;
+            m_underConstructionDepthFrame->cameraFrameTextureSize[0] = m_cameraFrameWidth * 2;
+            m_underConstructionDepthFrame->cameraFrameTextureSize[1] = m_cameraFrameHeight;
             m_underConstructionDepthFrame->disparityDownscaleFactor = (float)m_downscaleFactor;
             m_underConstructionDepthFrame->minDisparity = stereoConfig.StereoMinDisparity / 2048.0f;
             m_underConstructionDepthFrame->maxDisparity = m_maxDisparity / 2048.0f;
             m_underConstructionDepthFrame->bIsValid = true;
             m_underConstructionDepthFrame->bIsFirstRender = true;
+
+
+            if (!m_renderer.BeginRender(m_underConstructionDepthFrame))
+            {
+                continue;
+            }
+
+            // Write disparity and confidence to texture
+#if 1
+            cv::Rect copySrcRegion = cv::Rect(numDisparities, 0, m_cvImageWidth, m_cvImageHeight);
+
+            m_outputDisparity = cv::Mat(m_cvImageHeight, m_cvImageWidth * 2, CV_16S, m_renderer.GetDisparityWriteBuffer());
+            //m_outputDisparity = cv::Mat(m_cvImageHeight, m_cvImageWidth * 2, CV_8S, m_renderer.GetDisparityWriteBuffer());
+
+            m_outputDisparityLeft = m_outputDisparity(cv::Rect(0, 0, m_cvImageWidth, m_cvImageHeight));
+            m_outputDisparityRight = m_outputDisparity(cv::Rect(m_cvImageWidth, 0, m_cvImageWidth, m_cvImageHeight));
+
+            (*outputMatrixLeft)(copySrcRegion).copyTo(m_outputDisparityLeft);
+            //(*outputMatrixLeft)(copySrcRegion).convertTo(m_outputDisparityLeft, CV_8S, 1);
+
+            if (m_bDisparityBothEyes)
+            {
+                // Invert right eye disparity
+                (*outputMatrixRight)(copySrcRegion).convertTo(m_outputDisparityRight, CV_16S, -1);
+                //(*outputMatrixRight)(copySrcRegion).convertTo(m_outputDisparityRight, CV_8S, -1);
+            }
+            else
+            {
+                (*outputMatrixRight)(copySrcRegion).copyTo(m_outputDisparityRight);
+                //(*outputMatrixRight)(copySrcRegion).convertTo(m_outputDisparityRight, CV_8S, -1);
+            }
+
+            m_outputConfidence = cv::Mat(m_cvImageHeight, m_cvImageWidth * 2, CV_16S, m_renderer.GetConfidenceWriteBuffer());
+            //m_outputConfidence = cv::Mat(m_cvImageHeight, m_cvImageWidth * 2, CV_8S, m_renderer.GetConfidenceWriteBuffer());
+
+            m_outputConfidenceLeft = m_outputConfidence(cv::Rect(0, 0, m_cvImageWidth, m_cvImageHeight));
+            m_outputConfidenceRight = m_outputConfidence(cv::Rect(m_cvImageWidth, 0, m_cvImageWidth, m_cvImageHeight));
+
+            //(*outputMatrixLeft)(copySrcRegion).convertTo(m_outputDisparityLeft, CV_16S);
+            //(*outputMatrixRight)(copySrcRegion).convertTo(m_outputDisparityRight, CV_16S);
+
+           /* cv::Mat leftIn[2];
+            cv::Mat rightIn[2];
+
+            leftIn[0] = (*outputMatrixLeft)(cv::Rect(numDisparities, 0, m_cvImageWidth, m_cvImageHeight));
+            rightIn[0] = (*outputMatrixRight)(cv::Rect(numDisparities, 0, m_cvImageWidth, m_cvImageHeight));*/
+
+            if (stereoConfig.StereoFiltering != StereoFiltering_None || stereoConfig.StereoFillHoles)
+            {
+                float confFactor = (stereoConfig.StereoFiltering != StereoFiltering_None) ? 32768.0f / 255.0f : 32768.0f;
+
+                if ((uint32_t)outputConfMatrixLeft->size().width >= m_cvImageWidth + numDisparities)
+                {
+                    (*outputConfMatrixLeft)(copySrcRegion).convertTo(m_outputConfidenceLeft, CV_16S, confFactor);
+                    //(*outputConfMatrixLeft)(copySrcRegion).convertTo(m_outputConfidenceLeft, CV_8S, confFactor);
+
+                    if (!m_bDisparityBothEyes)
+                    {
+                        (*outputConfMatrixLeft)(copySrcRegion).convertTo(m_outputConfidenceRight, CV_16S, confFactor);
+                        //(*outputConfMatrixLeft)(copySrcRegion).convertTo(m_outputConfidenceRight, CV_8S, confFactor);
+                    }
+                }
+                else
+                {
+                    m_outputConfidenceLeft = cv::Mat::zeros(m_cvImageHeight, m_cvImageWidth, CV_16S);
+                    //m_outputConfidenceLeft = cv::Mat::zeros(m_cvImageHeight, m_cvImageWidth, CV_8S);
+
+                    if (!m_bDisparityBothEyes)
+                    {
+                        m_outputConfidenceRight = cv::Mat::zeros(m_cvImageHeight, m_cvImageWidth, CV_16S);
+                        //m_outputConfidenceRight = cv::Mat::zeros(m_cvImageHeight, m_cvImageWidth, CV_8S);
+                    }
+                }
+
+                if (m_bDisparityBothEyes)
+                {
+                    if ((uint32_t)(*outputConfMatrixRight).size().width >= m_cvImageWidth + numDisparities)
+                    {
+                        (*outputConfMatrixRight)(copySrcRegion).convertTo(m_outputConfidenceRight, CV_16S, confFactor);
+                        //(*outputConfMatrixRight)(copySrcRegion).convertTo(m_outputConfidenceRight, CV_8S, confFactor);
+                    }
+                    else
+                    {
+                        m_outputConfidenceRight = cv::Mat::zeros(m_cvImageHeight, m_cvImageWidth, CV_16S);
+                        //m_outputConfidenceRight = cv::Mat::zeros(m_cvImageHeight, m_cvImageWidth, CV_8S);
+                    }
+                }
+
+                /*int fromTo[4] = { 0,0 , 1,1 };
+                cv::mixChannels(leftIn, 2, &m_outputDisparityLeft, 1, fromTo, 2);
+                cv::mixChannels(rightIn, 2, &m_outputDisparityRight, 1, fromTo, 2);*/
+
+            }
+            else
+            {
+                m_outputConfidenceLeft = cv::Mat::zeros(m_cvImageHeight, m_cvImageWidth, CV_16S);
+                m_outputConfidenceRight = cv::Mat::zeros(m_cvImageHeight, m_cvImageWidth, CV_16S);
+                //m_outputConfidenceLeft = cv::Mat::zeros(m_cvImageHeight, m_cvImageWidth, CV_8S);
+                //m_outputConfidenceRight = cv::Mat::zeros(m_cvImageHeight, m_cvImageWidth, CV_8S);
+
+                /*int fromTo[4] = { 0,0 , 1,1 };
+                cv::mixChannels(leftIn, 2, &m_outputDisparityLeft, 1, fromTo, 2);
+                cv::mixChannels(rightIn, 2, &m_outputDisparityRight, 1, fromTo, 2);*/
+            }
+
+            //if (m_bDisparityBothEyes)
+            //{
+            //    // Invert right eye disparity
+            //    m_outputDisparityRight.forEach<cv::Vec2s>([this](cv::Vec2s& element, const int* position) -> void
+            //    {
+            //        element[0] *= -1;
+            //    });
+            //}
+
+
+            // Copy rectified camera frame associated with disparity
+            {
+                //m_underConstructionDepthFrame->cameraFrameRectifiedBW->resize(m_cameraFrameWidth * 2 * m_cameraFrameHeight);
+
+                m_outputCameraFrame = cv::Mat(m_cameraFrameHeight, m_cameraFrameWidth * 2, CV_8U, m_renderer.GetCameraWriteBuffer());
+
+                m_outputCameraFrameLeft = m_outputCameraFrame(cv::Rect(0, 0, m_cameraFrameWidth, m_cameraFrameHeight));
+                m_outputCameraFrameRight = m_outputCameraFrame(cv::Rect(m_cameraFrameWidth, 0, m_cameraFrameWidth, m_cameraFrameHeight));
+
+                if (m_bUseColor)
+                {
+                    cv::cvtColor(m_rectifiedFrameLeft, m_outputCameraFrameLeft, cv::COLOR_RGBA2GRAY);
+                    cv::cvtColor(m_rectifiedFrameRight, m_outputCameraFrameRight, cv::COLOR_RGBA2GRAY);
+                }
+                else
+                {
+                    m_rectifiedFrameLeft.copyTo(m_outputCameraFrameLeft);
+                    m_rectifiedFrameRight.copyTo(m_outputCameraFrameRight);
+                }
+            }
+#endif
+            m_renderer.Render(m_underConstructionDepthFrame);
 
             {
                 std::lock_guard<std::mutex> lock(m_serveMutex);

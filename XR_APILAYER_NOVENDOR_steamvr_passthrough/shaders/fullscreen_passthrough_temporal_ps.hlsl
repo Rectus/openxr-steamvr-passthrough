@@ -74,6 +74,13 @@ PS_Output main(VS_OUTPUT input)
         outUvs = Remap(outUvs, float2(0.0, 1.0), float2(1.0, 0.0), g_uvBounds.xy, g_uvBounds.zw);
         outUvs = clamp(outUvs, g_uvBounds.xy, g_uvBounds.zw);
     }
+    
+    if (g_bClampCameraFrame)
+    {
+        clip(cameraClipSpacePos.w);
+        clip(outUvs);
+        clip(1 - outUvs);
+    }
       
     float3 rgbColor = g_cameraFrameTexture.Sample(g_samplerState, outUvs).rgb;
     float3 minColor = rgbColor;

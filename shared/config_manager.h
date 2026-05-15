@@ -208,7 +208,7 @@ struct alignas(4) Config_Main
 
 struct alignas(4) Config_Camera
 {
-	bool ClampCameraFrame = true;
+	bool ClampCameraFrame = false;
 
 	bool UseTrackedDevice = true;
 	char TrackedDeviceSerialNumber[MAX_CAMERA_SERIAL_NUMBER_SIZE + 1] = "";
