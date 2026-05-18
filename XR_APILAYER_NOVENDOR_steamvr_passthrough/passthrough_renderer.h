@@ -330,8 +330,7 @@ protected:
 	void SetupCameraUndistortedFrameResource(const uint32_t imageIndex);
 	bool CheckInitViewData(const uint32_t viewIndex, const uint32_t swapchainIndex);
 	bool CheckInitFrameData(const uint32_t imageIndex);
-	void SetupDisparityMap(uint32_t width, uint32_t height);
-	//void SetupDisparityMapExternal(HANDLE handle, uint32_t width, uint32_t height);
+	void SetupDisparityFilter(uint32_t width, uint32_t height);
 	void SetupPassthroughDepthStencil(uint32_t viewIndex, uint32_t swapchainIndex, uint32_t width, uint32_t height);
 	void SetupUVDistortionMap(std::shared_ptr<std::vector<float>> uvDistortionMap);
 	DX11TemporaryRenderTarget& GetTemporaryRenderTarget(const uint32_t swapchainIndex, const uint32_t eyeIndex);

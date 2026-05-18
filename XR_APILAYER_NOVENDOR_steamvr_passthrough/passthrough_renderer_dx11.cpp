@@ -783,26 +783,8 @@ void PassthroughRendererDX11::SetupCameraUndistortedFrameResource(const uint32_t
 }
 
 
-void PassthroughRendererDX11::SetupDisparityMap(uint32_t width, uint32_t height)
+void PassthroughRendererDX11::SetupDisparityFilter(uint32_t width, uint32_t height)
 {
-	// TODO: merge textures to one, we shouldn't need a separtate one for temporal filtering
-	D3D11_TEXTURE2D_DESC textureDesc = {};
-	textureDesc.MipLevels = 1;
-	textureDesc.Format = DXGI_FORMAT_R16G16_SNORM;
-	textureDesc.Width = width;
-	textureDesc.Height = height;
-	textureDesc.ArraySize = 1;
-	textureDesc.SampleDesc.Count = 1;
-	textureDesc.SampleDesc.Quality = 0;
-	textureDesc.BindFlags = D3D11_BIND_UNORDERED_ACCESS | D3D11_BIND_SHADER_RESOURCE;
-	textureDesc.Usage = D3D11_USAGE_DEFAULT;
-	textureDesc.CPUAccessFlags = 0;
-	
-	D3D11_SHADER_RESOURCE_VIEW_DESC srvDesc = {};
-	srvDesc.ViewDimension = D3D11_SRV_DIMENSION_TEXTURE2D;
-	srvDesc.Format = textureDesc.Format;
-	srvDesc.Texture2D.MipLevels = 1;
-
 	D3D11_TEXTURE2D_DESC uavTextureDesc = {};
 	uavTextureDesc.MipLevels = 1;
 	uavTextureDesc.Format = DXGI_FORMAT_R16G16_SNORM;
@@ -815,105 +797,36 @@ void PassthroughRendererDX11::SetupDisparityMap(uint32_t width, uint32_t height)
 	uavTextureDesc.Usage = D3D11_USAGE_DEFAULT;
 	uavTextureDesc.CPUAccessFlags = 0;
 
+	D3D11_SHADER_RESOURCE_VIEW_DESC srvDesc = {};
+	srvDesc.ViewDimension = D3D11_SRV_DIMENSION_TEXTURE2D;
+	srvDesc.Format = DXGI_FORMAT_R16G16_SNORM;
+	srvDesc.Texture2D.MipLevels = 1;
+
 	D3D11_UNORDERED_ACCESS_VIEW_DESC uavDesc = {};
 	uavDesc.Format = DXGI_FORMAT_R16G16_SNORM;
 	uavDesc.ViewDimension = D3D11_UAV_DIMENSION_TEXTURE2D;
-
-	/*D3D11_TEXTURE2D_DESC uploadTextureDesc = textureDesc;
-	uploadTextureDesc.BindFlags = 0;
-	uploadTextureDesc.Usage = D3D11_USAGE_STAGING;
-	uploadTextureDesc.CPUAccessFlags = D3D11_CPU_ACCESS_WRITE;
-
-	if (FAILED(m_d3dDevice->CreateTexture2D(&uploadTextureDesc, nullptr, &m_disparityMapUploadTexture)))
-	{
-		g_logger->error("Disparity Map CreateTexture2D error!");
-		return;
-	}
-	SET_DXGI_DEBUGNAME(m_disparityMapUploadTexture);*/
-
 
 	for (int i = 0; i < m_frameData.size(); i++)
 	{
 		DX11FrameData& frameData = m_frameData[i];
 
-		/*if (FAILED(m_d3dDevice->CreateTexture2D(&textureDesc, nullptr, &frameData.disparityMap.Texture)))
+		if (FAILED(m_d3dDevice->CreateTexture2D(&uavTextureDesc, nullptr, &frameData.disparityFilter.Texture)))
 		{
-			g_logger->error("Disparity Map CreateTexture2D error!");
-			return;
+			g_logger->error("Disparity Map UAV CreateTexture2D error!");
 		}
 
-		if (FAILED(m_d3dDevice->CreateUnorderedAccessView(frameData.disparityMap.Texture.Get(), &uavDesc, &frameData.disparityMap.UAV)))
+		if (FAILED(m_d3dDevice->CreateUnorderedAccessView(frameData.disparityFilter.Texture.Get(), &uavDesc, &frameData.disparityFilter.UAV)))
 		{
 			g_logger->error("Disparity Map CreateUnorderedAccessView error!");
 		}
 
-		if (FAILED(m_d3dDevice->CreateShaderResourceView(frameData.disparityMap.Texture.Get(), &srvDesc, &frameData.disparityMap.SRV)))
+		if (FAILED(m_d3dDevice->CreateShaderResourceView(frameData.disparityFilter.Texture.Get(), &srvDesc, &frameData.disparityFilter.SRV)))
 		{
 			g_logger->error("Disparity Map CreateShaderResourceView error!");
-			return;
-		}*/
-
-		if (m_configManager->GetConfig_Stereo().StereoUseDisparityTemporalFiltering && m_bIsVSUAVSupported)
-		{
-
-			if (FAILED(m_d3dDevice->CreateTexture2D(&uavTextureDesc, nullptr, &frameData.disparityFilter.Texture)))
-			{
-				g_logger->error("Disparity Map UAV CreateTexture2D error!");
-			}
-
-			if (FAILED(m_d3dDevice->CreateUnorderedAccessView(frameData.disparityFilter.Texture.Get(), &uavDesc, &frameData.disparityFilter.UAV)))
-			{
-				g_logger->error("Disparity Map CreateUnorderedAccessView error!");
-			}
-
-			if (FAILED(m_d3dDevice->CreateShaderResourceView(frameData.disparityFilter.Texture.Get(), &srvDesc, &frameData.disparityFilter.SRV)))
-			{
-				g_logger->error("Disparity Map CreateShaderResourceView error!");
-			}
 		}
 	}
 }
 
-//void PassthroughRendererDX11::SetupDisparityMapExternal(HANDLE handle, uint32_t width, uint32_t height)
-//{
-//	if (handle == INVALID_HANDLE_VALUE)
-//	{
-//		g_logger->error("SetupDisparityMapExternal: invalid external handle!");
-//		return;
-//	}
-//
-//	DX11UAVSRVTexture& dispMap = m_sharedDisparityMaps.emplace_back();
-//
-//	dispMap.NTHandle = handle;
-//	HRESULT res = m_d3dDevice1->OpenSharedResource(handle, IID_PPV_ARGS(&dispMap.Map.Texture));
-//	if (FAILED(res))
-//	{
-//		g_logger->error("SetupDisparityMapExternal failed to open external handle! {:x}", (uint32_t)res);
-//		return;
-//	}
-//
-//	//dispMap.Map.Texture->QueryInterface(IID_PPV_ARGS(dispMap.Map.Mutex.GetAddressOf()));
-//
-//	D3D11_SHADER_RESOURCE_VIEW_DESC srvDesc = {};
-//	srvDesc.ViewDimension = D3D11_SRV_DIMENSION_TEXTURE2D;
-//	srvDesc.Format = DXGI_FORMAT_R16G16_SNORM;
-//	srvDesc.Texture2D.MipLevels = 1;
-//
-//	D3D11_UNORDERED_ACCESS_VIEW_DESC uavDesc = {};
-//	uavDesc.Format = DXGI_FORMAT_R16G16_SNORM;
-//	uavDesc.ViewDimension = D3D11_UAV_DIMENSION_TEXTURE2D;
-//
-//	if (FAILED(m_d3dDevice->CreateUnorderedAccessView(dispMap.Map.Texture.Get(), &uavDesc, &dispMap.Map.UAV)))
-//	{
-//		g_logger->error("Shared Disparity Map CreateUnorderedAccessView error!");
-//	}
-//
-//	if (FAILED(m_d3dDevice->CreateShaderResourceView(dispMap.Map.Texture.Get(), &srvDesc, &dispMap.Map.SRV)))
-//	{
-//		g_logger->error("Shared Disparity Map CreateShaderResourceView error!");
-//		return;
-//	}
-//}
 
 
 void PassthroughRendererDX11::SetupPassthroughDepthStencil(uint32_t viewIndex, uint32_t swapchainIndex, uint32_t width, uint32_t height)
@@ -1597,16 +1510,17 @@ void PassthroughRendererDX11::RenderPassthroughFrame(const XrCompositionLayerPro
 
 	if (mainConf.ProjectionMode == Projection_StereoReconstruction)
 	{
-		bool bDisparityMapUpdated = depthFrame->bIsFirstRender;
-
+		bool bDispTemportalFiltering = stereoConf.StereoUseDisparityTemporalFiltering && m_bIsVSUAVSupported;
 		bool bDisparityMapReset = false;
 
-		if (depthFrame->disparityTextureSize[0] != m_disparityMapWidth || (stereoConf.StereoUseDisparityTemporalFiltering && m_bIsVSUAVSupported && frameData.disparityFilter.Texture == nullptr))
+		if (depthFrame->disparityTextureSize[0] != m_disparityMapWidth || (bDispTemportalFiltering && frameData.disparityFilter.Texture == nullptr))
 		{
 			m_disparityMapWidth = depthFrame->disparityTextureSize[0];
 
-			// Only makes the temportal filter texture,
-			SetupDisparityMap(depthFrame->disparityTextureSize[0], depthFrame->disparityTextureSize[1]);
+			if (bDispTemportalFiltering)
+			{
+				SetupDisparityFilter(depthFrame->disparityTextureSize[0], depthFrame->disparityTextureSize[1]);
+			}
 
 			for (int i = 0; i < m_viewData[0].size(); i++)
 			{
@@ -1615,62 +1529,29 @@ void PassthroughRendererDX11::RenderPassthroughFrame(const XrCompositionLayerPro
 				m_viewData[1][i].passthroughDepthStencil[0].Texture = nullptr;
 				m_viewData[0][i].passthroughDepthStencil[1].Texture = nullptr;
 			}
-			bDisparityMapUpdated = true;
 			bDisparityMapReset = true;
 		}
-		//if (bDisparityMapUpdated)
+		
+		bool bHasDisparityMap = false;
+		for (auto dispMap : m_sharedDisparityMaps)
 		{
-			bool bHasMap = false;
-			for (auto dispMap : m_sharedDisparityMaps)
+			if (dispMap.Texture.Get() == reinterpret_cast<ID3D11Texture2D*>(depthFrame->outputDisparityMapNativeTexture))
 			{
-				if (dispMap.Texture.Get() == reinterpret_cast<ID3D11Texture2D*>(depthFrame->outputDisparityMapNativeTexture))
-				{
-					frameData.disparityMap.SRV = dispMap.SRV;
-					frameData.disparityMap.Texture = dispMap.Texture;
-					frameData.disparityMap.UAV = dispMap.UAV;
+				frameData.disparityMap.SRV = dispMap.SRV;
+				frameData.disparityMap.Texture = dispMap.Texture;
+				frameData.disparityMap.UAV = dispMap.UAV;
 
-					bHasMap = true;
-					break;
-				}
+				bHasDisparityMap = true;
+				break;
 			}
-
-			if (!bHasMap)
-			{
-				g_logger->error("No disparity map found!");
-				return;
-				//SetupDisparityMapExternal(depthFrame->outputDisparitySharedNT, depthFrame->disparityTextureSize[0], depthFrame->disparityTextureSize[1]);
-
-				//frameData.disparityMap.SRV = m_sharedDisparityMaps.back().SRV;
-				//frameData.disparityMap.Texture = m_sharedDisparityMaps.back().Texture;
-				//frameData.disparityMap.UAV = m_sharedDisparityMaps.back().UAV;
-
-				//// Purge any outdated textures.
-				//while (m_sharedDisparityMaps.size() > 3)
-				//{
-				//	m_sharedDisparityMaps.erase(m_sharedDisparityMaps.begin());
-				//}
-			}
-
-			/*UploadTexture(m_deviceContext, m_disparityMapUploadTexture, (uint8_t*)depthFrame->disparityMap->data(), depthFrame->disparityTextureSize[1], depthFrame->disparityTextureSize[0] * sizeof(uint16_t) * 2);
-			m_prevDepthUpdatedFrameIndex = m_depthUpdatedFrameIndex;
-			m_depthUpdatedFrameIndex = m_frameIndex;
-			m_deviceContext->CopyResource(frameData.disparityMap.Texture.Get(), m_disparityMapUploadTexture.Get());*/
 		}
 
-		/*if (frameData.disparityMap.Mutex != nullptr)
+		if (!bHasDisparityMap)
 		{
-			frameData.disparityMap.Mutex->AcquireSync(1, 1);
-		}*/
+			g_logger->error("No disparity map found!");
+			return;
+		}
 
-		/*if(!bDisparityMapUpdated && frameData.disparityMap.Texture != nullptr && frameData.disparityMap.Texture != nullptr)
-		{
-			m_deviceContext->CopyResource(frameData.disparityMap.Texture.Get(), prevFrameData.disparityMap.Texture.Get());
-		}*/
-
-		/*if (stereoConf.StereoFillHoles && bDisparityMapUpdated)
-		{
-			RenderHoleFillCS(frameData, depthFrame);
-		}*/
 
 		bool bDepthMapsReset = false;
 
@@ -2147,7 +2028,6 @@ void PassthroughRendererDX11::RenderDepthPrepassView(const ERenderEye eye, const
 	ID3D11Buffer* vsBuffers[2] = { viewData.vsViewConstantBuffer.Get(), frameData.vsPassConstantBuffer.Get() };
 	m_renderContext->VSSetConstantBuffers(0, 2, vsBuffers);
 
-	//ID3D11ShaderResourceView* vsSRVs[1] = { m_frameData[m_depthUpdatedFrameIndex].disparityMap.SRV.Get() };
 	ID3D11ShaderResourceView* vsSRVs[1] = { frameData.disparityMap.SRV.Get() };
 	m_renderContext->VSSetShaderResources(0, 1, vsSRVs);
 
@@ -2380,13 +2260,11 @@ void PassthroughRendererDX11::RenderMaskedPrepassView(const ERenderEye eye, cons
 		}
 		else if (stereoConf.StereoUseDisparityTemporalFiltering && m_bIsVSUAVSupported)
 		{
-			//ID3D11ShaderResourceView* vsSRVs[2] = { m_frameData[m_depthUpdatedFrameIndex].disparityMap.SRV.Get(), m_frameData[m_prevDepthUpdatedFrameIndex].disparityFilter.SRV.Get() };
 			ID3D11ShaderResourceView* vsSRVs[2] = { frameData.disparityMap.SRV.Get(), m_frameData[m_prevDepthUpdatedFrameIndex].disparityFilter.SRV.Get() };
 			m_renderContext->VSSetShaderResources(0, 2, vsSRVs);
 		}
 		else
 		{
-			//ID3D11ShaderResourceView* vsSRVs[2] = { m_frameData[m_depthUpdatedFrameIndex].disparityMap.SRV.Get() };
 			ID3D11ShaderResourceView* vsSRVs[2] = { frameData.disparityMap.SRV.Get() };
 			m_renderContext->VSSetShaderResources(0, 1, vsSRVs);
 		}
@@ -2624,7 +2502,6 @@ void PassthroughRendererDX11::RenderAlphaPrepassView(const ERenderEye eye, const
 		else if (bUseDisparityTemporalFiltering)
 		{
 			ID3D11ShaderResourceView* vsSRVs[2] = {
-				//m_frameData[m_depthUpdatedFrameIndex].disparityMap.SRV.Get(),
 				frameData.disparityMap.SRV.Get(),
 				m_frameData[m_prevDepthUpdatedFrameIndex].disparityFilter.SRV.Get()
 			};
@@ -2632,7 +2509,6 @@ void PassthroughRendererDX11::RenderAlphaPrepassView(const ERenderEye eye, const
 		}
 		else
 		{
-			//ID3D11ShaderResourceView* vsSRVs[1] = { m_frameData[m_depthUpdatedFrameIndex].disparityMap.SRV.Get() };
 			ID3D11ShaderResourceView* vsSRVs[1] = { frameData.disparityMap.SRV.Get() };
 			m_renderContext->VSSetShaderResources(0, 1, vsSRVs);
 		}
@@ -2889,7 +2765,6 @@ void PassthroughRendererDX11::RenderPassthroughView(const ERenderEye eye, const 
 		else if (bUseDisparityTemporalFiltering)
 		{
 			ID3D11ShaderResourceView* vsSRVs[2] = {
-				//m_frameData[m_depthUpdatedFrameIndex].disparityMap.SRV.Get(),
 				frameData.disparityMap.SRV.Get(),
 				m_frameData[m_prevDepthUpdatedFrameIndex].disparityFilter.SRV.Get()
 			};
@@ -2897,7 +2772,6 @@ void PassthroughRendererDX11::RenderPassthroughView(const ERenderEye eye, const 
 		}
 		else
 		{
-			//ID3D11ShaderResourceView* vsSRVs[1] = { m_frameData[m_depthUpdatedFrameIndex].disparityMap.SRV.Get() };
 			ID3D11ShaderResourceView* vsSRVs[1] = { frameData.disparityMap.SRV.Get() };
 			m_renderContext->VSSetShaderResources(0, 1, vsSRVs);
 		}
@@ -3281,13 +3155,6 @@ void PassthroughRendererDX11::RenderFrameFinish()
 		m_deviceContext->ExecuteCommandList(commandList.Get(), true);
 		m_renderContext.Reset();
 	}
-
-
-	/*if (m_configManager->GetConfig_Main().ProjectionMode == Projection_StereoReconstruction &&
-		m_frameData[m_frameIndex].disparityMap.Mutex != nullptr)
-	{
-		m_frameData[m_frameIndex].disparityMap.Mutex->ReleaseSync(1);
-	}*/
 }
 
 
@@ -3366,9 +3233,6 @@ bool PassthroughRendererDX11::CreateSharedDisparityMap(HANDLE* sharedHandle, voi
 	IDXGIResource1* tempResource = NULL;
 	(*texture)->QueryInterface(IID_PPV_ARGS(&tempResource));
 
-	//std::wstring name = std::wstring(L"Local\\SharedTexture") + std::to_wstring((uint64_t)(*d3dTexture));
-
-	//result = tempResource->CreateSharedHandle(NULL, DXGI_SHARED_RESOURCE_READ | DXGI_SHARED_RESOURCE_WRITE, name.data(), sharedHandle);
 	result = tempResource->GetSharedHandle(sharedHandle);
 	if (result != S_OK)
 	{
@@ -3378,8 +3242,6 @@ bool PassthroughRendererDX11::CreateSharedDisparityMap(HANDLE* sharedHandle, voi
 	}
 
 	tempResource->Release();
-
-	//(*texture)->QueryInterface(IID_PPV_ARGS(d3dMutex));
 
 	return true;
 }

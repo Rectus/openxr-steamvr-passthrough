@@ -1127,7 +1127,8 @@ void PassthroughRendererDX12::RenderPassthroughFrame(const XrCompositionLayerPro
 		int rowPitch = Align(depthFrame->disparityTextureSize[0] * sizeof(uint16_t) * 2, D3D12_TEXTURE_DATA_PITCH_ALIGNMENT);
 		size_t disparityTextureSize = Align(depthFrame->disparityTextureSize[1] * rowPitch, D3D12_TEXTURE_DATA_PLACEMENT_ALIGNMENT);
 
-		UploadTexture(m_commandList.Get(), m_disparityMap[m_frameIndex].Get(), m_disparityMapUploadHeap.Get(), disparityTextureSize * m_frameIndex, (uint8_t*)depthFrame->disparityMap->data(), depthFrame->disparityTextureSize[0], depthFrame->disparityTextureSize[1], DXGI_FORMAT_R16G16_SNORM, sizeof(uint16_t) * 2, 0);
+		// TODO: Non-functional
+		/*UploadTexture(m_commandList.Get(), m_disparityMap[m_frameIndex].Get(), m_disparityMapUploadHeap.Get(), disparityTextureSize * m_frameIndex, (uint8_t*)depthFrame->disparityMap->data(), depthFrame->disparityTextureSize[0], depthFrame->disparityTextureSize[1], DXGI_FORMAT_R16G16_SNORM, sizeof(uint16_t) * 2, 0);*/
 
 		TransitionResource(m_commandList.Get(), m_disparityMap[m_frameIndex].Get(), D3D12_RESOURCE_STATE_COPY_DEST, D3D12_RESOURCE_STATE_NON_PIXEL_SHADER_RESOURCE);
 

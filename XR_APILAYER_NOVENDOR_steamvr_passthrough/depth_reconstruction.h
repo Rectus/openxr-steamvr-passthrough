@@ -123,6 +123,10 @@ private:
 	cv::Mat m_outputCameraFrameLeft;
 	cv::Mat m_outputCameraFrameRight;
 
+	std::vector<uint8_t> m_outputDisparityBuffer;
+	std::vector<uint8_t> m_outputConfidenceBuffer;
+	std::vector<uint8_t> m_outputCameraFrameBuffer;
+
 	std::deque<float> m_reconstructionTimes;
 	float m_averageReconstructionTime;
 

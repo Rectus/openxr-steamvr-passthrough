@@ -17,28 +17,12 @@ struct VulkanTexture
 	uint8_t* MappedMemory = nullptr;
 
 	HANDLE SharedHandle = INVALID_HANDLE_VALUE;
-	ID3D11Texture2D* d3dTexture = NULL;
+	void* nativeTexture = NULL;
 
 	VkExtent2D Extent = { 0, 0 };
 	bool bIsValid = false;
 	VkImageLayout Layout = VK_IMAGE_LAYOUT_UNDEFINED;
 };
-
-struct VulkanBufferTexture
-{
-	VkBuffer Buffer = VK_NULL_HANDLE;
-	VkDeviceMemory 	Memory = VK_NULL_HANDLE;
-	VkBufferView View = VK_NULL_HANDLE;
-	VkBuffer StagingBuffer = VK_NULL_HANDLE;
-	VkDeviceMemory 	StagingBufferMemory = VK_NULL_HANDLE;
-	uint8_t* MappedMemory = nullptr;
-
-	VkExtent2D Extent = { 0, 0 };
-	VkDeviceSize Size = 0;
-	bool bIsValid = false;
-	bool bSupportsDirectTransfer = false;
-};
-
 
 class AsyncRenderer
 {
@@ -50,21 +34,18 @@ public:
 	~AsyncRenderer();
 	bool InitRenderer();
 	bool BeginRender(std::shared_ptr<DepthFrame> depthFrame);
-	uint16_t* GetDisparityWriteBuffer();
-	uint16_t* GetConfidenceWriteBuffer();
-	uint8_t* GetCameraWriteBuffer();
+	void CopyDisparityToGPU(std::vector<uint8_t>& buffer);
+	void CopyConfidenceToGPU(std::vector<uint8_t>& buffer);
+	void CopyCameraFrameToGPU(std::vector<uint8_t>& buffer);
 	void Render(std::shared_ptr<DepthFrame> depthFrame);
-	bool TransferTextureToCPU(void* textureSRV, const uint32_t width, const uint32_t height, const uint32_t bufferSize, uint8_t* buffer);
 
 private:
 
 	VkShaderModule CreateShaderModule(const uint32_t* bytecode, size_t codeSize);
 	bool CreateBuffer(VkBuffer& buffer, VkDeviceMemory& bufferMem, VkDeviceSize bufferSize, VkBufferUsageFlags usageFlags, VkMemoryPropertyFlags memFlags, std::deque<std::function<void()>>* deletionQueue);
-	bool CreateBufferTexture(VulkanBufferTexture& texture, VkExtent2D extent, VkDeviceSize bufferSize);
-	bool CreateTexture(VulkanTexture& texture, VkExtent2D extent, VkFormat format, VkImageUsageFlags usageFlags, VkImageCreateFlags createFlags, VkMemoryPropertyFlags memFlags);
+	bool CreateTexture(VulkanTexture& texture, VkExtent2D extent, VkFormat format, VkImageUsageFlags usageFlags);
 	bool CreateSharedTexture(VulkanTexture& texture, VkExtent2D extent, VkFormat format);
 	void DestroyTexture(VulkanTexture& texture);
-	void DestroyBufferTexture(VulkanBufferTexture& texture);
 	void ComputeFilterKernels();
 
 
@@ -81,7 +62,7 @@ private:
 	VkQueue m_queue = VK_NULL_HANDLE;
 	VkCommandPool m_commandPool = VK_NULL_HANDLE;
 	VkCommandBuffer m_commandBuffer = VK_NULL_HANDLE;
-	bool m_bReBAREnabled = false;
+	bool m_bHostImageCopyEnabled = false;
 
 	VkFence m_renderFence = VK_NULL_HANDLE;
 	VkFence m_transferFence = VK_NULL_HANDLE;
@@ -107,7 +88,6 @@ private:
 	VkBuffer m_filterKernelBuffer = VK_NULL_HANDLE;
 	VkDeviceMemory m_filterKernelBufferMem = VK_NULL_HANDLE;
 	
-	bool m_bFirstFrame = true;
 	float m_minDisparity = 0.0f;
 	float m_maxDisparity = 0.0f;
 

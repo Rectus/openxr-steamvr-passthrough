@@ -15,14 +15,12 @@
 #define MAX_FILTER_DIST 10
 #define WEIGHT_ARRAY_SIZE (MAX_FILTER_DIST * 2 + 1)
 
+// Using the default sparse 16 byte aligned arrays for a bit of performance over packing them.
 cbuffer FilterKernels : register(b0)
 {
-    float4 g_lumaWeights[256 / 4];
-    float4 g_spaceWeights[WEIGHT_ARRAY_SIZE][WEIGHT_ARRAY_SIZE / 4];
+    float g_lumaWeights[256];
+    float g_spaceWeights[WEIGHT_ARRAY_SIZE][WEIGHT_ARRAY_SIZE];
 }
-
-#define ACCESS_PACKED(arr, x) arr[x >> 2][x & 3]
-#define ACCESS_PACKED2(arr, y, x) arr[y][x >> 2][x & 3]
 
 
 SamplerState g_samplerState : register(s3);
@@ -57,10 +55,10 @@ bool CalculatePixel(inout float dispSum, inout float totalWeight, inout bool bCe
     float luma = g_cameraFrame.Sample(g_samplerState, uvPos + pixelUVSize * offset).x;
 
     // Weight of color distance
-    float jointWeight = ACCESS_PACKED(g_lumaWeights, min(int(abs(centerLuma - luma) * 255.0), 255));
+    float jointWeight = g_lumaWeights[min(int(abs(centerLuma - luma) * 255.0), 255)];
 
     // Weight of sample distance from center
-    float spaceWeight = ACCESS_PACKED2(g_spaceWeights, offset.y + radius, offset.x + radius);
+    float spaceWeight = g_spaceWeights[offset.y + radius][offset.x + radius];
 
     float weight = spaceWeight * sampleWeight * jointWeight;
     //float weight = sampleWeight * jointWeight;

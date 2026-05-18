@@ -24,10 +24,11 @@ struct alignas(16) CSAsyncConstantBuffer
 #define MAX_FILTER_DIST 10
 #define WEIGHT_ARRAY_SIZE (MAX_FILTER_DIST * 2 + 1)
 
-struct CSFilterKernels
+// Using the default sparse 16 byte aligned arrays for a bit of performance over packing them.
+struct  CSFilterKernels
 {
-	float lumaWeights[256];
-	float spaceWeights[WEIGHT_ARRAY_SIZE][WEIGHT_ARRAY_SIZE];
+	float lumaWeights[256][4];
+	float spaceWeights[WEIGHT_ARRAY_SIZE][WEIGHT_ARRAY_SIZE][4];
 };
 
 
@@ -153,8 +154,6 @@ static void TransitionImage(VkCommandBuffer commandBuffer, VkImage image, VkImag
 	vkCmdPipelineBarrier(commandBuffer, srcStageMask, dstStageMask, depFlags, 0, nullptr, 0, nullptr, 1, &barrier);
 }
 
-
-
 void CopyTextureToGPU(VkCommandBuffer commandBuffer, VulkanTexture texture, VkImageLayout newLayout)
 {
 
@@ -175,29 +174,33 @@ void CopyTextureToGPU(VkCommandBuffer commandBuffer, VulkanTexture texture, VkIm
 	texture.Layout = newLayout;
 }
 
-void CopyBufferTextureToGPU(VkCommandBuffer commandBuffer, VulkanBufferTexture texture)
+void CopyHostImageToGPU(VkDevice device, VulkanTexture texture, std::vector<uint8_t>& buffer)
 {
-	VkBufferMemoryBarrier barrier{ VK_STRUCTURE_TYPE_BUFFER_MEMORY_BARRIER };
-	barrier.buffer = texture.Buffer;
-	barrier.size = VK_WHOLE_SIZE;
-	barrier.srcAccessMask = VK_ACCESS_SHADER_READ_BIT;
-	barrier.dstAccessMask = VK_ACCESS_TRANSFER_WRITE_BIT;
-	VkPipelineStageFlags srcStageMask = VK_PIPELINE_STAGE_COMPUTE_SHADER_BIT;
-	VkPipelineStageFlags dstStageMask = VK_PIPELINE_STAGE_TRANSFER_BIT;
+	VkMemoryToImageCopy region{ VK_STRUCTURE_TYPE_MEMORY_TO_IMAGE_COPY };
+	region.pHostPointer = buffer.data();
+	region.memoryRowLength = 0;
+	region.memoryImageHeight = 0;
+	region.imageSubresource.aspectMask = VK_IMAGE_ASPECT_COLOR_BIT;
+	region.imageSubresource.baseArrayLayer = 0;
+	region.imageSubresource.layerCount = 1;
+	region.imageSubresource.mipLevel = 0;
+	region.imageOffset = { 0, 0, 0 };
+	region.imageExtent = { texture.Extent.width, texture.Extent.height, 1 };
 
-	vkCmdPipelineBarrier(commandBuffer, srcStageMask, dstStageMask, 0, 0, nullptr, 1, &barrier, 0, nullptr);
+	VkCopyMemoryToImageInfo copyInfo{ VK_STRUCTURE_TYPE_COPY_MEMORY_TO_IMAGE_INFO };
+	copyInfo.flags = 0;
+	copyInfo.dstImage = texture.Image;
+	copyInfo.dstImageLayout = VK_IMAGE_LAYOUT_GENERAL;
+	copyInfo.regionCount = 1;
+	copyInfo.pRegions = &region;
 
-	VkBufferCopy region{};
-	region.size = texture.Size;
-
-	vkCmdCopyBuffer(commandBuffer, texture.StagingBuffer, texture.Buffer, 1, &region);
-
-	barrier.srcAccessMask = VK_ACCESS_TRANSFER_WRITE_BIT;
-	barrier.dstAccessMask = VK_ACCESS_SHADER_READ_BIT;
-	srcStageMask = VK_PIPELINE_STAGE_TRANSFER_BIT;
-	dstStageMask = VK_PIPELINE_STAGE_COMPUTE_SHADER_BIT;
-	vkCmdPipelineBarrier(commandBuffer, srcStageMask, dstStageMask, 0, 0, nullptr, 1, &barrier, 0, nullptr);
+	VkResult res = vkCopyMemoryToImage(device, &copyInfo);
+	if (res != VK_SUCCESS)
+	{
+		g_logger->error("vkCopyMemoryToImage failure: {}", (int32_t)res);
+	}
 }
+
 
 
 AsyncRenderer::~AsyncRenderer()
@@ -355,7 +358,6 @@ bool AsyncRenderer::InitRenderer()
 			(familyProps[i].queueFlags & VK_QUEUE_GRAPHICS_BIT) == 0)
 		{
 			bFoundQueue = true;
-			g_logger->warn("Using queue {}", i);
 			m_queueFamilyIndex = i;
 			break;
 		}
@@ -381,11 +383,28 @@ bool AsyncRenderer::InitRenderer()
 	queueInfo.queueFamilyIndex = m_queueFamilyIndex;
 	queueInfo.pQueuePriorities = &queuePriority;
 
+	VkPhysicalDeviceVulkan14Features enabledFeatures14{ VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_VULKAN_1_4_FEATURES };
+
+	{
+		VkPhysicalDeviceVulkan14Features physFeatures14{ VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_VULKAN_1_4_FEATURES };
+		VkPhysicalDeviceFeatures2 physFeatures{ VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_FEATURES_2 };
+		physFeatures.pNext = &physFeatures14;
+
+		vkGetPhysicalDeviceFeatures2(m_physDevice, &physFeatures);
+
+		if (physFeatures14.hostImageCopy)
+		{
+			enabledFeatures14.hostImageCopy = true;
+			m_bHostImageCopyEnabled = true;
+		}
+	}
+
 	std::vector<const char*> deviceExtensions;
 	//deviceExtensions.push_back(VK_KHR_EXTERNAL_MEMORY_EXTENSION_NAME);
 	deviceExtensions.push_back(VK_KHR_EXTERNAL_MEMORY_WIN32_EXTENSION_NAME);
 
 	VkDeviceCreateInfo deviceInfo = { VK_STRUCTURE_TYPE_DEVICE_CREATE_INFO };
+	deviceInfo.pNext = &enabledFeatures14;
 	deviceInfo.queueCreateInfoCount = 1;
 	deviceInfo.pQueueCreateInfos = &queueInfo;
 	deviceInfo.enabledExtensionCount = (uint32_t)deviceExtensions.size();
@@ -629,120 +648,7 @@ bool AsyncRenderer::CreateBuffer(VkBuffer& buffer, VkDeviceMemory& bufferMem, Vk
 	return true;
 }
 
-bool AsyncRenderer::CreateBufferTexture(VulkanBufferTexture& texture, VkExtent2D extent, VkDeviceSize bufferSize)
-{
-	DestroyBufferTexture(texture);
-
-	texture.Size = bufferSize;
-	texture.Extent = extent;
-
-	VkBufferCreateInfo bufferInfo{ VK_STRUCTURE_TYPE_BUFFER_CREATE_INFO };
-	bufferInfo.usage = VK_BUFFER_USAGE_TRANSFER_DST_BIT | VK_BUFFER_USAGE_STORAGE_TEXEL_BUFFER_BIT;
-	bufferInfo.size = bufferSize;
-	bufferInfo.sharingMode = VK_SHARING_MODE_EXCLUSIVE;
-
-	vkCreateBuffer(m_device, &bufferInfo, nullptr, &texture.Buffer);
-
-	VkMemoryRequirements memReq{};
-	vkGetBufferMemoryRequirements(m_device, texture.Buffer, &memReq);
-
-	bool bFoundHostVisibleMem = false;
-	bool bFoundDeviceOnlyMem = false;
-	uint32_t memType = 0;
-
-	for (uint32_t i = 0; i < m_memProps.memoryTypeCount; i++)
-	{
-		if (memReq.memoryTypeBits & (1 << i))
-		{
-			/*if (m_memProps.memoryTypes[i].propertyFlags & VK_MEMORY_PROPERTY_DEVICE_LOCAL_BIT | VK_MEMORY_PROPERTY_HOST_VISIBLE_BIT | VK_MEMORY_PROPERTY_HOST_COHERENT_BIT)
-			{
-				memType = i;
-				bFoundHostVisibleMem = true;
-				texture.bSupportsDirectTransfer = true;
-				break;
-			}
-			else */if (m_memProps.memoryTypes[i].propertyFlags & VK_MEMORY_PROPERTY_DEVICE_LOCAL_BIT)
-			{
-				memType = i;
-				bFoundDeviceOnlyMem = true;
-				break;
-			}
-		}
-	}
-
-	if (!bFoundHostVisibleMem && !bFoundDeviceOnlyMem)
-	{
-		g_logger->error("Failed to find suitable memory type for buffer!");
-		return false;
-	}
-
-	VkMemoryAllocateInfo allocInfo{ VK_STRUCTURE_TYPE_MEMORY_ALLOCATE_INFO };
-	allocInfo.allocationSize = memReq.size;
-	allocInfo.memoryTypeIndex = memType;
-
-	if (vkAllocateMemory(m_device, &allocInfo, nullptr, &texture.Memory) != VK_SUCCESS)
-	{
-		g_logger->error("vkAllocateMemory failed!");
-		return false;
-	}
-
-	if (vkBindBufferMemory(m_device, texture.Buffer, texture.Memory, 0) != VK_SUCCESS)
-	{
-		g_logger->error("vkBindBufferMemory failed!");
-		return false;
-	}
-
-
-	VkBufferViewCreateInfo viewInfo{ VK_STRUCTURE_TYPE_BUFFER_VIEW_CREATE_INFO };
-	viewInfo.buffer = texture.Buffer;
-	viewInfo.format = VK_FORMAT_R16_SNORM;
-	viewInfo.offset = 0;
-	viewInfo.range = memReq.size;
-
-	if (vkCreateBufferView(m_device, &viewInfo, nullptr, &texture.View) != VK_SUCCESS)
-	{
-		g_logger->error("vkCreateBufferView failure!");
-		return false;
-	}
-
-
-	// Create staging buffer if the texture will be updated from the CPU.
-	if (!bFoundHostVisibleMem)
-	{
-		texture.bSupportsDirectTransfer = false;
-
-		if (!CreateBuffer(texture.StagingBuffer, texture.StagingBufferMemory, memReq.size, VK_BUFFER_USAGE_TRANSFER_SRC_BIT, VK_MEMORY_PROPERTY_HOST_VISIBLE_BIT, nullptr))
-		{
-			g_logger->error("Staging buffer creation failure!");
-			return false;
-		}
-
-		VkResult ret = vkMapMemory(m_device, texture.StagingBufferMemory, 0, VK_WHOLE_SIZE, 0, reinterpret_cast<void**>(&texture.MappedMemory));
-		if (ret != VK_SUCCESS)
-		{
-			g_logger->error("Failed to map staging buffer! {}", (int32_t)ret);
-			return false;
-		}
-	}
-	else
-	{
-		VkResult ret = vkMapMemory(m_device, texture.Memory, 0, VK_WHOLE_SIZE, 0, reinterpret_cast<void**>(&texture.MappedMemory));
-		if (ret != VK_SUCCESS)
-		{
-			g_logger->error("Failed to map buffer! {}", (int32_t)ret);
-			return false;
-		}
-
-		g_logger->info("Created buffer texture with host accessible memory");
-	}
-
-	texture.bIsValid = true;
-
-	return true;
-}
-
-
-bool AsyncRenderer::CreateTexture(VulkanTexture& texture, VkExtent2D extent, VkFormat format, VkImageUsageFlags usageFlags, VkImageCreateFlags createFlags, VkMemoryPropertyFlags memFlags)
+bool AsyncRenderer::CreateTexture(VulkanTexture& texture, VkExtent2D extent, VkFormat format, VkImageUsageFlags usageFlags)
 {
 	DestroyTexture(texture);
 
@@ -762,7 +668,7 @@ bool AsyncRenderer::CreateTexture(VulkanTexture& texture, VkExtent2D extent, VkF
 	imageInfo.usage = usageFlags;
 	imageInfo.sharingMode = VK_SHARING_MODE_EXCLUSIVE;
 	imageInfo.samples = VK_SAMPLE_COUNT_1_BIT;
-	imageInfo.flags = createFlags;
+	imageInfo.flags = 0;
 
 	if (vkCreateImage(m_device, &imageInfo, nullptr, &texture.Image) != VK_SUCCESS)
 	{
@@ -779,7 +685,8 @@ bool AsyncRenderer::CreateTexture(VulkanTexture& texture, VkExtent2D extent, VkF
 	bool bFoundMemoryType = false;
 	for (uint32_t i = 0; i < m_memProps.memoryTypeCount; i++)
 	{
-		if ((memReq.memoryTypeBits & (1 << i)) && ((m_memProps.memoryTypes[i].propertyFlags & memFlags) == memFlags))
+		if ((memReq.memoryTypeBits & (1 << i)) && 
+			(m_memProps.memoryTypes[i].propertyFlags & VK_MEMORY_PROPERTY_DEVICE_LOCAL_BIT))
 		{
 			allocInfo.memoryTypeIndex = i;
 			bFoundMemoryType = true;
@@ -822,7 +729,8 @@ bool AsyncRenderer::CreateTexture(VulkanTexture& texture, VkExtent2D extent, VkF
 	}
 
 	// Create staging buffer if the texture will be updated from the CPU.
-	if (usageFlags & VK_IMAGE_USAGE_TRANSFER_DST_BIT)
+	if (usageFlags & VK_IMAGE_USAGE_TRANSFER_DST_BIT && 
+		(usageFlags & VK_IMAGE_USAGE_HOST_TRANSFER_BIT) == 0)
 	{
 		if (!CreateBuffer(texture.StagingBuffer, texture.StagingBufferMemory, memReq.size, VK_BUFFER_USAGE_TRANSFER_SRC_BIT, VK_MEMORY_PROPERTY_HOST_VISIBLE_BIT, nullptr))
 		{
@@ -837,6 +745,27 @@ bool AsyncRenderer::CreateTexture(VulkanTexture& texture, VkExtent2D extent, VkF
 		}
 	}
 
+	if (usageFlags & VK_IMAGE_USAGE_HOST_TRANSFER_BIT)
+	{
+		VkHostImageLayoutTransitionInfo info{ VK_STRUCTURE_TYPE_HOST_IMAGE_LAYOUT_TRANSITION_INFO };
+		info.image = texture.Image;
+		info.oldLayout = VK_IMAGE_LAYOUT_UNDEFINED;
+		info.newLayout = VK_IMAGE_LAYOUT_GENERAL;
+		info.subresourceRange.aspectMask = VK_IMAGE_ASPECT_COLOR_BIT;
+		info.subresourceRange.baseMipLevel =  0;
+		info.subresourceRange.levelCount = 1;
+		info.subresourceRange.baseArrayLayer = 0;
+		info.subresourceRange.layerCount = 1;
+
+		if (vkTransitionImageLayout(m_device, 1, &info) != VK_SUCCESS)
+		{
+			g_logger->error("vkTransitionImageLayout failed!");
+			return false;
+		}
+
+		texture.Layout = VK_IMAGE_LAYOUT_GENERAL;
+	}
+
 	texture.bIsValid = true;
 	return true;
 }
@@ -849,7 +778,7 @@ bool AsyncRenderer::CreateSharedTexture(VulkanTexture& texture, VkExtent2D exten
 	texture.Extent = extent;
 	texture.Layout = VK_IMAGE_LAYOUT_UNDEFINED;
 	
-	if (!m_baseRenderer->CreateSharedDisparityMap(&texture.SharedHandle, &texture.d3dTexture, extent, format))
+	if (!m_baseRenderer->CreateSharedDisparityMap(&texture.SharedHandle, &texture.nativeTexture, extent, format))
 	{
 		return false;
 	}
@@ -972,7 +901,7 @@ void AsyncRenderer::DestroyTexture(VulkanTexture& texture)
 		texture.SharedHandle = INVALID_HANDLE_VALUE;
 	}
 	
-	texture.d3dTexture = nullptr;
+	texture.nativeTexture = nullptr;
 
 	if (texture.View != VK_NULL_HANDLE)
 	{
@@ -988,40 +917,6 @@ void AsyncRenderer::DestroyTexture(VulkanTexture& texture)
 	{
 		vkDestroyImage(m_device, texture.Image, nullptr);
 		texture.Image = VK_NULL_HANDLE;
-	}
-
-	if (texture.StagingBufferMemory != VK_NULL_HANDLE)
-	{
-		vkFreeMemory(m_device, texture.StagingBufferMemory, nullptr);
-		texture.MappedMemory = nullptr;
-		texture.StagingBufferMemory = VK_NULL_HANDLE;
-	}
-	if (texture.StagingBuffer != VK_NULL_HANDLE)
-	{
-		vkDestroyBuffer(m_device, texture.StagingBuffer, nullptr);
-		texture.StagingBuffer = VK_NULL_HANDLE;
-	}
-}
-
-void AsyncRenderer::DestroyBufferTexture(VulkanBufferTexture& texture)
-{
-	texture.bIsValid = false;
-
-
-	if (texture.View != VK_NULL_HANDLE)
-	{
-		vkDestroyBufferView(m_device, texture.View, nullptr);
-		texture.View = VK_NULL_HANDLE;
-	}
-	if (texture.Memory != VK_NULL_HANDLE)
-	{
-		vkFreeMemory(m_device, texture.Memory, nullptr);
-		texture.Memory = VK_NULL_HANDLE;
-	}
-	if (texture.Buffer != VK_NULL_HANDLE)
-	{
-		vkDestroyBuffer(m_device, texture.Buffer, nullptr);
-		texture.Buffer = VK_NULL_HANDLE;
 	}
 
 	if (texture.StagingBufferMemory != VK_NULL_HANDLE)
@@ -1056,14 +951,15 @@ bool AsyncRenderer::BeginRender(std::shared_ptr<DepthFrame> depthFrame)
 	{
 		VkExtent2D extent = { depthFrame->disparityTextureSize[0], depthFrame->disparityTextureSize[1] };
 		VkImageUsageFlags usageFlags = VK_IMAGE_USAGE_TRANSFER_DST_BIT | VK_IMAGE_USAGE_SAMPLED_BIT | VK_IMAGE_USAGE_STORAGE_BIT;
+		if (m_bHostImageCopyEnabled) { usageFlags |= VK_IMAGE_USAGE_HOST_TRANSFER_BIT; }
 
-		if (!CreateTexture(m_disparityTexture, extent, VK_FORMAT_R16_SNORM, usageFlags, 0, VK_MEMORY_PROPERTY_DEVICE_LOCAL_BIT))
+		if (!CreateTexture(m_disparityTexture, extent, VK_FORMAT_R16_SNORM, usageFlags))
 		{
 			g_logger->error("Failed to create m_disparityTexture!");
 			return false;
 		}
 
-		if (!CreateTexture(m_confidenceTexture, extent, VK_FORMAT_R16_SNORM, usageFlags, 0, VK_MEMORY_PROPERTY_DEVICE_LOCAL_BIT))
+		if (!CreateTexture(m_confidenceTexture, extent, VK_FORMAT_R16_SNORM, usageFlags))
 		{
 			g_logger->error("Failed to create m_confidenceTexture!");
 			return false;
@@ -1081,14 +977,15 @@ bool AsyncRenderer::BeginRender(std::shared_ptr<DepthFrame> depthFrame)
 			return false;
 		}
 
-		depthFrame->outputDisparityMapNativeTexture = m_outputTexture[textureIndex].d3dTexture;
-
-		g_logger->info("Created m_outputTexture {}", textureIndex);
+		depthFrame->outputDisparityMapNativeTexture = m_outputTexture[textureIndex].nativeTexture;
 	}
 
 	if (!m_cameraTexture.bIsValid || m_cameraTexture.Extent.width != depthFrame->cameraFrameTextureSize[0] || m_cameraTexture.Extent.height != depthFrame->cameraFrameTextureSize[1])
 	{
-		if (!CreateTexture(m_cameraTexture, { depthFrame->cameraFrameTextureSize[0] , depthFrame->cameraFrameTextureSize[1] }, VK_FORMAT_R8_SRGB, VK_IMAGE_USAGE_TRANSFER_DST_BIT | VK_IMAGE_USAGE_SAMPLED_BIT, 0, VK_MEMORY_PROPERTY_DEVICE_LOCAL_BIT))
+		VkImageUsageFlags usageFlags = VK_IMAGE_USAGE_TRANSFER_DST_BIT | VK_IMAGE_USAGE_SAMPLED_BIT;
+		if (m_bHostImageCopyEnabled) { usageFlags |= VK_IMAGE_USAGE_HOST_TRANSFER_BIT; }
+
+		if (!CreateTexture(m_cameraTexture, { depthFrame->cameraFrameTextureSize[0] , depthFrame->cameraFrameTextureSize[1] }, VK_FORMAT_R8_SRGB, usageFlags))
 		{
 			g_logger->error("Failed to create m_cameraTexture!");
 			return false;
@@ -1114,19 +1011,46 @@ bool AsyncRenderer::BeginRender(std::shared_ptr<DepthFrame> depthFrame)
 }
 
 
-uint16_t* AsyncRenderer::GetDisparityWriteBuffer()
+void AsyncRenderer::CopyDisparityToGPU(std::vector<uint8_t>& buffer)
 {
-	return reinterpret_cast<uint16_t*>(m_disparityTexture.MappedMemory);
+	if (m_disparityTexture.StagingBuffer == VK_NULL_HANDLE)
+	{
+		CopyHostImageToGPU(m_device, m_disparityTexture, buffer);
+	}
+	else
+	{
+		memcpy(m_disparityTexture.MappedMemory, buffer.data(), buffer.size());
+		CopyTextureToGPU(m_commandBuffer, m_disparityTexture, VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL);
+	}
 }
 
-uint16_t* AsyncRenderer::GetConfidenceWriteBuffer()
+void AsyncRenderer::CopyConfidenceToGPU(std::vector<uint8_t>& buffer)
 {
-	return reinterpret_cast<uint16_t*>(m_confidenceTexture.MappedMemory);
+	if (m_confidenceTexture.StagingBuffer == VK_NULL_HANDLE)
+	{
+		CopyHostImageToGPU(m_device, m_confidenceTexture, buffer);
+	}
+	else
+	{
+		memcpy(m_confidenceTexture.MappedMemory, buffer.data(), buffer.size());
+		CopyTextureToGPU(m_commandBuffer, m_confidenceTexture, VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL);
+	}
 }
 
-uint8_t* AsyncRenderer::GetCameraWriteBuffer()
+void AsyncRenderer::CopyCameraFrameToGPU(std::vector<uint8_t>& buffer)
 {
-	return m_cameraTexture.MappedMemory;
+	if (m_configManager->GetConfig_Stereo().StereoDrawBackground) // todo
+	{
+		if (m_cameraTexture.StagingBuffer == VK_NULL_HANDLE)
+		{
+			CopyHostImageToGPU(m_device, m_cameraTexture, buffer);
+		}
+		else
+		{
+			memcpy(m_cameraTexture.MappedMemory, buffer.data(), buffer.size());
+			CopyTextureToGPU(m_commandBuffer, m_cameraTexture, VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL);
+		}
+	}
 }
 
 
@@ -1135,11 +1059,6 @@ void AsyncRenderer::Render(std::shared_ptr<DepthFrame> depthFrame)
 	Config_Stereo& stereoConf = m_configManager->GetConfig_Stereo();
 
 	int textureIndex = depthFrame->disparityTextureIndex;
-
-	CopyTextureToGPU(m_commandBuffer, m_disparityTexture, VK_IMAGE_LAYOUT_GENERAL);
-	CopyTextureToGPU(m_commandBuffer, m_confidenceTexture, VK_IMAGE_LAYOUT_GENERAL);
-	CopyTextureToGPU(m_commandBuffer, m_cameraTexture, VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL);
-	
 
 	{
 		VkDescriptorBufferInfo filterBufferInfo{};
@@ -1289,12 +1208,12 @@ void AsyncRenderer::Render(std::shared_ptr<DepthFrame> depthFrame)
 	}
 
 	// Add a RenderDoc frame end marker to allow captures from the UI.
-	if (g_renderDocAPI)
+	/*if (g_renderDocAPI)
 	{
 		VkDebugUtilsLabelEXT label{ VK_STRUCTURE_TYPE_DEBUG_UTILS_LABEL_EXT };
 		label.pLabelName = "vr-marker,frame_end,type,application";
 		_vkCmdInsertDebugUtilsLabelEXT(m_commandBuffer, &label);
-	}
+	}*/
 
 
 	vkEndCommandBuffer(m_commandBuffer);
@@ -1340,11 +1259,6 @@ VkShaderModule AsyncRenderer::CreateShaderModule(const uint32_t* bytecode, size_
 	return module;
 }
 
-bool AsyncRenderer::TransferTextureToCPU(void* textureSRV, const uint32_t width, const uint32_t height, const uint32_t bufferSize, uint8_t* buffer)
-{
-	return false;
-}
-
 
 void AsyncRenderer::ComputeFilterKernels()
 {
@@ -1356,7 +1270,7 @@ void AsyncRenderer::ComputeFilterKernels()
 	for (int i = 0; i < 256; i++)
 	{
 		float factor = float(i) / 256.0f;
-		bufferMemory->lumaWeights[i] = exp(factor * factor * gaussLumaCoeff);
+		bufferMemory->lumaWeights[i][0] = exp(factor * factor * gaussLumaCoeff);
 	}
 
 
@@ -1373,7 +1287,7 @@ void AsyncRenderer::ComputeFilterKernels()
 			int j = y - radius;
 
 			float r2 = (float)(i * i + j * j);
-			bufferMemory->spaceWeights[x][y] = exp(r2 * gaussSpaceCoeff);
+			bufferMemory->spaceWeights[x][y][0] = exp(r2 * gaussSpaceCoeff);
 		}
 	}
 
