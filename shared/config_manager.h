@@ -114,8 +114,8 @@ struct alignas(4) Config_Main
 
 	bool RequireSteamVRRuntime = true;
 	bool ShowSettingDescriptions = true;
-	bool UseLegacyD3D12Renderer = false;
 	bool UseLegacyVulkanRenderer = false;
+	bool AllowVulkanWithoutConfirmedFeatures = true;
 
 	bool PauseImageHandlingOnIdle = true;
 	float IdleTimeSeconds = 10.0f;
@@ -155,8 +155,8 @@ struct alignas(4) Config_Main
 
 		RequireSteamVRRuntime = ini.GetBoolValue(section, "RequireSteamVRRuntime", RequireSteamVRRuntime);
 		ShowSettingDescriptions = ini.GetBoolValue(section, "ShowSettingDescriptions", ShowSettingDescriptions);
-		UseLegacyD3D12Renderer = ini.GetBoolValue(section, "UseLegacyD3D12Renderer", UseLegacyD3D12Renderer);
 		UseLegacyVulkanRenderer = ini.GetBoolValue(section, "UseLegacyVulkanRenderer", UseLegacyVulkanRenderer);
+		AllowVulkanWithoutConfirmedFeatures = ini.GetBoolValue(section, "AllowVulkanWithoutConfirmedFeatures", AllowVulkanWithoutConfirmedFeatures);
 
 		PauseImageHandlingOnIdle = ini.GetBoolValue(section, "PauseImageHandlingOnIdle", PauseImageHandlingOnIdle);
 		IdleTimeSeconds = (float)ini.GetDoubleValue(section, "IdleTimeSeconds", IdleTimeSeconds);
@@ -191,8 +191,8 @@ struct alignas(4) Config_Main
 
 		ini.SetBoolValue(section, "RequireSteamVRRuntime", RequireSteamVRRuntime);
 		ini.SetBoolValue(section, "ShowSettingDescriptions", ShowSettingDescriptions);
-		ini.SetBoolValue(section, "UseLegacyD3D12Renderer", UseLegacyD3D12Renderer);
 		ini.SetBoolValue(section, "UseLegacyVulkanRenderer", UseLegacyVulkanRenderer);
+		ini.SetBoolValue(section, "AllowVulkanWithoutConfirmedFeatures", AllowVulkanWithoutConfirmedFeatures);
 
 		ini.SetBoolValue(section, "PauseImageHandlingOnIdle", PauseImageHandlingOnIdle);
 		ini.SetDoubleValue(section, "IdleTimeSeconds", IdleTimeSeconds);
@@ -582,12 +582,10 @@ struct alignas(4) Config_Stereo
 	bool StereoUseMulticore = true;
 	bool StereoRectificationFiltering = false;
 	bool StereoUseColor = false;
-	bool StereoUseBWInputAlpha= false;
+	bool StereoUseBWInputAlpha = false;
 	bool StereoUseHexagonGridMesh = false;
 	bool StereoFillHoles = true;
 	bool StereoDrawBackground = false;
-	bool StereoUseSeparateDepthPass = true;
-	bool StereoUseFullscreenPass = true;
 	int StereoFrameSkip = 0;
 	int StereoDownscaleFactor = 3;
 
@@ -625,15 +623,17 @@ struct alignas(4) Config_Stereo
 	int StereoSGBM_SpeckleWindowSize = 80;
 	int StereoSGBM_SpeckleRange = 3;
 
-	EStereoFiltering StereoFiltering = StereoFiltering_WLS;
-	float StereoWLS_Lambda = 8000.0f;
-	float StereoWLS_Sigma = 1.8f;
-	float StereoWLS_ConfidenceRadius = 0.5f;
-	float StereoFBS_Spatial = 6.0f;
-	float StereoFBS_Luma = 8.0f;
-	float StereoFBS_Chroma = 8.0f;
-	float StereoFBS_Lambda = 128.0f;
-	int StereoFBS_Iterations = 11;
+	bool StereoFilteringWLS_Enable = true;
+	float StereoFilteringWLS_Lambda = 8000.0f;
+	float StereoFilteringWLS_Sigma = 1.8f;
+	float StereoFilteringWLS_ConfidenceRadius = 0.5f;
+
+	bool StereoFilteringBilateral_Enable = false;
+	int StereoFilteringBilateral_OutputScale = 1;
+	int StereoFilteringBilateral_Distance = 9;
+	float StereoFilteringBilateral_DispCutoff = 0.3f;
+	float StereoFilteringBilateral_SigmaSpace = 10.0f;
+	float StereoFilteringBilateral_SigmaLuma = 0.01f;
 
 	void ParseConfig(CSimpleIniA& ini, const char* section)
 	{
@@ -644,8 +644,6 @@ struct alignas(4) Config_Stereo
 		StereoUseHexagonGridMesh = ini.GetBoolValue(section, "StereoUseHexagonGridMesh", StereoUseHexagonGridMesh);
 		StereoFillHoles = ini.GetBoolValue(section, "StereoFillHoles", StereoFillHoles);
 		StereoDrawBackground = ini.GetBoolValue(section, "StereoDrawBackground", StereoDrawBackground);
-		StereoUseSeparateDepthPass = ini.GetBoolValue(section, "StereoUseSeparateDepthPass", StereoUseSeparateDepthPass);
-		StereoUseFullscreenPass = ini.GetBoolValue(section, "StereoUseFullscreenPass", StereoUseFullscreenPass);
 		StereoFrameSkip = ini.GetLongValue(section, "StereoFrameSkip", StereoFrameSkip);
 		StereoDownscaleFactor = ini.GetLongValue(section, "StereoDownscaleFactor", StereoDownscaleFactor);
 		StereoUseDisparityTemporalFiltering = ini.GetBoolValue(section, "StereoUseDisparityTemporalFiltering", StereoUseDisparityTemporalFiltering);
@@ -682,15 +680,17 @@ struct alignas(4) Config_Stereo
 		StereoSGBM_SpeckleWindowSize = ini.GetLongValue(section, "StereoSGBM_SpeckleWindowSize", StereoSGBM_SpeckleWindowSize);
 		StereoSGBM_SpeckleRange = ini.GetLongValue(section, "StereoSGBM_SpeckleRange", StereoSGBM_SpeckleRange);
 
-		StereoFiltering = (EStereoFiltering)ini.GetLongValue(section, "StereoFiltering", StereoFiltering);
-		StereoWLS_Lambda = (float)ini.GetDoubleValue(section, "StereoWLS_Lambda", StereoWLS_Lambda);
-		StereoWLS_Sigma = (float)ini.GetDoubleValue(section, "StereoWLS_Sigma", StereoWLS_Sigma);
-		StereoWLS_ConfidenceRadius = (float)ini.GetDoubleValue(section, "StereoWLS_ConfidenceRadius", StereoWLS_ConfidenceRadius);
-		StereoFBS_Spatial = (float)ini.GetDoubleValue(section, "StereoFBS_Spatial", StereoFBS_Spatial);
-		StereoFBS_Luma = (float)ini.GetDoubleValue(section, "StereoFBS_Luma", StereoFBS_Luma);
-		StereoFBS_Chroma = (float)ini.GetDoubleValue(section, "StereoFBS_Chroma", StereoFBS_Chroma);
-		StereoFBS_Lambda = (float)ini.GetDoubleValue(section, "StereoFBS_Lambda", StereoFBS_Lambda);
-		StereoFBS_Iterations = ini.GetLongValue(section, "StereoFBS_Iterations", StereoFBS_Iterations);
+		StereoFilteringWLS_Enable = ini.GetBoolValue(section, "StereoFilteringWLS_Enable", StereoFilteringWLS_Enable);
+		StereoFilteringWLS_Lambda = (float)ini.GetDoubleValue(section, "StereoFilteringWLS_Lambda", StereoFilteringWLS_Lambda);
+		StereoFilteringWLS_Sigma = (float)ini.GetDoubleValue(section, "StereoFilteringWLS_Sigma", StereoFilteringWLS_Sigma);
+		StereoFilteringWLS_ConfidenceRadius = (float)ini.GetDoubleValue(section, "StereoFilteringWLS_ConfidenceRadius", StereoFilteringWLS_ConfidenceRadius);
+		
+		StereoFilteringBilateral_Enable = ini.GetBoolValue(section, "StereoFilteringBilateral_Enable", StereoFilteringBilateral_Enable);
+		StereoFilteringBilateral_OutputScale = ini.GetLongValue(section, "StereoFilteringBilateral_OutputScale", StereoFilteringBilateral_OutputScale);
+		StereoFilteringBilateral_Distance = ini.GetLongValue(section, "StereoFilteringBilateral_Distance", StereoFilteringBilateral_Distance);
+		StereoFilteringBilateral_DispCutoff = (float)ini.GetDoubleValue(section, "StereoFilteringBilateral_DispCutoff", StereoFilteringBilateral_DispCutoff);
+		StereoFilteringBilateral_SigmaSpace = (float)ini.GetDoubleValue(section, "StereoFilteringBilateral_SigmaSpace", StereoFilteringBilateral_SigmaSpace);
+		StereoFilteringBilateral_SigmaLuma = (float)ini.GetDoubleValue(section, "StereoFilteringBilateral_SigmaLuma", StereoFilteringBilateral_SigmaLuma);
 	}
 
 	void UpdateConfig(CSimpleIniA& ini, const char* section)
@@ -702,8 +702,6 @@ struct alignas(4) Config_Stereo
 		ini.SetBoolValue(section, "StereoUseHexagonGridMesh", StereoUseHexagonGridMesh);
 		ini.SetBoolValue(section, "StereoFillHoles", StereoFillHoles);
 		ini.SetBoolValue(section, "StereoDrawBackground", StereoDrawBackground);
-		ini.SetBoolValue(section, "StereoUseSeparateDepthPass", StereoUseSeparateDepthPass);
-		ini.SetBoolValue(section, "StereoUseFullscreenPass", StereoUseFullscreenPass);
 		ini.SetLongValue(section, "StereoFrameSkip", StereoFrameSkip);
 		ini.SetLongValue(section, "StereoDownscaleFactor", StereoDownscaleFactor);
 		ini.SetBoolValue(section, "StereoUseDisparityTemporalFiltering", StereoUseDisparityTemporalFiltering);
@@ -740,15 +738,17 @@ struct alignas(4) Config_Stereo
 		ini.SetLongValue(section, "StereoSGBM_SpeckleWindowSize", StereoSGBM_SpeckleWindowSize);
 		ini.SetLongValue(section, "StereoSGBM_SpeckleRange", StereoSGBM_SpeckleRange);
 
-		ini.SetLongValue(section, "StereoFiltering", StereoFiltering);
-		ini.SetDoubleValue(section, "StereoWLS_Lambda", StereoWLS_Lambda);
-		ini.SetDoubleValue(section, "StereoWLS_Sigma", StereoWLS_Sigma);
-		ini.SetDoubleValue(section, "StereoWLS_ConfidenceRadius", StereoWLS_ConfidenceRadius);
-		ini.SetDoubleValue(section, "StereoFBS_Spatial", StereoFBS_Spatial);
-		ini.SetDoubleValue(section, "StereoFBS_Luma", StereoFBS_Luma);
-		ini.SetDoubleValue(section, "StereoFBS_Chroma", StereoFBS_Chroma);
-		ini.SetDoubleValue(section, "StereoFBS_Lambda", StereoFBS_Lambda);
-		ini.SetLongValue(section, "StereoFBS_Iterations", StereoFBS_Iterations);
+		ini.SetBoolValue(section, "StereoFilteringWLS_Enable", StereoFilteringWLS_Enable);
+		ini.SetDoubleValue(section, "StereoFilteringWLS_Lambda", StereoFilteringWLS_Lambda);
+		ini.SetDoubleValue(section, "StereoFilteringWLS_Sigma", StereoFilteringWLS_Sigma);
+		ini.SetDoubleValue(section, "StereoFilteringWLS_ConfidenceRadius", StereoFilteringWLS_ConfidenceRadius);
+
+		ini.SetBoolValue(section, "StereoFilteringBilateral_Enable", StereoFilteringBilateral_Enable);
+		ini.SetLongValue(section, "StereoFilteringBilateral_Distance", StereoFilteringBilateral_Distance);
+		ini.SetLongValue(section, "StereoFilteringBilateral_OutputScale", StereoFilteringBilateral_OutputScale);
+		ini.SetDoubleValue(section, "StereoFilteringBilateral_DispCutoff", StereoFilteringBilateral_DispCutoff);
+		ini.SetDoubleValue(section, "StereoFilteringBilateral_SigmaSpace", StereoFilteringBilateral_SigmaSpace);
+		ini.SetDoubleValue(section, "StereoFilteringBilateral_SigmaLuma", StereoFilteringBilateral_SigmaLuma);
 	}
 };
 

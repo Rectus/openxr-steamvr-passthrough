@@ -851,10 +851,11 @@ if (bIsActiveTab) { ImGui::PopStyleColor(1); bIsActiveTab = false; }
 			TextDescription("How long to wait before stopping the processing when idle.");
 			EndSoftDisabled(!mainConfig.PauseImageHandlingOnIdle);
 
-			ImGui::Checkbox("Use legacy DirectX 12 renderer", &mainConfig.UseLegacyD3D12Renderer);
-			TextDescription("Uses the old native DirectX 12 renderer for DirectX 12 applications. Not recommended since it is missing rendering features. Requires restart.");
 			ImGui::Checkbox("Use legacy Vulkan renderer", &mainConfig.UseLegacyVulkanRenderer);
 			TextDescription("Uses the old native Vulkan renderer for Vulkan applications. Not recommended since it is missing rendering features. Requires restart.");
+
+			ImGui::Checkbox("Allow Vulkan without confirming required features", &mainConfig.AllowVulkanWithoutConfirmedFeatures);
+			TextDescription("Enables the layer Vulkan applications even when the timeline semaphores feature can not be enabled. Disable this if you experience renderer crashes with Vulkan applications.");
 
 			ImGui::Checkbox("Launch settings menu process automatically", &mainConfig.LaunchMenuOnStartup);
 			TextDescription("Adds the settings menu to the systray and dashboard when an OpenXR application starts. If this is off, the settings menu can still be launched manually from the installation folder.");
@@ -2006,29 +2007,6 @@ if (bIsActiveTab) { ImGui::PopStyleColor(1); bIsActiveTab = false; }
 			if (TreeNodePersistent("Projection", ImGuiTreeNodeFlags_DefaultOpen))
 			{
 				ImGui::Spacing();
-				ImGui::BeginGroup();
-				ImGui::Text("Rendering Path");
-				if (ImGui::RadioButton("Direct Rendering (Legacy)", !stereoCustomConfig.StereoUseSeparateDepthPass))
-				{
-					stereoCustomConfig.StereoUseSeparateDepthPass = false;
-					stereoCustomConfig.StereoUseFullscreenPass = false;
-				}
-				TextDescriptionSpaced("Legacy mode that reprojects from disparity and draws passthrough in one call.\nPoor support for temporal filtering and camera composition.");
-				if (ImGui::RadioButton("Separate Depth Pass (Legacy)", stereoCustomConfig.StereoUseSeparateDepthPass && !stereoCustomConfig.StereoUseFullscreenPass))
-				{
-					stereoCustomConfig.StereoUseSeparateDepthPass = true;
-					stereoCustomConfig.StereoUseFullscreenPass = false;
-				}
-				TextDescriptionSpaced("Uses a separate render pass for drawing depth maps.\nBetter support for camera composition, but still uses original vertex grid shaders.");
-				if (ImGui::RadioButton("Separate Depth Pass Fullscreen", stereoCustomConfig.StereoUseSeparateDepthPass && stereoCustomConfig.StereoUseFullscreenPass))
-				{
-					stereoCustomConfig.StereoUseSeparateDepthPass = true;
-					stereoCustomConfig.StereoUseFullscreenPass = true;
-				}
-				TextDescription("More effective version of the above renderer that proccesses the depth maps directly in the pixel shader.");
-				ImGui::EndGroup();
-
-				IMGUI_BIG_SPACING;
 
 				ImGui::Checkbox("Use Hexagon Grid Mesh", &stereoCustomConfig.StereoUseHexagonGridMesh);
 				TextDescription("Mesh with smoother corners for less artifacting. May introduce warping.");
@@ -2041,11 +2019,9 @@ if (bIsActiveTab) { ImGui::PopStyleColor(1); bIsActiveTab = false; }
 
 				IMGUI_BIG_SPACING;
 
-				BeginSoftDisabled(!stereoCustomConfig.StereoUseSeparateDepthPass);
 				ImGui::SetNextItemWidth(ImGui::GetContentRegionAvail().x * 0.45f);
 				ScrollableSliderInt("Depth Map Scale", &stereoCustomConfig.StereoDepthMapScale, 1, 4, "%d", 1);
 				TextDescriptionSpaced("Scale of generated depth maps releative to the proecessed disparity maps.");
-				EndSoftDisabled(!stereoCustomConfig.StereoUseSeparateDepthPass);
 
 				ImGui::SetNextItemWidth(ImGui::GetContentRegionAvail().x * 0.45f);
 				ScrollableSlider("Disparity Smoothing Confidence Cutout", &stereoCustomConfig.StereoDisparityFilterConfidenceCutout, 0.0f, 1.0f, "%.2f", 0.01f);
@@ -2076,14 +2052,12 @@ if (bIsActiveTab) { ImGui::PopStyleColor(1); bIsActiveTab = false; }
 
 			if (TreeNodePersistent("Depth Fold", ImGuiTreeNodeFlags_DefaultOpen))
 			{
-				TextDescription("Adjusts depth mesh vertices to smooth out contours in areas with large depth discontinuities.\nThis helps with depth aliasing. Not used in fullscreen mode");
+				TextDescription("Adjusts depth mesh vertices to smooth out contours in areas with large depth discontinuities.\nThis helps with depth aliasing.");
 				ImGui::PushItemWidth(ImGui::GetContentRegionAvail().x * 0.45f);
-				BeginSoftDisabled(!stereoCustomConfig.StereoUseSeparateDepthPass || stereoCustomConfig.StereoUseFullscreenPass);
 				ScrollableSlider("Depth Fold Strength", &stereoCustomConfig.StereoDepthContourStrength, 0.0f, 5.0f, "%.1f", 0.1f);
 				TextDescription("Strength of the effect.");
 				ScrollableSlider("Depth Fold Theshold", &stereoCustomConfig.StereoDepthContourThreshold, 0.0f, 2.0f, "%.1f", 0.1f);
 				TextDescription("Minimum depth difference treshold for applying contour adjustment.");
-				EndSoftDisabled(!stereoCustomConfig.StereoUseSeparateDepthPass || stereoCustomConfig.StereoUseFullscreenPass);
 				ImGui::PopItemWidth();
 
 				IMGUI_BIG_SPACING;
@@ -2095,14 +2069,12 @@ if (bIsActiveTab) { ImGui::PopStyleColor(1); bIsActiveTab = false; }
 				TextDescription("Detects edges in the depth map and moves pixels toward the front or back to provide sharp contours.\nThis reduces interpolation artifacts from low resolution depth maps.");
 
 				ImGui::PushItemWidth(ImGui::GetContentRegionAvail().x * 0.45f);
-				BeginSoftDisabled(!stereoCustomConfig.StereoUseSeparateDepthPass || !stereoCustomConfig.StereoUseFullscreenPass);
 				ScrollableSlider("Fullscreen Contour Filter Strength", &stereoCustomConfig.StereoDepthFullscreenContourStrength, 0.0f, 2.0f, "%.2f", 0.01f);
 				TextDescription("How far the depth is adjusted. Set to 0 to disable feature.");
 				ScrollableSlider("Fullscreen Contour Filter Theshold", &stereoCustomConfig.StereoDepthFullscreenContourThreshold, 0.0f, 1.0f, "%.2f", 0.01f);
 				TextDescription("Depth treshold to trigger filtering.");
 				ScrollableSliderInt("Fullscreen Contour Filter Width", &stereoCustomConfig.StereoDepthFullscreenContourFilterWidth, 0, 5, "%d", 1);
 				TextDescription("Adds Gaussian filtering to smooth out depth map pixles.\nProduces a smoother contour. Set to 0 to not use.");
-				EndSoftDisabled(!stereoCustomConfig.StereoUseSeparateDepthPass || !stereoCustomConfig.StereoUseFullscreenPass);
 
 				ImGui::PopItemWidth();
 
@@ -2188,50 +2160,32 @@ if (bIsActiveTab) { ImGui::PopStyleColor(1); bIsActiveTab = false; }
 			if (TreeNodePersistent("Disparity Filtering", ImGuiTreeNodeFlags_DefaultOpen))
 			{
 				ImGui::Text("Filtering Passes");
-				ImGui::BeginGroup();
-				if (ImGui::RadioButton("None###FiltNone", stereoCustomConfig.StereoFiltering == StereoFiltering_None))
-				{
-					stereoCustomConfig.StereoFiltering = StereoFiltering_None;
-				}
-				TextDescription("Filtering from SGBM pass only. Noisy image with many invalid areas.");
 
-				if (ImGui::RadioButton("Weighted Least Squares###FiltWLS", stereoCustomConfig.StereoFiltering == StereoFiltering_WLS))
-				{
-					stereoCustomConfig.StereoFiltering = StereoFiltering_WLS;
-				}
-				TextDescription("Patches up invalid areas. May still be noisy.");
+				ImGui::Checkbox("Weighted Least Squares(CPU)###FiltWLS", &stereoCustomConfig.StereoFilteringWLS_Enable);
+				TextDescription("CPU-side high quality filter. Takes up much CPU time but produces generally good results.");
 
-				if (ImGui::RadioButton("Weighted Least Squares & Fast Bilateral Solver###FiltWLSFBS", stereoCustomConfig.StereoFiltering == StereoFiltering_WLS_FBS))
-				{
-					stereoCustomConfig.StereoFiltering = StereoFiltering_WLS_FBS;
-				}
-				TextDescription("Patches up invalid areas and filters the output. May produce worse depth results.");
-
-				if (ImGui::RadioButton("Fast Bilateral Solver###FiltFBS", stereoCustomConfig.StereoFiltering == StereoFiltering_FBS))
-				{
-					stereoCustomConfig.StereoFiltering = StereoFiltering_FBS;
-				}
-				TextDescription("Patches up invalid areas and filters the output. May produce worse depth results.");
-				ImGui::EndGroup();
+				ImGui::Checkbox("Joint Bilateral Filter(GPU)###FiltBilateral", &stereoCustomConfig.StereoFilteringBilateral_Enable);
+				TextDescription("GPU-side filtering. Fast, but not as good as the CPU fliter. Can also smooth out noise.");
 
 				IMGUI_BIG_SPACING;
 
-				BeginSoftDisabled(stereoCustomConfig.StereoFiltering == StereoFiltering_None || stereoCustomConfig.StereoFiltering == StereoFiltering_FBS);
+				BeginSoftDisabled(!stereoCustomConfig.StereoFilteringWLS_Enable);
 				ImGui::PushItemWidth(ImGui::GetContentRegionAvail().x * 0.45f);
-				ScrollableSlider("WLS Lambda", &stereoCustomConfig.StereoWLS_Lambda, 1.0f, 10000.0f, "%.0f", 100.0f);
-				ScrollableSlider("WLS Sigma", &stereoCustomConfig.StereoWLS_Sigma, 0.5f, 2.0f, "%.1f", 0.1f);
-				ScrollableSlider("WLS Confidence Radius", &stereoCustomConfig.StereoWLS_ConfidenceRadius, 0.1f, 2.0f, "%.1f", 0.1f);
-				EndSoftDisabled(stereoCustomConfig.StereoFiltering == StereoFiltering_None || stereoCustomConfig.StereoFiltering == StereoFiltering_FBS);
+				ScrollableSlider("WLS Lambda", &stereoCustomConfig.StereoFilteringWLS_Lambda, 1.0f, 10000.0f, "%.0f", 100.0f);
+				ScrollableSlider("WLS Sigma", &stereoCustomConfig.StereoFilteringWLS_Sigma, 0.5f, 2.0f, "%.1f", 0.1f);
+				ScrollableSlider("WLS Confidence Radius", &stereoCustomConfig.StereoFilteringWLS_ConfidenceRadius, 0.1f, 2.0f, "%.1f", 0.1f);
+				EndSoftDisabled(!stereoCustomConfig.StereoFilteringWLS_Enable);
+
 				IMGUI_BIG_SPACING;
 
-				BeginSoftDisabled(stereoCustomConfig.StereoFiltering == StereoFiltering_None || stereoCustomConfig.StereoFiltering == StereoFiltering_WLS);
-				ScrollableSlider("FBS Spatial", &stereoCustomConfig.StereoFBS_Spatial, 0.0f, 50.0f, "%.0f", 1.0f);
-				ScrollableSlider("FBS Luma", &stereoCustomConfig.StereoFBS_Luma, 0.0f, 16.0f, "%.0f", 1.0f);
-				ScrollableSlider("FBS Chroma", &stereoCustomConfig.StereoFBS_Chroma, 0.0f, 16.0f, "%.0f", 1.0f);
-				ScrollableSlider("FBS Lambda", &stereoCustomConfig.StereoFBS_Lambda, 0.0f, 256.0f, "%.0f", 1.0f);
-
-				ScrollableSliderInt("FBS Iterations", &stereoCustomConfig.StereoFBS_Iterations, 1, 35, "%d", 1);
-				EndSoftDisabled(stereoCustomConfig.StereoFiltering == StereoFiltering_None || stereoCustomConfig.StereoFiltering == StereoFiltering_WLS);
+				BeginSoftDisabled(!stereoCustomConfig.StereoFilteringBilateral_Enable);
+				ScrollableSliderInt("Bilateral Output Scale", &stereoCustomConfig.StereoFilteringBilateral_OutputScale, 1, 4, "%d", 1);
+				ScrollableSliderInt("Bilateral Distance", &stereoCustomConfig.StereoFilteringBilateral_Distance, 1, 10, "%d", 1);
+				ScrollableSlider("Bilateral Disparity Cutoff", &stereoCustomConfig.StereoFilteringBilateral_DispCutoff, 0.0f, 1.0f, "%.2f", 0.01f);
+				ScrollableSlider("Bilateral Sigma Space", &stereoCustomConfig.StereoFilteringBilateral_SigmaSpace, 1.0f, 20.0f, "%.2f", 1.0f);
+				ScrollableSlider("Bilateral Sigma Luma", &stereoCustomConfig.StereoFilteringBilateral_SigmaLuma, 0.001f, 0.030f, "%.3f", 0.001f);
+				
+				EndSoftDisabled(!stereoCustomConfig.StereoFilteringBilateral_Enable);
 				ImGui::PopItemWidth();
 
 				ImGui::TreePop();

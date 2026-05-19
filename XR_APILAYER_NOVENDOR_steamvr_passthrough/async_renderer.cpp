@@ -946,10 +946,10 @@ bool AsyncRenderer::BeginRender(std::shared_ptr<DepthFrame> depthFrame)
 	}
 
 	if (!m_disparityTexture.bIsValid ||
-		m_disparityTexture.Extent.width != depthFrame->disparityTextureSize[0] ||
-		m_disparityTexture.Extent.height != depthFrame->disparityTextureSize[1])
+		m_disparityTexture.Extent.width != depthFrame->inputDisparityTextureSize[0] ||
+		m_disparityTexture.Extent.height != depthFrame->inputDisparityTextureSize[1])
 	{
-		VkExtent2D extent = { depthFrame->disparityTextureSize[0], depthFrame->disparityTextureSize[1] };
+		VkExtent2D extent = { depthFrame->inputDisparityTextureSize[0], depthFrame->inputDisparityTextureSize[1] };
 		VkImageUsageFlags usageFlags = VK_IMAGE_USAGE_TRANSFER_DST_BIT | VK_IMAGE_USAGE_SAMPLED_BIT | VK_IMAGE_USAGE_STORAGE_BIT;
 		if (m_bHostImageCopyEnabled) { usageFlags |= VK_IMAGE_USAGE_HOST_TRANSFER_BIT; }
 
@@ -966,12 +966,11 @@ bool AsyncRenderer::BeginRender(std::shared_ptr<DepthFrame> depthFrame)
 		}
 	}
 
-	// TODO output texture scaling
 	if (!m_outputTexture[textureIndex].bIsValid ||
-		m_outputTexture[textureIndex].Extent.width != depthFrame->disparityTextureSize[0] ||
-		m_outputTexture[textureIndex].Extent.height != depthFrame->disparityTextureSize[1])
+		m_outputTexture[textureIndex].Extent.width != depthFrame->outputDisparityTextureSize[0] ||
+		m_outputTexture[textureIndex].Extent.height != depthFrame->outputDisparityTextureSize[1])
 	{
-		if (!CreateSharedTexture(m_outputTexture[textureIndex], { depthFrame->disparityTextureSize[0], depthFrame->disparityTextureSize[1] }, VK_FORMAT_R16G16_SNORM))
+		if (!CreateSharedTexture(m_outputTexture[textureIndex], { depthFrame->outputDisparityTextureSize[0], depthFrame->outputDisparityTextureSize[1] }, VK_FORMAT_R16G16_SNORM))
 		{
 			g_logger->error("Failed to create m_outputTexture {}!", textureIndex);
 			return false;
@@ -1039,25 +1038,20 @@ void AsyncRenderer::CopyConfidenceToGPU(std::vector<uint8_t>& buffer)
 
 void AsyncRenderer::CopyCameraFrameToGPU(std::vector<uint8_t>& buffer)
 {
-	if (m_configManager->GetConfig_Stereo().StereoDrawBackground) // todo
+	if (m_cameraTexture.StagingBuffer == VK_NULL_HANDLE)
 	{
-		if (m_cameraTexture.StagingBuffer == VK_NULL_HANDLE)
-		{
-			CopyHostImageToGPU(m_device, m_cameraTexture, buffer);
-		}
-		else
-		{
-			memcpy(m_cameraTexture.MappedMemory, buffer.data(), buffer.size());
-			CopyTextureToGPU(m_commandBuffer, m_cameraTexture, VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL);
-		}
+		CopyHostImageToGPU(m_device, m_cameraTexture, buffer);
+	}
+	else
+	{
+		memcpy(m_cameraTexture.MappedMemory, buffer.data(), buffer.size());
+		CopyTextureToGPU(m_commandBuffer, m_cameraTexture, VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL);
 	}
 }
 
 
-void AsyncRenderer::Render(std::shared_ptr<DepthFrame> depthFrame)
+void AsyncRenderer::Render(std::shared_ptr<DepthFrame> depthFrame, const Config_Stereo& stereoConf)
 {
-	Config_Stereo& stereoConf = m_configManager->GetConfig_Stereo();
-
 	int textureIndex = depthFrame->disparityTextureIndex;
 
 	{
@@ -1134,25 +1128,24 @@ void AsyncRenderer::Render(std::shared_ptr<DepthFrame> depthFrame)
 
 	CSAsyncConstantBuffer constants = {};
 
-	constants.g_disparitySize[0] = depthFrame->disparityTextureSize[0];
-	constants.g_disparitySize[1] = depthFrame->disparityTextureSize[1];
+	constants.g_disparitySize[0] = depthFrame->inputDisparityTextureSize[0];
+	constants.g_disparitySize[1] = depthFrame->inputDisparityTextureSize[1];
 	constants.minDisparity = depthFrame->minDisparity;
 	constants.maxDisparity = depthFrame->maxDisparity;
-	constants.bilateralDistance = stereoConf.StereoFBS_Iterations;
-	constants.bilateralDispCutoff = stereoConf.StereoFBS_Lambda / 255.0f * (m_maxDisparity - m_minDisparity);
+	constants.bilateralDistance = stereoConf.StereoFilteringBilateral_Distance;
+	constants.bilateralDispCutoff = stereoConf.StereoFilteringBilateral_DispCutoff * (m_maxDisparity - m_minDisparity);
 	constants.bHoleFillLastPass = false;
-	constants.bUseInputConfidence = stereoConf.StereoFiltering != StereoFiltering_None;
+	constants.bUseInputConfidence = stereoConf.StereoFilteringWLS_Enable;
 
 
-	if (stereoConf.StereoDrawBackground && 
-		(m_bilateralDistance != stereoConf.StereoFBS_Iterations ||
-		m_bilateralSigmaSpace != stereoConf.StereoFBS_Spatial ||
-		m_bilateralSigmaLuma != stereoConf.StereoFBS_Luma / 250.0f))
+	if (stereoConf.StereoFilteringBilateral_Enable &&
+		(m_bilateralDistance != stereoConf.StereoFilteringBilateral_Distance ||
+		m_bilateralSigmaSpace != stereoConf.StereoFilteringBilateral_SigmaSpace ||
+		m_bilateralSigmaLuma != stereoConf.StereoFilteringBilateral_SigmaLuma))
 	{
-		// TODO Add proper values to config
-		m_bilateralDistance = stereoConf.StereoFBS_Iterations;
-		m_bilateralSigmaSpace = stereoConf.StereoFBS_Spatial;
-		m_bilateralSigmaLuma = stereoConf.StereoFBS_Luma / 250.0f;
+		m_bilateralDistance = stereoConf.StereoFilteringBilateral_Distance;
+		m_bilateralSigmaSpace = stereoConf.StereoFilteringBilateral_SigmaSpace;
+		m_bilateralSigmaLuma = stereoConf.StereoFilteringBilateral_SigmaLuma;
 
 		ComputeFilterKernels();
 	}
@@ -1166,8 +1159,8 @@ void AsyncRenderer::Render(std::shared_ptr<DepthFrame> depthFrame)
 
 	if (stereoConf.StereoFillHoles)
 	{
-		int groupCountX = DivRoundUp(depthFrame->disparityTextureSize[0], 32);
-		int groupCountY = DivRoundUp(depthFrame->disparityTextureSize[1], 32);
+		int groupCountX = DivRoundUp(depthFrame->inputDisparityTextureSize[0], 32);
+		int groupCountY = DivRoundUp(depthFrame->inputDisparityTextureSize[1], 32);
 
 		vkCmdPushConstants(m_commandBuffer, m_pipelineLayout, VK_SHADER_STAGE_COMPUTE_BIT, 0, sizeof(CSAsyncConstantBuffer), &constants);
 
@@ -1184,10 +1177,10 @@ void AsyncRenderer::Render(std::shared_ptr<DepthFrame> depthFrame)
 		constants.bHoleFillLastPass = true;
 	}
 
-	if (stereoConf.StereoDrawBackground)
+	if (stereoConf.StereoFilteringBilateral_Enable)
 	{
-		int groupCountX = DivRoundUp(depthFrame->disparityTextureSize[0] * stereoConf.StereoDepthMapScale, 32);
-		int groupCountY = DivRoundUp(depthFrame->disparityTextureSize[1] * stereoConf.StereoDepthMapScale, 32);
+		int groupCountX = DivRoundUp(depthFrame->outputDisparityTextureSize[0], 32);
+		int groupCountY = DivRoundUp(depthFrame->outputDisparityTextureSize[1], 32);
 
 		vkCmdPushConstants(m_commandBuffer, m_pipelineLayout, VK_SHADER_STAGE_COMPUTE_BIT, 0, sizeof(CSAsyncConstantBuffer), &constants);
 
@@ -1196,8 +1189,8 @@ void AsyncRenderer::Render(std::shared_ptr<DepthFrame> depthFrame)
 	}
 	else
 	{
-		int groupCountX = DivRoundUp(depthFrame->disparityTextureSize[0] * stereoConf.StereoDepthMapScale, 32);
-		int groupCountY = DivRoundUp(depthFrame->disparityTextureSize[1] * stereoConf.StereoDepthMapScale, 32);
+		int groupCountX = DivRoundUp(depthFrame->outputDisparityTextureSize[0], 32);
+		int groupCountY = DivRoundUp(depthFrame->outputDisparityTextureSize[1], 32);
 
 		constants.bHoleFillLastPass = true;
 

@@ -15,15 +15,9 @@ float gaussian(float2 value)
 }
 
 
-float4 DisparityToWorldCoords(float disparity, float2 clipCoords)
+float4 DisparityToWorldCoords(float disparity, float2 uvCoords)
 {
-    float2 texturePos = clipCoords * g_disparityTextureSize * float2(0.5, 1) * g_disparityDownscaleFactor;
-    
-	// Convert to int16 range with 4 bit fixed decimal: 65536 / 2 / 16
-    float scaledDisp = disparity * 2048.0 * g_disparityDownscaleFactor;
-    float4 viewSpaceCoords = mul(g_disparityToDepth, float4(texturePos, scaledDisp, 1.0));
-    viewSpaceCoords.y = 1 - viewSpaceCoords.y;
-    viewSpaceCoords.z *= -1;
+    float4 viewSpaceCoords = mul(g_disparityToDepth, float4(uvCoords, disparity, 1.0));
     viewSpaceCoords /= viewSpaceCoords.w;
     viewSpaceCoords.z = sign(viewSpaceCoords.z) * min(abs(viewSpaceCoords.z), g_projectionDistance);
 
@@ -36,16 +30,16 @@ VS_OUTPUT main(float3 inPosition : POSITION, uint vertexID : SV_VertexID)
 	VS_OUTPUT output;
     
     float2 disparityUVs = inPosition.xy * (g_disparityUVBounds.zw - g_disparityUVBounds.xy) + g_disparityUVBounds.xy;
-    uint3 uvPos = uint3(floor(disparityUVs * g_disparityTextureSize), 0);
+    uint3 texturePos = uint3(floor(disparityUVs * g_disparityTextureSize), 0);
     
     float2 dispConf = g_disparityTexture.SampleLevel(g_samplerState, disparityUVs, 0);
 
 	// Disparity at the max projection distance
-    float minDisparity = max(g_minDisparity, g_disparityToDepth[3][2] /
-        (g_projectionDistance * 2048.0 * g_disparityDownscaleFactor * g_disparityToDepth[2][3]));
+    float minDisparity = max(max(g_minDisparity, 0.0001), 
+    -g_disparityToDepth[2][3] / (g_projectionDistance * g_disparityToDepth[3][2]));
     
-    float defaultDisparity = g_disparityToDepth[3][2] /
-    (min(2.0, g_projectionDistance) * 2048.0 * g_disparityDownscaleFactor * g_disparityToDepth[2][3]); 
+    float defaultDisparity = max(max(g_minDisparity, 0.0001), 
+    -g_disparityToDepth[2][3] / (min(2.0, g_projectionDistance) * g_disparityToDepth[3][2])); 
     
     uint maxFilterWidth = max(g_disparityFilterWidth, (int)ceil(g_cutoutFilterWidth));
     
@@ -64,8 +58,8 @@ VS_OUTPUT main(float3 inPosition : POSITION, uint vertexID : SV_VertexID)
         output.cameraBlendConfidence.x = -10000;
     }
     // Prevent filtering if it would sample across the image edge
-    else if (uvPos.x < maxFilterWidth || uvPos.x >= g_disparityTextureSize.x - maxFilterWidth || 
-             uvPos.y < maxFilterWidth || uvPos.y >= g_disparityTextureSize.y - maxFilterWidth)
+    else if (texturePos.x < maxFilterWidth || texturePos.x >= g_disparityTextureSize.x - maxFilterWidth || 
+             texturePos.y < maxFilterWidth || texturePos.y >= g_disparityTextureSize.y - maxFilterWidth)
     {
         output.projectionConfidence = 0;
     }

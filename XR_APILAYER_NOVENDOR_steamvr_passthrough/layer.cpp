@@ -560,20 +560,8 @@ namespace
 
 					const XrGraphicsBindingD3D12KHR* bindings = reinterpret_cast<const XrGraphicsBindingD3D12KHR*>(entry);
 
-					ERenderAPI usedAPI = RenderAPI_Direct3D11;
-
-					if (m_configManager->GetConfig_Main().UseLegacyD3D12Renderer)
-					{
-						m_Renderer = std::make_unique<PassthroughRendererDX12>(bindings->device, bindings->queue, g_dllModule, m_configManager);
-						usedAPI = RenderAPI_Direct3D12;
-						g_logger->info("Using legacy Direct3D 12 renderer");
-					}
-					else
-					{
-						m_Renderer = std::make_unique<PassthroughRendererDX11Interop>(bindings->device, bindings->queue, g_dllModule, m_configManager);
-					}
-
-					m_renderAPI = usedAPI;
+					m_Renderer = std::make_unique<PassthroughRendererDX11Interop>(bindings->device, bindings->queue, g_dllModule, m_configManager);
+					m_renderAPI = RenderAPI_Direct3D11;
 					m_appRenderAPI = RenderAPI_Direct3D12;
 
 					if (!SetupProcessingPipeline())
@@ -582,7 +570,7 @@ namespace
 					}
 
 					clientData.Values.bSessionActive = true;
-					clientData.Values.RenderAPI = usedAPI;
+					clientData.Values.RenderAPI = RenderAPI_Direct3D11;
 					clientData.Values.AppRenderAPI = RenderAPI_Direct3D12;
 					m_menuHandler->DispatchClientDataValues();
 					m_bDepthSupportedByRenderer = true;
@@ -606,7 +594,13 @@ namespace
 					}
 					else
 					{
-						if (!m_bEnableVulkan2Extension)
+						if (!m_bEnableVulkan2Extension && m_configManager->GetConfig_Main().AllowVulkanWithoutConfirmedFeatures)
+						{
+							
+							g_logger->warn("Application is using the XR_KHR_vulkan_enable extension. Required Vulkan features can not be confirmed");
+							return false;
+						}
+						else if (!m_bEnableVulkan2Extension)
 						{
 							g_logger->error("The XR_KHR_vulkan_enable extension is only supported with the legacy renderer, passthrough rendering not enabled");
 							return false;

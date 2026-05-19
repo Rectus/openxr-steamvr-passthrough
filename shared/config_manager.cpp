@@ -136,7 +136,6 @@ void ConfigManager::SetupStereoPresets()
 	m_stereoPresets[1].StereoDrawBackground = false;
 	m_stereoPresets[1].StereoFrameSkip = 0;
 	m_stereoPresets[1].StereoDownscaleFactor = 5;
-	m_stereoPresets[1].StereoUseSeparateDepthPass = false;
 	m_stereoPresets[1].StereoUseDisparityTemporalFiltering = false;
 	m_stereoPresets[1].StereoDisparityTemporalFilteringStrength = 0.9f;
 	m_stereoPresets[1].StereoDisparityTemporalFilteringDistance = 0.5f;
@@ -163,15 +162,16 @@ void ConfigManager::SetupStereoPresets()
 	m_stereoPresets[1].StereoSGBM_SpeckleWindowSize = 0;
 	m_stereoPresets[1].StereoSGBM_SpeckleRange = 0;
 
-	m_stereoPresets[1].StereoFiltering = StereoFiltering_WLS;
-	m_stereoPresets[1].StereoWLS_Lambda = 8000.0f;
-	m_stereoPresets[1].StereoWLS_Sigma = 1.9f;
-	m_stereoPresets[1].StereoWLS_ConfidenceRadius = 0.5f;
-	m_stereoPresets[1].StereoFBS_Spatial = 6.0f;
-	m_stereoPresets[1].StereoFBS_Luma = 8.0f;
-	m_stereoPresets[1].StereoFBS_Chroma = 8.0f;
-	m_stereoPresets[1].StereoFBS_Lambda = 128.0f;
-	m_stereoPresets[1].StereoFBS_Iterations = 11;
+	m_stereoPresets[1].StereoFilteringWLS_Enable = false;
+	m_stereoPresets[1].StereoFilteringWLS_Lambda = 8000.0f;
+	m_stereoPresets[1].StereoFilteringWLS_Sigma = 1.9f;
+	m_stereoPresets[1].StereoFilteringWLS_ConfidenceRadius = 0.5f;
+
+	m_stereoPresets[1].StereoFilteringBilateral_Enable = true;
+	m_stereoPresets[1].StereoFilteringBilateral_Distance = 9;
+	m_stereoPresets[1].StereoFilteringBilateral_DispCutoff = 0.3f;
+	m_stereoPresets[1].StereoFilteringBilateral_SigmaSpace = 10.0f;
+	m_stereoPresets[1].StereoFilteringBilateral_SigmaLuma = 0.01f;
 
 
 	m_stereoPresets[2].StereoUseMulticore = true;
@@ -183,7 +183,6 @@ void ConfigManager::SetupStereoPresets()
 	m_stereoPresets[2].StereoDrawBackground = false;
 	m_stereoPresets[2].StereoFrameSkip = 0;
 	m_stereoPresets[2].StereoDownscaleFactor = 4;
-	m_stereoPresets[2].StereoUseSeparateDepthPass = true;
 	m_stereoPresets[2].StereoUseDisparityTemporalFiltering = false;
 	m_stereoPresets[2].StereoDisparityTemporalFilteringStrength = 0.92f;
 	m_stereoPresets[2].StereoDisparityTemporalFilteringDistance = 2.0f;
@@ -210,15 +209,16 @@ void ConfigManager::SetupStereoPresets()
 	m_stereoPresets[2].StereoSGBM_SpeckleWindowSize = 80;
 	m_stereoPresets[2].StereoSGBM_SpeckleRange = 1;
 
-	m_stereoPresets[2].StereoFiltering = StereoFiltering_WLS;
-	m_stereoPresets[2].StereoWLS_Lambda = 8000.0f;
-	m_stereoPresets[2].StereoWLS_Sigma = 0.5f;
-	m_stereoPresets[2].StereoWLS_ConfidenceRadius = 0.5f;
-	m_stereoPresets[2].StereoFBS_Spatial = 6.0f;
-	m_stereoPresets[2].StereoFBS_Luma = 8.0f;
-	m_stereoPresets[2].StereoFBS_Chroma = 8.0f;
-	m_stereoPresets[2].StereoFBS_Lambda = 128.0f;
-	m_stereoPresets[2].StereoFBS_Iterations = 11;
+	m_stereoPresets[2].StereoFilteringWLS_Enable = false;
+	m_stereoPresets[2].StereoFilteringWLS_Lambda = 8000.0f;
+	m_stereoPresets[2].StereoFilteringWLS_Sigma = 0.5f;
+	m_stereoPresets[2].StereoFilteringWLS_ConfidenceRadius = 0.5f;
+
+	m_stereoPresets[2].StereoFilteringBilateral_Enable = true;
+	m_stereoPresets[2].StereoFilteringBilateral_Distance = 9;
+	m_stereoPresets[2].StereoFilteringBilateral_DispCutoff = 0.3f;
+	m_stereoPresets[2].StereoFilteringBilateral_SigmaSpace = 10.0f;
+	m_stereoPresets[2].StereoFilteringBilateral_SigmaLuma = 0.01f;
 
 
 	m_stereoPresets[3].StereoUseMulticore = true;
@@ -230,7 +230,6 @@ void ConfigManager::SetupStereoPresets()
 	m_stereoPresets[3].StereoDrawBackground = false;
 	m_stereoPresets[3].StereoFrameSkip = 0;
 	m_stereoPresets[3].StereoDownscaleFactor = 3;
-	m_stereoPresets[3].StereoUseSeparateDepthPass = true;
 	m_stereoPresets[3].StereoUseDisparityTemporalFiltering = true;
 	m_stereoPresets[3].StereoDisparityTemporalFilteringStrength = 0.92f;
 	m_stereoPresets[3].StereoDisparityTemporalFilteringDistance = 2.0f;
@@ -257,15 +256,16 @@ void ConfigManager::SetupStereoPresets()
 	m_stereoPresets[3].StereoSGBM_SpeckleWindowSize = 80;
 	m_stereoPresets[3].StereoSGBM_SpeckleRange = 1;
 
-	m_stereoPresets[3].StereoFiltering = StereoFiltering_WLS;
-	m_stereoPresets[3].StereoWLS_Lambda = 8000.0f;
-	m_stereoPresets[3].StereoWLS_Sigma = 0.5f;
-	m_stereoPresets[3].StereoWLS_ConfidenceRadius = 0.5f;
-	m_stereoPresets[3].StereoFBS_Spatial = 6.0f;
-	m_stereoPresets[3].StereoFBS_Luma = 8.0f;
-	m_stereoPresets[3].StereoFBS_Chroma = 8.0f;
-	m_stereoPresets[3].StereoFBS_Lambda = 128.0f;
-	m_stereoPresets[3].StereoFBS_Iterations = 11;
+	m_stereoPresets[3].StereoFilteringWLS_Enable = true;
+	m_stereoPresets[3].StereoFilteringWLS_Lambda = 8000.0f;
+	m_stereoPresets[3].StereoFilteringWLS_Sigma = 0.5f;
+	m_stereoPresets[3].StereoFilteringWLS_ConfidenceRadius = 0.5f;
+
+	m_stereoPresets[3].StereoFilteringBilateral_Enable = false;
+	m_stereoPresets[3].StereoFilteringBilateral_Distance = 9;
+	m_stereoPresets[3].StereoFilteringBilateral_DispCutoff = 0.3f;
+	m_stereoPresets[3].StereoFilteringBilateral_SigmaSpace = 10.0f;
+	m_stereoPresets[3].StereoFilteringBilateral_SigmaLuma = 0.01f;
 
 
 	m_stereoPresets[4].StereoUseMulticore = true;
@@ -277,7 +277,6 @@ void ConfigManager::SetupStereoPresets()
 	m_stereoPresets[4].StereoDrawBackground = false;
 	m_stereoPresets[4].StereoFrameSkip = 0;
 	m_stereoPresets[4].StereoDownscaleFactor = 3;
-	m_stereoPresets[4].StereoUseSeparateDepthPass = true;
 	m_stereoPresets[4].StereoUseDisparityTemporalFiltering = true;
 	m_stereoPresets[4].StereoDisparityTemporalFilteringStrength = 0.92f;
 	m_stereoPresets[4].StereoDisparityTemporalFilteringDistance = 2.0f;
@@ -304,15 +303,16 @@ void ConfigManager::SetupStereoPresets()
 	m_stereoPresets[4].StereoSGBM_SpeckleWindowSize = 80;
 	m_stereoPresets[4].StereoSGBM_SpeckleRange = 1;
 
-	m_stereoPresets[4].StereoFiltering = StereoFiltering_WLS;
-	m_stereoPresets[4].StereoWLS_Lambda = 8000.0f;
-	m_stereoPresets[4].StereoWLS_Sigma = 0.5f;
-	m_stereoPresets[4].StereoWLS_ConfidenceRadius = 0.5f;
-	m_stereoPresets[4].StereoFBS_Spatial = 6.0f;
-	m_stereoPresets[4].StereoFBS_Luma = 8.0f;
-	m_stereoPresets[4].StereoFBS_Chroma = 8.0f;
-	m_stereoPresets[4].StereoFBS_Lambda = 128.0f;
-	m_stereoPresets[4].StereoFBS_Iterations = 11;
+	m_stereoPresets[4].StereoFilteringWLS_Enable = true;
+	m_stereoPresets[4].StereoFilteringWLS_Lambda = 8000.0f;
+	m_stereoPresets[4].StereoFilteringWLS_Sigma = 0.5f;
+	m_stereoPresets[4].StereoFilteringWLS_ConfidenceRadius = 0.5f;
+
+	m_stereoPresets[4].StereoFilteringBilateral_Enable = false;
+	m_stereoPresets[4].StereoFilteringBilateral_Distance = 9;
+	m_stereoPresets[4].StereoFilteringBilateral_DispCutoff = 0.3f;
+	m_stereoPresets[4].StereoFilteringBilateral_SigmaSpace = 10.0f;
+	m_stereoPresets[4].StereoFilteringBilateral_SigmaLuma = 0.01f;
 
 
 	m_stereoPresets[5].StereoUseMulticore = true;
@@ -324,7 +324,6 @@ void ConfigManager::SetupStereoPresets()
 	m_stereoPresets[5].StereoDrawBackground = false;
 	m_stereoPresets[5].StereoFrameSkip = 0;
 	m_stereoPresets[5].StereoDownscaleFactor = 2;
-	m_stereoPresets[5].StereoUseSeparateDepthPass = true;
 	m_stereoPresets[5].StereoUseDisparityTemporalFiltering = true;
 	m_stereoPresets[5].StereoDisparityTemporalFilteringStrength = 0.92f;
 	m_stereoPresets[5].StereoDisparityTemporalFilteringDistance = 2.0f;
@@ -351,13 +350,14 @@ void ConfigManager::SetupStereoPresets()
 	m_stereoPresets[5].StereoSGBM_SpeckleWindowSize = 80;
 	m_stereoPresets[5].StereoSGBM_SpeckleRange = 3;
 
-	m_stereoPresets[5].StereoFiltering = StereoFiltering_WLS;
-	m_stereoPresets[5].StereoWLS_Lambda = 8000.0f;
-	m_stereoPresets[5].StereoWLS_Sigma = 0.5f;
-	m_stereoPresets[5].StereoWLS_ConfidenceRadius = 0.3f;
-	m_stereoPresets[5].StereoFBS_Spatial = 6.0f;
-	m_stereoPresets[5].StereoFBS_Luma = 8.0f;
-	m_stereoPresets[5].StereoFBS_Chroma = 8.0f;
-	m_stereoPresets[5].StereoFBS_Lambda = 128.0f;
-	m_stereoPresets[5].StereoFBS_Iterations = 11;
+	m_stereoPresets[5].StereoFilteringWLS_Enable = true;
+	m_stereoPresets[5].StereoFilteringWLS_Lambda = 8000.0f;
+	m_stereoPresets[5].StereoFilteringWLS_Sigma = 0.5f;
+	m_stereoPresets[5].StereoFilteringWLS_ConfidenceRadius = 0.5f;
+
+	m_stereoPresets[5].StereoFilteringBilateral_Enable = true;
+	m_stereoPresets[5].StereoFilteringBilateral_Distance = 9;
+	m_stereoPresets[5].StereoFilteringBilateral_DispCutoff = 0.3f;
+	m_stereoPresets[5].StereoFilteringBilateral_SigmaSpace = 10.0f;
+	m_stereoPresets[5].StereoFilteringBilateral_SigmaLuma = 0.01f;
 }

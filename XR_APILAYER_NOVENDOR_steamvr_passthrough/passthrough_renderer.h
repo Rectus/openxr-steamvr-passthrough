@@ -363,7 +363,6 @@ protected:
 	HMODULE m_dllModule;
 	std::shared_timed_mutex m_accessRendererMutex;
 
-	bool m_bIsVSUAVSupported = true;
 	bool m_bUsingDeferredContext = false;
 
 	int m_frameIndex = 0;
@@ -395,13 +394,11 @@ protected:
 	ComPtr<ID3D11DepthStencilState> m_depthStencilStateGreaterWrite;
 	ComPtr<ID3D11DepthStencilState> m_depthStencilStateAlwaysWrite;
 
-	ComPtr<ID3D11ComputeShader> m_fillHolesCS;
 	ComPtr<ID3D11VertexShader> m_fullscreenQuadVS;
 	ComPtr<ID3D11VertexShader> m_passthroughVS;
 	ComPtr<ID3D11VertexShader> m_meshRigidVS;
 	ComPtr<ID3D11VertexShader> m_passthroughStereoVS;
-	ComPtr<ID3D11VertexShader> m_passthroughStereoTemporalVS;
-	ComPtr<ID3D11VertexShader> m_passthroughReadDepthVS;
+
 	ComPtr<ID3D11PixelShader> m_passthroughPS;
 	ComPtr<ID3D11PixelShader> m_passthroughTemporalPS;
 	ComPtr<ID3D11PixelShader> m_alphaPrepassPS;
@@ -410,8 +407,6 @@ protected:
 	ComPtr<ID3D11PixelShader> m_maskedAlphaCopyPS;
 	ComPtr<ID3D11PixelShader> m_depthWritePS;
 	ComPtr<ID3D11PixelShader> m_depthWriteTemporalPS;
-	ComPtr<ID3D11PixelShader> m_stereoCompositePS;
-	ComPtr<ID3D11PixelShader> m_stereoCompositeTemporalPS;
 	ComPtr<ID3D11PixelShader> m_fullscreenPassthroughPS;
 	ComPtr<ID3D11PixelShader> m_fullscreenPassthroughTemporalPS;
 	ComPtr<ID3D11PixelShader> m_fullscreenPassthroughCompositePS;
@@ -579,133 +574,6 @@ private:
 	uint32_t m_localDepthBuffersOpenGLRight[NUM_SWAPCHAINS] = {};
 	uint32_t m_localDBMemOpenGLLeft[NUM_SWAPCHAINS] = {};
 	uint32_t m_localDBMemOpenGLRight[NUM_SWAPCHAINS] = {};
-};
-
-
-class PassthroughRendererDX12 : public IPassthroughRenderer
-{
-public:
-	PassthroughRendererDX12(ID3D12Device* device, ID3D12CommandQueue* commandQueue, HMODULE dllModule, std::shared_ptr<ConfigManager> configManager);
-	~PassthroughRendererDX12() {};
-
-	bool InitRenderer();	
-	void InitRenderTarget(const ERenderEye eye, void* rendertarget, const uint32_t imageIndex, const XrSwapchainCreateInfo& swapchainInfo, const XrSwapchain swapchain);
-	void InitDepthBuffer(const ERenderEye eye, void* depthBuffer, const uint32_t imageIndex, const XrSwapchainCreateInfo& swapchainInfo, const XrSwapchain swapchain);
-	void SetFrameSize(const uint32_t width, const uint32_t height, const uint32_t bufferSize, const uint32_t undistortedWidth, const uint32_t undistortedHeight, const uint32_t undistortedBufferSize);
-	void RenderPassthroughFrame(const XrCompositionLayerProjection* layer, std::shared_ptr<CameraFrame> frame, FrameRenderParameters& renderParams, std::shared_ptr<DepthFrame> depthFrame, UVDistortionParameters& distortionParams);
-	void* GetRenderDevice();
-	std::shared_timed_mutex& GetAccessMutex() { return m_accessRendererMutex; }
-	
-private:
-	ComPtr<ID3D12Resource> InitBuffer(UINT8** bufferCPUData, int numBuffers, int bufferSizePerAlign, int heapIndex);
-	void SetupDebugTexture(DebugTexture& texture);
-	void SetupFrameResource();
-	void SetupUndistortedFrameResource();
-	void SetupDisparityMap(uint32_t width, uint32_t height);
-	void SetupUVDistortionMap(std::shared_ptr<std::vector<float>> uvDistortionMap);
-	bool CreateRootSignature();
-	bool InitPipeline(bool bFlipTriangles);
-	void SetupIntermediateRenderTarget(uint32_t index, uint32_t width, uint32_t height);
-	void GenerateMesh();
-	void GenerateDepthMesh(uint32_t width, uint32_t height);
-
-	void RenderPassthroughView(const ERenderEye eye, const int32_t imageIndex, const XrCompositionLayerProjection* layer, std::shared_ptr<CameraFrame> frame, EPassthroughBlendMode blendMode, UINT numIndices);
-	void RenderMaskedPrepassView(const ERenderEye eye, const int32_t imageIndex, const XrCompositionLayerProjection* layer, std::shared_ptr<CameraFrame> frame, UINT numIndices);
-	void RenderFrameFinish();
-
-	std::shared_ptr<ConfigManager> m_configManager;
-	HMODULE m_dllModule;
-	std::shared_timed_mutex m_accessRendererMutex;
-
-	int m_frameIndex = 0;
-
-	ComPtr<ID3D12Device> m_d3dDevice;
-	ComPtr<ID3D12CommandQueue> m_d3dCommandQueue;
-
-	ComPtr<ID3D12Resource> m_renderTargets[NUM_SWAPCHAINS * 2];
-	ComPtr<ID3D12Resource> m_depthStencils[NUM_SWAPCHAINS * 2];
-	
-	ComPtr<ID3D12CommandAllocator> m_commandAllocators[NUM_SWAPCHAINS * 2];
-	ComPtr<ID3D12GraphicsCommandList> m_commandList;
-	ComPtr<ID3D12DescriptorHeap> m_RTVHeap;
-	ComPtr<ID3D12DescriptorHeap> m_DSVHeap;
-	ComPtr<ID3D12DescriptorHeap> m_CBVSRVHeap;
-	UINT m_RTVHeapDescSize = 0;
-	UINT m_DSVHeapDescSize = 0;
-	UINT m_CBVSRVHeapDescSize = 0;
-	ComPtr<ID3D12RootSignature> m_rootSignature;
-
-	ComPtr<ID3D12PipelineState> m_psoPrepass;
-	ComPtr<ID3D12PipelineState> m_psoMaskedPrepassFullscreen;
-	ComPtr<ID3D12PipelineState> m_psoMaskedAlphaCopy;
-	ComPtr<ID3D12PipelineState> m_psoMainPass;
-	ComPtr<ID3D12PipelineState> m_psoCutoutPass;
-	ComPtr<ID3D12PipelineState> m_psoHoleFillPass;
-
-	DXGI_FORMAT m_swapchainFormat;
-	DXGI_FORMAT m_depthStencilFormat;
-	EPassthroughBlendMode m_blendMode;
-	bool m_bUsingStereo;
-	bool m_bUsingDepth;
-	bool m_bUsingReversedDepth;
-	bool m_bWriteDepth;
-	
-	ComPtr<ID3D12Resource> m_vsPassConstantBuffer;
-	UINT8* m_vsPassConstantBufferCPUData[NUM_SWAPCHAINS];
-
-	ComPtr<ID3D12Resource> m_vsViewConstantBuffer;
-	UINT8* m_vsViewConstantBufferCPUData[NUM_SWAPCHAINS * 4];
-
-	ComPtr<ID3D12Resource> m_psPassConstantBuffer;
-	UINT8* m_psPassConstantBufferCPUData[NUM_SWAPCHAINS];
-
-	ComPtr<ID3D12Resource> m_psViewConstantBuffer;
-	UINT8* m_psViewConstantBufferCPUData[NUM_SWAPCHAINS * 4];
-
-	ComPtr<ID3D12Resource> m_psMaskedConstantBuffer;
-	UINT8* m_psMaskedConstantBufferCPUData[NUM_SWAPCHAINS];
-
-	ComPtr<ID3D12Resource> m_debugTexture;
-	ComPtr<ID3D12Resource> m_debugTextureUploadHeap;
-	ESelectedDebugTexture m_selectedDebugTexture;
-
-	ComPtr<ID3D12Resource> m_cameraFrameRes[NUM_SWAPCHAINS];
-	ComPtr<ID3D12Resource> m_frameResUploadHeap;
-
-	ComPtr<ID3D12Resource> m_cameraUndisortedFrameRes[NUM_SWAPCHAINS];
-	ComPtr<ID3D12Resource> m_undistortedFrameResUploadHeap;
-
-	ComPtr<ID3D12Resource> m_intermediateRenderTargets[NUM_SWAPCHAINS * 2];
-	ComPtr<ID3D12DescriptorHeap> m_intermediateRTVHeap;
-
-	ComPtr<ID3D12Resource> m_disparityMap[NUM_SWAPCHAINS * 2];
-	ComPtr<ID3D12Resource> m_disparityMapUploadHeap;
-	uint32_t m_disparityMapWidth;
-
-	ComPtr<ID3D12Resource> m_uvDistortionMap;
-	ComPtr<ID3D12Resource> m_uvDistortionMapUploadHeap;
-	float m_fovScale;
-	
-	Mesh<VertexFormatBasic> m_cylinderMesh;
-	ComPtr<ID3D12Resource> m_cylinderMeshVertexBuffer;
-	ComPtr<ID3D12Resource> m_cylinderMeshIndexBuffer;
-	ComPtr<ID3D12Resource> m_cylinderMeshVertexBufferUpload;
-	ComPtr<ID3D12Resource> m_cylinderMeshIndexBufferUpload;
-
-	Mesh<VertexFormatBasic> m_gridMesh;
-	ComPtr<ID3D12Resource> m_gridMeshVertexBuffer;
-	ComPtr<ID3D12Resource> m_gridMeshIndexBuffer;
-	ComPtr<ID3D12Resource> m_gridMeshVertexBufferUpload;
-	ComPtr<ID3D12Resource> m_gridMeshIndexBufferUpload;
-	bool m_bUseHexagonGridMesh;
-
-	uint32_t m_cameraTextureWidth;
-	uint32_t m_cameraTextureHeight;
-	uint32_t m_cameraFrameBufferSize;
-
-	uint32_t m_cameraUndistortedTextureWidth;
-	uint32_t m_cameraUndistortedTextureHeight;
-	uint32_t m_cameraUndistortedFrameBufferSize;
 };
 
 

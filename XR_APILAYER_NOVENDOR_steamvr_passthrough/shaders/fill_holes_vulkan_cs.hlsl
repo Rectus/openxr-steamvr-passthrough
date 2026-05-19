@@ -40,7 +40,7 @@ void main(uint3 pos3 : SV_DispatchThreadID)
 
         if (confidence <= 0.0 && (disparity <= g_minDisparity || disparity >= g_maxDisparity))
         {
-            // Return the stored disparity value fro mthe confidence buffer if one exists.
+            // Return the stored disparity value from the confidence buffer if one exists.
             if (confidence < 0.5 && confidence >= 0.0)
             {
                 disparity = g_minDisparity;
@@ -51,6 +51,10 @@ void main(uint3 pos3 : SV_DispatchThreadID)
                 disparity = -confidence;
                 confidence = 0.0;
             }
+        }
+        else if(!g_bUseInputConfidence) // Set confidence to 1 for areas that had valid disparity values
+        {
+            confidence = 1.0;
         }
 
         g_outputDisparity[pos] = float2(disparity, confidence);

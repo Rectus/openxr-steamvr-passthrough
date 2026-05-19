@@ -233,7 +233,6 @@ copy $(SolutionDir)THIRD_PARTY $(OutDir)THIRD_PARTY.txt</Command>
     <ClCompile Include="openvr_manager.cpp" />
     <ClCompile Include="passthrough_renderer_dx11.cpp" />
     <ClCompile Include="passthrough_renderer_dx11_interop.cpp" />
-    <ClCompile Include="passthrough_renderer_dx12.cpp" />
     <ClCompile Include="layer.cpp" />
     <ClCompile Include="passthrough_renderer_vulkan.cpp" />
     <ClCompile Include="pch.cpp">
@@ -337,14 +336,6 @@ copy $(SolutionDir)THIRD_PARTY $(OutDir)THIRD_PARTY.txt</Command>
       <ShaderType Condition="'$(Configuration)|$(Platform)'=='Release|x64'">Pixel</ShaderType>
       <VariableName Condition="'$(Configuration)|$(Platform)'=='Release|x64'">g_depthWriteTemporalPS</VariableName>
     </FxCompile>
-    <FxCompile Include="shaders\fill_holes_cs.hlsl">
-      <ShaderType Condition="'$(Configuration)|$(Platform)'=='Release|x64'">Compute</ShaderType>
-      <VariableName Condition="'$(Configuration)|$(Platform)'=='Release|x64'">g_FillHolesCS</VariableName>
-      <HeaderFileOutput Condition="'$(Configuration)|$(Platform)'=='Release|x64'">shaders\fill_holes_cs.h</HeaderFileOutput>
-      <HeaderFileOutput Condition="'$(Configuration)|$(Platform)'=='Debug|x64'">shaders\fill_holes_cs.h</HeaderFileOutput>
-      <VariableName Condition="'$(Configuration)|$(Platform)'=='Debug|x64'">g_FillHolesCS</VariableName>
-      <ShaderType Condition="'$(Configuration)|$(Platform)'=='Debug|x64'">Compute</ShaderType>
-    </FxCompile>
     <None Include="shaders\fill_holes_vulkan_cs.hlsl">
       <FileType>Document</FileType>
     </None>
@@ -412,38 +403,6 @@ copy $(SolutionDir)THIRD_PARTY $(OutDir)THIRD_PARTY.txt</Command>
       <HeaderFileOutput Condition="'$(Configuration)|$(Platform)'=='Release|x64'">shaders\passthrough_ps.h</HeaderFileOutput>
       <VariableName Condition="'$(Configuration)|$(Platform)'=='Release|x64'">g_PassthroughPS</VariableName>
       <ShaderType Condition="'$(Configuration)|$(Platform)'=='Release|x64'">Pixel</ShaderType>
-    </FxCompile>
-    <FxCompile Include="shaders\passthrough_read_depth_vs.hlsl">
-      <ShaderType Condition="'$(Configuration)|$(Platform)'=='Release|x64'">Vertex</ShaderType>
-      <VariableName Condition="'$(Configuration)|$(Platform)'=='Release|x64'">g_PassthroughReadDepthVS</VariableName>
-      <HeaderFileOutput Condition="'$(Configuration)|$(Platform)'=='Release|x64'">shaders/passthrough_read_depth_vs.h</HeaderFileOutput>
-      <HeaderFileOutput Condition="'$(Configuration)|$(Platform)'=='Debug|x64'">shaders/passthrough_read_depth_vs.h</HeaderFileOutput>
-      <VariableName Condition="'$(Configuration)|$(Platform)'=='Debug|x64'">g_PassthroughReadDepthVS</VariableName>
-      <ShaderType Condition="'$(Configuration)|$(Platform)'=='Debug|x64'">Vertex</ShaderType>
-    </FxCompile>
-    <FxCompile Include="shaders\passthrough_stereo_composite_ps.hlsl">
-      <ShaderType Condition="'$(Configuration)|$(Platform)'=='Release|x64'">Pixel</ShaderType>
-      <VariableName Condition="'$(Configuration)|$(Platform)'=='Release|x64'">g_PassthroughStereoCompositePS</VariableName>
-      <HeaderFileOutput Condition="'$(Configuration)|$(Platform)'=='Release|x64'">shaders\passthrough_stereo_composite_ps.h</HeaderFileOutput>
-      <VariableName Condition="'$(Configuration)|$(Platform)'=='Debug|x64'">g_PassthroughStereoCompositePS</VariableName>
-      <HeaderFileOutput Condition="'$(Configuration)|$(Platform)'=='Debug|x64'">shaders\passthrough_stereo_composite_ps.h</HeaderFileOutput>
-      <ShaderType Condition="'$(Configuration)|$(Platform)'=='Debug|x64'">Pixel</ShaderType>
-    </FxCompile>
-    <FxCompile Include="shaders\passthrough_stereo_composite_temporal_ps.hlsl">
-      <HeaderFileOutput Condition="'$(Configuration)|$(Platform)'=='Release|x64'">shaders\passthrough_stereo_composite_temporal_ps.h</HeaderFileOutput>
-      <ShaderType Condition="'$(Configuration)|$(Platform)'=='Release|x64'">Pixel</ShaderType>
-      <VariableName Condition="'$(Configuration)|$(Platform)'=='Release|x64'">g_PassthroughStereoCompositeTemporalPS</VariableName>
-      <VariableName Condition="'$(Configuration)|$(Platform)'=='Debug|x64'">g_PassthroughStereoCompositeTemporalPS</VariableName>
-      <HeaderFileOutput Condition="'$(Configuration)|$(Platform)'=='Debug|x64'">shaders\passthrough_stereo_composite_temporal_ps.h</HeaderFileOutput>
-      <ShaderType Condition="'$(Configuration)|$(Platform)'=='Debug|x64'">Pixel</ShaderType>
-    </FxCompile>
-    <FxCompile Include="shaders\passthrough_stereo_temporal_vs.hlsl">
-      <HeaderFileOutput Condition="'$(Configuration)|$(Platform)'=='Release|x64'">shaders\passthrough_stereo_temporal_vs.h</HeaderFileOutput>
-      <VariableName Condition="'$(Configuration)|$(Platform)'=='Release|x64'">g_PassthroughStereoTemporalVS</VariableName>
-      <ShaderType Condition="'$(Configuration)|$(Platform)'=='Release|x64'">Vertex</ShaderType>
-      <VariableName Condition="'$(Configuration)|$(Platform)'=='Debug|x64'">g_PassthroughStereoTemporalVS</VariableName>
-      <HeaderFileOutput Condition="'$(Configuration)|$(Platform)'=='Debug|x64'">shaders\passthrough_stereo_temporal_vs.h</HeaderFileOutput>
-      <ShaderType Condition="'$(Configuration)|$(Platform)'=='Debug|x64'">Vertex</ShaderType>
     </FxCompile>
     <FxCompile Include="shaders\passthrough_stereo_vs.hlsl">
       <HeaderFileOutput Condition="'$(Configuration)|$(Platform)'=='Debug|x64'">shaders\passthrough_stereo_vs.h</HeaderFileOutput>

@@ -37,7 +37,7 @@ public:
 	void CopyDisparityToGPU(std::vector<uint8_t>& buffer);
 	void CopyConfidenceToGPU(std::vector<uint8_t>& buffer);
 	void CopyCameraFrameToGPU(std::vector<uint8_t>& buffer);
-	void Render(std::shared_ptr<DepthFrame> depthFrame);
+	void Render(std::shared_ptr<DepthFrame> depthFrame, const Config_Stereo& stereoConf);
 
 private:
 

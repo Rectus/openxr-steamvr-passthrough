@@ -124,9 +124,6 @@
     <ClCompile Include="framework\log.cpp">
       <Filter>Framework</Filter>
     </ClCompile>
-    <ClCompile Include="passthrough_renderer_dx12.cpp">
-      <Filter>Source Files</Filter>
-    </ClCompile>
     <ClCompile Include="camera_manager_openvr.cpp">
       <Filter>Source Files</Filter>
     </ClCompile>
@@ -227,25 +224,10 @@
     <FxCompile Include="shaders\passthrough_temporal_ps.hlsl">
       <Filter>Shaders</Filter>
     </FxCompile>
-    <FxCompile Include="shaders\passthrough_stereo_temporal_vs.hlsl">
-      <Filter>Shaders</Filter>
-    </FxCompile>
     <FxCompile Include="shaders\mesh_rigid_vs.hlsl">
       <Filter>Shaders</Filter>
     </FxCompile>
-    <FxCompile Include="shaders\fill_holes_cs.hlsl">
-      <Filter>Shaders</Filter>
-    </FxCompile>
     <FxCompile Include="shaders\depth_write_ps.hlsl">
-      <Filter>Shaders</Filter>
-    </FxCompile>
-    <FxCompile Include="shaders\passthrough_read_depth_vs.hlsl">
-      <Filter>Shaders</Filter>
-    </FxCompile>
-    <FxCompile Include="shaders\passthrough_stereo_composite_ps.hlsl">
-      <Filter>Shaders</Filter>
-    </FxCompile>
-    <FxCompile Include="shaders\passthrough_stereo_composite_temporal_ps.hlsl">
       <Filter>Shaders</Filter>
     </FxCompile>
     <FxCompile Include="shaders\depth_write_temporal_ps.hlsl">
