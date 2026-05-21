@@ -105,7 +105,7 @@ int APIENTRY wWinMain(_In_ HINSTANCE hInstance, _In_opt_ HINSTANCE hPrevInstance
         spdlog::set_default_logger(g_logger);
         spdlog::flush_every(std::chrono::seconds(10));
 
-        g_logger->info("Starting Passthrough Wenu version {}", VersionString);
+        g_logger->info("Starting Passthrough Menu version {}", VersionString);
         g_logger->info("Logging to {}", logFilePath);
     }
 

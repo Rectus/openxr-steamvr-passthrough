@@ -1134,7 +1134,7 @@ void VulkanCopyImages(VkCommandBuffer commandBuffer, std::vector<ImageCopyData>&
 
 
 
-void PassthroughRendererDX11Interop::RenderPassthroughFrame(const XrCompositionLayerProjection* layer, std::shared_ptr<CameraFrame> frame, FrameRenderParameters& renderParams, std::shared_ptr<DepthFrame> depthFrame, UVDistortionParameters& distortionParams)
+void PassthroughRendererDX11Interop::RenderPassthroughFrame(const XrCompositionLayerProjection* layer, std::shared_ptr<CameraFrame> frame, std::shared_ptr<CameraCPUFrame> cpuFrame, FrameRenderParameters& renderParams, std::shared_ptr<DepthFrame> depthFrame, UVDistortionParameters& distortionParams)
 {
 	DX11ViewData& viewDataLeft = m_viewData[0][renderParams.LeftFrameIndex];
 	DX11ViewData& viewDataRight = m_viewData[1][renderParams.RightFrameIndex];
@@ -1166,7 +1166,7 @@ void PassthroughRendererDX11Interop::RenderPassthroughFrame(const XrCompositionL
 				m_d3d11On12Device->AcquireWrappedResources(dts, 2);
 			}
 
-			PassthroughRendererDX11::RenderPassthroughFrame(layer, frame, renderParams, depthFrame, distortionParams);
+			PassthroughRendererDX11::RenderPassthroughFrame(layer, frame, cpuFrame, renderParams, depthFrame, distortionParams);
 
 			m_d3d11On12Device->ReleaseWrappedResources(rts, 2);
 
@@ -1259,7 +1259,7 @@ void PassthroughRendererDX11Interop::RenderPassthroughFrame(const XrCompositionL
 		{
 			m_d3d11DeviceContext4->Wait(m_semaphoreFence.Get(), m_semaphoreValue);
 
-			PassthroughRendererDX11::RenderPassthroughFrame(layer, frame, renderParams, depthFrame, distortionParams);
+			PassthroughRendererDX11::RenderPassthroughFrame(layer, frame, cpuFrame, renderParams, depthFrame, distortionParams);
 
 			m_semaphoreValue++;
 			m_d3d11DeviceContext4->Signal(m_semaphoreFence.Get(), m_semaphoreValue);
@@ -1400,7 +1400,7 @@ void PassthroughRendererDX11Interop::RenderPassthroughFrame(const XrCompositionL
 
 			m_d3d11DeviceContext4->Wait(m_semaphoreFence.Get(), m_semaphoreValue);
 
-			PassthroughRendererDX11::RenderPassthroughFrame(layer, frame, renderParams, depthFrame, distortionParams);
+			PassthroughRendererDX11::RenderPassthroughFrame(layer, frame, cpuFrame, renderParams, depthFrame, distortionParams);
 
 			m_semaphoreValue++;
 			m_d3d11DeviceContext4->Signal(m_semaphoreFence.Get(), m_semaphoreValue);
@@ -1459,7 +1459,7 @@ void PassthroughRendererDX11Interop::RenderPassthroughFrame(const XrCompositionL
 
 	default:
 	{
-		PassthroughRendererDX11::RenderPassthroughFrame(layer, frame, renderParams, depthFrame, distortionParams);
+		PassthroughRendererDX11::RenderPassthroughFrame(layer, frame, cpuFrame, renderParams, depthFrame, distortionParams);
 		break;
 	}
 	}

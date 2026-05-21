@@ -77,6 +77,8 @@ private:
 	ImFont* m_smallFont;
 	ImFont* m_fixedFont;
 
+	BlockQueueDebugProperties m_blockQueueDebugProps{};
+
 	std::vector<DeviceDebugProperties> m_deviceDebugProps;
 	int m_currentDebugDevice = 0;
 

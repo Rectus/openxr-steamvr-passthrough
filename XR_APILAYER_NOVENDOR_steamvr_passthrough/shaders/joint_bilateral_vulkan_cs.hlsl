@@ -13,13 +13,12 @@
 }
 
 #define MAX_FILTER_DIST 10
-#define WEIGHT_ARRAY_SIZE (MAX_FILTER_DIST * 2 + 1)
 
 // Using the default sparse 16 byte aligned arrays for a bit of performance over packing them.
 cbuffer FilterKernels : register(b0)
 {
     float g_lumaWeights[256];
-    float g_spaceWeights[WEIGHT_ARRAY_SIZE][WEIGHT_ARRAY_SIZE];
+    float g_spaceWeights[MAX_FILTER_DIST][MAX_FILTER_DIST]; // One quadrant of the symmetric filter values.
 }
 
 
@@ -34,23 +33,39 @@ bool CalculatePixel(inout float dispSum, inout float totalWeight, inout bool bCe
 {
     float sampleDisp = g_disparity.Load(centerPos + offset);
     float sampleConf = g_confidence.Load(centerPos + offset);
+    
+    // Restore disparity from holefill confidence buffer.
+    if(sampleConf < 0.0)
+    {
+        sampleDisp = -sampleConf;
+        sampleConf = 0.0;
+    }
+    
+    if(!g_bUseInputConfidence)
+    {
+        sampleConf = 1.0;
+    }
 
     bool bSampleValid = sampleDisp < g_maxDisparity && sampleDisp > g_minDisparity;
 
+    if (!bSampleValid)
+    {
+        return true;
+    }
+    
     // Disparity distance weight. Ignore small changes, but discard on discontinuities.
     bool bInDiscontinuity = bCenterValid && abs(centerDisp - sampleDisp) > g_bilateralDispCutoff;
 
-    if (!bSampleValid || bInDiscontinuity)
+    if (bInDiscontinuity)
     {
         // If the center pixel is on the background side of a discontinuity
-        if (abs(offset.x) < 2 && abs(offset.y) < 2 && (!bSampleValid || sampleDisp > centerDisp)) { bCenterIsBackground = true; }
+        //if (abs(offset.x) < 2 && abs(offset.y) < 2 && (sampleDisp > centerDisp)) 
+        if (sampleDisp > centerDisp + g_bilateralDispCutoff) 
+        { 
+            bCenterIsBackground = true; 
+        }
         return true;
     }
-
-
-    float sampleWeight = 1.0; //bInDiscontinuity ? 0.0f : 1.0f;
-            
-    //if (sampleWeight <= 0 && sampleDisp > pixelDisp) { bIsBackgroundPixel = true; }
 
     float luma = g_cameraFrame.Sample(g_samplerState, uvPos + pixelUVSize * offset).x;
 
@@ -58,10 +73,9 @@ bool CalculatePixel(inout float dispSum, inout float totalWeight, inout bool bCe
     float jointWeight = g_lumaWeights[min(int(abs(centerLuma - luma) * 255.0), 255)];
 
     // Weight of sample distance from center
-    float spaceWeight = g_spaceWeights[offset.y + radius][offset.x + radius];
+    float spaceWeight = g_spaceWeights[abs(offset.y)][abs(offset.x)];
 
-    float weight = spaceWeight * sampleWeight * jointWeight;
-    //float weight = sampleWeight * jointWeight;
+    float weight = spaceWeight * jointWeight;
 
     dispSum += sampleDisp * weight;
     totalWeight += weight;
@@ -100,13 +114,24 @@ void main(uint3 pos3 : SV_DispatchThreadID)
     }
 
     float pixelDisp = g_disparity.Load(inPos);
-    float pixelConfidence = g_bUseInputConfidence ? abs(g_confidence.Load(inPos)) : 1.0; // Abs flips back hole fill negative conf
+    float pixelConfidence =  g_confidence.Load(inPos);
+    
+    // Restore disparity from holefill confidence buffer.
+    if(pixelConfidence < 0.0)
+    {
+        pixelDisp = -pixelConfidence;
+        pixelConfidence = 0.0;
+    }
+    
+    if(!g_bUseInputConfidence)
+    {
+        pixelConfidence = 1.0;
+    }
 
     float centerLuma =  g_cameraFrame.Sample(g_samplerState, uvPos).x;
 
-
     bool bPixelValid = pixelDisp < g_maxDisparity && pixelDisp > g_minDisparity;
-
+    
     if (!bPixelValid)
     {
         pixelDisp = g_minDisparity;
@@ -115,7 +140,7 @@ void main(uint3 pos3 : SV_DispatchThreadID)
     int radius = int(g_bilateralDistance);
 
     float dispSum = pixelDisp;
-    float totalWeight = g_spaceWeights[radius][radius];
+    float totalWeight = g_spaceWeights[0][0];
 
     bool bIsBackgroundPixel = false;
 
@@ -173,13 +198,17 @@ void main(uint3 pos3 : SV_DispatchThreadID)
             }
         }
     }
+    
+    int discDistance = min(discUp, min(discDown, min(discLeft, discRight)));
+    
+    bool bNearDiscontinuity = radius > 1 ? discDistance < 2 : false;
 
     float disparity = (totalWeight > 0) ? (dispSum / totalWeight) : 0.0;
 
     float numSamples = min(inSizeInt.y - inPos.y, radius) - min(inPos.y, radius) + 
         min(inSizeInt.x - inPos.x, radius) - min(inPos.x, radius);
 
-    float confidence = (bPixelValid && !bIsBackgroundPixel) ? min(totalWeight / numSamples * 1.0, pixelConfidence) : 0.0f;
+    float confidence = (bPixelValid && !bIsBackgroundPixel && !bNearDiscontinuity) ? min(totalWeight / numSamples * 1.0, pixelConfidence) : 0.0f;
 
     g_outputDisparity[outPos] = float2(disparity, confidence);
 }

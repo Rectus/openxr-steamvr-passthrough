@@ -164,10 +164,11 @@ void ConfigManager::SetupStereoPresets()
 
 	m_stereoPresets[1].StereoFilteringWLS_Enable = false;
 	m_stereoPresets[1].StereoFilteringWLS_Lambda = 8000.0f;
-	m_stereoPresets[1].StereoFilteringWLS_Sigma = 1.9f;
+	m_stereoPresets[1].StereoFilteringWLS_Sigma = 0.5f;
 	m_stereoPresets[1].StereoFilteringWLS_ConfidenceRadius = 0.5f;
 
 	m_stereoPresets[1].StereoFilteringBilateral_Enable = true;
+	m_stereoPresets[1].StereoFilteringBilateral_OutputScale = 1;
 	m_stereoPresets[1].StereoFilteringBilateral_Distance = 9;
 	m_stereoPresets[1].StereoFilteringBilateral_DispCutoff = 0.3f;
 	m_stereoPresets[1].StereoFilteringBilateral_SigmaSpace = 10.0f;
@@ -215,6 +216,7 @@ void ConfigManager::SetupStereoPresets()
 	m_stereoPresets[2].StereoFilteringWLS_ConfidenceRadius = 0.5f;
 
 	m_stereoPresets[2].StereoFilteringBilateral_Enable = true;
+	m_stereoPresets[2].StereoFilteringBilateral_OutputScale = 1;
 	m_stereoPresets[2].StereoFilteringBilateral_Distance = 9;
 	m_stereoPresets[2].StereoFilteringBilateral_DispCutoff = 0.3f;
 	m_stereoPresets[2].StereoFilteringBilateral_SigmaSpace = 10.0f;
@@ -262,6 +264,7 @@ void ConfigManager::SetupStereoPresets()
 	m_stereoPresets[3].StereoFilteringWLS_ConfidenceRadius = 0.5f;
 
 	m_stereoPresets[3].StereoFilteringBilateral_Enable = false;
+	m_stereoPresets[3].StereoFilteringBilateral_OutputScale = 1;
 	m_stereoPresets[3].StereoFilteringBilateral_Distance = 9;
 	m_stereoPresets[3].StereoFilteringBilateral_DispCutoff = 0.3f;
 	m_stereoPresets[3].StereoFilteringBilateral_SigmaSpace = 10.0f;
@@ -309,6 +312,7 @@ void ConfigManager::SetupStereoPresets()
 	m_stereoPresets[4].StereoFilteringWLS_ConfidenceRadius = 0.5f;
 
 	m_stereoPresets[4].StereoFilteringBilateral_Enable = false;
+	m_stereoPresets[4].StereoFilteringBilateral_OutputScale = 1;
 	m_stereoPresets[4].StereoFilteringBilateral_Distance = 9;
 	m_stereoPresets[4].StereoFilteringBilateral_DispCutoff = 0.3f;
 	m_stereoPresets[4].StereoFilteringBilateral_SigmaSpace = 10.0f;
@@ -356,6 +360,7 @@ void ConfigManager::SetupStereoPresets()
 	m_stereoPresets[5].StereoFilteringWLS_ConfidenceRadius = 0.5f;
 
 	m_stereoPresets[5].StereoFilteringBilateral_Enable = true;
+	m_stereoPresets[5].StereoFilteringBilateral_OutputScale = 1;
 	m_stereoPresets[5].StereoFilteringBilateral_Distance = 9;
 	m_stereoPresets[5].StereoFilteringBilateral_DispCutoff = 0.3f;
 	m_stereoPresets[5].StereoFilteringBilateral_SigmaSpace = 10.0f;

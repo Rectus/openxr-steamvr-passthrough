@@ -104,6 +104,22 @@ struct DeviceDebugProperties
 	bool bAllowLightSourceFrequency;
 };
 
+struct BlockQueueDebugProperties
+{
+	bool bInterfaceFound;
+	bool bBlockQueueFound;
+	int32_t Format;
+	int32_t Width;
+	int32_t Height;
+	bool bFrameAvailable;
+	int32_t FrameSize;
+	uint64_t FrameSequence;
+	double FrameTimeMonotonic;
+	uint64_t ServerTimeTicks;
+	double DeliveryRate;
+	double ElapsedTime;
+};
+
 struct DeviceIdentProperties
 {
 	uint32_t DeviceId;

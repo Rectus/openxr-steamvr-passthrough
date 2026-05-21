@@ -22,19 +22,19 @@ struct alignas(16) CSAsyncConstantBuffer
 };
 
 #define MAX_FILTER_DIST 10
-#define WEIGHT_ARRAY_SIZE (MAX_FILTER_DIST * 2 + 1)
 
 // Using the default sparse 16 byte aligned arrays for a bit of performance over packing them.
 struct  CSFilterKernels
 {
 	float lumaWeights[256][4];
-	float spaceWeights[WEIGHT_ARRAY_SIZE][WEIGHT_ARRAY_SIZE][4];
+	float spaceWeights[MAX_FILTER_DIST][MAX_FILTER_DIST][4];
 };
 
 
 static PFN_vkGetMemoryWin32HandleKHR _vkGetMemoryWin32HandleKHR = nullptr;
 static PFN_vkGetMemoryWin32HandlePropertiesKHR _vkGetMemoryWin32HandlePropertiesKHR = nullptr;
 static PFN_vkCmdInsertDebugUtilsLabelEXT _vkCmdInsertDebugUtilsLabelEXT = nullptr;
+static PFN_vkSetDebugUtilsObjectNameEXT _vkSetDebugUtilsObjectNameEXT = nullptr;
 
 static RENDERDOC_API_1_7_0* g_renderDocAPI = nullptr;
 static bool g_bRenderDocCaptured = false;
@@ -201,6 +201,21 @@ void CopyHostImageToGPU(VkDevice device, VulkanTexture texture, std::vector<uint
 	}
 }
 
+void SetVulkanDebugName(const VkDevice device, const void* object, const VkObjectType type, const char* name)
+{
+	if (!_vkSetDebugUtilsObjectNameEXT)
+	{
+		return;
+	}
+	VkDebugUtilsObjectNameInfoEXT nameInfo{ VK_STRUCTURE_TYPE_DEBUG_UTILS_OBJECT_NAME_INFO_EXT };
+	nameInfo.objectType = type;
+	nameInfo.objectHandle = reinterpret_cast<uint64_t>(object);
+	nameInfo.pObjectName = name;
+
+	_vkSetDebugUtilsObjectNameEXT(device, &nameInfo);
+}
+
+
 
 
 AsyncRenderer::~AsyncRenderer()
@@ -253,7 +268,7 @@ bool AsyncRenderer::InitRenderer()
 	appInfo.apiVersion = VK_API_VERSION_1_4;
 
 	std::vector<const char*> validationLayers;
-	validationLayers.push_back("VK_LAYER_KHRONOS_validation");
+	//validationLayers.push_back("VK_LAYER_KHRONOS_validation");
 
 	std::vector<const char*> instanceExtensions;
 	instanceExtensions.push_back(VK_KHR_EXTERNAL_MEMORY_CAPABILITIES_EXTENSION_NAME);
@@ -419,6 +434,7 @@ bool AsyncRenderer::InitRenderer()
 	_vkGetMemoryWin32HandleKHR = reinterpret_cast<PFN_vkGetMemoryWin32HandleKHR>(vkGetDeviceProcAddr(m_device, "vkGetMemoryWin32HandleKHR"));
 	_vkGetMemoryWin32HandlePropertiesKHR = reinterpret_cast<PFN_vkGetMemoryWin32HandlePropertiesKHR>(vkGetDeviceProcAddr(m_device, "vkGetMemoryWin32HandlePropertiesKHR"));
 	_vkCmdInsertDebugUtilsLabelEXT = reinterpret_cast<PFN_vkCmdInsertDebugUtilsLabelEXT>(vkGetDeviceProcAddr(m_device, "vkCmdInsertDebugUtilsLabelEXT"));
+	_vkSetDebugUtilsObjectNameEXT = reinterpret_cast<PFN_vkSetDebugUtilsObjectNameEXT>(vkGetDeviceProcAddr(m_device, "vkSetDebugUtilsObjectNameEXT"));
 	
 	vkGetDeviceQueue(m_device, m_queueFamilyIndex, 0, &m_queue);
 
@@ -446,9 +462,21 @@ bool AsyncRenderer::InitRenderer()
 	}
 
 	m_disparityFillHolesCS = CreateShaderModule(g_FillHolesCS, ARRAYSIZE(g_FillHolesCS) * sizeof(g_FillHolesCS[0]));
+	if (m_disparityFillHolesCS == nullptr)
+	{
+		g_logger->error("Failed to create m_disparityFillHolesCS");
+		return false;
+	}
+	SetVulkanDebugName(m_device, m_disparityFillHolesCS, VK_OBJECT_TYPE_SHADER_MODULE, "m_disparityFillHolesCS");
 	m_deletionQueue.push_back([=]() { vkDestroyShaderModule(m_device, m_disparityFillHolesCS, nullptr); });
 
 	m_disparityJointBilateralCS = CreateShaderModule(g_JointBilateralCS, ARRAYSIZE(g_JointBilateralCS) * sizeof(g_JointBilateralCS[0]));
+	if (m_disparityJointBilateralCS == nullptr)
+	{
+		g_logger->error("Failed to create m_disparityJointBilateralCS");
+		return false;
+	}
+	SetVulkanDebugName(m_device, m_disparityJointBilateralCS, VK_OBJECT_TYPE_SHADER_MODULE, "m_disparityJointBilateralCS");
 	m_deletionQueue.push_back([=]() { vkDestroyShaderModule(m_device, m_disparityJointBilateralCS, nullptr); });
 
 
@@ -1267,19 +1295,15 @@ void AsyncRenderer::ComputeFilterKernels()
 	}
 
 
-	uint32_t radius = min(m_bilateralDistance, MAX_FILTER_DIST);
-	int filterSize = radius * 2 + 1;
+	int radius = min(m_bilateralDistance, MAX_FILTER_DIST);
 
 	float gaussSpaceCoeff = -0.5f / (m_bilateralSigmaSpace * m_bilateralSigmaSpace);
 
-	for (int y = 0; y < filterSize; y++)
+	for (int y = 0; y < radius; y++)
 	{
-		for (int x = 0; x < filterSize; x++)
+		for (int x = 0; x < radius; x++)
 		{
-			int i = x - radius;
-			int j = y - radius;
-
-			float r2 = (float)(i * i + j * j);
+			float r2 = (float)(x * x + y * y);
 			bufferMemory->spaceWeights[x][y][0] = exp(r2 * gaussSpaceCoeff);
 		}
 	}

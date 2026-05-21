@@ -33,6 +33,7 @@ public:
 	void UpdateOverlay(vr::VRVulkanTextureData_t* textureData, ImGuiIO& io);
 
 	void GetCameraDebugProperties(std::vector<DeviceDebugProperties>& properties);
+	void GetBlockQueueDebugProperties(BlockQueueDebugProperties& properties);
 	void GetDeviceIdentProperties(std::vector<DeviceIdentProperties>& properties);
 
 protected:

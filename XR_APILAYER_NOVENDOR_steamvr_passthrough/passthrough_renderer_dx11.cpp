@@ -1398,7 +1398,7 @@ void PassthroughRendererDX11::UpdateRenderModels(std::shared_ptr<CameraFrame> fr
 	m_depthStencilStateDisabled.Get() )
 
 
-void PassthroughRendererDX11::RenderPassthroughFrame(const XrCompositionLayerProjection* layer, std::shared_ptr<CameraFrame> frame, FrameRenderParameters& renderParams, std::shared_ptr<DepthFrame> depthFrame, UVDistortionParameters& distortionParams)
+void PassthroughRendererDX11::RenderPassthroughFrame(const XrCompositionLayerProjection* layer, std::shared_ptr<CameraFrame> frame, std::shared_ptr<CameraCPUFrame> cpuFrame, FrameRenderParameters& renderParams, std::shared_ptr<DepthFrame> depthFrame, UVDistortionParameters& distortionParams)
 {
 	m_prevFrameIndex = m_frameIndex;
 	//Relying on the application not doing anything too weird with the swapchain indices
@@ -1622,13 +1622,13 @@ void PassthroughRendererDX11::RenderPassthroughFrame(const XrCompositionLayerPro
 		// Use shared texture
 		psSRVs[0] = (ID3D11ShaderResourceView*)frame->frameTextureResource;
 	}
-	else if(!bGotDebugTexture && frame->frameBuffer.get() != nullptr && frame->frameBuffer->size() > 0)
+	else if(!bGotDebugTexture && cpuFrame->bIsValid && !cpuFrame->bIsRaw)
 	{
 		// Upload camera frame from CPU
 
 		if (frame->header.eFrameType == vr::VRTrackedCameraFrameType_Distorted)
 		{
-			UploadTexture(m_deviceContext, m_cameraFrameUploadTexture, (uint8_t*)frame->frameBuffer->data(), m_cameraTextureHeight, m_cameraTextureWidth * 4);
+			UploadTexture(m_deviceContext, m_cameraFrameUploadTexture, (uint8_t*)cpuFrame->FrameBuffer->data(), m_cameraTextureHeight, m_cameraTextureWidth * 4);
 
 			m_deviceContext->CopyResource(frameData.cameraFrame.Texture.Get(), m_cameraFrameUploadTexture.Get());
 
@@ -1636,7 +1636,7 @@ void PassthroughRendererDX11::RenderPassthroughFrame(const XrCompositionLayerPro
 		}
 		else
 		{
-			UploadTexture(m_deviceContext, m_cameraUndistortedFrameUploadTexture, (uint8_t*)frame->frameBuffer->data(), m_cameraUndistortedTextureHeight, m_cameraUndistortedTextureWidth * 4);
+			UploadTexture(m_deviceContext, m_cameraUndistortedFrameUploadTexture, (uint8_t*)cpuFrame->FrameBuffer->data(), m_cameraUndistortedTextureHeight, m_cameraUndistortedTextureWidth * 4);
 
 			m_deviceContext->CopyResource(frameData.cameraUndistortedFrame.Texture.Get(), m_cameraUndistortedFrameUploadTexture.Get());
 

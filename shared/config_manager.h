@@ -242,6 +242,7 @@ struct alignas(4) Config_Camera
 	float Camera1_IntrinsicsDist[4] = { 0.0f };
 	int Camera1_IntrinsicsSensorPixels[2] = { 1, 1 };
 
+	bool OpenVR_UseBlockQueueForDepth = true;
 	bool OpenVRCustomCalibration = false;
 	bool OpenVR_CameraHasFisheyeLens = true;
 
@@ -320,6 +321,7 @@ struct alignas(4) Config_Camera
 		Camera1_IntrinsicsSensorPixels[0] = (int)ini.GetLongValue(section, "Camera1_IntrinsicsSensorPixelsX", Camera1_IntrinsicsSensorPixels[0]);
 		Camera1_IntrinsicsSensorPixels[1] = (int)ini.GetLongValue(section, "Camera1_IntrinsicsSensorPixelsY", Camera1_IntrinsicsSensorPixels[1]);
 
+		OpenVR_UseBlockQueueForDepth = ini.GetBoolValue(section, "OpenVR_UseBlockQueueForDepth", OpenVR_UseBlockQueueForDepth);
 		OpenVRCustomCalibration = ini.GetBoolValue(section, "OpenVRCustomCalibration", OpenVRCustomCalibration);
 		OpenVR_CameraHasFisheyeLens = ini.GetBoolValue(section, "OpenVR_CameraHasFisheyeLens", OpenVR_CameraHasFisheyeLens);
 
@@ -418,6 +420,7 @@ struct alignas(4) Config_Camera
 		ini.SetLongValue(section, "Camera1_IntrinsicsSensorPixelsX", Camera1_IntrinsicsSensorPixels[0]);
 		ini.SetLongValue(section, "Camera1_IntrinsicsSensorPixelsY", Camera1_IntrinsicsSensorPixels[1]);
 
+		ini.SetBoolValue(section, "OpenVR_UseBlockQueueForDepth", OpenVR_UseBlockQueueForDepth);
 		ini.SetBoolValue(section, "OpenVRCustomCalibration", OpenVRCustomCalibration);
 		ini.SetBoolValue(section, "OpenVR_CameraHasFisheyeLens", OpenVR_CameraHasFisheyeLens);
 
@@ -625,7 +628,7 @@ struct alignas(4) Config_Stereo
 
 	bool StereoFilteringWLS_Enable = true;
 	float StereoFilteringWLS_Lambda = 8000.0f;
-	float StereoFilteringWLS_Sigma = 1.8f;
+	float StereoFilteringWLS_Sigma = 0.5f;
 	float StereoFilteringWLS_ConfidenceRadius = 0.5f;
 
 	bool StereoFilteringBilateral_Enable = false;

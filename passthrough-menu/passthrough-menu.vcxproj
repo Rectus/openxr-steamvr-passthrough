@@ -113,7 +113,7 @@
       <PreprocessorDefinitions>LAYER_NAMESPACE=steamvr_passthrough;_DEBUG;_WINDOWS;%(PreprocessorDefinitions)</PreprocessorDefinitions>
       <ConformanceMode>true</ConformanceMode>
       <LanguageStandard>stdcpp20</LanguageStandard>
-      <AdditionalIncludeDirectories>$(ProjectDir);$(SolutionDir)shared;$(SolutionDir)XR_APILAYER_NOVENDOR_steamvr_passthrough;$(SolutionDir)XR_APILAYER_NOVENDOR_steamvr_passthrough\framework;$(SolutionDir)external\OpenXR-SDK\include;$(SolutionDir)external\OpenXR-SDK\src\common;$(SolutionDir)external\openvr\headers;$(SolutionDir)external\lodepng;$(SolutionDir)external\imgui;$(SolutionDir)external\imgui\backends;$(SolutionDir)external\simpleini;$(SolutionDir)external\opencv\build\include;$(SolutionDir)external\spdlog\include;$(VULKAN_SDK)\Include</AdditionalIncludeDirectories>
+      <AdditionalIncludeDirectories>$(ProjectDir);$(SolutionDir)shared;$(SolutionDir)XR_APILAYER_NOVENDOR_steamvr_passthrough;$(SolutionDir)XR_APILAYER_NOVENDOR_steamvr_passthrough\framework;$(SolutionDir)external\OpenXR-SDK\include;$(SolutionDir)external\OpenXR-SDK\src\common;$(SolutionDir)external\openvr_blockqueue;$(SolutionDir)external\openvr\headers;$(SolutionDir)external\lodepng;$(SolutionDir)external\imgui;$(SolutionDir)external\imgui\backends;$(SolutionDir)external\simpleini;$(SolutionDir)external\opencv\build\include;$(SolutionDir)external\spdlog\include;$(VULKAN_SDK)\Include</AdditionalIncludeDirectories>
       <PrecompiledHeader>Use</PrecompiledHeader>
       <PrecompiledHeaderFile>pch.h</PrecompiledHeaderFile>
       <AdditionalOptions>/utf-8 %(AdditionalOptions)</AdditionalOptions>
@@ -134,7 +134,7 @@
       <PreprocessorDefinitions>LAYER_NAMESPACE=steamvr_passthrough;NDEBUG;_WINDOWS;%(PreprocessorDefinitions)</PreprocessorDefinitions>
       <ConformanceMode>true</ConformanceMode>
       <LanguageStandard>stdcpp20</LanguageStandard>
-      <AdditionalIncludeDirectories>$(ProjectDir);$(SolutionDir)shared;$(SolutionDir)XR_APILAYER_NOVENDOR_steamvr_passthrough;$(SolutionDir)XR_APILAYER_NOVENDOR_steamvr_passthrough\framework;$(SolutionDir)external\OpenXR-SDK\include;$(SolutionDir)external\OpenXR-SDK\src\common;$(SolutionDir)external\openvr\headers;$(SolutionDir)external\lodepng;$(SolutionDir)external\imgui;$(SolutionDir)external\imgui\backends;$(SolutionDir)external\simpleini;$(SolutionDir)external\opencv\build\include;$(SolutionDir)external\spdlog\include;$(VULKAN_SDK)\Include</AdditionalIncludeDirectories>
+      <AdditionalIncludeDirectories>$(ProjectDir);$(SolutionDir)shared;$(SolutionDir)XR_APILAYER_NOVENDOR_steamvr_passthrough;$(SolutionDir)XR_APILAYER_NOVENDOR_steamvr_passthrough\framework;$(SolutionDir)external\OpenXR-SDK\include;$(SolutionDir)external\OpenXR-SDK\src\common;$(SolutionDir)external\openvr_blockqueue;$(SolutionDir)external\openvr\headers;$(SolutionDir)external\lodepng;$(SolutionDir)external\imgui;$(SolutionDir)external\imgui\backends;$(SolutionDir)external\simpleini;$(SolutionDir)external\opencv\build\include;$(SolutionDir)external\spdlog\include;$(VULKAN_SDK)\Include</AdditionalIncludeDirectories>
       <EnableEnhancedInstructionSet>AdvancedVectorExtensions</EnableEnhancedInstructionSet>
       <FavorSizeOrSpeed>Speed</FavorSizeOrSpeed>
       <PrecompiledHeader>Use</PrecompiledHeader>

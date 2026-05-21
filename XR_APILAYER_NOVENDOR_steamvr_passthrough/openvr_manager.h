@@ -4,6 +4,7 @@
 #include <mutex>
 #include <shared_mutex>
 #include "layer_structs.h"
+#include "vr_blockqueue.h"
 
 namespace vr {
 	class IVRClientCore;
@@ -46,13 +47,22 @@ public:
 		return m_vrRenderModels;
 	}
 
+	inline vr::IVRPaths* GetVRPaths()
+	{
+		if (!CheckRuntimeIntialized()) { return nullptr; }
+		return m_vrPaths;
+	}
+
+	inline vr::IVRBlockQueue* GetVRBlockQueue()
+	{
+		if (!CheckRuntimeIntialized()) { return nullptr; }
+		return m_vrBlockQueue;
+	}
+
 	int GetHMDDeviceId() const
 	{
 		return m_hmdDeviceId;
 	}
-
-	void GetCameraDebugProperties(std::vector<DeviceDebugProperties>& properties);
-	void GetDeviceIdentProperties(std::vector<DeviceIdentProperties>& properties);
 	
 
 private:
@@ -79,5 +89,7 @@ private:
 	vr::IVRTrackedCamera* m_vrTrackedCamera = nullptr;
 	vr::IVROverlay* m_vrOverlay = nullptr;
 	vr::IVRRenderModels* m_vrRenderModels = nullptr;
+	vr::IVRPaths* m_vrPaths = nullptr;
+	vr::IVRBlockQueue* m_vrBlockQueue = nullptr;
 };
 

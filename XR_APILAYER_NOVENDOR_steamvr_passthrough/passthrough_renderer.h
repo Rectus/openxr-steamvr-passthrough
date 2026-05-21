@@ -297,7 +297,7 @@ public:
 	virtual void InitRenderTarget(const ERenderEye eye, void* rendertarget, const uint32_t imageIndex, const XrSwapchainCreateInfo& swapchainInfo, const XrSwapchain swapchain) = 0;
 	virtual void InitDepthBuffer(const ERenderEye eye, void* depthBuffer, const uint32_t imageIndex, const XrSwapchainCreateInfo& swapchainInfo, const XrSwapchain swapchain) {}
 	virtual void SetFrameSize(const uint32_t width, const uint32_t height, const uint32_t bufferSize, const uint32_t undistortedWidth, const uint32_t undistortedHeight, const uint32_t undistortedBufferSize) = 0;
-	virtual void RenderPassthroughFrame(const XrCompositionLayerProjection* layer, std::shared_ptr<CameraFrame> frame, FrameRenderParameters& renderParams, std::shared_ptr<DepthFrame> depthFrame, UVDistortionParameters& distortionParams) = 0;
+	virtual void RenderPassthroughFrame(const XrCompositionLayerProjection* layer, std::shared_ptr<CameraFrame> frame, std::shared_ptr<CameraCPUFrame> cpuFrame, FrameRenderParameters& renderParams, std::shared_ptr<DepthFrame> depthFrame, UVDistortionParameters& distortionParams) = 0;
 	virtual void* GetRenderDevice() = 0;
 	virtual uint64_t GetRenderDeviceLUID() { return 0; };
 	virtual bool DownloadTextureToCPU(void* textureSRV, const uint32_t width, const uint32_t height, const uint32_t bufferSize, uint8_t* buffer) { return false; }
@@ -317,7 +317,7 @@ public:
 	void InitDepthBuffer(const ERenderEye eye, void* depthBuffer, const uint32_t imageIndex, const XrSwapchainCreateInfo& swapchainInfo, const XrSwapchain swapchain);
 	void SetFrameSize(const uint32_t width, const uint32_t height, const uint32_t bufferSize, const uint32_t undistortedWidth, const uint32_t undistortedHeight, const uint32_t undistortedBufferSize);
 
-	void RenderPassthroughFrame(const XrCompositionLayerProjection* layer, std::shared_ptr<CameraFrame> frame, FrameRenderParameters& renderParams, std::shared_ptr<DepthFrame> depthFrame, UVDistortionParameters& distortionParams);
+	void RenderPassthroughFrame(const XrCompositionLayerProjection* layer, std::shared_ptr<CameraFrame> frame, std::shared_ptr<CameraCPUFrame> cpuFrame, FrameRenderParameters& renderParams, std::shared_ptr<DepthFrame> depthFrame, UVDistortionParameters& distortionParams);
 	void* GetRenderDevice();
 	uint64_t GetRenderDeviceLUID();
 	std::shared_timed_mutex& GetAccessMutex() { return m_accessRendererMutex; }
@@ -338,8 +338,6 @@ protected:
 	void GenerateDepthMesh(uint32_t width, uint32_t height);
 	void SetupTemporalUAV(const uint32_t viewIndex, const uint32_t swapchainIndex, const uint32_t width, const uint32_t height);
 	void UpdateRenderModels(std::shared_ptr<CameraFrame> frame);
-
-	void RenderHoleFillCS(DX11FrameData& frameData, std::shared_ptr<DepthFrame> depthFrame);
 
 	void RenderSetupView(const ERenderEye eye, const XrCompositionLayerProjection* layer, std::shared_ptr<CameraFrame> frame, std::shared_ptr<DepthFrame> depthFrame, FrameRenderParameters& renderParams);
 
@@ -484,7 +482,7 @@ public:
 
 	bool InitRenderer();
 	
-	void RenderPassthroughFrame(const XrCompositionLayerProjection* layer, std::shared_ptr<CameraFrame> frame, FrameRenderParameters& renderParams, std::shared_ptr<DepthFrame> depthFrame, UVDistortionParameters& distortionParams);
+	void RenderPassthroughFrame(const XrCompositionLayerProjection* layer, std::shared_ptr<CameraFrame> frame, std::shared_ptr<CameraCPUFrame> cpuFrame, FrameRenderParameters& renderParams, std::shared_ptr<DepthFrame> depthFrame, UVDistortionParameters& distortionParams);
 	bool DownloadTextureToCPU(void* textureSRV, const uint32_t width, const uint32_t height, const uint32_t bufferSize, uint8_t* buffer);
 
 private:
@@ -586,7 +584,7 @@ public:
 	bool InitRenderer();
 	void InitRenderTarget(const ERenderEye eye, void* rendertarget, const uint32_t imageIndex, const XrSwapchainCreateInfo& swapchainInfo, const XrSwapchain swapchain);
 	void SetFrameSize(const uint32_t width, const uint32_t height, const uint32_t bufferSize, const uint32_t undistortedWidth, const uint32_t undistortedHeight, const uint32_t undistortedBufferSize);
-	void RenderPassthroughFrame(const XrCompositionLayerProjection* layer, std::shared_ptr<CameraFrame> frame, FrameRenderParameters& renderParams, std::shared_ptr<DepthFrame> depthFrame, UVDistortionParameters& distortionParams);
+	void RenderPassthroughFrame(const XrCompositionLayerProjection* layer, std::shared_ptr<CameraFrame> frame, std::shared_ptr<CameraCPUFrame> cpuFrame, FrameRenderParameters& renderParams, std::shared_ptr<DepthFrame> depthFrame, UVDistortionParameters& distortionParams);
 	void* GetRenderDevice();
 	std::shared_timed_mutex& GetAccessMutex() { return m_accessRendererMutex; }
 

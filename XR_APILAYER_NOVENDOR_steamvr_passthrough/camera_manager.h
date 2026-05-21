@@ -53,6 +53,7 @@ public:
 	virtual void UpdateStaticCameraParameters() = 0;
 	virtual float GetFrameRetrievalPerfTime() = 0;
 	virtual bool GetCameraFrame(std::shared_ptr<CameraFrame>& frame) = 0;
+	virtual bool GetCameraCPUFrame(std::shared_ptr<CameraCPUFrame>& frame) = 0;
 	virtual void CalculateFrameProjection(std::shared_ptr<CameraFrame>& frame, std::shared_ptr<DepthFrame> depthFrame, const XrCompositionLayerProjection& layer, float timeToPhotons, const XrReferenceSpaceCreateInfo& refSpaceInfo, UVDistortionParameters& distortionParams) = 0;
 
 	const void DumpCameraFrameTexture(const std::shared_ptr<std::vector<uint8_t>> frameBuffer, const uint32_t width, const uint32_t height, const std::string cameraProvider)
@@ -64,7 +65,7 @@ public:
 		}
 
 		const auto time = std::chrono::current_zone()->to_local(std::chrono::system_clock::now());
-
+	
 		const std::string fileName = GetLocalAppData() + std::format("\\{} Camera Frame {:%Y-%m-%d %H-%M-%S}.png", cameraProvider, time);
 
 		uint32_t error = lodepng::encode(fileName, frameBuffer->data(), width, height);
@@ -108,10 +109,12 @@ public:
 	void UpdateStaticCameraParameters();
 	float GetFrameRetrievalPerfTime() { return m_averageFrameRetrievalTime; }
 	bool GetCameraFrame(std::shared_ptr<CameraFrame>& frame);
+	bool GetCameraCPUFrame(std::shared_ptr<CameraCPUFrame>& frame);
 	void CalculateFrameProjection(std::shared_ptr<CameraFrame>& frame, std::shared_ptr<DepthFrame> depthFrame, const XrCompositionLayerProjection& layer, float timeToPhotons, const XrReferenceSpaceCreateInfo& refSpaceInfo, UVDistortionParameters& distortionParams);
 
 private:
 	void ServeFrames();
+	void ServeBlockQueueFrames();
 	void UpdateRenderModels();
 	void GetTrackedCameraEyePoses(XrMatrix4x4f& LeftPose, XrMatrix4x4f& RightPose, bool bForceOpenVRValue);
 	XrMatrix4x4f GetHMDWorldToViewMatrix(const ERenderEye eye, const XrCompositionLayerProjection& layer, const XrReferenceSpaceCreateInfo& refSpaceInfo);
@@ -144,15 +147,23 @@ private:
 	ERenderAPI m_renderAPI;
 	ERenderAPI m_appRenderAPI;
 	std::thread m_serveThread;
+	std::thread m_serveThreadBlockQueue;
 	std::atomic_bool m_bRunThread = true;
 	std::mutex m_serveMutex;
+	std::mutex m_serveMutexCPU;
 	bool m_bIsPaused = false;
 	std::atomic_bool m_bWaitingForCamera = false;
 	bool m_bCameraFailed = false;
+	bool m_bPoseAvailable = false;
+	std::atomic_bool m_bUseBlockQueue = false;
 
 	std::shared_ptr<CameraFrame> m_renderFrame;
 	std::shared_ptr<CameraFrame> m_servedFrame;
 	std::shared_ptr<CameraFrame> m_underConstructionFrame;
+
+	std::shared_ptr<CameraCPUFrame> m_renderFrameCPU;
+	std::shared_ptr<CameraCPUFrame> m_servedFrameCPU;
+	std::shared_ptr<CameraCPUFrame> m_underConstructionFrameCPU;
 
 	int m_hmdDeviceId = -1;
 	vr::TrackedCameraHandle_t m_cameraHandle;
@@ -189,7 +200,9 @@ private:
 	XrMatrix4x4f m_lastDisparityViewToWorldRight;
 
 	std::deque<float> m_frameRetrievalTimes;
+	std::deque<float> m_blockQueueFrameRetrievalTimes;
 	float m_averageFrameRetrievalTime;
+	float m_averageBlockQueueFrameRetrievalTime;
 
 	std::shared_ptr<std::vector<RenderModel>> m_renderModels;
 };
@@ -223,6 +236,7 @@ public:
 	void UpdateStaticCameraParameters();
 	float GetFrameRetrievalPerfTime() { return m_averageFrameRetrievalTime; }
 	bool GetCameraFrame(std::shared_ptr<CameraFrame>& frame);
+	bool GetCameraCPUFrame(std::shared_ptr<CameraCPUFrame>& frame);
 	void CalculateFrameProjection(std::shared_ptr<CameraFrame>& frame, std::shared_ptr<DepthFrame> depthFrame, const XrCompositionLayerProjection& layer, float timeToPhotons, const XrReferenceSpaceCreateInfo& refSpaceInfo, UVDistortionParameters& distortionParams);
 
 private:
@@ -265,10 +279,15 @@ private:
 	std::thread m_serveThread;
 	std::atomic_bool m_bRunThread = true;
 	std::mutex m_serveMutex;
+	std::mutex m_serveMutexCPU;
 
 	std::shared_ptr<CameraFrame> m_renderFrame;
 	std::shared_ptr<CameraFrame> m_servedFrame;
 	std::shared_ptr<CameraFrame> m_underConstructionFrame;
+
+	std::shared_ptr<CameraCPUFrame> m_renderFrameCPU;
+	std::shared_ptr<CameraCPUFrame> m_servedFrameCPU;
+	std::shared_ptr<CameraCPUFrame> m_underConstructionFrameCPU;
 
 	int m_hmdDeviceId = -1;
 	vr::TrackedCameraHandle_t m_cameraHandle;

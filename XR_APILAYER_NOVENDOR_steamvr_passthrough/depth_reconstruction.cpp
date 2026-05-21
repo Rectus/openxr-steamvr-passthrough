@@ -5,7 +5,7 @@
 #include "mathutil.h"
 #include "perfutil.h"
 
-
+#include <opencv2/imgcodecs.hpp>
 
 
 DepthReconstruction::DepthReconstruction(std::shared_ptr<ConfigManager> configManager, std::shared_ptr<OpenVRManager> openVRManager, std::shared_ptr<ICameraManager> cameraManager,std::shared_ptr<IPassthroughRenderer> baseRenderer)
@@ -394,33 +394,15 @@ void DepthReconstruction::RunThread()
             cv::setNumThreads(m_bUseMulticore ? -1 : 0);
         }
 
-        std::shared_ptr<CameraFrame> frame;
+        std::shared_ptr<CameraCPUFrame> frame;
         XrMatrix4x4f viewToWorldLeft, viewToWorldRight;
 
-        if (mainConfig.ProjectionMode != Projection_StereoReconstruction || mainConfig.DebugStereoReconstructionFreeze || !m_cameraManager->GetCameraFrame(frame))
+        if (mainConfig.ProjectionMode != Projection_StereoReconstruction || mainConfig.DebugStereoReconstructionFreeze || !m_cameraManager->GetCameraCPUFrame(frame))
         {
             continue;
         }
 
         {
-            std::shared_lock readLock(frame->readWriteMutex);
-
-            if(!frame->bHasFrameBuffer || 
-                frame->frameLayout == FrameLayout_Mono || 
-                frame->frameBuffer->size() < m_cameraTextureHeight * m_cameraTextureWidth * 4 || 
-                frame->header.nFrameSequence == m_lastFrameSequence || 
-                frame->header.nFrameSequence % (stereoConfig.StereoFrameSkip + 1) != 0)
-            {
-                continue;
-            }
-
-            m_lastFrameSequence = frame->header.nFrameSequence;
-
-            viewToWorldLeft = frame->cameraViewToWorldLeft;
-            viewToWorldRight = frame->cameraViewToWorldRight;
-
-            m_inputFrame = cv::Mat(m_cameraTextureHeight, m_cameraTextureWidth, CV_8UC4, frame->frameBuffer->data());
-            
             cv::Rect frameROILeft, frameROIRight;
 
             if (m_frameLayout == FrameLayout_StereoHorizontal)
@@ -434,24 +416,194 @@ void DepthReconstruction::RunThread()
                 frameROIRight = cv::Rect(0, 0, m_cameraFrameWidth, m_cameraFrameHeight);
             }
 
-            if (m_bUseColor)
+            std::shared_lock readLock(frame->ReadWriteMutex);
+
+            int frameMinMemSize = m_cameraTextureHeight * m_cameraTextureWidth * 4;
+
+            if (frame->bIsRaw)
             {
-                cv::cvtColor(m_inputFrame(frameROILeft), m_inputFrameLeft, cv::COLOR_RGBA2RGB);
-                cv::cvtColor(m_inputFrame(frameROIRight), m_inputFrameRight, cv::COLOR_RGBA2RGB);
+                switch (frame->RawFrameFormat)
+                {
+                case 3: // CVS_FORMAT_RGB24
+                    frameMinMemSize = frame->RawFrameSize[0] * frame->RawFrameSize[1] * 3;
+                    break;
+
+                case 1: // CVS_FORMAT_RAW10
+                case 5: // CVS_FORMAT_YUYV16
+                case 6: // CVS_FORMAT_BAYER16BG
+                    frameMinMemSize = frame->RawFrameSize[0] * frame->RawFrameSize[1] * 2;
+                    break;
+
+                case 2: // CVS_FORMAT_NV12
+                case 4: // CVS_FORMAT_NV12_2
+                    frameMinMemSize = frame->RawFrameSize[0] * frame->RawFrameSize[1] * 12 / 8;
+                    break;
+
+                case 7: // CVS_FORMAT_MJPEG
+                    frameMinMemSize = 1;
+                    break;
+
+                case 8: // CVS_FORMAT_RGBX32
+                default:
+                    frameMinMemSize = frame->RawFrameSize[0] * frame->RawFrameSize[1] * 4;
+                }
             }
-            else if (stereoConfig.StereoUseBWInputAlpha)
+
+            if (!frame->bIsValid ||
+                frame->FrameLayout == FrameLayout_Mono ||
+                frame->FrameBuffer->size() < frameMinMemSize ||
+                frame->FrameSequence == m_lastFrameSequence ||
+                frame->FrameSequence % (stereoConfig.StereoFrameSkip + 1) != 0)
             {
-                // Uses B&W image in alpha channel of distorted frames, unsure if all headsets support this.
-                m_inputAlphaLeft = m_inputFrame(frameROILeft);
-                m_inputAlphaRight = m_inputFrame(frameROIRight);
-                int fromTo[2] = { 3, 0 };
-                cv::mixChannels(&m_inputAlphaLeft, 1, &m_inputFrameLeft, 1, fromTo, 1);
-                cv::mixChannels(&m_inputAlphaRight, 1, &m_inputFrameRight, 1, fromTo, 1);
+                continue;
+            }
+
+            m_lastFrameSequence = static_cast<uint32_t>(frame->FrameSequence);
+
+            viewToWorldLeft = frame->CameraViewToWorldLeft;
+            viewToWorldRight = frame->CameraViewToWorldRight;
+
+            if (frame->bIsRaw)
+            {
+                switch (frame->RawFrameFormat)
+                {
+                case 8: // CVS_FORMAT_RGBX32
+                {
+                    m_inputFrame = cv::Mat(frame->RawFrameSize[1], frame->RawFrameSize[0], CV_8UC4, frame->FrameBuffer->data());
+
+                    if (m_bUseColor)
+                    {
+                        cv::cvtColor(m_inputFrame(frameROILeft), m_inputFrameLeft, cv::COLOR_RGBA2RGB);
+                        cv::cvtColor(m_inputFrame(frameROIRight), m_inputFrameRight, cv::COLOR_RGBA2RGB);
+                    }
+                    else
+                    {
+                        cv::cvtColor(m_inputFrame(frameROILeft), m_inputFrameLeft, cv::COLOR_RGBA2GRAY);
+                        cv::cvtColor(m_inputFrame(frameROIRight), m_inputFrameRight, cv::COLOR_RGBA2GRAY);
+                    }
+                    break;
+                }
+                case 3: // CVS_FORMAT_RGB24
+                {
+                    m_inputFrame = cv::Mat(frame->RawFrameSize[1], frame->RawFrameSize[0], CV_8UC3, frame->FrameBuffer->data());
+
+                    if (m_bUseColor)
+                    {
+                        m_inputFrame(frameROILeft).copyTo(m_inputFrameLeft);
+                        m_inputFrame(frameROIRight).copyTo(m_inputFrameRight);
+                    }
+                    else
+                    {
+                        cv::cvtColor(m_inputFrame(frameROILeft), m_inputFrameLeft, cv::COLOR_RGB2GRAY);
+                        cv::cvtColor(m_inputFrame(frameROIRight), m_inputFrameRight, cv::COLOR_RGB2GRAY);
+                    }
+                    break;
+                }
+                case 5: // CVS_FORMAT_YUYV16
+                {
+                    m_inputFrame = cv::Mat(frame->RawFrameSize[1], frame->RawFrameSize[0], CV_8UC2, frame->FrameBuffer->data());
+
+                    if (m_bUseColor)
+                    {
+                        cv::cvtColor(m_inputFrame(frameROILeft), m_inputFrameLeft, cv::COLOR_YUV2RGB_YUY2);
+                        cv::cvtColor(m_inputFrame(frameROIRight), m_inputFrameRight, cv::COLOR_YUV2RGB_YUY2);
+                    }
+                    else
+                    {
+                        cv::cvtColor(m_inputFrame(frameROILeft), m_inputFrameLeft, cv::COLOR_YUV2GRAY_YUY2);
+                        cv::cvtColor(m_inputFrame(frameROIRight), m_inputFrameRight, cv::COLOR_YUV2GRAY_YUY2);
+                    }
+                    break;
+                }
+                case 2: // CVS_FORMAT_NV12
+                {
+                    m_rawInputFrame = cv::Mat(frame->RawFrameSize[1], frame->RawFrameSize[0], CV_8UC1, frame->FrameBuffer->data());
+                    m_inputFrame = cv::Mat(m_cameraTextureHeight, m_cameraTextureWidth, CV_8UC3);
+
+                    cv::cvtColor(m_rawInputFrame, m_inputFrame, cv::COLOR_YUV2RGB_NV12);
+
+                    if (m_bUseColor)
+                    {
+                        m_inputFrame(frameROILeft).copyTo(m_inputFrameLeft);
+                        m_inputFrame(frameROIRight).copyTo(m_inputFrameRight);
+                    }
+                    else
+                    {
+                        cv::cvtColor(m_inputFrame(frameROILeft), m_inputFrameLeft, cv::COLOR_RGB2GRAY);
+                        cv::cvtColor(m_inputFrame(frameROIRight), m_inputFrameRight, cv::COLOR_RGB2GRAY);
+                    }
+                    break;
+                }
+                case 6: // CVS_FORMAT_BAYER16BG
+                {
+                    m_inputFrame = cv::Mat(frame->RawFrameSize[1], frame->RawFrameSize[0], CV_16UC1, frame->FrameBuffer->data());
+
+                    if (m_bUseColor)
+                    {
+                        cv::cvtColor(m_inputFrame(frameROILeft), m_inputFrameLeft, cv::COLOR_BayerBG2RGB);
+                        cv::cvtColor(m_inputFrame(frameROIRight), m_inputFrameRight, cv::COLOR_BayerBG2RGB);
+                    }
+                    else
+                    {
+                        cv::cvtColor(m_inputFrame(frameROILeft), m_inputFrameLeft, cv::COLOR_BayerBG2GRAY);
+                        cv::cvtColor(m_inputFrame(frameROIRight), m_inputFrameRight, cv::COLOR_BayerBG2GRAY);
+                    }
+                    break;
+                }
+                case 7: // CVS_FORMAT_MJPEG 
+                {
+                    m_inputFrame = cv::imdecode(*frame->FrameBuffer.get(), cv::IMREAD_COLOR, &m_rawInputFrame);
+
+                    if (m_inputFrame.empty())
+                    {
+                        g_logger->warn("Falied to decode MJPEG camera frame!");
+                        continue;
+                    }
+
+                    if (m_bUseColor)
+                    {
+                        cv::cvtColor(m_inputFrame(frameROILeft), m_inputFrameLeft, cv::COLOR_BGR2RGB);
+                        cv::cvtColor(m_inputFrame(frameROIRight), m_inputFrameRight, cv::COLOR_BGR2RGB);
+                    }
+                    else
+                    {
+                        cv::cvtColor(m_inputFrame(frameROILeft), m_inputFrameLeft, cv::COLOR_BGR2GRAY);
+                        cv::cvtColor(m_inputFrame(frameROIRight), m_inputFrameRight, cv::COLOR_BGR2GRAY);
+                    }
+                    break;
+                }
+
+                case 1: // CVS_FORMAT_RAW10 // TODO
+                case 4: // CVS_FORMAT_NV12_2 // TODO
+                default:
+                {
+                    continue;
+                }
+                }
             }
             else
             {
-                cv::cvtColor(m_inputFrame(frameROILeft), m_inputFrameLeft, cv::COLOR_RGBA2GRAY);
-                cv::cvtColor(m_inputFrame(frameROIRight), m_inputFrameRight, cv::COLOR_RGBA2GRAY);
+                m_inputFrame = cv::Mat(m_cameraTextureHeight, m_cameraTextureWidth, CV_8UC4, frame->FrameBuffer->data());
+
+                if (m_bUseColor)
+                {
+                    cv::cvtColor(m_inputFrame(frameROILeft), m_inputFrameLeft, cv::COLOR_RGBA2RGB);
+                    cv::cvtColor(m_inputFrame(frameROIRight), m_inputFrameRight, cv::COLOR_RGBA2RGB);
+                }
+                else if (stereoConfig.StereoUseBWInputAlpha)
+                {
+                    // Uses B&W image in alpha channel of distorted frames, unsure if all headsets support this.
+                    m_inputAlphaLeft = m_inputFrame(frameROILeft);
+                    m_inputAlphaRight = m_inputFrame(frameROIRight);
+                    int fromTo[2] = { 3, 0 };
+                    cv::mixChannels(&m_inputAlphaLeft, 1, &m_inputFrameLeft, 1, fromTo, 1);
+                    cv::mixChannels(&m_inputAlphaRight, 1, &m_inputFrameRight, 1, fromTo, 1);
+                }
+                else
+                {
+                    cv::cvtColor(m_inputFrame(frameROILeft), m_inputFrameLeft, cv::COLOR_RGBA2GRAY);
+                    cv::cvtColor(m_inputFrame(frameROIRight), m_inputFrameRight, cv::COLOR_RGBA2GRAY);
+                }
             }
         }
 

@@ -50,7 +50,6 @@ struct CameraFrame
 		, projectionOriginWorldRight()
 		, frameLayout(FrameLayout_Mono)
 		, bIsValid(false)
-		, bHasFrameBuffer(false)
 		, bHasReversedDepth(false)
 		, bIsFirstRender(true)
 		, bIsRenderingMirrored(false)
@@ -60,8 +59,6 @@ struct CameraFrame
 	std::shared_mutex readWriteMutex;
 	vr::CameraVideoStreamFrameHeader_t header;
 	void* frameTextureResource;
-	std::shared_ptr<std::vector<uint8_t>> frameBuffer;
-	std::shared_ptr<std::vector<uint8_t>> rectifiedFrameBuffer;
 	XrMatrix4x4f cameraViewToWorldLeft;
 	XrMatrix4x4f cameraViewToWorldRight;
 	XrMatrix4x4f worldToCameraProjectionLeft;
@@ -83,12 +80,48 @@ struct CameraFrame
 	XrVector3f projectionOriginWorldRight;
 	EStereoFrameLayout frameLayout;
 	bool bIsValid;
-	bool bHasFrameBuffer;
 	bool bHasReversedDepth;
 	bool bIsFirstRender;
 	bool bIsRenderingMirrored;
 
 	std::shared_ptr<std::vector<RenderModel>> renderModels;
+};
+
+struct CameraCPUFrame
+{
+	CameraCPUFrame()
+		: ReadWriteMutex()
+		, CameraViewToWorldLeft()
+		, CameraViewToWorldRight()
+		, RawFrameFormat(0)
+		, RawFrameDataBytes(0)
+		, FrameSequence(0)
+		, FrameExposureTimestamp(0)
+		, FrameLayout(FrameLayout_Mono)
+		, bIsValid(false)
+		, bIsRaw(false)
+	{
+		RawFrameSize[0] = 0;
+		RawFrameSize[1] = 0;
+		FrameSize[0] = 0;
+		FrameSize[1] = 0;
+	}
+
+	std::shared_mutex ReadWriteMutex;
+	std::shared_ptr<std::vector<uint8_t>> FrameBuffer;
+	XrMatrix4x4f CameraViewToWorldLeft;
+	XrMatrix4x4f CameraViewToWorldRight;
+	
+	int32_t RawFrameFormat;
+	int32_t RawFrameDataBytes;
+	int32_t RawFrameSize[2];
+
+	int32_t FrameSize[2];
+	uint64_t FrameSequence;
+	uint64_t FrameExposureTimestamp;
+	EStereoFrameLayout FrameLayout;
+	bool bIsValid;
+	bool bIsRaw;
 };
 
 struct DepthFrame

@@ -1406,17 +1406,20 @@ namespace
 		{
 			XrCompositionLayerProjection* layer = (XrCompositionLayerProjection*)frameEndInfo->layers[layerNum];
 			std::shared_ptr<CameraFrame> frame;
+			std::shared_ptr<CameraCPUFrame> cpuFrame;
 
 			if (m_configManager->GetConfig_Main().CameraProvider == CameraProvider_Augmented)
 			{
-				if (!m_augmentedCameraManager->GetCameraFrame(frame))
+				if (!m_augmentedCameraManager->GetCameraFrame(frame) || 
+					!m_augmentedCameraManager->GetCameraCPUFrame(cpuFrame))
 				{
 					return;
 				}
 			}
 			else
 			{
-				if (!m_cameraManager->GetCameraFrame(frame))
+				if (!m_cameraManager->GetCameraFrame(frame) ||
+					!m_cameraManager->GetCameraCPUFrame(cpuFrame))
 				{
 					return;
 				}
@@ -1425,6 +1428,7 @@ namespace
 			ClientData& clientData = m_menuHandler->GetClientData();
 
 			std::shared_lock readLock(frame->readWriteMutex);
+			std::shared_lock cpuFrameReadLock(cpuFrame->ReadWriteMutex);
 
 
 			LARGE_INTEGER preRenderTime = StartPerfTimer();
@@ -1582,7 +1586,7 @@ namespace
 				m_depthReconstruction->GetDistortionParameters();
 
 
-			m_Renderer->RenderPassthroughFrame(layer, frame, renderParams, depthFrame, distParams);
+			m_Renderer->RenderPassthroughFrame(layer, frame, cpuFrame, renderParams, depthFrame, distParams);
 
 			depthFrame->bIsFirstRender = false;
 

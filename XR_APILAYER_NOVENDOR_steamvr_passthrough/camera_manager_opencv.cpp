@@ -25,6 +25,11 @@ CameraManagerOpenCV::CameraManagerOpenCV(std::shared_ptr<IPassthroughRenderer> r
     m_renderFrame = std::make_shared<CameraFrame>();
     m_servedFrame = std::make_shared<CameraFrame>();
     m_underConstructionFrame = std::make_shared<CameraFrame>();
+
+    m_renderFrameCPU = std::make_shared<CameraCPUFrame>();
+    m_servedFrameCPU = std::make_shared<CameraCPUFrame>();
+    m_underConstructionFrameCPU = std::make_shared<CameraCPUFrame>();
+
     m_renderModels = std::make_shared<std::vector<RenderModel>>();
 }
 
@@ -337,6 +342,28 @@ bool CameraManagerOpenCV::GetCameraFrame(std::shared_ptr<CameraFrame>& frame)
     return false;
 }
 
+bool CameraManagerOpenCV::GetCameraCPUFrame(std::shared_ptr<CameraCPUFrame>& frame)
+{
+    if (!m_bCameraInitialized) { return false; }
+
+    std::unique_lock<std::mutex> lock(m_serveMutexCPU, std::try_to_lock);
+    if (lock.owns_lock() && m_servedFrameCPU->bIsValid)
+    {
+        m_renderFrameCPU->bIsValid = false;
+        m_renderFrameCPU.swap(m_servedFrameCPU);
+
+        frame = m_renderFrameCPU;
+        return true;
+    }
+    else if (m_renderFrameCPU->bIsValid)
+    {
+        frame = m_renderFrameCPU;
+        return true;
+    }
+
+    return false;
+}
+
 void CameraManagerOpenCV::ServeFrames()
 {
     vr::IVRSystem* vrSystem = m_openVRManager->GetVRSystem();
@@ -362,6 +389,7 @@ void CameraManagerOpenCV::ServeFrames()
 
         // Wait for the old frame struct to be available in case someone is still reading from it.
         std::unique_lock writeLock(m_underConstructionFrame->readWriteMutex);
+        std::unique_lock cpuFrameWriteLock(m_underConstructionFrameCPU->ReadWriteMutex);
 
         startFrameRetrievalTime = StartPerfTimer();
 
@@ -405,22 +433,20 @@ void CameraManagerOpenCV::ServeFrames()
 
         if (!m_bRunThread) { return; }
 
-        if (m_underConstructionFrame->frameBuffer.get() == nullptr)
+        if (m_underConstructionFrameCPU->FrameBuffer.get() == nullptr)
         {
-            m_underConstructionFrame->frameBuffer = std::make_shared<std::vector<uint8_t>>(m_cameraFrameBufferSize);
+            m_underConstructionFrameCPU->FrameBuffer = std::make_shared<std::vector<uint8_t>>(m_cameraFrameBufferSize);
         }
 
-        cv::Mat paddedBuffer = cv::Mat(frameBuffer.rows, frameBuffer.cols, CV_8UC4, (void*)m_underConstructionFrame->frameBuffer->data());
+        cv::Mat paddedBuffer = cv::Mat(frameBuffer.rows, frameBuffer.cols, CV_8UC4, (void*)m_underConstructionFrameCPU->FrameBuffer->data());
 
         int from_to[] = { 0,2, 1,1, 2,0, -1,3 };
         cv::mixChannels(&frameBuffer, 1, &paddedBuffer, 1, from_to, frameBuffer.channels());
 
         if (m_configManager->CheckFrameTextureDumpPending())
         {
-            DumpCameraFrameTexture(m_underConstructionFrame->frameBuffer, m_cameraTextureWidth, m_cameraTextureHeight, "OpenCV");
+            DumpCameraFrameTexture(m_underConstructionFrameCPU->FrameBuffer, m_cameraTextureWidth, m_cameraTextureHeight, "OpenCV");
         }
-
-        m_underConstructionFrame->bHasFrameBuffer = true;
 
         bHasFrame = true;
  
@@ -501,11 +527,24 @@ void CameraManagerOpenCV::ServeFrames()
             m_underConstructionFrame->cameraViewToWorldLeft = camera0ToWorld;
             m_underConstructionFrame->cameraViewToWorldRight = camera1ToWorld;
         }
+
+        m_underConstructionFrameCPU->bIsValid = true;
+        m_underConstructionFrameCPU->bIsRaw = false;
+        m_underConstructionFrameCPU->FrameExposureTimestamp = m_underConstructionFrame->header.ulFrameExposureTime;
+        m_underConstructionFrameCPU->FrameLayout = m_frameLayout;
+        m_underConstructionFrameCPU->FrameSequence = m_underConstructionFrame->header.nFrameSequence;
+        m_underConstructionFrameCPU->FrameSize[0] = m_cameraTextureWidth;
+        m_underConstructionFrameCPU->FrameSize[1] = m_cameraTextureHeight;
+        m_underConstructionFrame->cameraViewToWorldLeft = m_underConstructionFrame->cameraViewToWorldLeft;
+        m_underConstructionFrame->cameraViewToWorldRight = m_underConstructionFrame->cameraViewToWorldRight;
    
+        {
+            std::lock_guard<std::mutex> lock(m_serveMutexCPU);
+            m_servedFrameCPU.swap(m_underConstructionFrameCPU);
+        }
 
         {
             std::lock_guard<std::mutex> lock(m_serveMutex);
-
             m_servedFrame.swap(m_underConstructionFrame);
         }
 

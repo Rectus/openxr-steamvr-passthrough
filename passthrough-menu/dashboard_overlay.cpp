@@ -2,7 +2,7 @@
 #include "pch.h"
 #include "dashboard_overlay.h"
 #include "resource.h"
-
+#include "vr_blockqueue.h"
 
 
 DashboardOverlay::DashboardOverlay()
@@ -360,6 +360,11 @@ void DashboardOverlay::GetCameraDebugProperties(std::vector<DeviceDebugPropertie
 {
 	properties.clear();
 
+	if (!m_bRuntimeInitialized)
+	{
+		return;
+	}
+
 	vr::IVRSystem* vrSystem = vr::VRSystem();
 	vr::IVRTrackedCamera* trackedCamera = vr::VRTrackedCamera();
 
@@ -454,9 +459,159 @@ void DashboardOverlay::GetCameraDebugProperties(std::vector<DeviceDebugPropertie
 	}
 }
 
+void DashboardOverlay::GetBlockQueueDebugProperties(BlockQueueDebugProperties& properties)
+{
+	properties = {};
+
+	if (!m_bRuntimeInitialized)
+	{
+		return;
+	}
+
+	vr::EVRInitError error;
+
+	vr::IVRPaths* vrPaths = reinterpret_cast<vr::IVRPaths*>(vr::VR_GetGenericInterface(vr::IVRPaths_Version, &error));
+	if (vrPaths == nullptr || error != vr::EVRInitError::VRInitError_None)
+	{
+		return;
+	}
+
+	vr::IVRBlockQueue* vrBlockQueue = reinterpret_cast<vr::IVRBlockQueue*>(vr::VR_GetGenericInterface(vr::IVRBlockQueue_Version, &error));
+	if (vrBlockQueue == nullptr || error != vr::EVRInitError::VRInitError_None)
+	{
+		return;
+	}
+
+	properties.bInterfaceFound = true;
+
+	vr::PropertyContainerHandle_t rawFrameQueue = 0;
+
+	vr::EBlockQueueError queueError = vrBlockQueue->Connect(&rawFrameQueue, "/lighthouse/camera/raw_frames");
+	if (queueError != vr::EBlockQueueError_BlockQueueError_None)
+	{
+		return;
+	}
+
+	properties.bBlockQueueFound = true;
+
+	vr::PathHandle_t formatHandle;
+	vrPaths->StringToHandle(&formatHandle, "/format");
+
+	vr::PathHandle_t widthHandle;
+	vrPaths->StringToHandle(&widthHandle, "/width");
+
+	vr::PathHandle_t heightHandle;
+	vrPaths->StringToHandle(&heightHandle, "/height");
+
+	vr::PathHandle_t frameSizeHandle;
+	vrPaths->StringToHandle(&frameSizeHandle, "/frame_size");
+
+	vr::PathHandle_t frameSequenceHandle;
+	vrPaths->StringToHandle(&frameSequenceHandle, "/frame_sequence");
+
+	vr::PathHandle_t frameTimeMonotonicHandle;
+	vrPaths->StringToHandle(&frameTimeMonotonicHandle, "/frame_time_monotonic");
+
+	vr::PathHandle_t serverTimeTicksHandle;
+	vrPaths->StringToHandle(&serverTimeTicksHandle, "/server_time_ticks");
+
+	vr::PathHandle_t deliveryRateHandle;
+	vrPaths->StringToHandle(&deliveryRateHandle, "/delivery_rate");
+
+	vr::PathHandle_t elapsedTimeHandle;
+	vrPaths->StringToHandle(&elapsedTimeHandle, "/elapsed_time");
+
+	{
+		vr::PathRead_t read = {};
+		read.unRequiredBufferSize = 0;
+		read.pszPath = nullptr;
+
+		read.ulPath = formatHandle;
+		read.pvBuffer = &properties.Format;
+		read.unBufferSize = sizeof(properties.Format);
+		read.unTag = vr::k_unInt32PropertyTag;
+
+		vrPaths->ReadPathBatch(rawFrameQueue, &read, 1);
+
+		read.ulPath = heightHandle;
+		read.pvBuffer = &properties.Height;
+		read.unBufferSize = sizeof(properties.Height);
+		read.unTag = vr::k_unInt32PropertyTag;
+
+		vrPaths->ReadPathBatch(rawFrameQueue, &read, 1);
+
+		read.ulPath = widthHandle;
+		read.pvBuffer = &properties.Width;
+		read.unBufferSize = sizeof(properties.Width);
+		read.unTag = vr::k_unInt32PropertyTag;
+
+		vrPaths->ReadPathBatch(rawFrameQueue, &read, 1);
+	}
+
+	vr::PropertyContainerHandle_t readHandle;
+	uint8_t* pBuffer;
+
+	queueError = vrBlockQueue->WaitAndAcquireReadOnlyBlock(rawFrameQueue, &readHandle, (void**)&pBuffer, vr::EBlockQueueReadType_BlockQueueRead_Next, 100);
+	if (queueError != vr::EBlockQueueError_BlockQueueError_None)
+	{
+		return;
+	}
+
+	properties.bFrameAvailable = true;
+
+	vr::PathRead_t read = {};
+	read.unRequiredBufferSize = 0;
+	read.pszPath = nullptr;
+
+	read.ulPath = frameSizeHandle;
+	read.pvBuffer = &properties.FrameSize;
+	read.unBufferSize = sizeof(properties.FrameSize);
+	read.unTag = vr::k_unInt32PropertyTag;
+	vrPaths->ReadPathBatch(readHandle, &read, 1);
+
+	read.ulPath = frameSequenceHandle;
+	read.pvBuffer = &properties.FrameSequence;
+	read.unBufferSize = sizeof(properties.FrameSequence);
+	read.unTag = vr::k_unUint64PropertyTag;
+	vrPaths->ReadPathBatch(readHandle, &read, 1);
+
+	read.ulPath = frameTimeMonotonicHandle;
+	read.pvBuffer = &properties.FrameTimeMonotonic;
+	read.unBufferSize = sizeof(properties.FrameTimeMonotonic);
+	read.unTag = vr::k_unDoublePropertyTag;
+	vrPaths->ReadPathBatch(readHandle, &read, 1);
+
+	read.ulPath = serverTimeTicksHandle;
+	read.pvBuffer = &properties.ServerTimeTicks;
+	read.unBufferSize = sizeof(properties.ServerTimeTicks);
+	read.unTag = vr::k_unUint64PropertyTag;
+	vrPaths->ReadPathBatch(readHandle, &read, 1);
+
+
+	read.ulPath = deliveryRateHandle;
+	read.pvBuffer = &properties.DeliveryRate;
+	read.unBufferSize = sizeof(properties.DeliveryRate);
+	read.unTag = vr::k_unDoublePropertyTag;
+	vrPaths->ReadPathBatch(readHandle, &read, 1);
+
+	read.ulPath = elapsedTimeHandle;
+	read.pvBuffer = &properties.ElapsedTime;
+	read.unBufferSize = sizeof(properties.ElapsedTime);
+	read.unTag = vr::k_unDoublePropertyTag;
+
+	vrPaths->ReadPathBatch(readHandle, &read, 1);
+
+	vrBlockQueue->ReleaseReadOnlyBlock(rawFrameQueue, readHandle);
+}
+
 void DashboardOverlay::GetDeviceIdentProperties(std::vector<DeviceIdentProperties>& properties)
 {
 	properties.clear();
+
+	if (!m_bRuntimeInitialized)
+	{
+		return;
+	}
 
 	vr::IVRSystem* vrSystem = vr::VRSystem();
 

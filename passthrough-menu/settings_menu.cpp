@@ -353,6 +353,39 @@ inline void SettingsMenu::TextDescriptionSpaced(const char* fmt, ...)
 	}
 }
 
+inline void PrintStreamFormat(int32_t streamFormat)
+{
+	switch (streamFormat)
+	{
+	case 1:
+		ImGui::Text("RAW10");
+		break;
+	case 2:
+		ImGui::Text("NV12");
+		break;
+	case 3:
+		ImGui::Text("RGB24");
+		break;
+	case 4:
+		ImGui::Text("NV12_2");
+		break;
+	case 5:
+		ImGui::Text("YUYV16");
+		break;
+	case 6:
+		ImGui::Text("BAYER16BG");
+		break;
+	case 7:
+		ImGui::Text("MJPEG");
+		break;
+	case 8:
+		ImGui::Text("RGBX32");
+		break;
+	default:
+		ImGui::Text("Unknown");
+	}
+}
+
 bool SettingsMenu::TreeNodePersistent(const char* label, ImGuiTreeNodeFlags flags)
 {
 	ImGuiWindow* window = ImGui::GetCurrentWindow();
@@ -1675,6 +1708,9 @@ if (bIsActiveTab) { ImGui::PopStyleColor(1); bIsActiveTab = false; }
 
 		if (CollapsingHeaderPersistent("SteamVR Camera Configuration", ImGuiTreeNodeFlags_DefaultOpen))
 		{
+			ImGui::Checkbox("Use OpenVR Block Queue Interface for SteamVR Camera", &cameraConfig.OpenVR_UseBlockQueueForDepth);
+			TextDescription("Uses a lower latency interface for depth calculation. Disable if there are block queue related errors in the log.");
+
 			IMGUI_BIG_SPACING;
 
 			ImGui::Checkbox("Enable Custom Calibration for SteamVR Camera", &cameraConfig.OpenVRCustomCalibration);
@@ -2213,6 +2249,7 @@ if (bIsActiveTab) { ImGui::PopStyleColor(1); bIsActiveTab = false; }
 			if (m_dashboardOverlay->IsRuntimeInitialized())
 			{
 				m_dashboardOverlay->GetCameraDebugProperties(m_deviceDebugProps);
+				m_dashboardOverlay->GetBlockQueueDebugProperties(m_blockQueueDebugProps);
 			}
 			m_debugTabBeenOpened = true;
 		}
@@ -2492,7 +2529,7 @@ if (bIsActiveTab) { ImGui::PopStyleColor(1); bIsActiveTab = false; }
 			ImGui::EndGroup();		
 		}
 
-		if (CollapsingHeaderPersistent("Device Properties", ImGuiTreeNodeFlags_DefaultOpen))
+		if (CollapsingHeaderPersistent("Device Properties", 0))
 		{
 
 			ImGui::BeginDisabled(!m_dashboardOverlay->IsRuntimeInitialized());
@@ -2614,35 +2651,7 @@ if (bIsActiveTab) { ImGui::PopStyleColor(1); bIsActiveTab = false; }
 
 				ImGui::Text("Camera stream format:");
 				ImGui::SameLine();
-				switch (props.CameraStreamFormat)
-				{
-				case 1:
-					ImGui::Text("RAW10");
-					break;
-				case 2:
-					ImGui::Text("NV12");
-					break;
-				case 3:
-					ImGui::Text("RGB24");
-					break;
-				case 4:
-					ImGui::Text("NV12_2");
-					break;
-				case 5:
-					ImGui::Text("YUYV16");
-					break;
-				case 6:
-					ImGui::Text("BAYER16BG");
-					break;
-				case 7:
-					ImGui::Text("MJPEG");
-					break;
-				case 8:
-					ImGui::Text("RGBX32");
-					break;
-				default:
-					ImGui::Text("Unknown");
-				}
+				PrintStreamFormat(props.CameraStreamFormat);
 
 				ImGui::Text("Camera to head transform:");
 				for (int y = 0; y < 3; y++)
@@ -2754,6 +2763,51 @@ if (bIsActiveTab) { ImGui::PopStyleColor(1); bIsActiveTab = false; }
 
 				ImGui::PopFont();
 			}
+			IMGUI_BIG_SPACING;
+		}
+
+		if (CollapsingHeaderPersistent("Block Queue Properties", 0))
+		{
+
+			ImGui::BeginDisabled(!m_dashboardOverlay->IsRuntimeInitialized());
+			if (ImGui::Button("Refresh"))
+			{
+				if (m_dashboardOverlay->IsRuntimeInitialized())
+				{
+					m_dashboardOverlay->GetBlockQueueDebugProperties(m_blockQueueDebugProps);
+				}
+			}
+			ImGui::EndDisabled();
+			ImGui::Spacing();
+
+			ImGui::PushFont(m_fixedFont);
+
+			if (m_blockQueueDebugProps.bInterfaceFound) { ImGui::Text("Interface found: True"); }
+			else { ImGui::Text("Interface found: False"); }
+
+			if (m_blockQueueDebugProps.bBlockQueueFound) { ImGui::Text("Block queue found: True"); }
+			else { ImGui::Text("Block queue found: False"); }
+
+			ImGui::Text("Frame format:");
+			ImGui::SameLine();
+			PrintStreamFormat(m_blockQueueDebugProps.Format);
+
+			ImGui::Text("Frame size: %d x %d", m_blockQueueDebugProps.Width, m_blockQueueDebugProps.Height);
+
+			IMGUI_BIG_SPACING;
+
+			if (m_blockQueueDebugProps.bFrameAvailable) { ImGui::Text("Frame available: True"); }
+			else { ImGui::Text("Frame available: False"); }
+
+			ImGui::Text("Frame memory size: %d bytes", m_blockQueueDebugProps.FrameSize);
+			ImGui::Text("Frame sequence: %u", m_blockQueueDebugProps.FrameSequence);
+			ImGui::Text("Frame time montonic: %f seconds", m_blockQueueDebugProps.FrameTimeMonotonic);
+			ImGui::Text("Server time ticks: %u", m_blockQueueDebugProps.ServerTimeTicks);
+			ImGui::Text("Delivery rate: %f seconds", m_blockQueueDebugProps.DeliveryRate);
+			ImGui::Text("Elapsed time: %f seconds", m_blockQueueDebugProps.ElapsedTime);
+
+			ImGui::PopFont();
+
 			IMGUI_BIG_SPACING;
 		}
 

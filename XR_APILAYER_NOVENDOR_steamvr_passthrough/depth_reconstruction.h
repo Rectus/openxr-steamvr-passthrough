@@ -87,6 +87,7 @@ private:
 	cv::Ptr<cv::ximgproc::DisparityWLSFilter> m_wlsFilterLeft;
 	cv::Ptr<cv::ximgproc::DisparityWLSFilter> m_wlsFilterRight;
 
+	cv::Mat m_rawInputFrame;
 	cv::Mat m_inputFrame;
 	cv::Mat m_inputFrameLeft;
 	cv::Mat m_inputFrameRight;
