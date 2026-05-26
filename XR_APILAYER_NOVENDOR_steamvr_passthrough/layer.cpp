@@ -1404,32 +1404,47 @@ namespace
 
 		void RenderPassthroughOnAppLayer(const XrFrameEndInfo* frameEndInfo, uint32_t layerNum, bool bUseFBPassthrough, FBPassthroughLayerInstance* fbLayer)
 		{
+			Config_Main& mainConf = m_configManager->GetConfig_Main();
+
 			XrCompositionLayerProjection* layer = (XrCompositionLayerProjection*)frameEndInfo->layers[layerNum];
 			std::shared_ptr<CameraFrame> frame;
 			std::shared_ptr<CameraCPUFrame> cpuFrame;
 
-			if (m_configManager->GetConfig_Main().CameraProvider == CameraProvider_Augmented)
+			std::shared_lock<std::shared_mutex> cpuFrameReadLock;
+			std::shared_lock<std::shared_mutex> depthFrameReadLock;
+
+			if ((mainConf.CameraProvider == CameraProvider_Augmented) ?
+				!m_augmentedCameraManager->GetCameraFrame(frame) :
+				!m_cameraManager->GetCameraFrame(frame))
 			{
-				if (!m_augmentedCameraManager->GetCameraFrame(frame) || 
-					!m_augmentedCameraManager->GetCameraCPUFrame(cpuFrame))
-				{
-					return;
-				}
+				return;
 			}
-			else
+			std::shared_lock readLock(frame->readWriteMutex);
+
+			// TODO: CPU-side camera frame only needed for OpenCV provider. Upload async instead.
+			if (mainConf.CameraProvider == CameraProvider_OpenCV)
 			{
-				if (!m_cameraManager->GetCameraFrame(frame) ||
+				if ((mainConf.CameraProvider == CameraProvider_Augmented) ?
+					!m_augmentedCameraManager->GetCameraCPUFrame(cpuFrame) :
 					!m_cameraManager->GetCameraCPUFrame(cpuFrame))
 				{
 					return;
 				}
+				cpuFrameReadLock = std::shared_lock<std::shared_mutex>(cpuFrame->ReadWriteMutex);
 			}
 
+			std::shared_ptr<DepthFrame> depthFrame = m_depthReconstruction->GetDepthFrame();
+			if (depthFrame.get())
+			{
+				depthFrameReadLock = std::shared_lock<std::shared_mutex>(depthFrame->readWriteMutex);
+			}
+			else
+			{
+				return;
+			}
+
+
 			ClientData& clientData = m_menuHandler->GetClientData();
-
-			std::shared_lock readLock(frame->readWriteMutex);
-			std::shared_lock cpuFrameReadLock(cpuFrame->ReadWriteMutex);
-
 
 			LARGE_INTEGER preRenderTime = StartPerfTimer();
 
@@ -1443,6 +1458,15 @@ namespace
 			float frameToPhotonsTime = GetPerfTimerDiff(frame->header.ulFrameExposureTime, displayTime.QuadPart);
 			clientData.Values.FrameToPhotonsLatencyMS = UpdateAveragePerfTime(m_frameToPhotonTimes, frameToPhotonsTime, 20);
 
+			if (depthFrame->bIsValid)
+			{
+				float depthToRenderTime = GetPerfTimerDiff(depthFrame->frameExposureTimestamp, preRenderTime.QuadPart);
+				clientData.Values.DepthToRenderLatencyMS = UpdateAveragePerfTime(m_depthToRenderTimes, depthToRenderTime, 20);
+
+				float depthToPhotonsTime = GetPerfTimerDiff(depthFrame->frameExposureTimestamp, displayTime.QuadPart);
+				clientData.Values.DepthToPhotonsLatencyMS = UpdateAveragePerfTime(m_depthToPhotonTimes, depthToPhotonsTime, 20);
+			}
+
 
 			float timeToPhotons = GetPerfTimerDiff(preRenderTime.QuadPart, displayTime.QuadPart);
 			
@@ -1450,13 +1474,9 @@ namespace
 			Config_Extensions& extConf = m_configManager->GetConfig_Extensions();
 			Config_Depth& depthConf = m_configManager->GetConfig_Depth();
 
-			std::shared_ptr<DepthFrame> depthFrame = m_depthReconstruction->GetDepthFrame();
-			if (depthFrame.get())
-			{
-				std::shared_lock depthReadLock(depthFrame->readWriteMutex);
-			}		
+				
 
-			if (m_configManager->GetConfig_Main().CameraProvider == CameraProvider_Augmented)
+			if (mainConf.CameraProvider == CameraProvider_Augmented)
 			{
 				m_augmentedCameraManager->CalculateFrameProjection(frame, depthFrame, *layer, timeToPhotons, m_refSpaces[layer->space], m_augmentedDepthReconstruction->GetDistortionParameters());
 			}
@@ -1590,12 +1610,23 @@ namespace
 
 			depthFrame->bIsFirstRender = false;
 
+			if (depthFrameReadLock.owns_lock())
+			{
+				depthFrameReadLock.unlock();
+			}
+
+			if (cpuFrameReadLock.owns_lock())
+			{
+				cpuFrameReadLock.unlock();
+			}
 
 			float renderTime = EndPerfTimer(preRenderTime.QuadPart);
 			clientData.Values.RenderTimeMS = UpdateAveragePerfTime(m_passthroughRenderTimes, renderTime, 20);
 
 			clientData.Values.StereoReconstructionTimeMS = m_depthReconstruction->GetReconstructionPerfTime();
-			clientData.Values.FrameRetrievalTimeMS = m_cameraManager->GetFrameRetrievalPerfTime();
+			clientData.Values.StereoRenderTimeMS = m_depthReconstruction->GetRenderPerfTime();
+			clientData.Values.GPUFrameRetrievalTimeMS = m_cameraManager->GetGPUFrameRetrievalPerfTime();
+			clientData.Values.CPUFrameRetrievalTimeMS = m_cameraManager->GetCPUFrameRetrievalPerfTime();
 		}
 
 
@@ -2302,6 +2333,8 @@ namespace
 
 		std::deque<float> m_frameToRenderTimes;
 		std::deque<float> m_frameToPhotonTimes;
+		std::deque<float> m_depthToRenderTimes;
+		std::deque<float> m_depthToPhotonTimes;
 		std::deque<float> m_passthroughRenderTimes;
 
 		LARGE_INTEGER m_lastRenderTime = {};

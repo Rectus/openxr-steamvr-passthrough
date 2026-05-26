@@ -912,26 +912,27 @@ void CameraManagerOpenVR::ServeBlockQueueFrames()
 
     while (m_bRunThread)
     {
-        std::this_thread::sleep_for(POSTFRAME_SLEEP_INTERVAL);
+        std::this_thread::sleep_for(FRAME_POLL_INTERVAL);
 
         if (!m_bRunThread) { return; }
 
-        if (m_bIsPaused || !m_bUseBlockQueue) { continue; }
+        if (m_bIsPaused || !m_bUseBlockQueue || m_configManager->GetConfig_Main().ProjectionMode != Projection_StereoReconstruction) { continue; }
 
         // Wait for the old frame struct to be available in case someone is still reading from it.
         std::unique_lock writeLock(m_underConstructionFrameCPU->ReadWriteMutex);
         std::shared_ptr<CameraCPUFrame>& frame = m_underConstructionFrameCPU;
 
+        bool bGotFrame = false;
+
         while (true)
         {
-            startFrameRetrievalTime = StartPerfTimer();
+            if (!m_bRunThread) { return; }
 
-            if (m_configManager->GetConfig_Main().ProjectionMode != Projection_StereoReconstruction)
+            if (m_bIsPaused || !m_bUseBlockQueue || m_configManager->GetConfig_Main().ProjectionMode != Projection_StereoReconstruction)
             {
                 std::this_thread::sleep_for(POSTFRAME_SLEEP_INTERVAL);
-                continue;
+                break;
             }
-
 
             queueError = vrBlockQueue->WaitAndAcquireReadOnlyBlock(rawFrameQueue, &readHandle, (void**)&readBuffer, vr::EBlockQueueReadType_BlockQueueRead_Next, 10);
             if (queueError == vr::EBlockQueueError_BlockQueueError_BlockNotAvailable)
@@ -944,6 +945,9 @@ void CameraManagerOpenVR::ServeBlockQueueFrames()
             }
             else
             {
+                // Start measuring here to not include wait.
+                startFrameRetrievalTime = StartPerfTimer();
+
                 vr::ETrackedPropertyError propError;
 
                 vr::PathRead_t read = {};
@@ -989,15 +993,16 @@ void CameraManagerOpenVR::ServeBlockQueueFrames()
 
                 if (frameLatencyMS > FRAME_TIMEOUT_MS) // We were served a too old frame to be useful.
                 {
-                    g_logger->warn("old frame {}", frameLatencyMS);
                     bWaitingForCamera = true;
                 }
                 else if (bWaitingForCamera) // Always accept the first frame offered if we were timed out.
                 {
+                    bGotFrame = true;
                     break;
                 }
                 else if (frame->FrameSequence != lastFrameSequence) // Normal wait for the next frame.
                 {
+                    bGotFrame = true;
                     break;
                 }
 
@@ -1009,12 +1014,14 @@ void CameraManagerOpenVR::ServeBlockQueueFrames()
             } 
 
             if (!m_bRunThread) { return; }
-
-            std::this_thread::sleep_for(FRAME_POLL_INTERVAL);
-
-            if (!m_bRunThread) { return; }
         }
 
+        if (!bGotFrame)
+        {
+            continue;
+        }
+
+        // check that we are still running before doing a costly memcpy.
         if (!m_bRunThread) 
         { 
             queueError = vrBlockQueue->ReleaseReadOnlyBlock(rawFrameQueue, readHandle);
@@ -1040,7 +1047,7 @@ void CameraManagerOpenVR::ServeBlockQueueFrames()
         }
 
 
-        m_bWaitingForCamera = false;
+        bWaitingForCamera = false;
         lastFrameSequence = frame->FrameSequence;
 
         frame->bIsValid = true;

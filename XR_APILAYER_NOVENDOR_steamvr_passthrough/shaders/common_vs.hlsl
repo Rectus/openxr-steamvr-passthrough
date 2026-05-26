@@ -14,7 +14,6 @@ cbuffer vsViewConstantBuffer : register(b0)
     float g_floorHeightOffset;
     float g_cameraBlendWeight;
     int g_cameraViewIndex;
-    bool g_bWriteDisparityFilter;
 };
 
 cbuffer vsPassConstantBuffer : register(b1)
@@ -23,12 +22,8 @@ cbuffer vsPassConstantBuffer : register(b1)
 	float4x4 g_worldToCameraFrameProjectionRight;
 	float4x4 g_worldToPrevCameraFrameProjectionLeft;
 	float4x4 g_worldToPrevCameraFrameProjectionRight;
-	float4x4 g_worldToPrevDepthFrameProjectionLeft;
-	float4x4 g_worldToPrevDepthFrameProjectionRight;
 	float4x4 g_depthFrameViewToWorldLeft;
 	float4x4 g_depthFrameViewToWorldRight;
-	float4x4 g_prevDepthFrameViewToWorldLeft;
-	float4x4 g_prevDepthFrameViewToWorldRight;
     
     float4x4 g_disparityToDepth;
     uint2 g_disparityTextureSize;
@@ -40,14 +35,10 @@ cbuffer vsPassConstantBuffer : register(b1)
     float g_cutoutFilterWidth;
     int g_disparityFilterWidth;
     float g_disparityFilterConfidenceCutout;
-    bool g_bProjectBorders;
     bool g_bFindDiscontinuities;
     bool g_bUseDisparityTemporalFilter;
-    bool g_bBlendDepthMaps;
-    float g_disparityTemporalFilterStrength;
-    float g_disparityTemporalFilterDistance;
-    float g_depthContourStrength;
-	float g_depthContourTreshold;
+    float g_depthFoldStrength;
+	float g_depthFoldTreshold;
 };
 
 #endif //_COMMON_VS_INCLUDED

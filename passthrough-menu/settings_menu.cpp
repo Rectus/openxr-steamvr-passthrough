@@ -2492,11 +2492,15 @@ if (bIsActiveTab) { ImGui::PopStyleColor(1); bIsActiveTab = false; }
 				{
 					ImGui::Text("Last camera frame submitted %4.0fms ago", timeSinceCameraFrame * 1000.0f);
 				}
-				ImGui::Text("Exposure to render latency: %.1fms", displayValues.FrameToRenderLatencyMS);
-				ImGui::Text("Exposure to photons latency: %.1fms", displayValues.FrameToPhotonsLatencyMS);
+				ImGui::Text("Camera exposure to render latency: %.1fms", displayValues.FrameToRenderLatencyMS);
+				ImGui::Text("Camera exposure to photons latency: %.1fms", displayValues.FrameToPhotonsLatencyMS);
+				ImGui::Text("Depth exposure to render latency: %.1fms", displayValues.DepthToRenderLatencyMS);
+				ImGui::Text("Depth exposure to photons latency: %.1fms", displayValues.DepthToPhotonsLatencyMS);
 				ImGui::Text("Passthrough CPU render duration: %.2fms", displayValues.RenderTimeMS);
-				ImGui::Text("Stereo reconstruction duration: %.2fms", displayValues.StereoReconstructionTimeMS);
-				ImGui::Text("Camera frame retrieval duration: %.2fms", displayValues.FrameRetrievalTimeMS);
+				ImGui::Text("Stereo reconstruction CPU duration: %.2fms", displayValues.StereoReconstructionTimeMS);
+				ImGui::Text("Stereo reconstruction GPU duration: %.2fms", displayValues.StereoRenderTimeMS);
+				ImGui::Text("GPU Camera frame retrieval duration: %.2fms", displayValues.GPUFrameRetrievalTimeMS);
+				ImGui::Text("CPU Camera frame retrieval duration: %.2fms", displayValues.CPUFrameRetrievalTimeMS);
 			}
 			else
 			{
@@ -2518,6 +2522,13 @@ if (bIsActiveTab) { ImGui::PopStyleColor(1); bIsActiveTab = false; }
 			frameIdx = (frameIdx + 1) % 8;*/
 
 			ImGui::PopFont();
+
+			IMGUI_BIG_SPACING;
+
+			ImGui::Checkbox("Enable RenderDoc Debugging", &mainConfig.EnableRenderDocDebugging);
+			ImGui::Checkbox("Autostart RenderDoc Instance", &mainConfig.AutostartRenderDocInstance);
+			ImGui::Checkbox("Insert RenderDoc Markers in the Asyncronous Renderer", &mainConfig.InsertAsyncRendererRenderDocMarkers);
+			ImGui::Checkbox("Enable Asyncronous Renderer Vulkan Validation", &mainConfig.EnableAsyncVulkanValidation);
 
 			IMGUI_BIG_SPACING;
 
@@ -2829,10 +2840,10 @@ if (bIsActiveTab) { ImGui::PopStyleColor(1); bIsActiveTab = false; }
 	bool bInteractionEnded = !ImGui::IsAnyItemActive() && m_bElementActiveLastFrame;
 	m_bElementActiveLastFrame = ImGui::IsAnyItemActive();	
 
-	if (bInteractionEnded || bImmediateUpdate) { m_bSettingsUpdatedThisSession = true; }
+	if (bInteractionEnded || bImmediateUpdate) 
+	{ 
+		m_bSettingsUpdatedThisSession = true; 
 
-	if (bInteractionEnded || bImmediateUpdate)
-	{
 		m_configManager->ConfigUpdated();
 
 		MenuIPCMessage message = {};
@@ -2921,6 +2932,8 @@ if (bIsActiveTab) { ImGui::PopStyleColor(1); bIsActiveTab = false; }
 		}
 		case TabDebug:
 		{
+			m_bDebugSettingsUpdatedThisSession = true;
+
 			message.Header.Type = MessageType_SendConfig_Main;
 			message.Header.PayloadSize = sizeof(Config_Main);
 			memcpy(message.Payload, &mainConfig, sizeof(Config_Main));
@@ -3028,7 +3041,7 @@ void SettingsMenu::MenuIPCClientConnected(int clientIndex)
 		m_IPCServer->WriteMessage(message, clientIndex);
 	}
 
-	if (m_bSettingsUpdatedThisSession && m_configManager->IsUpdatePending())
+	if ((m_bSettingsUpdatedThisSession && m_configManager->IsUpdatePending()) || m_bDebugSettingsUpdatedThisSession)
 	{
 		m_bClientTransientUpdatePending = true;
 		m_clientData[clientIndex]->bTransientUpdatePending = true;

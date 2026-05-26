@@ -23,6 +23,7 @@ public:
 		return m_distortionParams;
 	}
 	float GetReconstructionPerfTime() { return m_averageReconstructionTime; }
+	float GetRenderPerfTime() { return m_averageRenderTime; }
 
 private:
 	void InitReconstruction();
@@ -130,6 +131,8 @@ private:
 
 	std::deque<float> m_reconstructionTimes;
 	float m_averageReconstructionTime;
+	std::deque<float> m_renderTimes;
+	float m_averageRenderTime;
 
 	cv::Mat m_colorRectifyInput;
 	cv::Mat m_colorRectifyLeft;

@@ -136,6 +136,7 @@ struct DepthFrame
 		, prevDispWorldToCameraProjectionLeft()
 		, prevDispWorldToCameraProjectionRight()
 		, disparityDownscaleFactor(0.0f)
+		, frameExposureTimestamp(0)
 		, minDisparity(0.0f)
 		, maxDisparity(0.0f)
 		, bIsValid(false)
@@ -164,6 +165,7 @@ struct DepthFrame
 	uint32_t inputDisparityTextureSize[2];
 	uint32_t outputDisparityTextureSize[2];
 	uint32_t cameraFrameTextureSize[2];
+	uint64_t frameExposureTimestamp;
 	float disparityDownscaleFactor;
 	float minDisparity;
 	float maxDisparity;

@@ -75,12 +75,8 @@ struct alignas(16) VSPassConstantBuffer
 	XrMatrix4x4f worldToCameraFrameProjectionRight;
 	XrMatrix4x4f worldToPrevCameraFrameProjectionLeft;
 	XrMatrix4x4f worldToPrevCameraFrameProjectionRight;
-	XrMatrix4x4f worldToPrevDepthFrameProjectionLeft;
-	XrMatrix4x4f worldToPrevDepthFrameProjectionRight;
 	XrMatrix4x4f depthFrameViewToWorldLeft;
 	XrMatrix4x4f depthFrameViewToWorldRight;
-	XrMatrix4x4f prevDepthFrameViewToWorldLeft;
-	XrMatrix4x4f prevDepthFrameViewToWorldRight;
 
 	XrMatrix4x4f disparityToDepth;
 	uint32_t disparityTextureSize[2];
@@ -92,14 +88,10 @@ struct alignas(16) VSPassConstantBuffer
 	float cutoutFilterWidth;
 	int32_t disparityFilterWidth;
 	float disparityFilterConfidenceCutout;
-	uint32_t bProjectBorders;
 	uint32_t bFindDiscontinuities;
 	uint32_t bUseDisparityTemporalFilter;
-	uint32_t bBlendDepthMaps;
-	float disparityTemporalFilterStrength;
-	float disparityTemporalFilterDistance;
-	float depthContourStrength;
-	float depthContourTreshold;
+	float depthFoldStrength;
+	float depthFoldTreshold;
 };
 
 struct alignas(16) VSViewConstantBuffer
@@ -114,7 +106,6 @@ struct alignas(16) VSViewConstantBuffer
 	float floorHeightOffset;
 	float cameraBlendWeight;
 	uint32_t cameraViewIndex;
-	uint32_t bWriteDisparityFilter;
 };
 
 struct alignas(16) VSMeshConstantBuffer

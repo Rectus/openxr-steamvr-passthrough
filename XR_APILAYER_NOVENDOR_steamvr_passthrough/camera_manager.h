@@ -51,7 +51,8 @@ public:
 	virtual bool IsUsingFisheyeModel() const = 0;
 	virtual XrMatrix4x4f GetLeftToRightCameraTransform() const = 0;
 	virtual void UpdateStaticCameraParameters() = 0;
-	virtual float GetFrameRetrievalPerfTime() = 0;
+	virtual float GetGPUFrameRetrievalPerfTime() { return -1.0f; }
+	virtual float GetCPUFrameRetrievalPerfTime() { return -1.0f; }
 	virtual bool GetCameraFrame(std::shared_ptr<CameraFrame>& frame) = 0;
 	virtual bool GetCameraCPUFrame(std::shared_ptr<CameraCPUFrame>& frame) = 0;
 	virtual void CalculateFrameProjection(std::shared_ptr<CameraFrame>& frame, std::shared_ptr<DepthFrame> depthFrame, const XrCompositionLayerProjection& layer, float timeToPhotons, const XrReferenceSpaceCreateInfo& refSpaceInfo, UVDistortionParameters& distortionParams) = 0;
@@ -107,7 +108,8 @@ public:
 	bool IsUsingFisheyeModel() const;
 	XrMatrix4x4f GetLeftToRightCameraTransform() const;
 	void UpdateStaticCameraParameters();
-	float GetFrameRetrievalPerfTime() { return m_averageFrameRetrievalTime; }
+	float GetGPUFrameRetrievalPerfTime() { return m_averageFrameRetrievalTime; }
+	float GetCPUFrameRetrievalPerfTime() { return m_averageBlockQueueFrameRetrievalTime; }
 	bool GetCameraFrame(std::shared_ptr<CameraFrame>& frame);
 	bool GetCameraCPUFrame(std::shared_ptr<CameraCPUFrame>& frame);
 	void CalculateFrameProjection(std::shared_ptr<CameraFrame>& frame, std::shared_ptr<DepthFrame> depthFrame, const XrCompositionLayerProjection& layer, float timeToPhotons, const XrReferenceSpaceCreateInfo& refSpaceInfo, UVDistortionParameters& distortionParams);
@@ -234,7 +236,8 @@ public:
 	bool IsUsingFisheyeModel() const;
 	XrMatrix4x4f GetLeftToRightCameraTransform() const;
 	void UpdateStaticCameraParameters();
-	float GetFrameRetrievalPerfTime() { return m_averageFrameRetrievalTime; }
+	float GetGPUFrameRetrievalPerfTime() { return -1.0f; }
+	float GetCPUFrameRetrievalPerfTime() { return m_averageFrameRetrievalTime; }
 	bool GetCameraFrame(std::shared_ptr<CameraFrame>& frame);
 	bool GetCameraCPUFrame(std::shared_ptr<CameraCPUFrame>& frame);
 	void CalculateFrameProjection(std::shared_ptr<CameraFrame>& frame, std::shared_ptr<DepthFrame> depthFrame, const XrCompositionLayerProjection& layer, float timeToPhotons, const XrReferenceSpaceCreateInfo& refSpaceInfo, UVDistortionParameters& distortionParams);

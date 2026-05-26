@@ -95,6 +95,7 @@ private:
 	bool m_bIsKeyboardOpen = false;
 	bool m_bElementActiveLastFrame = false;
 	bool m_bSettingsUpdatedThisSession = false;
+	bool m_bDebugSettingsUpdatedThisSession = false;
 	bool m_bClientTransientUpdatePending = false;
 	std::atomic<bool> m_bIsRendering = false;
 	uint32_t m_menuWidth = 0;

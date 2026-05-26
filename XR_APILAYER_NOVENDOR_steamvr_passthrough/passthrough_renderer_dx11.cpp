@@ -1542,12 +1542,8 @@ void PassthroughRendererDX11::RenderPassthroughFrame(const XrCompositionLayerPro
 
 	if (mainConf.ProjectionMode == Projection_StereoReconstruction)
 	{
-		vsBuffer.worldToPrevDepthFrameProjectionLeft = depthFrame->prevDispWorldToCameraProjectionLeft;
-		vsBuffer.worldToPrevDepthFrameProjectionRight = depthFrame->prevDispWorldToCameraProjectionRight;
 		vsBuffer.depthFrameViewToWorldLeft = depthFrame->disparityViewToWorldLeft;
 		vsBuffer.depthFrameViewToWorldRight = depthFrame->disparityViewToWorldRight;
-		vsBuffer.prevDepthFrameViewToWorldLeft = depthFrame->prevDisparityViewToWorldLeft;
-		vsBuffer.prevDepthFrameViewToWorldRight = depthFrame->prevDisparityViewToWorldRight;
 		vsBuffer.disparityToDepth = depthFrame->disparityToDepth;
 		vsBuffer.disparityDownscaleFactor = depthFrame->disparityDownscaleFactor;
 		vsBuffer.disparityTextureSize[0] = depthFrame->outputDisparityTextureSize[0];
@@ -1559,14 +1555,10 @@ void PassthroughRendererDX11::RenderPassthroughFrame(const XrCompositionLayerPro
 		vsBuffer.cutoutFilterWidth = stereoConf.StereoCutoutFilterWidth;
 		vsBuffer.disparityFilterWidth = stereoConf.StereoDisparityFilterWidth;
 		vsBuffer.disparityFilterConfidenceCutout = stereoConf.StereoDisparityFilterConfidenceCutout;
-		vsBuffer.bProjectBorders = !mainConf.DebugStereoReconstructionFreeze;
 		vsBuffer.bFindDiscontinuities = stereoConf.StereoCutoutEnabled;
 		vsBuffer.bUseDisparityTemporalFilter = stereoConf.StereoUseDisparityTemporalFiltering;
-		vsBuffer.bBlendDepthMaps = stereoConf.StereoCutoutEnabled;
-		vsBuffer.disparityTemporalFilterStrength = stereoConf.StereoDisparityTemporalFilteringStrength;
-		vsBuffer.disparityTemporalFilterDistance = stereoConf.StereoDisparityTemporalFilteringDistance;
-		vsBuffer.depthContourStrength = stereoConf.StereoDepthContourStrength;
-		vsBuffer.depthContourTreshold = stereoConf.StereoDepthContourThreshold;
+		vsBuffer.depthFoldStrength = stereoConf.StereoDepthContourStrength;
+		vsBuffer.depthFoldTreshold = stereoConf.StereoDepthContourThreshold;
 	}
 
 	m_renderContext->UpdateSubresource(frameData.vsPassConstantBuffer.Get(), 0, nullptr, &vsBuffer, 0, 0);
@@ -1868,7 +1860,6 @@ void PassthroughRendererDX11::RenderSetupView(const ERenderEye eye, const XrComp
 	vsViewBuffer.floorHeightOffset = mainConf.FloorHeightOffset;
 	vsViewBuffer.cameraBlendWeight = 1.0;
 	vsViewBuffer.cameraViewIndex = viewIndex;
-	vsViewBuffer.bWriteDisparityFilter = false;
 
 	m_renderContext->UpdateSubresource(viewData.vsViewConstantBuffer.Get(), 0, nullptr, &vsViewBuffer, 0, 0);
 
@@ -2545,27 +2536,6 @@ void PassthroughRendererDX11::RenderPassthroughView(const ERenderEye eye, const 
 	ID3D11Buffer* psBuffers[2] = { frameData.psPassConstantBuffer.Get(), viewData.psViewConstantBuffer.Get() };
 	m_renderContext->PSSetConstantBuffers(0, 2, psBuffers);
 
-
-	/*if (stereoConf.StereoUseDisparityTemporalFiltering && depthFrame->bIsFirstRender)
-	{
-		VSViewConstantBuffer vsViewBuffer = {};
-
-		vsViewBuffer.worldToHMDProjection = (eye == RenderEye_Left) ? frame->worldToHMDProjectionLeft : frame->worldToHMDProjectionRight;
-		XrMatrix4x4f_Invert(&vsViewBuffer.HMDProjectionToWorld, &vsViewBuffer.worldToHMDProjection);
-		vsViewBuffer.prevHMDFrame_WorldToHMDProjection = (eye == RenderEye_Left) ? frame->prevHMDFrame_WorldToHMDProjectionLeft : frame->prevHMDFrame_WorldToHMDProjectionRight;
-		vsViewBuffer.prevCameraFrame_WorldToHMDProjection = (eye == RenderEye_Left) ? frame->prevCameraFrame_WorldToHMDProjectionLeft : frame->prevCameraFrame_WorldToHMDProjectionRight;
-
-		vsViewBuffer.disparityUVBounds = GetFrameUVBounds(eye, FrameLayout_StereoHorizontal);
-		vsViewBuffer.projectionOriginWorld = (eye == RenderEye_Left) ? frame->projectionOriginWorldLeft : frame->projectionOriginWorldRight;
-		vsViewBuffer.projectionDistance = mainConf.ProjectionDistanceFar;
-		vsViewBuffer.floorHeightOffset = mainConf.FloorHeightOffset;
-		vsViewBuffer.cameraBlendWeight = 1.0;
-		vsViewBuffer.cameraViewIndex = viewIndex;
-
-		vsViewBuffer.bWriteDisparityFilter = true;
-
-		m_renderContext->UpdateSubresource(viewData.vsViewConstantBuffer.Get(), 0, nullptr, &vsViewBuffer, 0, 0);
-	}*/
 
 	bool bInvertAlpha = (renderParams.bInvertLayerAlpha && 
 		mainConf.ProjectionMode == Projection_StereoReconstruction && 

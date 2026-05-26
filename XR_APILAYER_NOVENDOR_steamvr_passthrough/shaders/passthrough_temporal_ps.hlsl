@@ -161,7 +161,7 @@ float4 main(VS_OUTPUT input) : SV_TARGET
     float factor = saturate(min(g_temporalFilteringFactor, 1 - vLenSq * 500));
     float confidence = confidenceInv + (1 - prevConfidenceInv);
 
-    float finalFactor = clamp(factor * confidence, 0, g_temporalFilteringFactor);
+    float finalFactor = clamp(confidence, 0, g_temporalFilteringFactor);
     
     rgbColor = lerp(rgbColor, filtered.xyz, finalFactor);
     

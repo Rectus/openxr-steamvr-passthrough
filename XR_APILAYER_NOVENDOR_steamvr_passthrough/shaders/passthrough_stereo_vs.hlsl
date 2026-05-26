@@ -108,15 +108,15 @@ VS_OUTPUT main(float3 inPosition : POSITION, uint vertexID : SV_VertexID)
             float maxDisp = max(disparity, max(dispU, max(dispD, max(dispL, max(dispR, max(dispUL, max(dispDL, max(dispUR, dispDR))))))));
 
 
-            if ((maxDisp - minDisp) > g_depthContourTreshold * (g_maxDisparity - minDisparity) * 0.01)
+            if ((maxDisp - minDisp) > g_depthFoldTreshold * (g_maxDisparity - minDisparity) * 0.01)
             {
-                float contourFactor = saturate(g_depthContourStrength * 4 * length(float2(dfilterX, dfilterY)));
+                float contourFactor = saturate(g_depthFoldStrength * 4 * length(float2(dfilterX, dfilterY)));
                 
                 bool inForeground = ((disparity - minDisp) > (maxDisp - disparity));
 
                 float2 maxOffset = 1.0 / g_disparityTextureSize;
                 
-                float2 offset = clamp((inForeground ? float2(-dfilterX, dfilterY) : float2(dfilterX, -dfilterY)) * maxOffset * g_depthContourStrength * 2, -maxOffset, maxOffset);
+                float2 offset = clamp((inForeground ? float2(-dfilterX, dfilterY) : float2(dfilterX, -dfilterY)) * maxOffset * g_depthFoldStrength * 2, -maxOffset, maxOffset);
 
                 disparityOffset = lerp(float2(0, 0), offset, contourFactor);
             }

@@ -123,6 +123,11 @@ struct alignas(4) Config_Main
 	bool LaunchMenuOnStartup = true;
 	bool ShutdownMenuOnAppExit = true;
 
+	bool EnableRenderDocDebugging = false;
+	bool AutostartRenderDocInstance = false;
+	bool InsertAsyncRendererRenderDocMarkers = false;
+	bool EnableAsyncVulkanValidation = false;
+
 	EStereoPreset StereoPreset = StereoPreset_Medium;
 
 	// Transient settings not written to file
@@ -164,6 +169,11 @@ struct alignas(4) Config_Main
 		LaunchMenuOnStartup = ini.GetBoolValue(section, "LaunchMenuOnStartup", LaunchMenuOnStartup);
 		ShutdownMenuOnAppExit = ini.GetBoolValue(section, "ShutdownMenuOnAppExit", ShutdownMenuOnAppExit);
 
+		EnableRenderDocDebugging = ini.GetBoolValue(section, "EnableRenderDocDebugging", EnableRenderDocDebugging);
+		AutostartRenderDocInstance = ini.GetBoolValue(section, "AutostartRenderDocInstance", AutostartRenderDocInstance);
+		InsertAsyncRendererRenderDocMarkers = ini.GetBoolValue(section, "InsertAsyncRendererRenderDocMarkers", InsertAsyncRendererRenderDocMarkers);
+		EnableAsyncVulkanValidation = ini.GetBoolValue(section, "EnableAsyncVulkanValidation", EnableAsyncVulkanValidation);
+
 		StereoPreset = (EStereoPreset)ini.GetLongValue(section, "StereoPreset", StereoPreset);
 	}
 
@@ -199,6 +209,11 @@ struct alignas(4) Config_Main
 		ini.SetBoolValue(section, "CloseCameraStreamOnPause", CloseCameraStreamOnPause);
 		ini.SetBoolValue(section, "LaunchMenuOnStartup", LaunchMenuOnStartup);
 		ini.SetBoolValue(section, "ShutdownMenuOnAppExit", ShutdownMenuOnAppExit);
+
+		ini.SetBoolValue(section, "EnableRenderDocDebugging", EnableRenderDocDebugging);
+		ini.SetBoolValue(section, "AutostartRenderDocInstance", AutostartRenderDocInstance);
+		ini.SetBoolValue(section, "InsertAsyncRendererRenderDocMarkers", InsertAsyncRendererRenderDocMarkers);
+		ini.SetBoolValue(section, "EnableAsyncVulkanValidation", EnableAsyncVulkanValidation);
 
 		ini.SetLongValue(section, "StereoPreset", StereoPreset);
 	}

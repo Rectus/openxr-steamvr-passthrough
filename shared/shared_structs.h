@@ -150,9 +150,13 @@ struct alignas(8) ClientDataValues
 
 	float FrameToRenderLatencyMS = 0.0f;
 	float FrameToPhotonsLatencyMS = 0.0f;
+	float DepthToRenderLatencyMS = 0.0f;
+	float DepthToPhotonsLatencyMS = 0.0f;
 	float RenderTimeMS = 0.0f;
 	float StereoReconstructionTimeMS = 0.0f;
-	float FrameRetrievalTimeMS = 0.0f;
+	float StereoRenderTimeMS = 0.0f;
+	float GPUFrameRetrievalTimeMS = 0.0f;
+	float CPUFrameRetrievalTimeMS = 0.0f;
 	uint64_t LastFrameTimestamp = 0;
 	uint64_t LastCameraTimestamp = 0;
 

@@ -3,11 +3,15 @@
 #include "async_renderer.h"
 #include "mathutil.h"
 #include "renderdoc_app.h"
+#include "pathutil.h"
 
 #include "passthrough_renderer.h"
 
 #include "shaders\fill_holes_vulkan_cs.spv.h"
 #include "shaders\joint_bilateral_vulkan_cs.spv.h"
+
+
+#define RENDERDOC_DLL_PATH_REG_KEY L"SOFTWARE\\Classes\\RenderDoc.RDCCapture.1\\DefaultIcon\\"
 
 struct alignas(16) CSAsyncConstantBuffer
 {
@@ -22,11 +26,12 @@ struct alignas(16) CSAsyncConstantBuffer
 };
 
 #define MAX_FILTER_DIST 10
+#define LUMA_WEIGHT_CLAMP 48
 
 // Using the default sparse 16 byte aligned arrays for a bit of performance over packing them.
 struct  CSFilterKernels
 {
-	float lumaWeights[256][4];
+	float lumaWeights[LUMA_WEIGHT_CLAMP][4];
 	float spaceWeights[MAX_FILTER_DIST][MAX_FILTER_DIST][4];
 };
 
@@ -250,25 +255,62 @@ AsyncRenderer::~AsyncRenderer()
 
 bool AsyncRenderer::InitRenderer()
 {
-	if (HMODULE mod = GetModuleHandleA("renderdoc.dll"))
+	Config_Main& mainConfig = m_configManager->GetConfig_Main();
+
+	if (mainConfig.EnableRenderDocDebugging)
 	{
-		pRENDERDOC_GetAPI RENDERDOC_GetAPI =(pRENDERDOC_GetAPI)GetProcAddress(mod, "RENDERDOC_GetAPI");
-		int ret = RENDERDOC_GetAPI(eRENDERDOC_API_Version_1_7_0, (void**)&g_renderDocAPI);
-		if (ret == 1)
+		HMODULE module = nullptr;
+
+		if (mainConfig.AutostartRenderDocInstance)
 		{
-			g_logger->info("RenderDoc API enabled for async renderer");
+			HKEY key;
+			if (RegOpenKeyExW(HKEY_LOCAL_MACHINE, RENDERDOC_DLL_PATH_REG_KEY, 0, KEY_READ, &key) == ERROR_SUCCESS)
+			{
+				WCHAR path[256] = { 0 };
+				DWORD pathSize = 255;
+
+				LSTATUS ret = RegGetValueW(key, NULL, NULL, RRF_RT_REG_SZ, NULL, &path, &pathSize);
+				if (ret == ERROR_SUCCESS)
+				{
+					std::filesystem::path dirPath(ToUTF8String(path));
+					dirPath.replace_filename("renderdoc.dll");
+
+					module = LoadLibraryW(ToWideString(dirPath.string()).data());
+					if (module)
+					{
+						g_logger->info("Starting RenderDoc instance...");
+					}
+				}
+				RegCloseKey(key);
+			}
 		}
 		else
 		{
-			g_logger->error("Failed to initalize RenderDoc API: {}", ret);
+			module = GetModuleHandleA("renderdoc.dll");
+		}
+
+		if (module)
+		{
+			pRENDERDOC_GetAPI RENDERDOC_GetAPI = (pRENDERDOC_GetAPI)GetProcAddress(module, "RENDERDOC_GetAPI");
+			int result = RENDERDOC_GetAPI(eRENDERDOC_API_Version_1_7_0, (void**)&g_renderDocAPI);
+			if (result == 1)
+			{
+				g_logger->info("RenderDoc API enabled for async renderer");
+			}
+			else
+			{
+				g_logger->warn("Failed to initalize RenderDoc API: {}", result);
+			}
 		}
 	}
-
 	VkApplicationInfo appInfo{ VK_STRUCTURE_TYPE_APPLICATION_INFO };
 	appInfo.apiVersion = VK_API_VERSION_1_4;
 
 	std::vector<const char*> validationLayers;
-	//validationLayers.push_back("VK_LAYER_KHRONOS_validation");
+	if (mainConfig.EnableAsyncVulkanValidation)
+	{
+		validationLayers.push_back("VK_LAYER_KHRONOS_validation");
+	}
 
 	std::vector<const char*> instanceExtensions;
 	instanceExtensions.push_back(VK_KHR_EXTERNAL_MEMORY_CAPABILITIES_EXTENSION_NAME);
@@ -551,8 +593,8 @@ bool AsyncRenderer::InitRenderer()
 
 
 	VkSamplerCreateInfo samplerInfo{ VK_STRUCTURE_TYPE_SAMPLER_CREATE_INFO };
-	samplerInfo.magFilter = VK_FILTER_LINEAR;
-	samplerInfo.minFilter = VK_FILTER_LINEAR;
+	samplerInfo.magFilter = VK_FILTER_NEAREST;// VK_FILTER_LINEAR;
+	samplerInfo.minFilter = VK_FILTER_NEAREST;
 	samplerInfo.addressModeU = VK_SAMPLER_ADDRESS_MODE_CLAMP_TO_EDGE;
 	samplerInfo.addressModeV = VK_SAMPLER_ADDRESS_MODE_CLAMP_TO_EDGE;
 	samplerInfo.addressModeW = VK_SAMPLER_ADDRESS_MODE_CLAMP_TO_EDGE;
@@ -1229,12 +1271,12 @@ void AsyncRenderer::Render(std::shared_ptr<DepthFrame> depthFrame, const Config_
 	}
 
 	// Add a RenderDoc frame end marker to allow captures from the UI.
-	/*if (g_renderDocAPI)
+	if (g_renderDocAPI && m_configManager->GetConfig_Main().InsertAsyncRendererRenderDocMarkers)
 	{
 		VkDebugUtilsLabelEXT label{ VK_STRUCTURE_TYPE_DEBUG_UTILS_LABEL_EXT };
 		label.pLabelName = "vr-marker,frame_end,type,application";
 		_vkCmdInsertDebugUtilsLabelEXT(m_commandBuffer, &label);
-	}*/
+	}
 
 
 	vkEndCommandBuffer(m_commandBuffer);
@@ -1288,7 +1330,7 @@ void AsyncRenderer::ComputeFilterKernels()
 
 	float gaussLumaCoeff = -0.5f / (m_bilateralSigmaLuma * m_bilateralSigmaLuma);
 
-	for (int i = 0; i < 256; i++)
+	for (int i = 0; i < LUMA_WEIGHT_CLAMP; i++)
 	{
 		float factor = float(i) / 256.0f;
 		bufferMemory->lumaWeights[i][0] = exp(factor * factor * gaussLumaCoeff);

@@ -16,6 +16,8 @@ DepthReconstruction::DepthReconstruction(std::shared_ptr<ConfigManager> configMa
     , m_distortionParams()
     , m_reconstructionTimes({0.0f})
     , m_averageReconstructionTime(0.0f)
+    , m_renderTimes({ 0.0f })
+    , m_averageRenderTime(0.0f)
 {
     Config_Stereo& stereoConfig = m_configManager->GetConfig_Stereo();
 
@@ -367,6 +369,7 @@ void DepthReconstruction::RunThread()
         std::this_thread::sleep_for(std::chrono::microseconds(100));
 
         LARGE_INTEGER startReconstructionTime = StartPerfTimer();
+        LARGE_INTEGER startRenderTime;
 
         // Make local copies for consistency
         Config_Main mainConfig = m_configManager->GetConfig_Main();
@@ -396,6 +399,7 @@ void DepthReconstruction::RunThread()
 
         std::shared_ptr<CameraCPUFrame> frame;
         XrMatrix4x4f viewToWorldLeft, viewToWorldRight;
+        uint64_t frameTimestamp;
 
         if (mainConfig.ProjectionMode != Projection_StereoReconstruction || mainConfig.DebugStereoReconstructionFreeze || !m_cameraManager->GetCameraCPUFrame(frame))
         {
@@ -462,6 +466,7 @@ void DepthReconstruction::RunThread()
 
             viewToWorldLeft = frame->CameraViewToWorldLeft;
             viewToWorldRight = frame->CameraViewToWorldRight;
+            frameTimestamp = frame->FrameExposureTimestamp;
 
             if (frame->bIsRaw)
             {
@@ -763,10 +768,16 @@ void DepthReconstruction::RunThread()
             m_underConstructionDepthFrame->cameraFrameTextureSize[0] = m_cameraFrameWidth * 2;
             m_underConstructionDepthFrame->cameraFrameTextureSize[1] = m_cameraFrameHeight;
             m_underConstructionDepthFrame->disparityDownscaleFactor = (float)m_downscaleFactor / outputScale;
+            m_underConstructionDepthFrame->frameExposureTimestamp = frameTimestamp;
             m_underConstructionDepthFrame->minDisparity = stereoConfig.StereoMinDisparity / 2048.0f;
             m_underConstructionDepthFrame->maxDisparity = m_maxDisparity / 2048.0f;
             m_underConstructionDepthFrame->bIsValid = true;
             m_underConstructionDepthFrame->bIsFirstRender = true;
+
+
+            startRenderTime = StartPerfTimer();
+            float reconstructionToRenderTime = GetPerfTimerDiff(startReconstructionTime.QuadPart, startRenderTime.QuadPart);
+            m_averageReconstructionTime = UpdateAveragePerfTime(m_reconstructionTimes, reconstructionToRenderTime, 20);
 
 
             if (!m_renderer.BeginRender(m_underConstructionDepthFrame))
@@ -967,7 +978,7 @@ void DepthReconstruction::RunThread()
             }
         }
         
-        m_averageReconstructionTime = UpdateAveragePerfTime(m_reconstructionTimes, EndPerfTimer(startReconstructionTime), 20);
+        m_averageRenderTime = UpdateAveragePerfTime(m_renderTimes, EndPerfTimer(startRenderTime.QuadPart), 20);
     }
 }
 
