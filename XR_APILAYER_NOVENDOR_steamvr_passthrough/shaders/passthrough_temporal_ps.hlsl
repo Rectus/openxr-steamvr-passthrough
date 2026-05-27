@@ -174,6 +174,8 @@ float4 main(VS_OUTPUT input) : SV_TARGET
     
 	if (g_bDoColorAdjustment)
 	{
+        rgbColor = pow(abs(rgbColor), g_gammaCorrection);
+        
 		// Using CIELAB D65 to match the EXT_FB_passthrough adjustments.
 		float3 labColor = LinearRGBtoLAB_D65(rgbColor);
 		float LPrime = clamp((labColor.x - 50.0) * g_contrast + 50.0, 0.0, 100.0);

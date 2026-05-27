@@ -534,6 +534,42 @@ bool CameraManagerOpenVR::GetCameraFrame(std::shared_ptr<CameraFrame>& frame)
     return false;
 }
 
+bool CameraManagerOpenVR::GetCameraFrameForWrite(std::shared_ptr<CameraFrame>& frame)
+{
+    if (!m_bCameraInitialized || !m_configManager->GetConfig_Camera().OpenVR_UseBlockQueueForColor) { return false; }
+
+    if (m_extrenalFrameWriteLock.mutex() && m_extrenalFrameWriteLock.owns_lock())
+    {
+        m_extrenalFrameWriteLock.unlock();
+    }
+
+    m_extrenalFrameWriteLock = std::unique_lock<std::shared_mutex>(m_underConstructionFrame->readWriteMutex, std::try_to_lock);
+    if (m_extrenalFrameWriteLock.owns_lock())
+    {
+        frame = m_underConstructionFrame;
+        return true;
+    }
+
+    return false;
+}
+
+void CameraManagerOpenVR::ReleaseCameraFrameForWrite(std::shared_ptr<CameraFrame>& frame)
+{
+    if (m_extrenalFrameWriteLock.owns_lock())
+    {
+        if (m_configManager->GetConfig_Main().ProjectToRenderModels)
+        {
+            UpdateRenderModels();
+        }
+        frame->renderModels = m_renderModels;
+
+        std::lock_guard<std::mutex> lock(m_serveMutex);
+        m_servedFrame.swap(m_underConstructionFrame);
+
+        m_extrenalFrameWriteLock.unlock();
+    }
+}
+
 bool CameraManagerOpenVR::GetCameraCPUFrame(std::shared_ptr<CameraCPUFrame>& frame)
 {
     if (!m_bCameraInitialized) { return false; }
@@ -584,14 +620,18 @@ void CameraManagerOpenVR::ServeFrames()
 
         if (m_bIsPaused) { continue; }
 
-        bool bUseBlockQueue = m_configManager->GetConfig_Camera().OpenVR_UseBlockQueueForDepth;
+        bool bUseBlockQueue = m_configManager->GetConfig_Camera().OpenVR_UseBlockQueueForDepth || m_configManager->GetConfig_Camera().OpenVR_UseBlockQueueForColor;
         if (!m_bUseBlockQueue && bUseBlockQueue && !m_serveThreadBlockQueue.joinable())
         {
             m_serveThreadBlockQueue = std::thread(&CameraManagerOpenVR::ServeBlockQueueFrames, this);
         }
         m_bUseBlockQueue = bUseBlockQueue;
 
-
+        if (m_configManager->GetConfig_Camera().OpenVR_UseBlockQueueForDepth && m_configManager->GetConfig_Camera().OpenVR_UseBlockQueueForColor)
+        {
+            continue;
+        }
+        
         // Wait for the old frame struct to be available in case someone is still reading from it.
         std::unique_lock writeLock(m_underConstructionFrame->readWriteMutex);
 

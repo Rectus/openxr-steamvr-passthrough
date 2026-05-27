@@ -36,7 +36,8 @@ public:
 	bool BeginRender(std::shared_ptr<DepthFrame> depthFrame);
 	void CopyDisparityToGPU(std::vector<uint8_t>& buffer);
 	void CopyConfidenceToGPU(std::vector<uint8_t>& buffer);
-	void CopyCameraFrameToGPU(std::vector<uint8_t>& buffer);
+	bool CopyCameraFrameToGPU(std::vector<uint8_t>& buffer, VkExtent2D extent, void** nativeTexture);
+	void CopyBWRectifiedCameraFrameToGPU(std::vector<uint8_t>& buffer);
 	void Render(std::shared_ptr<DepthFrame> depthFrame, const Config_Stereo& stereoConf);
 
 private:
@@ -44,7 +45,7 @@ private:
 	VkShaderModule CreateShaderModule(const uint32_t* bytecode, size_t codeSize);
 	bool CreateBuffer(VkBuffer& buffer, VkDeviceMemory& bufferMem, VkDeviceSize bufferSize, VkBufferUsageFlags usageFlags, VkMemoryPropertyFlags memFlags, std::deque<std::function<void()>>* deletionQueue);
 	bool CreateTexture(VulkanTexture& texture, VkExtent2D extent, VkFormat format, VkImageUsageFlags usageFlags);
-	bool CreateSharedTexture(VulkanTexture& texture, VkExtent2D extent, VkFormat format);
+	bool CreateSharedTexture(VulkanTexture& texture, VkExtent2D extent, VkFormat format, VkImageUsageFlags usageFlags, bool bCPUTransfer);
 	void DestroyTexture(VulkanTexture& texture);
 	void ComputeFilterKernels();
 
@@ -80,7 +81,9 @@ private:
 	
 	VkSampler m_sampler = VK_NULL_HANDLE;
 
-	VulkanTexture m_cameraTexture;
+	VulkanTexture m_cameraTexture[3] = {};
+	int m_cameraTextureIndex = -1;
+	VulkanTexture m_bwRectifiedCameraTexture;
 	VulkanTexture m_disparityTexture;
 	VulkanTexture m_confidenceTexture;
 	VulkanTexture m_outputTexture[3] = {};

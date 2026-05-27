@@ -1737,7 +1737,8 @@ void PassthroughRendererVulkan::RenderPassthroughFrame(const XrCompositionLayerP
 		psPassBuffer.contrast = mainConf.Contrast;
 		psPassBuffer.saturation = mainConf.Saturation;
 		psPassBuffer.sharpness = mainConf.Sharpness;
-		psPassBuffer.bDoColorAdjustment = fabsf(mainConf.Brightness) > 0.01f || fabsf(mainConf.Contrast - 1.0f) > 0.01f || fabsf(mainConf.Saturation - 1.0f) > 0.01f;
+		psPassBuffer.gammaCorrection = 1.0f / mainConf.GammaCorrection;
+		psPassBuffer.bDoColorAdjustment = fabsf(mainConf.Brightness) > 0.01f || fabsf(mainConf.Contrast - 1.0f) > 0.01f || fabsf(mainConf.Saturation - 1.0f) > 0.01f || fabsf(mainConf.GammaCorrection - 1.0f) > 0.01f;
 		psPassBuffer.bDebugDepth = mainConf.DebugSource == DebugSource_OutputDepth;
 		psPassBuffer.debugOverlay = mainConf.DebugOverlay;
 		psPassBuffer.bUseFisheyeCorrection = mainConf.ProjectionMode != Projection_RoomView2D;

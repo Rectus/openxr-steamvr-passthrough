@@ -106,6 +106,7 @@ struct alignas(4) Config_Main
 	float Contrast = 1.0f;
 	float Saturation = 1.0f;
 	float Sharpness = 0.0f;
+	float GammaCorrection = 1.0f;
 
 	bool EnableTemporalFiltering = false;
 	int TemporalFilteringSampling = 3;
@@ -152,6 +153,7 @@ struct alignas(4) Config_Main
 		Contrast = (float)ini.GetDoubleValue(section, "Contrast", Contrast);
 		Saturation = (float)ini.GetDoubleValue(section, "Saturation", Saturation);
 		Sharpness = (float)ini.GetDoubleValue(section, "Sharpness", Sharpness);
+		GammaCorrection = (float)ini.GetDoubleValue(section, "GammaCorrection", GammaCorrection);
 
 		EnableTemporalFiltering = ini.GetBoolValue(section, "EnableTemporalFiltering", EnableTemporalFiltering);
 		TemporalFilteringSampling = (int)ini.GetLongValue(section, "TemporalFilteringSampling", TemporalFilteringSampling);
@@ -193,6 +195,7 @@ struct alignas(4) Config_Main
 		ini.SetDoubleValue(section, "Contrast", Contrast);
 		ini.SetDoubleValue(section, "Saturation", Saturation);
 		ini.SetDoubleValue(section, "Sharpness", Sharpness);
+		ini.SetDoubleValue(section, "GammaCorrection", GammaCorrection);
 
 		ini.SetBoolValue(section, "EnableTemporalFiltering", EnableTemporalFiltering);
 		ini.SetLongValue(section, "TemporalFilteringSampling", TemporalFilteringSampling);
@@ -257,6 +260,7 @@ struct alignas(4) Config_Camera
 	float Camera1_IntrinsicsDist[4] = { 0.0f };
 	int Camera1_IntrinsicsSensorPixels[2] = { 1, 1 };
 
+	bool OpenVR_UseBlockQueueForColor = true;
 	bool OpenVR_UseBlockQueueForDepth = true;
 	bool OpenVRCustomCalibration = false;
 	bool OpenVR_CameraHasFisheyeLens = true;
@@ -336,6 +340,7 @@ struct alignas(4) Config_Camera
 		Camera1_IntrinsicsSensorPixels[0] = (int)ini.GetLongValue(section, "Camera1_IntrinsicsSensorPixelsX", Camera1_IntrinsicsSensorPixels[0]);
 		Camera1_IntrinsicsSensorPixels[1] = (int)ini.GetLongValue(section, "Camera1_IntrinsicsSensorPixelsY", Camera1_IntrinsicsSensorPixels[1]);
 
+		OpenVR_UseBlockQueueForColor = ini.GetBoolValue(section, "OpenVR_UseBlockQueueForColor", OpenVR_UseBlockQueueForColor);
 		OpenVR_UseBlockQueueForDepth = ini.GetBoolValue(section, "OpenVR_UseBlockQueueForDepth", OpenVR_UseBlockQueueForDepth);
 		OpenVRCustomCalibration = ini.GetBoolValue(section, "OpenVRCustomCalibration", OpenVRCustomCalibration);
 		OpenVR_CameraHasFisheyeLens = ini.GetBoolValue(section, "OpenVR_CameraHasFisheyeLens", OpenVR_CameraHasFisheyeLens);
@@ -435,6 +440,7 @@ struct alignas(4) Config_Camera
 		ini.SetLongValue(section, "Camera1_IntrinsicsSensorPixelsX", Camera1_IntrinsicsSensorPixels[0]);
 		ini.SetLongValue(section, "Camera1_IntrinsicsSensorPixelsY", Camera1_IntrinsicsSensorPixels[1]);
 
+		ini.SetBoolValue(section, "OpenVR_UseBlockQueueForColor", OpenVR_UseBlockQueueForColor);
 		ini.SetBoolValue(section, "OpenVR_UseBlockQueueForDepth", OpenVR_UseBlockQueueForDepth);
 		ini.SetBoolValue(section, "OpenVRCustomCalibration", OpenVRCustomCalibration);
 		ini.SetBoolValue(section, "OpenVR_CameraHasFisheyeLens", OpenVR_CameraHasFisheyeLens);

@@ -1682,11 +1682,12 @@ void PassthroughRendererDX11::RenderPassthroughFrame(const XrCompositionLayerPro
 		
 	}
 	psPassBuffer.sharpness = mainConf.Sharpness;
+	psPassBuffer.gammaCorrection = 1.0f / mainConf.GammaCorrection;
 	psPassBuffer.temporalFilteringSampling = mainConf.TemporalFilteringSampling;
 	psPassBuffer.temporalFilteringFactor = mainConf.TemporalFilteringFactor;
 	psPassBuffer.temporalFilteringColorRangeCutoff = mainConf.TemporalFilteringRejectionOffset;
 	psPassBuffer.cutoutCombineFactor = stereoConf.StereoCutoutCombineFactor;
-	psPassBuffer.bDoColorAdjustment = fabsf(mainConf.Brightness) > 0.01f || fabsf(mainConf.Contrast - 1.0f) > 0.01f || fabsf(mainConf.Saturation - 1.0f) > 0.01f;
+	psPassBuffer.bDoColorAdjustment = fabsf(mainConf.Brightness) > 0.01f || fabsf(mainConf.Contrast - 1.0f) > 0.01f || fabsf(mainConf.Saturation - 1.0f) > 0.01f || fabsf(mainConf.GammaCorrection- 1.0f) > 0.01f;
 	psPassBuffer.depthTemporalFilterFactor = stereoConf.StereoDisparityTemporalFilteringStrength;
 	psPassBuffer.depthTemporalFilterDistance = stereoConf.StereoDisparityTemporalFilteringDistance;
 	psPassBuffer.bDebugDepth = mainConf.DebugSource == DebugSource_OutputDepth;
@@ -2831,11 +2832,63 @@ uint64_t PassthroughRendererDX11::GetRenderDeviceLUID()
 	return 0;
 }
 
+bool PassthroughRendererDX11::CreateSharedCameraTexture(HANDLE* sharedHandle, void** nativeTexture, VkExtent2D extent, VkFormat format)
+{
+	DX11SRVTexture& cameraTexture = m_sharedCameraTextures.emplace_back();
+
+	D3D11_TEXTURE2D_DESC textureDesc{};
+	textureDesc.Format = VulkanImageFormatToDXGI(format);
+	textureDesc.Width = extent.width;
+	textureDesc.Height = extent.height;
+	textureDesc.ArraySize = 1;
+	textureDesc.MipLevels = 1;
+	textureDesc.SampleDesc.Count = 1;
+	textureDesc.SampleDesc.Quality = 0;
+	textureDesc.BindFlags = D3D11_BIND_SHADER_RESOURCE;
+	textureDesc.Usage = D3D11_USAGE_DEFAULT;
+	textureDesc.CPUAccessFlags = 0;
+	textureDesc.MiscFlags = D3D11_RESOURCE_MISC_SHARED;
+
+
+	HRESULT result = m_d3dDevice->CreateTexture2D(&textureDesc, nullptr, &cameraTexture.Texture);
+	if (result != S_OK)
+	{
+		g_logger->error("Failed to create shared texture: 0x{:x}", static_cast<uint32_t>(result));
+		return false;
+	}
+
+	D3D11_SHADER_RESOURCE_VIEW_DESC srvDesc = {};
+	srvDesc.ViewDimension = D3D11_SRV_DIMENSION_TEXTURE2D;
+	srvDesc.Format = textureDesc.Format;
+	srvDesc.Texture2D.MipLevels = 1;
+
+	if (FAILED(m_d3dDevice->CreateShaderResourceView(cameraTexture.Texture.Get(), &srvDesc, &cameraTexture.SRV)))
+	{
+		g_logger->error("Shared Camera Frame CreateShaderResourceView error!");
+		return false;
+	}
+
+	*reinterpret_cast<ID3D11ShaderResourceView**>(nativeTexture) = cameraTexture.SRV.Get();
+
+	IDXGIResource1* tempResource = NULL;
+	cameraTexture.Texture->QueryInterface(IID_PPV_ARGS(&tempResource));
+
+	result = tempResource->GetSharedHandle(sharedHandle);
+	if (result != S_OK)
+	{
+		g_logger->error("Failed to create shared texture handle: 0x{:x}", static_cast<uint32_t>(result));
+		tempResource->Release();
+		return false;
+	}
+
+	tempResource->Release();
+
+	return true;
+}
+
 bool PassthroughRendererDX11::CreateSharedDisparityMap(HANDLE* sharedHandle, void* nativeTexture, VkExtent2D extent, VkFormat format)
 {
 	DX11UAVSRVTexture& dispMap = m_sharedDisparityMaps.emplace_back();
-
-	ID3D11Texture2D** texture = reinterpret_cast<ID3D11Texture2D**>(nativeTexture);
 
 	D3D11_TEXTURE2D_DESC textureDesc{};
 	textureDesc.Format = VulkanImageFormatToDXGI(format);
@@ -2859,14 +2912,9 @@ bool PassthroughRendererDX11::CreateSharedDisparityMap(HANDLE* sharedHandle, voi
 	}
 
 	*reinterpret_cast<ID3D11Texture2D**>(nativeTexture) = dispMap.Texture.Get();
-	
-	D3D11_SHADER_RESOURCE_VIEW_DESC srvDesc = {};
-	srvDesc.ViewDimension = D3D11_SRV_DIMENSION_TEXTURE2D;
-	srvDesc.Format = DXGI_FORMAT_R16G16_SNORM;
-	srvDesc.Texture2D.MipLevels = 1;
 
 	D3D11_UNORDERED_ACCESS_VIEW_DESC uavDesc = {};
-	uavDesc.Format = DXGI_FORMAT_R16G16_SNORM;
+	uavDesc.Format = textureDesc.Format;
 	uavDesc.ViewDimension = D3D11_UAV_DIMENSION_TEXTURE2D;
 
 	if (FAILED(m_d3dDevice->CreateUnorderedAccessView(dispMap.Texture.Get(), &uavDesc, &dispMap.UAV)))
@@ -2875,6 +2923,11 @@ bool PassthroughRendererDX11::CreateSharedDisparityMap(HANDLE* sharedHandle, voi
 		return false;
 	}
 
+	D3D11_SHADER_RESOURCE_VIEW_DESC srvDesc = {};
+	srvDesc.ViewDimension = D3D11_SRV_DIMENSION_TEXTURE2D;
+	srvDesc.Format = textureDesc.Format;
+	srvDesc.Texture2D.MipLevels = 1;
+
 	if (FAILED(m_d3dDevice->CreateShaderResourceView(dispMap.Texture.Get(), &srvDesc, &dispMap.SRV)))
 	{
 		g_logger->error("Shared Disparity Map CreateShaderResourceView error!");
@@ -2882,7 +2935,7 @@ bool PassthroughRendererDX11::CreateSharedDisparityMap(HANDLE* sharedHandle, voi
 	}
 
 	IDXGIResource1* tempResource = NULL;
-	(*texture)->QueryInterface(IID_PPV_ARGS(&tempResource));
+	dispMap.Texture->QueryInterface(IID_PPV_ARGS(&tempResource));
 
 	result = tempResource->GetSharedHandle(sharedHandle);
 	if (result != S_OK)

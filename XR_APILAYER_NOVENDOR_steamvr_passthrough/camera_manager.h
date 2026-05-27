@@ -54,6 +54,8 @@ public:
 	virtual float GetGPUFrameRetrievalPerfTime() { return -1.0f; }
 	virtual float GetCPUFrameRetrievalPerfTime() { return -1.0f; }
 	virtual bool GetCameraFrame(std::shared_ptr<CameraFrame>& frame) = 0;
+	virtual bool GetCameraFrameForWrite(std::shared_ptr<CameraFrame>& frame) { return false; }
+	virtual void ReleaseCameraFrameForWrite(std::shared_ptr<CameraFrame>& frame) { }
 	virtual bool GetCameraCPUFrame(std::shared_ptr<CameraCPUFrame>& frame) = 0;
 	virtual void CalculateFrameProjection(std::shared_ptr<CameraFrame>& frame, std::shared_ptr<DepthFrame> depthFrame, const XrCompositionLayerProjection& layer, float timeToPhotons, const XrReferenceSpaceCreateInfo& refSpaceInfo, UVDistortionParameters& distortionParams) = 0;
 
@@ -111,6 +113,8 @@ public:
 	float GetGPUFrameRetrievalPerfTime() { return m_averageFrameRetrievalTime; }
 	float GetCPUFrameRetrievalPerfTime() { return m_averageBlockQueueFrameRetrievalTime; }
 	bool GetCameraFrame(std::shared_ptr<CameraFrame>& frame);
+	bool GetCameraFrameForWrite(std::shared_ptr<CameraFrame>& frame);
+	void ReleaseCameraFrameForWrite(std::shared_ptr<CameraFrame>& frame);
 	bool GetCameraCPUFrame(std::shared_ptr<CameraCPUFrame>& frame);
 	void CalculateFrameProjection(std::shared_ptr<CameraFrame>& frame, std::shared_ptr<DepthFrame> depthFrame, const XrCompositionLayerProjection& layer, float timeToPhotons, const XrReferenceSpaceCreateInfo& refSpaceInfo, UVDistortionParameters& distortionParams);
 
@@ -153,6 +157,7 @@ private:
 	std::atomic_bool m_bRunThread = true;
 	std::mutex m_serveMutex;
 	std::mutex m_serveMutexCPU;
+	std::unique_lock<std::shared_mutex> m_extrenalFrameWriteLock;
 	bool m_bIsPaused = false;
 	std::atomic_bool m_bWaitingForCamera = false;
 	bool m_bCameraFailed = false;

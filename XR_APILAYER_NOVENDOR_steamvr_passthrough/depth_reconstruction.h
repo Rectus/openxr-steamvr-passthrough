@@ -90,6 +90,8 @@ private:
 
 	cv::Mat m_rawInputFrame;
 	cv::Mat m_inputFrame;
+	cv::Mat m_inputFrameColor;
+	std::vector<uint8_t> m_inputFrameColorBuffer;
 	cv::Mat m_inputFrameLeft;
 	cv::Mat m_inputFrameRight;
 	cv::Mat m_inputAlphaLeft;

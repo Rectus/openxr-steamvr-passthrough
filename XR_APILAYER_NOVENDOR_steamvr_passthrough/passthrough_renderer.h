@@ -127,6 +127,7 @@ struct alignas(16) PSPassConstantBuffer
 	float contrast;
 	float saturation;
 	float sharpness;
+	float gammaCorrection;
 	int32_t temporalFilteringSampling;
 	float temporalFilteringFactor;
 	float temporalFilteringColorRangeCutoff;
@@ -293,6 +294,7 @@ public:
 	virtual uint64_t GetRenderDeviceLUID() { return 0; };
 	virtual bool DownloadTextureToCPU(void* textureSRV, const uint32_t width, const uint32_t height, const uint32_t bufferSize, uint8_t* buffer) { return false; }
 	virtual std::shared_timed_mutex& GetAccessMutex() = 0;
+	virtual bool CreateSharedCameraTexture(HANDLE* sharedHandle, void** nativeTexture, VkExtent2D extent, VkFormat format) { return false; };
 	virtual bool CreateSharedDisparityMap(HANDLE* sharedHandle, void* nativeTexture, VkExtent2D extent, VkFormat format) { return false; };
 };
 
@@ -312,6 +314,7 @@ public:
 	void* GetRenderDevice();
 	uint64_t GetRenderDeviceLUID();
 	std::shared_timed_mutex& GetAccessMutex() { return m_accessRendererMutex; }
+	bool CreateSharedCameraTexture(HANDLE* sharedHandle, void** nativeTexture, VkExtent2D extent, VkFormat format);
 	bool CreateSharedDisparityMap(HANDLE* sharedHandle, void* nativeTexture, VkExtent2D extent, VkFormat format);
 
 protected:
@@ -370,6 +373,7 @@ protected:
 	std::vector<DX11ViewData> m_viewData[2];
 	std::vector<DX11ViewDepthData> m_viewDepthData[2];
 	std::vector<DX11FrameData> m_frameData;
+	std::vector<DX11SRVTexture> m_sharedCameraTextures;
 	std::vector<DX11UAVSRVTexture> m_sharedDisparityMaps;
 	
 

@@ -935,6 +935,8 @@ if (bIsActiveTab) { ImGui::PopStyleColor(1); bIsActiveTab = false; }
 				bImmediateUpdate |= ScrollableSlider("Brightness", &mainConfig.Brightness, -50.0f, 50.0f, "%.0f", 1.0f);
 				bImmediateUpdate |= ScrollableSlider("Contrast", &mainConfig.Contrast, 0.0f, 2.0f, "%.1f", 0.1f);
 				bImmediateUpdate |= ScrollableSlider("Saturation", &mainConfig.Saturation, 0.0f, 2.0f, "%.1f", 0.1f);
+				bImmediateUpdate |= ScrollableSlider("Gamma Correction", &mainConfig.GammaCorrection, 0.01f, 2.0f, "%.2f", 0.01f);
+				if (fabsf(mainConfig.GammaCorrection - 1.0f) < 0.1) { mainConfig.GammaCorrection = 1.0f; }
 				bImmediateUpdate |= ScrollableSlider("Sharpness", &mainConfig.Sharpness, -1.0f, 1.0f, "%.1f", 0.1f);
 				if (fabsf(mainConfig.Sharpness) < 0.1) { mainConfig.Sharpness = 0.0f; }
 				ImGui::PopItemWidth();
@@ -1708,7 +1710,9 @@ if (bIsActiveTab) { ImGui::PopStyleColor(1); bIsActiveTab = false; }
 
 		if (CollapsingHeaderPersistent("SteamVR Camera Configuration", ImGuiTreeNodeFlags_DefaultOpen))
 		{
-			ImGui::Checkbox("Use OpenVR Block Queue Interface for SteamVR Camera", &cameraConfig.OpenVR_UseBlockQueueForDepth);
+			ImGui::Checkbox("Use OpenVR Block Queue Interface for Camera Frames", &cameraConfig.OpenVR_UseBlockQueueForColor);
+			TextDescription("Uses a lower latency interface for color calculation. Disable if there are block queue related errors in the log.");
+			ImGui::Checkbox("Use OpenVR Block Queue Interface for Depth Frames", &cameraConfig.OpenVR_UseBlockQueueForDepth);
 			TextDescription("Uses a lower latency interface for depth calculation. Disable if there are block queue related errors in the log.");
 
 			IMGUI_BIG_SPACING;

@@ -235,11 +235,12 @@ AsyncRenderer::~AsyncRenderer()
 		return;
 	}
 
-	DestroyTexture(m_cameraTexture);
+	DestroyTexture(m_bwRectifiedCameraTexture);
 	DestroyTexture(m_disparityTexture);
 	DestroyTexture(m_confidenceTexture);
 	for (int i = 0; i < 3; i++)
 	{
+		DestroyTexture(m_cameraTexture[i]);
 		DestroyTexture(m_outputTexture[i]);
 	}
 
@@ -372,7 +373,7 @@ bool AsyncRenderer::InitRenderer()
 
 	vkGetPhysicalDeviceMemoryProperties(m_physDevice, &m_memProps);
 
-#if 0
+#if 1
 	for (uint32_t i = 0; i < m_memProps.memoryTypeCount; i++)
 	{
 		VkMemoryHeap& heap = m_memProps.memoryHeaps[m_memProps.memoryTypes[i].heapIndex];
@@ -841,17 +842,10 @@ bool AsyncRenderer::CreateTexture(VulkanTexture& texture, VkExtent2D extent, VkF
 }
 
 
-bool AsyncRenderer::CreateSharedTexture(VulkanTexture& texture, VkExtent2D extent, VkFormat format)
+bool AsyncRenderer::CreateSharedTexture(VulkanTexture& texture, VkExtent2D extent, VkFormat format, VkImageUsageFlags usageFlags, bool bCPUTransfer)
 {
-	DestroyTexture(texture);
-
 	texture.Extent = extent;
 	texture.Layout = VK_IMAGE_LAYOUT_UNDEFINED;
-	
-	if (!m_baseRenderer->CreateSharedDisparityMap(&texture.SharedHandle, &texture.nativeTexture, extent, format))
-	{
-		return false;
-	}
 
 	VkExternalMemoryImageCreateInfo  extInfo = { VK_STRUCTURE_TYPE_EXTERNAL_MEMORY_IMAGE_CREATE_INFO };
 	extInfo.handleTypes = VK_EXTERNAL_MEMORY_HANDLE_TYPE_D3D11_TEXTURE_KMT_BIT;
@@ -867,7 +861,7 @@ bool AsyncRenderer::CreateSharedTexture(VulkanTexture& texture, VkExtent2D exten
 	imageInfo.format = format;
 	imageInfo.tiling = VK_IMAGE_TILING_OPTIMAL;
 	imageInfo.initialLayout = VK_IMAGE_LAYOUT_UNDEFINED;
-	imageInfo.usage = VK_IMAGE_USAGE_TRANSFER_SRC_BIT | VK_IMAGE_USAGE_TRANSFER_DST_BIT | VK_IMAGE_USAGE_SAMPLED_BIT | VK_IMAGE_USAGE_STORAGE_BIT;
+	imageInfo.usage = usageFlags;
 	imageInfo.sharingMode = VK_SHARING_MODE_EXCLUSIVE;
 	imageInfo.samples = VK_SAMPLE_COUNT_1_BIT;
 	imageInfo.flags = 0;
@@ -886,7 +880,6 @@ bool AsyncRenderer::CreateSharedTexture(VulkanTexture& texture, VkExtent2D exten
 	VkMemoryRequirements2 memReq{ VK_STRUCTURE_TYPE_MEMORY_REQUIREMENTS_2 };
 	memReq.pNext = &dedReq;
 	vkGetImageMemoryRequirements2(m_device, &reqInfo, &memReq);
-
 
 	VkMemoryWin32HandlePropertiesKHR handleProps{ VK_STRUCTURE_TYPE_MEMORY_WIN32_HANDLE_PROPERTIES_KHR };
 
@@ -955,6 +948,43 @@ bool AsyncRenderer::CreateSharedTexture(VulkanTexture& texture, VkExtent2D exten
 	{
 		g_logger->error("Async shared texture: vkCreateImageView failure!");
 		return false;
+	}
+
+	// Create staging buffer if the texture will be updated from the CPU.
+	if (bCPUTransfer &&	(usageFlags & VK_IMAGE_USAGE_HOST_TRANSFER_BIT) == 0)
+	{
+		if (!CreateBuffer(texture.StagingBuffer, texture.StagingBufferMemory, memReq.memoryRequirements.size, VK_BUFFER_USAGE_TRANSFER_SRC_BIT, VK_MEMORY_PROPERTY_HOST_VISIBLE_BIT, nullptr))
+		{
+			g_logger->error("Staging buffer creation failure!");
+			return false;
+		}
+
+		if (vkMapMemory(m_device, texture.StagingBufferMemory, 0, VK_WHOLE_SIZE, 0, reinterpret_cast<void**>(&texture.MappedMemory)) != VK_SUCCESS)
+		{
+			g_logger->error("Failed to map staging buffer!");
+			return false;
+		}
+	}
+
+	if (bCPUTransfer && (usageFlags & VK_IMAGE_USAGE_HOST_TRANSFER_BIT))
+	{
+		VkHostImageLayoutTransitionInfo info{ VK_STRUCTURE_TYPE_HOST_IMAGE_LAYOUT_TRANSITION_INFO };
+		info.image = texture.Image;
+		info.oldLayout = VK_IMAGE_LAYOUT_UNDEFINED;
+		info.newLayout = VK_IMAGE_LAYOUT_GENERAL;
+		info.subresourceRange.aspectMask = VK_IMAGE_ASPECT_COLOR_BIT;
+		info.subresourceRange.baseMipLevel = 0;
+		info.subresourceRange.levelCount = 1;
+		info.subresourceRange.baseArrayLayer = 0;
+		info.subresourceRange.layerCount = 1;
+
+		if (vkTransitionImageLayout(m_device, 1, &info) != VK_SUCCESS)
+		{
+			g_logger->error("vkTransitionImageLayout failed!");
+			return false;
+		}
+
+		texture.Layout = VK_IMAGE_LAYOUT_GENERAL;
 	}
 
 	texture.bIsValid = true;
@@ -1040,7 +1070,15 @@ bool AsyncRenderer::BeginRender(std::shared_ptr<DepthFrame> depthFrame)
 		m_outputTexture[textureIndex].Extent.width != depthFrame->outputDisparityTextureSize[0] ||
 		m_outputTexture[textureIndex].Extent.height != depthFrame->outputDisparityTextureSize[1])
 	{
-		if (!CreateSharedTexture(m_outputTexture[textureIndex], { depthFrame->outputDisparityTextureSize[0], depthFrame->outputDisparityTextureSize[1] }, VK_FORMAT_R16G16_SNORM))
+		DestroyTexture(m_outputTexture[textureIndex]);
+
+		if (!m_baseRenderer->CreateSharedDisparityMap(&m_outputTexture[textureIndex].SharedHandle, &m_outputTexture[textureIndex].nativeTexture, { depthFrame->outputDisparityTextureSize[0], depthFrame->outputDisparityTextureSize[1] }, VK_FORMAT_R16G16_SNORM))
+		{
+			g_logger->error("Failed to create shared disparity map {}!", textureIndex);
+			return false;
+		}
+
+		if (!CreateSharedTexture(m_outputTexture[textureIndex], { depthFrame->outputDisparityTextureSize[0], depthFrame->outputDisparityTextureSize[1] }, VK_FORMAT_R16G16_SNORM, VK_IMAGE_USAGE_TRANSFER_SRC_BIT | VK_IMAGE_USAGE_TRANSFER_DST_BIT | VK_IMAGE_USAGE_SAMPLED_BIT | VK_IMAGE_USAGE_STORAGE_BIT, false))
 		{
 			g_logger->error("Failed to create m_outputTexture {}!", textureIndex);
 			return false;
@@ -1049,14 +1087,14 @@ bool AsyncRenderer::BeginRender(std::shared_ptr<DepthFrame> depthFrame)
 		depthFrame->outputDisparityMapNativeTexture = m_outputTexture[textureIndex].nativeTexture;
 	}
 
-	if (!m_cameraTexture.bIsValid || m_cameraTexture.Extent.width != depthFrame->cameraFrameTextureSize[0] || m_cameraTexture.Extent.height != depthFrame->cameraFrameTextureSize[1])
+	if (!m_bwRectifiedCameraTexture.bIsValid || m_bwRectifiedCameraTexture.Extent.width != depthFrame->cameraFrameTextureSize[0] || m_bwRectifiedCameraTexture.Extent.height != depthFrame->cameraFrameTextureSize[1])
 	{
 		VkImageUsageFlags usageFlags = VK_IMAGE_USAGE_TRANSFER_DST_BIT | VK_IMAGE_USAGE_SAMPLED_BIT;
 		if (m_bHostImageCopyEnabled) { usageFlags |= VK_IMAGE_USAGE_HOST_TRANSFER_BIT; }
 
-		if (!CreateTexture(m_cameraTexture, { depthFrame->cameraFrameTextureSize[0] , depthFrame->cameraFrameTextureSize[1] }, VK_FORMAT_R8_SRGB, usageFlags))
+		if (!CreateTexture(m_bwRectifiedCameraTexture, { depthFrame->cameraFrameTextureSize[0] , depthFrame->cameraFrameTextureSize[1] }, VK_FORMAT_R8_SRGB, usageFlags))
 		{
-			g_logger->error("Failed to create m_cameraTexture!");
+			g_logger->error("Failed to create m_bwRectifiedCameraTexture!");
 			return false;
 		}
 	}
@@ -1106,16 +1144,74 @@ void AsyncRenderer::CopyConfidenceToGPU(std::vector<uint8_t>& buffer)
 	}
 }
 
-void AsyncRenderer::CopyCameraFrameToGPU(std::vector<uint8_t>& buffer)
+bool AsyncRenderer::CopyCameraFrameToGPU(std::vector<uint8_t>& buffer, VkExtent2D extent, void** nativeTexture)
 {
-	if (m_cameraTexture.StagingBuffer == VK_NULL_HANDLE)
+	m_cameraTextureIndex = (m_cameraTextureIndex + 1) % 3;
+	VulkanTexture& texture = m_cameraTexture[m_cameraTextureIndex];
+
+	if (!texture.bIsValid || texture.Extent.width != extent.width || texture.Extent.height != extent.height)
 	{
-		CopyHostImageToGPU(m_device, m_cameraTexture, buffer);
+		DestroyTexture(texture);
+
+		if (!m_baseRenderer->CreateSharedCameraTexture(&texture.SharedHandle, &texture.nativeTexture, extent, VK_FORMAT_R8G8B8A8_SRGB))
+		{
+			g_logger->error("Failed to create shared camera texture {}!", m_cameraTextureIndex);
+			return false;
+		}
+
+		VkImageUsageFlags usageFlags = VK_IMAGE_USAGE_TRANSFER_DST_BIT | VK_IMAGE_USAGE_SAMPLED_BIT;
+
+		if (!CreateSharedTexture(texture, { extent.width , extent.height }, VK_FORMAT_R8G8B8A8_SRGB, usageFlags, true))
+		{
+			g_logger->error("Failed to create m_cameraTexture!");
+			return false;
+		}
+	}
+
+	{
+		vkResetFences(m_device, 1, &m_renderFence);
+
+		VkCommandBufferBeginInfo beginInfo{ VK_STRUCTURE_TYPE_COMMAND_BUFFER_BEGIN_INFO };
+		beginInfo.flags = 0;
+
+		vkBeginCommandBuffer(m_commandBuffer, &beginInfo);
+
+		memcpy(texture.MappedMemory, buffer.data(), buffer.size());
+		CopyTextureToGPU(m_commandBuffer, texture, VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL);
+
+		vkEndCommandBuffer(m_commandBuffer);
+
+		VkSubmitInfo submitInfo{ VK_STRUCTURE_TYPE_SUBMIT_INFO };
+		submitInfo.commandBufferCount = 1;
+		submitInfo.pCommandBuffers = &m_commandBuffer;
+
+		vkQueueSubmit(m_queue, 1, &submitInfo, m_renderFence);
+
+		VkResult res = vkWaitForFences(m_device, 1, &m_renderFence, true, 1000 * 1000 * 100);
+		if (res == VK_TIMEOUT)
+		{
+			g_logger->warn("vkWaitForFences timeout!");
+		}
+		if (res != VK_SUCCESS)
+		{
+			g_logger->error("vkWaitForFences failure: {}", (int32_t)res);
+		}
+	}
+
+	*nativeTexture = texture.nativeTexture;
+	return true;
+}
+
+void AsyncRenderer::CopyBWRectifiedCameraFrameToGPU(std::vector<uint8_t>& buffer)
+{
+	if (m_bwRectifiedCameraTexture.StagingBuffer == VK_NULL_HANDLE)
+	{
+		CopyHostImageToGPU(m_device, m_bwRectifiedCameraTexture, buffer);
 	}
 	else
 	{
-		memcpy(m_cameraTexture.MappedMemory, buffer.data(), buffer.size());
-		CopyTextureToGPU(m_commandBuffer, m_cameraTexture, VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL);
+		memcpy(m_bwRectifiedCameraTexture.MappedMemory, buffer.data(), buffer.size());
+		CopyTextureToGPU(m_commandBuffer, m_bwRectifiedCameraTexture, VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL);
 	}
 }
 
@@ -1142,7 +1238,7 @@ void AsyncRenderer::Render(std::shared_ptr<DepthFrame> depthFrame, const Config_
 
 		VkDescriptorImageInfo cameraImageInfo{};
 		cameraImageInfo.imageLayout = VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL;
-		cameraImageInfo.imageView = m_cameraTexture.View;
+		cameraImageInfo.imageView = m_bwRectifiedCameraTexture.View;
 		cameraImageInfo.sampler = m_sampler;
 
 		VkDescriptorImageInfo outputImageInfo{};
