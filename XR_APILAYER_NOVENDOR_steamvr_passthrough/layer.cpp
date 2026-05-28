@@ -27,19 +27,14 @@
 #include "layer_structs.h"
 #include "perfutil.h"
 #include "pathutil.h"
-#include "passthrough_renderer.h"
-#include "camera_manager.h"
+#include "passthrough_system.h"
 #include "config_manager.h"
-#include "menu_handler.h"
-#include "menu_ipc_client.h"
-#include "openvr_manager.h"
-#include "depth_reconstruction.h"
 #include <util.h>
 #include <map>
 #include <queue>
 #include "psapi.h"
-#include "lodepng.h"
-#include "resource.h"
+
+
 
 HMODULE g_dllModule = NULL;
 
@@ -61,19 +56,9 @@ namespace
 		OpenXrLayer() = default;
 
 		~OpenXrLayer()
-		{
-			// Destroy renderer first so it can block on any outstanding rendering commands.
-
-			m_Renderer.reset();
-			m_depthReconstruction.reset();
-			m_augmentedDepthReconstruction.reset();
-			m_cameraManager.reset();
-			m_augmentedCameraManager.reset();
-
-			g_logger->flush();
-			m_menuHandler.reset();
-			m_menuIPCClient.reset();
-			m_openVRManager.reset();
+		{		
+			m_passthroughSystem.reset();
+			
 			g_logger->flush();
 		}
 
@@ -84,60 +69,34 @@ namespace
 			return XR_ERROR_VALIDATION_FAILURE;
 			}
 
-#if USE_TRACELOGGING
-			TraceLoggingWrite(g_traceProvider,
-					  "xrCreateInstance",
-					  TLArg(xr::ToString(createInfo->applicationInfo.apiVersion).c_str(), "ApiVersion"),
-					  TLArg(createInfo->applicationInfo.applicationName, "ApplicationName"),
-					  TLArg(createInfo->applicationInfo.applicationVersion, "ApplicationVersion"),
-					  TLArg(createInfo->applicationInfo.engineName, "EngineName"),
-					  TLArg(createInfo->applicationInfo.engineVersion, "EngineVersion"),
-					  TLArg(createInfo->createFlags, "CreateFlags"));
-
-			for (uint32_t i = 0; i < createInfo->enabledApiLayerCount; i++)
-			{
-			TraceLoggingWrite(
-				g_traceProvider, "xrCreateInstance", TLArg(createInfo->enabledApiLayerNames[i], "ApiLayerName"));
-			}
-			for (uint32_t i = 0; i < createInfo->enabledExtensionCount; i++)
-			{
-			TraceLoggingWrite(
-				g_traceProvider, "xrCreateInstance", TLArg(createInfo->enabledExtensionNames[i], "ExtensionName"));
-			}
-#endif
-			bool bEnableVulkan2Extension = false;
-			bool bInverseAlphaExtensionEnabled = false;
-			bool bEnableAndroidCameraStateExtension = false;
-			bool bEnableFBPassthroughExtension = false;
-			bool bEnableVarjoDepthExtension = false;
-			bool bEnableVarjoCompositionExtension = false;
+			m_extensionData = ExtensionData{};
 
 			std::vector<std::string> extensions = GetRequestedExtensions();
 			for (uint32_t i = 0; i < extensions.size(); i++)
 			{
 				if (extensions[i].compare(XR_KHR_VULKAN_ENABLE2_EXTENSION_NAME) == 0)
 				{
-					bEnableVulkan2Extension = true;
+					m_extensionData.bVulkan2ExtensionEnabled = true;
 				}
 				else if (extensions[i].compare(XR_EXT_COMPOSITION_LAYER_INVERTED_ALPHA_EXTENSION_NAME) == 0)
 				{
-					bInverseAlphaExtensionEnabled = true;
+					m_extensionData.bInverseAlphaExtensionEnabled = true;
 				}
 				else if (extensions[i].compare(XR_ANDROID_PASSTHROUGH_CAMERA_STATE_EXTENSION_NAME) == 0)
 				{
-					bEnableAndroidCameraStateExtension = true;
+					m_extensionData.bAndroidPassthroughStateExtensionEnabled = true;
 				}
 				else if (extensions[i].compare(XR_FB_PASSTHROUGH_EXTENSION_NAME) == 0)
 				{
-					bEnableFBPassthroughExtension = true;
+					m_extensionData.bFBPassthroughExtensionEnabled = true;
 				}
 				else if (extensions[i].compare(XR_VARJO_ENVIRONMENT_DEPTH_ESTIMATION_EXTENSION_NAME) == 0)
 				{
-					bEnableVarjoDepthExtension = true;
+					m_extensionData.bVarjoDepthExtensionEnabled = true;
 				}
 				else if (extensions[i].compare(XR_VARJO_COMPOSITION_LAYER_DEPTH_TEST_EXTENSION_NAME) == 0)
 				{
-					bEnableVarjoCompositionExtension = true;
+					m_extensionData.bVarjoCompositionExtensionEnabled = true;
 				}
 			}
 			
@@ -151,19 +110,6 @@ namespace
 
 			g_logger->info("Application {} creating OpenXR instance...", GetApplicationName());
 
-#if USE_TRACELOGGING
-			// Dump the application name and OpenXR runtime information to help debugging issues.
-			XrInstanceProperties instanceProperties = {XR_TYPE_INSTANCE_PROPERTIES};
-			OpenXrApi::xrGetInstanceProperties(GetXrInstance(), &instanceProperties);
-			const auto runtimeName = fmt::format("{} {}.{}.{}",
-							 instanceProperties.runtimeName,
-							 XR_VERSION_MAJOR(instanceProperties.runtimeVersion),
-							 XR_VERSION_MINOR(instanceProperties.runtimeVersion),
-							 XR_VERSION_PATCH(instanceProperties.runtimeVersion));
-			TraceLoggingWrite(g_traceProvider, "xrCreateInstance", TLArg(runtimeName.c_str(), "RuntimeName"));
-			g_logger->info("Application: {}", GetApplicationName().c_str());
-			g_logger->info("Using OpenXR runtime: {}", runtimeName.c_str());
-#endif
 
 			std::wstring dllPath(MAX_PATH, L'\0');
 			if (FAILED(GetModuleFileNameW(g_dllModule, (LPWSTR)dllPath.c_str(), (DWORD)dllPath.size())))
@@ -182,11 +128,11 @@ namespace
 				return result;
 			}
 #endif
-			{
-				std::string filePath = GetRoamingAppData() + CONFIG_FILE_DIR + CONFIG_FILE_NAME;
-				m_configManager = std::make_shared<ConfigManager>(filePath, false);
-				m_bIsInitialConfig = m_configManager->ReadConfigFile();
-			}
+			
+			std::string filePath = GetRoamingAppData() + CONFIG_FILE_DIR + CONFIG_FILE_NAME;
+			m_configManager = std::make_shared<ConfigManager>(filePath, false);
+			bool bIsInitialConfig = m_configManager->ReadConfigFile();
+			
 
 			// Check that the SteamVR OpenXR runtime is being used.
 			if (m_configManager->GetConfig_Main().RequireSteamVRRuntime)
@@ -224,50 +170,37 @@ namespace
 				g_logger->info("Automatic settings menu launch disabled");
 			}
 
-			m_openVRManager = std::make_shared<OpenVRManager>();
-			m_menuIPCClient = std::make_shared<MenuIPCClient>();
-			m_menuHandler = std::make_unique<MenuHandler>(g_dllModule, m_configManager, m_menuIPCClient);
-			m_menuIPCClient->RegisterReader(m_menuHandler);
+			m_passthroughSystem = std::make_unique<PassthroughSystem>(g_dllModule, m_configManager, bIsInitialConfig);
+			m_passthroughSystem->SetExtensions(m_extensionData);
 
-			ClientData& data = m_menuHandler->GetClientData();
+			ClientData& data = m_passthroughSystem->GetMenuClientData();
 
-			if (bEnableVarjoDepthExtension && m_configManager->GetConfig_Extensions().ExtVarjoDepthEstimation)
+			if (m_extensionData.bVarjoDepthExtensionEnabled && m_configManager->GetConfig_Extensions().ExtVarjoDepthEstimation)
 			{
-				m_bVarjoDepthExtensionEnabled = true;
 				data.Values.bVarjoDepthEstimationExtensionActive = true;
 				g_logger->info("Extension XR_VARJO_environment_depth_estimation enabled");
 			}
-
-			if (bEnableVarjoCompositionExtension && m_configManager->GetConfig_Extensions().ExtVarjoDepthComposition)
+			if (m_extensionData.bVarjoCompositionExtensionEnabled && m_configManager->GetConfig_Extensions().ExtVarjoDepthComposition)
 			{
-				m_bVarjoCompositionExtensionEnabled = true;
 				data.Values.bVarjoDepthCompositionExtensionActive = true;
 				g_logger->info("Extension XR_VARJO_composition_layer_depth_test enabled");
 			}
-
-			if (bEnableVulkan2Extension)
+			if (m_extensionData.bVulkan2ExtensionEnabled)
 			{
-				m_bEnableVulkan2Extension = true;
 				g_logger->info("Extension XR_KHR_vulkan_enable2 detected");
 			}
-
-			if (bInverseAlphaExtensionEnabled)
+			if (m_extensionData.bInverseAlphaExtensionEnabled)
 			{
-				m_bInverseAlphaExtensionEnabled = true;
 				data.Values.bExtInvertedAlphaActive = true;
 				g_logger->info("Extension XR_EXT_composition_layer_inverted_alpha enabled");
 			}
-
-			if (bEnableAndroidCameraStateExtension)
+			if (m_extensionData.bAndroidPassthroughStateExtensionEnabled)
 			{
-				m_bAndroidPassthroughStateExtensionEnabled = true;
 				data.Values.bAndroidPassthroughStateActive = true;
 				g_logger->info("Extension XR_ANDROID_passthrough_camera_state enabled");
 			}
-
-			if (bEnableFBPassthroughExtension && m_configManager->GetConfig_Extensions().ExtFBPassthrough)
+			if (m_extensionData.bFBPassthroughExtensionEnabled && m_configManager->GetConfig_Extensions().ExtFBPassthrough)
 			{
-				m_bFBPassthroughExtensionEnabled = true;
 				data.Values.bFBPassthroughExtensionActive = true;
 				g_logger->info("Extension XR_FB_passthrough enabled");
 			}
@@ -281,10 +214,7 @@ namespace
 			data.Values.EngineVersion = createInfo->applicationInfo.engineVersion;
 			data.Values.XRVersion = createInfo->applicationInfo.apiVersion;
 
-			m_menuHandler->DispatchApplicationModuleName();
-			m_menuHandler->DispatchApplicationName();
-			m_menuHandler->DispatchEngineName();
-			m_menuHandler->DispatchClientDataValues();
+			m_passthroughSystem->DispatchMenuClientData();
 
 			m_bSuccessfullyLoaded = true;
 			g_logger->info("OpenXR instance successfully created");
@@ -394,13 +324,6 @@ namespace
 				return XR_ERROR_VALIDATION_FAILURE;
 			}
 
-#if USE_TRACELOGGING
-			TraceLoggingWrite(g_traceProvider,
-					  "xrGetSystem",
-					  TLPArg(instance, "Instance"),
-					  TLArg(xr::ToCString(getInfo->formFactor), "FormFactor"));
-#endif
-
 			const XrResult result = OpenXrApi::xrGetSystem(instance, getInfo, systemId);
 			if (XR_SUCCEEDED(result) && getInfo->formFactor == XR_FORM_FACTOR_HEAD_MOUNTED_DISPLAY)
 			{
@@ -409,10 +332,6 @@ namespace
 				XrSystemProperties systemProperties{XR_TYPE_SYSTEM_PROPERTIES};
 				OpenXrApi::xrGetSystemProperties(instance, *systemId, &systemProperties);
 
-#if USE_TRACELOGGING
-				TraceLoggingWrite(g_traceProvider, "xrGetSystem", TLArg(systemProperties.systemName, "SystemName"));
-#endif
-
 				g_logger->info("Using OpenXR system: {}", systemProperties.systemName);
 			}
 
@@ -420,17 +339,13 @@ namespace
 			m_systemId = *systemId;
 			}
 
-#if USE_TRACELOGGING
-			TraceLoggingWrite(g_traceProvider, "xrGetSystem", TLArg((int)*systemId, "SystemId"));
-#endif
-
 			return result;
 		}
 
 
 		XrResult xrGetSystemProperties(XrInstance instance, XrSystemId systemId, XrSystemProperties* properties)
 		{
-			if (!m_bAndroidPassthroughStateExtensionEnabled && !m_bFBPassthroughExtensionEnabled)
+			if (!m_extensionData.bAndroidPassthroughStateExtensionEnabled && !m_extensionData.bFBPassthroughExtensionEnabled)
 			{
 				return OpenXrApi::xrGetSystemProperties(instance, systemId, properties);
 			}
@@ -520,268 +435,6 @@ namespace
 		}
 
 
-		bool SetupRenderer(const XrInstance instance, const XrSessionCreateInfo* createInfo, const XrSession* session)
-		{
-			ClientData& clientData = m_menuHandler->GetClientData();
-
-			const XrBaseInStructure* entry = reinterpret_cast<const XrBaseInStructure*>(createInfo->next);
-
-			while (entry != nullptr)
-			{
-				switch (entry->type)
-				{
-				case XR_TYPE_GRAPHICS_BINDING_D3D11_KHR:
-				{
-					g_logger->info("Initializing rendering for Direct3D 11...");
-
-					const XrGraphicsBindingD3D11KHR* bindings = reinterpret_cast<const XrGraphicsBindingD3D11KHR*>(entry);
-					m_Renderer = std::make_shared<PassthroughRendererDX11>(bindings->device, g_dllModule, m_configManager);
-					m_renderAPI = RenderAPI_Direct3D11;
-					m_appRenderAPI = RenderAPI_Direct3D11;
-
-					if (!SetupProcessingPipeline())
-					{
-						return false;
-					}
-
-					clientData.Values.bSessionActive = true;
-					clientData.Values.RenderAPI = RenderAPI_Direct3D11;
-					clientData.Values.AppRenderAPI = RenderAPI_Direct3D11;
-					m_menuHandler->DispatchClientDataValues();
-					m_bDepthSupportedByRenderer = true;
-					g_logger->info("Direct3D 11 rendering initialized");
-
-					return true;
-				}
-
-				case XR_TYPE_GRAPHICS_BINDING_D3D12_KHR:
-				{
-					g_logger->info("Initializing rendering for Direct3D 12...");
-
-					const XrGraphicsBindingD3D12KHR* bindings = reinterpret_cast<const XrGraphicsBindingD3D12KHR*>(entry);
-
-					m_Renderer = std::make_unique<PassthroughRendererDX11Interop>(bindings->device, bindings->queue, g_dllModule, m_configManager);
-					m_renderAPI = RenderAPI_Direct3D11;
-					m_appRenderAPI = RenderAPI_Direct3D12;
-
-					if (!SetupProcessingPipeline())
-					{
-						return false;
-					}
-
-					clientData.Values.bSessionActive = true;
-					clientData.Values.RenderAPI = RenderAPI_Direct3D11;
-					clientData.Values.AppRenderAPI = RenderAPI_Direct3D12;
-					m_menuHandler->DispatchClientDataValues();
-					m_bDepthSupportedByRenderer = true;
-					g_logger->info("Direct3D 12 rendering initialized");
-
-					return true;
-				}
-
-				case XR_TYPE_GRAPHICS_BINDING_VULKAN_KHR: // same as XR_TYPE_GRAPHICS_BINDING_VULKAN2_KHR
-				{
-					g_logger->info("Initializing rendering for Vulkan...");
-
-					ERenderAPI usedAPI = RenderAPI_Vulkan;
-
-					const XrGraphicsBindingVulkanKHR* bindings = reinterpret_cast<const XrGraphicsBindingVulkanKHR*>(entry);
-					if (m_configManager->GetConfig_Main().UseLegacyVulkanRenderer)
-					{
-
-						m_Renderer = std::make_unique<PassthroughRendererVulkan>(*bindings, g_dllModule, m_configManager);
-						g_logger->info("Using legacy Vulkan renderer");
-					}
-					else
-					{
-						if (!m_bEnableVulkan2Extension && m_configManager->GetConfig_Main().AllowVulkanWithoutConfirmedFeatures)
-						{
-							
-							g_logger->warn("Application is using the XR_KHR_vulkan_enable extension. Required Vulkan features can not be confirmed");
-							return false;
-						}
-						else if (!m_bEnableVulkan2Extension)
-						{
-							g_logger->error("The XR_KHR_vulkan_enable extension is only supported with the legacy renderer, passthrough rendering not enabled");
-							return false;
-						}
-
-						usedAPI = RenderAPI_Direct3D11;
-						m_Renderer = std::make_unique<PassthroughRendererDX11Interop>(*bindings, g_dllModule, m_configManager);
-					}
-
-					m_renderAPI = usedAPI;
-					m_appRenderAPI = RenderAPI_Vulkan;
-
-					if (!SetupProcessingPipeline())
-					{
-						return false;
-					}
-
-					clientData.Values.bSessionActive = true;
-					clientData.Values.RenderAPI = usedAPI;
-					clientData.Values.AppRenderAPI = RenderAPI_Vulkan;
-					m_menuHandler->DispatchClientDataValues();
-					m_bDepthSupportedByRenderer = false;
-					g_logger->info("Vulkan rendering initialized");
-
-					return true;
-				}
-
-				case XR_TYPE_GRAPHICS_BINDING_OPENGL_WIN32_KHR:
-				{
-					g_logger->info("Initializing rendering for OpenGL...");
-
-					m_appRenderAPI = RenderAPI_OpenGL;
-					m_renderAPI = RenderAPI_Direct3D11;
-
-					const XrGraphicsBindingOpenGLWin32KHR* bindings = reinterpret_cast<const XrGraphicsBindingOpenGLWin32KHR*>(entry);
-					
-					m_Renderer = std::make_unique<PassthroughRendererDX11Interop>(*bindings, g_dllModule, m_configManager);
-
-					if (!SetupProcessingPipeline())
-					{
-						return false;
-					}
-
-					clientData.Values.bSessionActive = true;
-					clientData.Values.RenderAPI = RenderAPI_Direct3D11;
-					clientData.Values.AppRenderAPI = RenderAPI_OpenGL;
-					m_menuHandler->DispatchClientDataValues();
-					m_bDepthSupportedByRenderer = false;
-					g_logger->info("OpenGL rendering initialized");
-
-					return true;
-				}
-
-				default:
-
-					entry = reinterpret_cast<const XrBaseInStructure*>(entry->next);
-				}
-			}
-			g_logger->info("Passthrough API layer: No supported graphics APIs detected!");
-			return false;
-		}
-
-		bool SetupProcessingPipeline()
-		{
-			uint32_t cameraTextureWidth;
-			uint32_t cameraTextureHeight;
-			uint32_t cameraFrameBufferSize;
-			uint32_t cameraUndistortedTextureWidth;
-			uint32_t cameraUndistortedTextureHeight;
-			uint32_t cameraUndistortedFrameBufferSize;
-			
-			m_depthReconstruction.reset();
-			m_augmentedDepthReconstruction.reset();
-			m_cameraManager.reset();
-			m_augmentedCameraManager.reset();
-
-			if (!m_Renderer.get())
-			{
-				g_logger->error("Trying to initialize processing pipeline without renderer!");
-				return false;
-			}
-
-			Config_Main& mainConfig = m_configManager->GetConfig_Main();
-
-			m_bIsPaused = false;
-			m_lastRenderTime = StartPerfTimer();
-
-			if (mainConfig.CameraProvider == CameraProvider_OpenVR)
-			{
-				m_cameraManager = std::make_shared<CameraManagerOpenVR>(m_Renderer, m_renderAPI, m_appRenderAPI, m_configManager, m_openVRManager);
-
-				if (!m_cameraManager->InitCamera())
-				{
-					g_logger->error("Failed to initialize camera!");
-					return false;
-				}
-
-				if (m_bIsInitialConfig)
-				{
-					m_bIsInitialConfig = false;
-
-					// Default to stereo mode if we have a compatible headset.
-					// TODO: Just checks for the fisheye model at the moment, whitelist of known models would be better.
-					/*if (m_cameraManager->GetFrameLayout() != FrameLayout_Mono && m_cameraManager->IsUsingFisheyeModel())
-					{
-						m_configManager->GetConfig_Main().ProjectionMode = Projection_StereoReconstruction;
-					}*/
-				}
-
-				ClientData& data = m_menuHandler->GetClientData();
-				m_cameraManager->GetCameraDisplayStats(data.Values.CameraFrameWidth, data.Values.CameraFrameHeight, data.Values.CameraFrameRate, data.Values.CameraProvider, data.Values.bCameraActive);
-				m_menuHandler->DispatchClientDataValues();
-
-				m_cameraManager->GetDistortedTextureSize(cameraTextureWidth, cameraTextureHeight, cameraFrameBufferSize);
-				m_cameraManager->GetUndistortedTextureSize(cameraUndistortedTextureWidth, cameraUndistortedTextureHeight, cameraUndistortedFrameBufferSize);
-			}
-			else if (mainConfig.CameraProvider == CameraProvider_Augmented)
-			{
-				m_cameraManager = std::make_shared<CameraManagerOpenVR>(m_Renderer, m_renderAPI, m_appRenderAPI, m_configManager, m_openVRManager);
-				m_augmentedCameraManager = std::make_shared<CameraManagerOpenCV>(m_Renderer, m_renderAPI, m_appRenderAPI, m_configManager, m_openVRManager, true);
-
-				if (!m_cameraManager->InitCamera() || !m_augmentedCameraManager->InitCamera())
-				{
-					g_logger->error("Failed to initialize camera!");
-					return false;
-				}
-				ClientData& data = m_menuHandler->GetClientData();
-				m_cameraManager->GetCameraDisplayStats(data.Values.CameraFrameWidth, data.Values.CameraFrameHeight, data.Values.CameraFrameRate, data.Values.CameraProvider, data.Values.bCameraActive);
-				m_menuHandler->DispatchClientDataValues();
-
-				m_augmentedCameraManager->GetDistortedTextureSize(cameraTextureWidth, cameraTextureHeight, cameraFrameBufferSize);
-				m_augmentedCameraManager->GetDistortedTextureSize(cameraUndistortedTextureWidth, cameraUndistortedTextureHeight, cameraUndistortedFrameBufferSize);
-			}
-			else
-			{
-				m_cameraManager = std::make_shared<CameraManagerOpenCV>(m_Renderer, m_renderAPI, m_appRenderAPI, m_configManager, m_openVRManager);
-
-				if (!m_cameraManager->InitCamera())
-				{
-					g_logger->error("Failed to initialize camera!");
-					return false;
-				}
-				ClientData& data = m_menuHandler->GetClientData();
-				m_cameraManager->GetCameraDisplayStats(data.Values.CameraFrameWidth, data.Values.CameraFrameHeight, data.Values.CameraFrameRate, data.Values.CameraProvider, data.Values.bCameraActive);
-				m_menuHandler->DispatchClientDataValues();
-
-				m_cameraManager->GetDistortedTextureSize(cameraTextureWidth, cameraTextureHeight, cameraFrameBufferSize);
-				m_cameraManager->GetDistortedTextureSize(cameraUndistortedTextureWidth, cameraUndistortedTextureHeight, cameraUndistortedFrameBufferSize);
-			}
-
-			m_bCamerasInitialized = true;
-
-			m_Renderer->SetFrameSize(cameraTextureWidth, cameraTextureHeight, cameraFrameBufferSize, cameraUndistortedTextureWidth, cameraUndistortedTextureHeight, cameraUndistortedFrameBufferSize);
-			if (!m_Renderer->InitRenderer())
-			{
-				g_logger->error("Failed to initialize renderer!");
-				return false;
-			}
-
-
-			m_depthReconstruction = std::make_shared<DepthReconstruction>(m_configManager, m_openVRManager, m_cameraManager, m_Renderer);
-
-			if (m_configManager->GetConfig_Main().CameraProvider == CameraProvider_Augmented)
-			{
-				m_augmentedDepthReconstruction = std::make_shared<DepthReconstruction>(m_configManager, m_openVRManager, m_augmentedCameraManager, m_Renderer);
-			}
-
-			return true;
-		}
-
-		void ResetRenderer()
-		{
-			m_swapChainLeft = XR_NULL_HANDLE;
-			m_swapChainRight = XR_NULL_HANDLE;
-			m_depthSwapChainLeft = XR_NULL_HANDLE;
-			m_depthSwapChainRight = XR_NULL_HANDLE;
-
-			SetupProcessingPipeline();
-		}
-
-
 		XrResult xrCreateSession(XrInstance instance, const XrSessionCreateInfo* createInfo, XrSession* session) override
 		{
 			if (m_configManager->GetConfig_Main().RequireSteamVRRuntime && !m_bSuccessfullyLoaded)
@@ -793,14 +446,6 @@ namespace
 			{
 				return XR_ERROR_VALIDATION_FAILURE;
 			}
-
-#if USE_TRACELOGGING
-			TraceLoggingWrite(g_traceProvider,
-					  "xrCreateSession",
-					  TLPArg(instance, "Instance"),
-					  TLArg((int)createInfo->systemId, "SystemId"),
-					  TLArg(createInfo->createFlags, "CreateFlags"));
-#endif
 
 			XrResult result = OpenXrApi::xrCreateSession(instance, createInfo, session);
 			if (XR_SUCCEEDED(result))
@@ -814,7 +459,7 @@ namespace
 
 					m_currentInstance = instance;
 					m_currentSession = *session;
-					if (SetupRenderer(instance, createInfo, session))
+					if (m_passthroughSystem->SetupRenderer(instance, createInfo, session))
 					{
 						g_logger->info("Passthrough API layer enabled for session");
 						m_bUsePassthrough = m_configManager->GetConfig_Main().EnablePassthrough;
@@ -826,10 +471,6 @@ namespace
 						g_logger->error("Failed to initialize rendering system!");
 					}
 				}
-
-#if USE_TRACELOGGING
-				TraceLoggingWrite(g_traceProvider, "xrCreateSession", TLPArg(*session, "Session"));
-#endif
 			}
 
 			return result;
@@ -841,13 +482,8 @@ namespace
 			if (isCurrentSession(session))
 			{
 				g_logger->info("Passthrough session ending...");
-				
-				m_depthReconstruction.reset();
-				m_augmentedDepthReconstruction.reset();
-				m_cameraManager.reset();
-				m_augmentedCameraManager.reset();
 
-				m_Renderer.reset();
+				m_passthroughSystem->ResetRenderer();
 
 				m_currentSession = XR_NULL_HANDLE;
 				m_currentInstance = XR_NULL_HANDLE;
@@ -990,7 +626,8 @@ namespace
 
 			XrSwapchainCreateInfo newCreateInfo = *createInfo;
 			
-			if (m_appRenderAPI == RenderAPI_Vulkan && m_renderAPI == RenderAPI_Direct3D11)
+			if (m_passthroughSystem->GetAppRenderAPI() == RenderAPI_Vulkan && 
+				m_passthroughSystem->GetLayerRenderAPI() == RenderAPI_Direct3D11)
 			{
 				newCreateInfo.usageFlags |= (XR_SWAPCHAIN_USAGE_TRANSFER_SRC_BIT | XR_SWAPCHAIN_USAGE_TRANSFER_DST_BIT);
 			}
@@ -1128,6 +765,25 @@ namespace
 			}
 		}
 
+		void ReleaseHeldSwapchainImages()
+		{
+			for (auto& held : m_heldSwapchains)
+			{
+				while (!held.second.empty())
+				{
+					held.second.pop();
+					m_waitedSwapchains[held.first] = false;
+					XrResult result = OpenXrApi::xrReleaseSwapchainImage(held.first, nullptr);
+					if (XR_FAILED(result))
+					{
+						g_logger->error("Error in xrReleaseSwapchainImage: {}", static_cast<int32_t>(result));
+					}
+				}
+			}
+
+			m_heldSwapchains.clear();
+		}
+
 
 		XrResult xrBeginFrame(XrSession session, const XrFrameBeginInfo* frameBeginInfo)
 		{
@@ -1171,7 +827,7 @@ namespace
 			
 			if (eye == RenderEye_Left)
 			{
-				m_menuHandler->GetClientData().Values.FrameBufferFormat = props->second.format;
+				m_passthroughSystem->GetMenuClientData().Values.FrameBufferFormat = props->second.format;
 				renderParams.LeftFrameIndex = imageIndex;
 			}
 			else
@@ -1185,15 +841,17 @@ namespace
 			
 				XrStructureType type = XR_TYPE_SWAPCHAIN_IMAGE_D3D11_KHR;
 
-				if (m_appRenderAPI == RenderAPI_Direct3D12)
+				ERenderAPI appAPI = m_passthroughSystem->GetAppRenderAPI();
+
+				if (appAPI == RenderAPI_Direct3D12)
 				{
 					type = XR_TYPE_SWAPCHAIN_IMAGE_D3D12_KHR;
 				}
-				else if (m_appRenderAPI == RenderAPI_Vulkan)
+				else if (appAPI == RenderAPI_Vulkan)
 				{
 					type = XR_TYPE_SWAPCHAIN_IMAGE_VULKAN_KHR;
 				}
-				if (m_appRenderAPI == RenderAPI_OpenGL)
+				if (appAPI == RenderAPI_OpenGL)
 				{
 					type = XR_TYPE_SWAPCHAIN_IMAGE_OPENGL_KHR;
 				}
@@ -1211,7 +869,7 @@ namespace
 				{
 					for (uint32_t i = 0; i < numImages; i++)
 					{
-						m_Renderer->InitRenderTarget(eye, swapchainImages[i].texture, i, props->second, newSwapchain);
+						m_passthroughSystem->InitRenderTarget(eye, swapchainImages[i].texture, i, props->second, newSwapchain);
 					}
 					*storedSwapchain = newSwapchain;
 				}
@@ -1256,7 +914,7 @@ namespace
 				{
 					if (eye == RenderEye_Left)
 					{
-						ClientData& data = m_menuHandler->GetClientData();
+						ClientData& data = m_passthroughSystem->GetMenuClientData();
 						data.Values.DepthBufferFormat = depthProps->second.format;
 						data.Values.NearZ = depthInfo->nearZ;
 						data.Values.FarZ = depthInfo->farZ;
@@ -1277,15 +935,17 @@ namespace
 
 					XrStructureType type = XR_TYPE_SWAPCHAIN_IMAGE_D3D11_KHR;
 
-					if (m_appRenderAPI == RenderAPI_Direct3D12)
+					ERenderAPI appAPI = m_passthroughSystem->GetAppRenderAPI();
+
+					if (appAPI == RenderAPI_Direct3D12)
 					{
 						type = XR_TYPE_SWAPCHAIN_IMAGE_D3D12_KHR;
 					}
-					else if (m_appRenderAPI == RenderAPI_Vulkan)
+					else if (appAPI == RenderAPI_Vulkan)
 					{
 						type = XR_TYPE_SWAPCHAIN_IMAGE_VULKAN_KHR;
 					}
-					if (m_appRenderAPI == RenderAPI_OpenGL)
+					if (appAPI == RenderAPI_OpenGL)
 					{
 						type = XR_TYPE_SWAPCHAIN_IMAGE_OPENGL_KHR;
 					}
@@ -1301,7 +961,7 @@ namespace
 					{
 						for (uint32_t i = 0; i < numImages; i++)
 						{
-							m_Renderer->InitDepthBuffer(eye, depthImages[i].texture, i, depthProps->second, depthInfo->subImage.swapchain);
+							m_passthroughSystem->InitDepthBuffer(eye, depthImages[i].texture, i, depthProps->second, depthInfo->subImage.swapchain);
 						}
 						*storedDepthSwapchain = depthInfo->subImage.swapchain;
 					}
@@ -1351,285 +1011,7 @@ namespace
 			return false;
 		}
 
-		void GetTestPattern(DebugTexture& texture)
-		{
-			HRSRC resInfo = FindResource(g_dllModule, MAKEINTRESOURCE(IDB_PNG_TESTPATTERN), L"PNG");
-			if (resInfo == nullptr)
-			{
-				g_logger->error("Error finding test pattern resource!");
-				return;
-			}
-			HGLOBAL memory = LoadResource(g_dllModule, resInfo);
-			if (memory == nullptr)
-			{
-				g_logger->error("Error loading test pattern resource!");
-				return;
-			}
-			size_t data_size = SizeofResource(g_dllModule, resInfo);
-			void* data = LockResource(memory);
-
-			if (data == nullptr)
-			{
-				g_logger->error("Error reading test pattern resource!");
-				return;
-			}
-
-			std::lock_guard<std::mutex> writelock(texture.RWMutex);
-			
-			if (texture.CurrentTexture != DebugTexture_TestImage)
-			{
-				texture.Texture = std::vector<uint8_t>();
-			}
-
-			unsigned width, height;
-			unsigned error = lodepng::decode(texture.Texture, width, height, (uint8_t*)data, data_size);
-
-			if (error)
-			{
-				g_logger->error("Error decoding test pattern!");
-				return;
-			}
-
-			texture.Texture.resize(width * height * 4);
-
-			texture.Height = height;
-			texture.Width = width;
-			texture.PixelSize = 4;
-			texture.Format = DebugTextureFormat_RGBA8;
-			texture.CurrentTexture = DebugTexture_TestImage;
-			texture.bDimensionsUpdated = true;
-
-			return;
-		}
-
-		void RenderPassthroughOnAppLayer(const XrFrameEndInfo* frameEndInfo, uint32_t layerNum, bool bUseFBPassthrough, FBPassthroughLayerInstance* fbLayer)
-		{
-			Config_Main& mainConf = m_configManager->GetConfig_Main();
-
-			XrCompositionLayerProjection* layer = (XrCompositionLayerProjection*)frameEndInfo->layers[layerNum];
-			std::shared_ptr<CameraFrame> frame;
-			std::shared_ptr<CameraCPUFrame> cpuFrame;
-
-			std::shared_lock<std::shared_mutex> cpuFrameReadLock;
-			std::shared_lock<std::shared_mutex> depthFrameReadLock;
-
-			if ((mainConf.CameraProvider == CameraProvider_Augmented) ?
-				!m_augmentedCameraManager->GetCameraFrame(frame) :
-				!m_cameraManager->GetCameraFrame(frame))
-			{
-				return;
-			}
-			std::shared_lock readLock(frame->readWriteMutex);
-
-			// TODO: CPU-side camera frame only needed for OpenCV provider. Upload async instead.
-			if (mainConf.CameraProvider == CameraProvider_OpenCV)
-			{
-				if ((mainConf.CameraProvider == CameraProvider_Augmented) ?
-					!m_augmentedCameraManager->GetCameraCPUFrame(cpuFrame) :
-					!m_cameraManager->GetCameraCPUFrame(cpuFrame))
-				{
-					return;
-				}
-				cpuFrameReadLock = std::shared_lock<std::shared_mutex>(cpuFrame->ReadWriteMutex);
-			}
-
-			std::shared_ptr<DepthFrame> depthFrame = m_depthReconstruction->GetDepthFrame();
-			if (depthFrame.get())
-			{
-				depthFrameReadLock = std::shared_lock<std::shared_mutex>(depthFrame->readWriteMutex);
-			}
-			else
-			{
-				return;
-			}
-
-
-			ClientData& clientData = m_menuHandler->GetClientData();
-
-			LARGE_INTEGER preRenderTime = StartPerfTimer();
-
-			float frameToRenderTime = GetPerfTimerDiff(frame->header.ulFrameExposureTime, preRenderTime.QuadPart);
-			clientData.Values.FrameToRenderLatencyMS = UpdateAveragePerfTime(m_frameToRenderTimes, frameToRenderTime, 20);
-
-			LARGE_INTEGER displayTime;
-
-			OpenXrApi::xrConvertTimeToWin32PerformanceCounterKHR(m_currentInstance, frameEndInfo->displayTime, &displayTime);
-
-			float frameToPhotonsTime = GetPerfTimerDiff(frame->header.ulFrameExposureTime, displayTime.QuadPart);
-			clientData.Values.FrameToPhotonsLatencyMS = UpdateAveragePerfTime(m_frameToPhotonTimes, frameToPhotonsTime, 20);
-
-			if (depthFrame->bIsValid)
-			{
-				float depthToRenderTime = GetPerfTimerDiff(depthFrame->frameExposureTimestamp, preRenderTime.QuadPart);
-				clientData.Values.DepthToRenderLatencyMS = UpdateAveragePerfTime(m_depthToRenderTimes, depthToRenderTime, 20);
-
-				float depthToPhotonsTime = GetPerfTimerDiff(depthFrame->frameExposureTimestamp, displayTime.QuadPart);
-				clientData.Values.DepthToPhotonsLatencyMS = UpdateAveragePerfTime(m_depthToPhotonTimes, depthToPhotonsTime, 20);
-			}
-
-
-			float timeToPhotons = GetPerfTimerDiff(preRenderTime.QuadPart, displayTime.QuadPart);
-			
-			Config_Core& coreConf = m_configManager->GetConfig_Core();
-			Config_Extensions& extConf = m_configManager->GetConfig_Extensions();
-			Config_Depth& depthConf = m_configManager->GetConfig_Depth();
-
-				
-
-			if (mainConf.CameraProvider == CameraProvider_Augmented)
-			{
-				m_augmentedCameraManager->CalculateFrameProjection(frame, depthFrame, *layer, timeToPhotons, m_refSpaces[layer->space], m_augmentedDepthReconstruction->GetDistortionParameters());
-			}
-			else
-			{
-				m_cameraManager->CalculateFrameProjection(frame, depthFrame, *layer, timeToPhotons, m_refSpaces[layer->space], m_depthReconstruction->GetDistortionParameters());
-			}
-
-			FrameRenderParameters renderParams;
-
-			if (bUseFBPassthrough)
-			{
-				if (extConf.ExtFBPassthroughAllowColorSettings && fbLayer->ColorAdjustmentEnabled)
-				{
-					renderParams.bForceColorSettings = true;
-					renderParams.ForcedBrightness = fbLayer->Brightness;
-					renderParams.ForcedContrast = fbLayer->Contrast;
-					renderParams.ForcedSaturation = fbLayer->Saturation;
-				}
-
-				renderParams.RenderOpacity = fbLayer->Opacity;
-			}
-
-			UpdateSwapchains(RenderEye_Left, layer, renderParams);
-			UpdateSwapchains(RenderEye_Right, layer, renderParams);
-
-			if (renderParams.LeftFrameIndex < 0 || renderParams.RightFrameIndex < 0)
-			{
-				g_logger->error("Error: No swapchains found!");
-				return;
-			}
-
-			clientData.Values.LastCameraTimestamp = frame->header.ulFrameExposureTime;
-
-			if (coreConf.CoreForcePassthrough && coreConf.CoreForceMode >= 0)
-			{
-				renderParams.BlendMode = (EPassthroughBlendMode)coreConf.CoreForceMode;
-				clientData.Values.bCorePassthroughActive = true;
-				clientData.Values.bFBPassthroughActive = false;
-				clientData.Values.bFBPassthroughDepthActive = false;
-			}
-			else if (bUseFBPassthrough)
-			{
-				renderParams.BlendMode = AlphaBlendPremultiplied;
-				clientData.Values.bCorePassthroughActive = false;
-				clientData.Values.bFBPassthroughActive = true;
-				clientData.Values.bFBPassthroughDepthActive = fbLayer->DepthEnabled;
-			}
-			else
-			{
-				renderParams.BlendMode = (EPassthroughBlendMode)frameEndInfo->environmentBlendMode;
-				clientData.Values.bCorePassthroughActive = true;
-				clientData.Values.bFBPassthroughActive = false;
-				clientData.Values.bFBPassthroughDepthActive = false;
-			}
-
-			if (renderParams.BlendMode == AlphaBlendPremultiplied)
-			{
-				if (coreConf.CoreForcePremultipliedAlpha == 0 || 
-					(coreConf.CoreForcePremultipliedAlpha == -1 && 
-						(layer->layerFlags & XR_COMPOSITION_LAYER_UNPREMULTIPLIED_ALPHA_BIT) != 0))
-				{
-					renderParams.BlendMode = AlphaBlendUnpremultiplied;
-				}
-			}
-
-			renderParams.bInvertLayerAlpha =  m_bInverseAlphaExtensionEnabled &&
-				(layer->layerFlags & XR_COMPOSITION_LAYER_INVERTED_ALPHA_BIT_EXT);
-
-			if (m_configManager->GetConfig_Main().DebugTexture == DebugTexture_TestImage &&
-				m_configManager->GetDebugTexture().CurrentTexture != DebugTexture_TestImage)
-			{
-				GetTestPattern(m_configManager->GetDebugTexture());
-			}		
-
-			renderParams.bEnableDepthRange = false;			
-
-			renderParams.bEnableDepthBlending = depthConf.DepthReadFromApplication &&
-					((m_bVarjoDepthEnabled && 
-					(renderParams.BlendMode == AlphaBlendPremultiplied ||
-					renderParams.BlendMode == AlphaBlendUnpremultiplied)) ||
-				(bUseFBPassthrough && fbLayer->DepthEnabled) ||
-				depthConf.DepthForceComposition);
-
-			clientData.Values.bDepthBlendingActive = renderParams.bEnableDepthBlending;
-
-			
-			if (m_bVarjoCompositionExtensionEnabled)
-			{
-				auto header = (XrCompositionLayerDepthTestVARJO*)layer->next;
-				XrCompositionLayerDepthTestVARJO* prevHeader = nullptr;
-
-				while (header != nullptr)
-				{
-					if (header->type == XR_TYPE_COMPOSITION_LAYER_DEPTH_TEST_VARJO)
-					{
-						renderParams.bEnableDepthRange = true;
-						renderParams.DepthRangeMin = header->depthTestRangeNearZ;
-						renderParams.DepthRangeMax = header->depthTestRangeFarZ;
-						
-						// Hide header from runtime
-						if (prevHeader)
-						{
-							prevHeader->next = header->next;
-						}
-						else
-						{
-							layer->next = header->next;
-						}
-						break;
-					}
-					prevHeader = header;
-					header = (XrCompositionLayerDepthTestVARJO*)header->next;
-				}
-			}
-
-			if (depthConf.DepthForceRangeTest)
-			{
-				renderParams.bEnableDepthRange = true;
-				renderParams.DepthRangeMin = depthConf.DepthForceRangeTestMin;
-				renderParams.DepthRangeMax = depthConf.DepthForceRangeTestMax;
-			}
-
-			UVDistortionParameters& distParams =
-				m_configManager->GetConfig_Main().CameraProvider == CameraProvider_Augmented ?
-				m_augmentedDepthReconstruction->GetDistortionParameters() :
-				m_depthReconstruction->GetDistortionParameters();
-
-
-			m_Renderer->RenderPassthroughFrame(layer, frame, cpuFrame, renderParams, depthFrame, distParams);
-
-			depthFrame->bIsFirstRender = false;
-
-			if (depthFrameReadLock.owns_lock())
-			{
-				depthFrameReadLock.unlock();
-			}
-
-			if (cpuFrameReadLock.owns_lock())
-			{
-				cpuFrameReadLock.unlock();
-			}
-
-			float renderTime = EndPerfTimer(preRenderTime.QuadPart);
-			clientData.Values.RenderTimeMS = UpdateAveragePerfTime(m_passthroughRenderTimes, renderTime, 20);
-
-			clientData.Values.StereoReconstructionTimeMS = m_depthReconstruction->GetReconstructionPerfTime();
-			clientData.Values.StereoRenderTimeMS = m_depthReconstruction->GetRenderPerfTime();
-			clientData.Values.GPUFrameRetrievalTimeMS = m_cameraManager->GetGPUFrameRetrievalPerfTime();
-			clientData.Values.CPUFrameRetrievalTimeMS = m_cameraManager->GetCPUFrameRetrievalPerfTime();
-		}
-
-
+		
 		XrResult xrEndFrame(XrSession session, const XrFrameEndInfo* frameEndInfo) 
 		{
 			if (!isCurrentSession(session))
@@ -1640,7 +1022,7 @@ namespace
 
 				std::vector<const XrCompositionLayerBaseHeader*>newLayers;
 
-				if (m_bFBPassthroughExtensionEnabled)
+				if (m_extensionData.bFBPassthroughExtensionEnabled)
 				{
 					for (uint32_t i = 0; i < modifiedFrameEndInfo.layerCount; i++)
 					{
@@ -1660,70 +1042,15 @@ namespace
 				return OpenXrApi::xrEndFrame(session, &modifiedFrameEndInfo);
 			}
 
-			Config_Main& mainConfig = m_configManager->GetConfig_Main();
 
-			bool bResetPending = false;
-
-			if (m_Renderer.get() && m_configManager->CheckResetRendererResetPending())
-			{
-				bResetPending = true;
-			}
+			m_passthroughSystem->OnPreRenderFrame(frameEndInfo);
 
 
-			XrResult result;
-
-			if (m_menuHandler.get())
-			{
-				ClientData& data = m_menuHandler->GetClientData();
-
-				if (m_cameraManager.get())
-				{
-					data.Values.CameraState = m_cameraManager->GetCameraState();
-				}
-
-				data.Values.CoreCurrentMode = frameEndInfo->environmentBlendMode;
-				data.Values.NumCompositionLayers = frameEndInfo->layerCount;
-				bool bDepthSubmitted = false;
-
-				for (uint32_t i = 0; i < frameEndInfo->layerCount; i++)
-				{
-					auto layer = reinterpret_cast<const XrCompositionLayerProjection*>(frameEndInfo->layers[i]);
-
-					if (layer->type != XR_TYPE_COMPOSITION_LAYER_PROJECTION) { continue; }
-
-					data.Values.FrameBufferHeight = layer->views[0].subImage.imageRect.extent.height;
-					data.Values.FrameBufferWidth = layer->views[0].subImage.imageRect.extent.width;
-					data.Values.FrameBufferFlags = layer->layerFlags;
-
-					auto depthInfo = reinterpret_cast<const XrCompositionLayerDepthInfoKHR*>(layer->views[0].next);
-
-					while (depthInfo != nullptr)
-					{
-						if (depthInfo->type == XR_TYPE_COMPOSITION_LAYER_DEPTH_INFO_KHR)
-						{
-							bDepthSubmitted = true;
-							break;
-						}
-						depthInfo = reinterpret_cast<const XrCompositionLayerDepthInfoKHR*>(depthInfo->next);
-					}
-
-					break;
-				}
-				data.Values.bDepthLayerSubmitted = bDepthSubmitted;
-
-				m_menuHandler->DispatchClientDataValues();
-			}
-
-			bool bInvalidEndFrame = false;
-
-			if (frameEndInfo->displayTime == 0 || !m_bBeginframeCalled)
-			{
-				bInvalidEndFrame = true;
-			}
-
+			bool bResetPending = m_configManager->CheckResetRendererResetPending();
+			bool bInvalidEndFrame = frameEndInfo->displayTime == 0 || !m_bBeginframeCalled;
 			m_bBeginframeCalled = false;
-
 			bool bDidRender = false;
+
 			if (m_bUsePassthrough && !bResetPending && !bInvalidEndFrame)
 			{
 				bool bHasUnderlayLayer = false;
@@ -1731,7 +1058,8 @@ namespace
 
 				for (uint32_t i = 0; i < frameEndInfo->layerCount; i++)
 				{
-					if (m_bFBPassthroughExtensionEnabled && m_fbPassthough.PassthroughStarted && frameEndInfo->layers[i]->type == XR_TYPE_COMPOSITION_LAYER_PASSTHROUGH_FB)
+					// Check for underlay passthrough layers
+					if (m_extensionData.bFBPassthroughExtensionEnabled && m_fbPassthough.PassthroughStarted && frameEndInfo->layers[i]->type == XR_TYPE_COMPOSITION_LAYER_PASSTHROUGH_FB)
 					{
 						auto layer = reinterpret_cast<const XrCompositionLayerPassthroughFB*>(frameEndInfo->layers[i]);
 
@@ -1753,41 +1081,27 @@ namespace
 					}
 					else if (frameEndInfo->layers[i]->type == XR_TYPE_COMPOSITION_LAYER_PROJECTION)
 					{
-						bool bCanRenderDirect = IsBlendModeEnabled(frameEndInfo->environmentBlendMode, reinterpret_cast<const XrCompositionLayerProjection*>(frameEndInfo->layers[i]));
+						auto layer = reinterpret_cast<const XrCompositionLayerProjection*>(frameEndInfo->layers[i]);
+
+						bool bCanRenderDirect = IsBlendModeEnabled(frameEndInfo->environmentBlendMode, layer);
 						bool bCanRenderFBPassthrough = bHasUnderlayLayer && frameEndInfo->layers[i]->layerFlags & XR_COMPOSITION_LAYER_BLEND_TEXTURE_SOURCE_ALPHA_BIT;
 
 						if (bCanRenderDirect || bCanRenderFBPassthrough)
 						{
-							if (m_bIsPaused)
-							{
-								if (mainConfig.CameraProvider == CameraProvider_Augmented)
-								{
-									m_augmentedCameraManager->SetPaused(false);
-								}
-								m_cameraManager->SetPaused(false);
+							m_frameRenderParams = FrameRenderParameters{};
+							m_frameRenderParams.bUseFBPassthrough = bCanRenderFBPassthrough;
+							m_frameRenderParams.FBLayer = fbLayer;
+							m_frameRenderParams.bVarjoDepthEnabled = m_bVarjoDepthEnabled;
+							m_frameRenderParams.ReferenceSpace = m_refSpaces[layer->space];
 
-								if (!m_bCamerasInitialized)
-								{
-									if (mainConfig.CameraProvider == CameraProvider_Augmented)
-									{
-										if ((!m_cameraManager->InitCamera() || !m_augmentedCameraManager->InitCamera()))
-										{
-											g_logger->error("Failed to reinitialize camera!");
-											break;
-										}
-									}
-									else if (!m_cameraManager->InitCamera())
-									{
-										g_logger->error("Failed to reinitialize camera!");
-										break;
-									}
-									m_bCamerasInitialized = true;
-								}
-								m_bIsPaused = false;
-							}
+							LARGE_INTEGER displayTime;
+							OpenXrApi::xrConvertTimeToWin32PerformanceCounterKHR(m_currentInstance, frameEndInfo->displayTime, &displayTime);
+							m_frameRenderParams.DisplayTime = displayTime.QuadPart;
 
-							RenderPassthroughOnAppLayer(frameEndInfo, i, bCanRenderFBPassthrough, fbLayer);
-							bDidRender = true;
+							UpdateSwapchains(RenderEye_Left, layer, m_frameRenderParams);
+							UpdateSwapchains(RenderEye_Right, layer, m_frameRenderParams);
+
+							bDidRender = m_passthroughSystem->RenderPassthroughOnAppLayer(frameEndInfo, i, m_frameRenderParams);
 
 							break;
 						}
@@ -1795,28 +1109,13 @@ namespace
 				}
 			}
 
-			for (auto& held : m_heldSwapchains)
-			{
-				while (!held.second.empty())
-				{
-					held.second.pop();
-					m_waitedSwapchains[held.first] = false;
-					result = OpenXrApi::xrReleaseSwapchainImage(held.first, nullptr);
-					if (XR_FAILED(result))
-					{
-						g_logger->error("Error in xrReleaseSwapchainImage: {}", static_cast<int32_t>(result));
-					}
-				}
-			}
-
-			m_heldSwapchains.clear();
-
+			ReleaseHeldSwapchainImages();
 
 			XrFrameEndInfo modifiedFrameEndInfo = *frameEndInfo;
 			modifiedFrameEndInfo.environmentBlendMode = XR_ENVIRONMENT_BLEND_MODE_OPAQUE;
 			std::vector<const XrCompositionLayerBaseHeader*>newLayers;
 
-			if (m_bFBPassthroughExtensionEnabled)
+			if (m_extensionData.bFBPassthroughExtensionEnabled)
 			{
 				for (uint32_t i = 0; i < modifiedFrameEndInfo.layerCount; i++)
 				{
@@ -1841,55 +1140,21 @@ namespace
 				modifiedFrameEndInfo.layerCount = static_cast<uint32_t>(newLayers.size());
 			}
 
-			result = OpenXrApi::xrEndFrame(session, &modifiedFrameEndInfo);
+			XrResult result = OpenXrApi::xrEndFrame(session, &modifiedFrameEndInfo);
 
 			if (bResetPending)
 			{
-				ResetRenderer();
-			}
-			else if (bDidRender)
-			{
-				m_lastRenderTime = StartPerfTimer();
-				m_menuHandler->GetClientData().Values.LastFrameTimestamp = m_lastRenderTime.QuadPart;
-				m_menuHandler->DispatchClientDataValues();
+				m_swapChainLeft = XR_NULL_HANDLE;
+				m_swapChainRight = XR_NULL_HANDLE;
+				m_depthSwapChainLeft = XR_NULL_HANDLE;
+				m_depthSwapChainRight = XR_NULL_HANDLE;
+
+				m_passthroughSystem->SetupProcessingPipeline();
 			}
 			else
 			{
-				if (m_menuHandler.get())
-				{
-					ClientData& data = m_menuHandler->GetClientData();
-					data.Values.bCorePassthroughActive = false;
-					data.Values.bFBPassthroughActive = false;
-					uint64_t frameTime = StartPerfTimer().QuadPart;
-					data.Values.LastFrameTimestamp = frameTime;
-
-					m_menuHandler->DispatchClientDataValues();
-				}
-
-				float time = EndPerfTimer(m_lastRenderTime);
-
 				// Never consider idle as long as FB passthrough is unpaused.
-				if (!m_bIsPaused && !m_fbPassthough.PassthroughStarted && mainConfig.PauseImageHandlingOnIdle && time > mainConfig.IdleTimeSeconds * 1000.0f)
-				{
-					m_bIsPaused = true;
-
-					if (mainConfig.CameraProvider == CameraProvider_Augmented)
-					{
-						m_augmentedCameraManager->SetPaused(true);
-					}
-					m_cameraManager->SetPaused(true);
-
-					if (mainConfig.CloseCameraStreamOnPause)
-					{
-						if (mainConfig.CameraProvider == CameraProvider_Augmented)
-						{
-							m_augmentedCameraManager->DeinitCamera();
-						}
-						m_cameraManager->DeinitCamera();
-
-						m_bCamerasInitialized = false;
-					}
-				}
+				m_passthroughSystem->OnPostRenderFrame(bDidRender, m_fbPassthough.PassthroughStarted);		
 			}
 
 			return result;
@@ -1898,7 +1163,7 @@ namespace
 
 		XrResult xrSetEnvironmentDepthEstimationVARJO(XrSession session, XrBool32 enabled)
 		{
-			if (!m_bVarjoDepthExtensionEnabled)
+			if (!m_extensionData.bVarjoDepthExtensionEnabled)
 			{
 				g_logger->error("xrSetEnvironmentDepthEstimationVARJO called without enabling extension!");
 				return XR_ERROR_RUNTIME_FAILURE;
@@ -1910,14 +1175,16 @@ namespace
 				return XR_ERROR_HANDLE_INVALID;
 			}
 
-			if (m_bDepthSupportedByRenderer && m_configManager->GetConfig_Extensions().ExtVarjoDepthEstimation && enabled)
+			bool bDepthSupported = m_passthroughSystem->IsDepthSupportedByRenderer();
+
+			if (bDepthSupported && m_configManager->GetConfig_Extensions().ExtVarjoDepthEstimation && enabled)
 			{
 				m_bVarjoDepthEnabled = true;
 				return XR_SUCCESS;
 			}
-			else if ((!m_bDepthSupportedByRenderer || !m_configManager->GetConfig_Extensions().ExtVarjoDepthEstimation) && enabled)
+			else if ((!bDepthSupported || !m_configManager->GetConfig_Extensions().ExtVarjoDepthEstimation) && enabled)
 			{
-				if (!m_bDepthSupportedByRenderer)
+				if (!bDepthSupported)
 				{
 					g_logger->error("Varjo depth estimation unsupported by current renderer.");
 				}
@@ -1933,7 +1200,7 @@ namespace
 
 		XrResult xrGetPassthroughCameraStateANDROID(XrSession session, const XrPassthroughCameraStateGetInfoANDROID* getInfo, XrPassthroughCameraStateANDROID* cameraStateOutput)
 		{
-			if (!m_bAndroidPassthroughStateExtensionEnabled)
+			if (!m_extensionData.bAndroidPassthroughStateExtensionEnabled)
 			{
 				g_logger->error("xrGetPassthroughCameraStateANDROID called without enabling extension!");
 				return XR_ERROR_RUNTIME_FAILURE;
@@ -1945,12 +1212,12 @@ namespace
 				return XR_ERROR_HANDLE_INVALID;
 			}
 
-			if (!m_cameraManager.get())
+			if (!m_passthroughSystem.get())
 			{
 				return XR_ERROR_RUNTIME_FAILURE;
 			}
 
-			switch (m_cameraManager->GetCameraState())
+			switch (m_passthroughSystem->GetCameraState())
 			{
 			case CameraState_Uninitialized:
 			case CameraState_Idle:
@@ -1977,7 +1244,7 @@ namespace
 
 		XrResult xrCreatePassthroughFB(XrSession session, const XrPassthroughCreateInfoFB* createInfo, XrPassthroughFB* outPassthrough)
 		{
-			if (!m_bFBPassthroughExtensionEnabled)
+			if (!m_extensionData.bFBPassthroughExtensionEnabled)
 			{
 				g_logger->error("xrCreatePassthroughFB called without enabling extension!");
 				return XR_ERROR_RUNTIME_FAILURE;
@@ -2008,7 +1275,7 @@ namespace
 
 		XrResult xrDestroyPassthroughFB(XrPassthroughFB passthrough)
 		{
-			if (!m_bFBPassthroughExtensionEnabled)
+			if (!m_extensionData.bFBPassthroughExtensionEnabled)
 			{
 				g_logger->error("xrDestroyPassthroughFB called without enabling extension!");
 				return XR_ERROR_RUNTIME_FAILURE;
@@ -2031,7 +1298,7 @@ namespace
 
 		XrResult xrPassthroughStartFB(XrPassthroughFB passthrough)
 		{
-			if (!m_bFBPassthroughExtensionEnabled)
+			if (!m_extensionData.bFBPassthroughExtensionEnabled)
 			{
 				g_logger->error("xrPassthroughStartFB called without enabling extension!");
 				return XR_ERROR_RUNTIME_FAILURE;
@@ -2051,7 +1318,7 @@ namespace
 
 		XrResult xrPassthroughPauseFB(XrPassthroughFB passthrough)
 		{
-			if (!m_bFBPassthroughExtensionEnabled)
+			if (!m_extensionData.bFBPassthroughExtensionEnabled)
 			{
 				g_logger->error("xrPassthroughPauseFB called without enabling extension!");
 				return XR_ERROR_RUNTIME_FAILURE;
@@ -2072,7 +1339,7 @@ namespace
 		XrResult xrCreatePassthroughLayerFB(XrSession session, const XrPassthroughLayerCreateInfoFB* createInfo, XrPassthroughLayerFB* outLayer)
 		{
 
-			if (!m_bFBPassthroughExtensionEnabled)
+			if (!m_extensionData.bFBPassthroughExtensionEnabled)
 			{
 				g_logger->error("xrCreatePassthroughLayerFB called without enabling extension!");
 				return XR_ERROR_RUNTIME_FAILURE;
@@ -2117,7 +1384,7 @@ namespace
 
 		XrResult xrDestroyPassthroughLayerFB(XrPassthroughLayerFB layer)
 		{
-			if (!m_bFBPassthroughExtensionEnabled)
+			if (!m_extensionData.bFBPassthroughExtensionEnabled)
 			{
 				g_logger->error("xrDestroyPassthroughLayerFB called without enabling extension!");
 				return XR_ERROR_RUNTIME_FAILURE;
@@ -2137,7 +1404,7 @@ namespace
 
 		XrResult xrPassthroughLayerPauseFB(XrPassthroughLayerFB layer)
 		{
-			if (!m_bFBPassthroughExtensionEnabled)
+			if (!m_extensionData.bFBPassthroughExtensionEnabled)
 			{
 				g_logger->error("xrPassthroughLayerPauseFB called without enabling extension!");
 				return XR_ERROR_RUNTIME_FAILURE;
@@ -2158,7 +1425,7 @@ namespace
 
 		XrResult xrPassthroughLayerResumeFB(XrPassthroughLayerFB layer)
 		{
-			if (!m_bFBPassthroughExtensionEnabled)
+			if (!m_extensionData.bFBPassthroughExtensionEnabled)
 			{
 				g_logger->error("xrPassthroughLayerResumeFB called without enabling extension!");
 				return XR_ERROR_RUNTIME_FAILURE;
@@ -2179,7 +1446,7 @@ namespace
 
 		XrResult xrPassthroughLayerSetStyleFB(XrPassthroughLayerFB layer, const XrPassthroughStyleFB* style)
 		{
-			if (!m_bFBPassthroughExtensionEnabled)
+			if (!m_extensionData.bFBPassthroughExtensionEnabled)
 			{
 				g_logger->error("xrPassthroughLayerSetStyleFB called without enabling extension!");
 				return XR_ERROR_RUNTIME_FAILURE;
@@ -2238,7 +1505,7 @@ namespace
 
 		XrResult xrCreateGeometryInstanceFB(XrSession session, const XrGeometryInstanceCreateInfoFB* createInfo, XrGeometryInstanceFB* outGeometryInstance)
 		{
-			if (!m_bFBPassthroughExtensionEnabled)
+			if (!m_extensionData.bFBPassthroughExtensionEnabled)
 			{
 				g_logger->error("xrCreateGeometryInstanceFB called without enabling extension!");
 				return XR_ERROR_RUNTIME_FAILURE;
@@ -2255,7 +1522,7 @@ namespace
 
 		XrResult xrDestroyGeometryInstanceFB(XrGeometryInstanceFB  instance)
 		{
-			if (!m_bFBPassthroughExtensionEnabled)
+			if (!m_extensionData.bFBPassthroughExtensionEnabled)
 			{
 				g_logger->error("xrDestroyGeometryInstanceFB called without enabling extension!");
 				return XR_ERROR_RUNTIME_FAILURE;
@@ -2272,7 +1539,7 @@ namespace
 
 		XrResult xrGeometryInstanceSetTransformFB(XrGeometryInstanceFB instance, const XrGeometryInstanceTransformFB* transformation)
 		{
-			if (!m_bFBPassthroughExtensionEnabled)
+			if (!m_extensionData.bFBPassthroughExtensionEnabled)
 			{
 				g_logger->error("xrGeometryInstanceSetTransformFB called without enabling extension!");
 				return XR_ERROR_RUNTIME_FAILURE;
@@ -2296,28 +1563,15 @@ namespace
 		XrInstance m_currentInstance{XR_NULL_HANDLE};
 		XrSystemId m_systemId{XR_NULL_SYSTEM_ID};
 		XrSession m_currentSession{XR_NULL_HANDLE};
-		std::shared_ptr<IPassthroughRenderer> m_Renderer;
+
+		std::unique_ptr<PassthroughSystem> m_passthroughSystem;
 		std::shared_ptr<ConfigManager> m_configManager;
-		std::shared_ptr<ICameraManager> m_cameraManager;
-		std::shared_ptr<ICameraManager> m_augmentedCameraManager;
-		std::shared_ptr<MenuHandler> m_menuHandler;
-		std::shared_ptr<MenuIPCClient> m_menuIPCClient;
-		std::shared_ptr<OpenVRManager> m_openVRManager;
-		std::shared_ptr<DepthReconstruction> m_depthReconstruction;
-		std::shared_ptr<DepthReconstruction> m_augmentedDepthReconstruction;
 
 		bool m_bSuccessfullyLoaded = false;
 		bool m_bUsePassthrough = false;
-		bool m_bInverseAlphaExtensionEnabled = false;
-		bool m_bFBPassthroughExtensionEnabled = false;
-		bool m_bVarjoDepthExtensionEnabled = false;
-		bool m_bVarjoDepthEnabled = false;
-		bool m_bVarjoCompositionExtensionEnabled = false;
-		bool m_bAndroidPassthroughStateExtensionEnabled = false;
-		bool m_bEnableVulkan2Extension = false;
-		bool m_bDepthSupportedByRenderer = false;
 		bool m_bBeginframeCalled = false;
-		bool m_bIsInitialConfig = false;
+		bool m_bVarjoDepthEnabled = false;
+		ExtensionData m_extensionData{};
 
 		XrSwapchain m_swapChainLeft{XR_NULL_HANDLE};
 		XrSwapchain m_swapChainRight{XR_NULL_HANDLE};
@@ -2329,23 +1583,10 @@ namespace
 		std::map<XrSwapchain, XrSwapchainCreateInfo> m_swapchainProperties{};
 		std::map<XrSwapchain, std::queue<uint32_t>> m_acquiredSwapchains{};
 		std::map<XrSwapchain, bool> m_waitedSwapchains{};
-		std::map<XrSwapchain, std::queue<uint32_t>> m_heldSwapchains{};
-
-		std::deque<float> m_frameToRenderTimes;
-		std::deque<float> m_frameToPhotonTimes;
-		std::deque<float> m_depthToRenderTimes;
-		std::deque<float> m_depthToPhotonTimes;
-		std::deque<float> m_passthroughRenderTimes;
-
-		LARGE_INTEGER m_lastRenderTime = {};
-		bool m_bIsPaused = false;
-		bool m_bCamerasInitialized = false;
+		std::map<XrSwapchain, std::queue<uint32_t>> m_heldSwapchains{};	
 
 		FBPassthroughInstance m_fbPassthough;
-
-		ERenderAPI m_renderAPI = RenderAPI_Direct3D11;
-		ERenderAPI m_appRenderAPI = RenderAPI_Direct3D11;
-
+		FrameRenderParameters m_frameRenderParams{};
     };
 
     std::unique_ptr<OpenXrLayer> g_instance = nullptr;

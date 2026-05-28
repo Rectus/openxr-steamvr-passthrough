@@ -64,6 +64,28 @@ std::shared_ptr<DepthFrame> DepthReconstruction::GetDepthFrame()
     return m_depthFrame;
 }
 
+void DepthReconstruction::CalculateCameraProjection(std::shared_ptr<CameraFrame>& cameraFrame, FrameRenderParameters& renderParams)
+{
+    std::shared_lock readLock(m_distortionParams.readWriteMutex);
+
+    XrMatrix4x4f worldToCameraView, worldToRectView;
+
+    XrMatrix4x4f_Invert(&worldToCameraView, &cameraFrame->cameraViewToWorldLeft);
+    XrMatrix4x4f_Multiply(&worldToRectView, &m_distortionParams.rectifiedRotationLeft, &worldToCameraView);
+    XrMatrix4x4f_Multiply(&cameraFrame->worldToCameraProjectionLeft, &m_distortionParams.cameraProjectionLeft, &worldToRectView);
+
+    if (m_frameLayout == EStereoFrameLayout::FrameLayout_Mono)
+    {
+        cameraFrame->worldToCameraProjectionRight = cameraFrame->worldToCameraProjectionLeft;
+    }
+    else
+    {
+        XrMatrix4x4f_Invert(&worldToCameraView, &cameraFrame->cameraViewToWorldRight);
+        XrMatrix4x4f_Multiply(&worldToRectView, &m_distortionParams.rectifiedRotationRight, &worldToCameraView);
+        XrMatrix4x4f_Multiply(&cameraFrame->worldToCameraProjectionRight, &m_distortionParams.cameraProjectionRight, &worldToRectView);
+    }
+}
+
 void DepthReconstruction::InitReconstruction()
 {
     m_frameLayout = m_cameraManager->GetFrameLayout();

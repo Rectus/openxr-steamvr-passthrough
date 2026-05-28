@@ -57,7 +57,7 @@ public:
 	virtual bool GetCameraFrameForWrite(std::shared_ptr<CameraFrame>& frame) { return false; }
 	virtual void ReleaseCameraFrameForWrite(std::shared_ptr<CameraFrame>& frame) { }
 	virtual bool GetCameraCPUFrame(std::shared_ptr<CameraCPUFrame>& frame) = 0;
-	virtual void CalculateFrameProjection(std::shared_ptr<CameraFrame>& frame, std::shared_ptr<DepthFrame> depthFrame, const XrCompositionLayerProjection& layer, float timeToPhotons, const XrReferenceSpaceCreateInfo& refSpaceInfo, UVDistortionParameters& distortionParams) = 0;
+	virtual void UpdateFrameProjectionMatrix(std::shared_ptr<CameraFrame>& frame) = 0;
 
 	const void DumpCameraFrameTexture(const std::shared_ptr<std::vector<uint8_t>> frameBuffer, const uint32_t width, const uint32_t height, const std::string cameraProvider)
 	{
@@ -116,16 +116,12 @@ public:
 	bool GetCameraFrameForWrite(std::shared_ptr<CameraFrame>& frame);
 	void ReleaseCameraFrameForWrite(std::shared_ptr<CameraFrame>& frame);
 	bool GetCameraCPUFrame(std::shared_ptr<CameraCPUFrame>& frame);
-	void CalculateFrameProjection(std::shared_ptr<CameraFrame>& frame, std::shared_ptr<DepthFrame> depthFrame, const XrCompositionLayerProjection& layer, float timeToPhotons, const XrReferenceSpaceCreateInfo& refSpaceInfo, UVDistortionParameters& distortionParams);
+	void UpdateFrameProjectionMatrix(std::shared_ptr<CameraFrame>& frame);
 
 private:
 	void ServeFrames();
 	void ServeBlockQueueFrames();
-	void UpdateRenderModels();
 	void GetTrackedCameraEyePoses(XrMatrix4x4f& LeftPose, XrMatrix4x4f& RightPose, bool bForceOpenVRValue);
-	XrMatrix4x4f GetHMDWorldToViewMatrix(const ERenderEye eye, const XrCompositionLayerProjection& layer, const XrReferenceSpaceCreateInfo& refSpaceInfo);
-	void UpdateProjectionMatrix(std::shared_ptr<CameraFrame>& frame);
-	void CalculateFrameProjectionForEye(const ERenderEye eye, std::shared_ptr<CameraFrame>& frame, const XrCompositionLayerProjection& layer, const XrReferenceSpaceCreateInfo& refSpaceInfo, UVDistortionParameters& distortionParams);
 
 	std::shared_ptr<ConfigManager> m_configManager;
 	std::shared_ptr<OpenVRManager> m_openVRManager;
@@ -176,12 +172,12 @@ private:
 	vr::TrackedCameraHandle_t m_cameraHandle;
 	EStereoFrameLayout m_frameLayout;
 
-	XrMatrix4x4f m_HMDViewToProjectionLeft{};
+	/*XrMatrix4x4f m_HMDViewToProjectionLeft{};
 	XrMatrix4x4f m_HMDViewToProjectionRight{};
 	XrMatrix4x4f m_viewToHMDLeft{};
 	XrMatrix4x4f m_viewToHMDRight{};
 	XrMatrix4x4f m_HMDToViewLeft{};
-	XrMatrix4x4f m_HMDToViewRight{};
+	XrMatrix4x4f m_HMDToViewRight{};*/
 
 	XrMatrix4x4f m_cameraProjectionInvLeft{};
 	XrMatrix4x4f m_cameraProjectionInvRight{};
@@ -193,25 +189,10 @@ private:
 
 	XrMatrix4x4f m_cameraLeftToRightPose{};
 
-	XrMatrix4x4f m_lastWorldToCameraProjectionLeft;
-	XrMatrix4x4f m_lastWorldToCameraProjectionRight;
-	XrMatrix4x4f m_lastCameraFrame_WorldToHMDProjectionLeft;
-	XrMatrix4x4f m_lastCameraFrame_WorldToHMDProjectionRight;
-	XrMatrix4x4f m_lastHMDFrame_WorldToHMDProjectionLeft;
-	XrMatrix4x4f m_lastHMDFrame_WorldToHMDProjectionRight;
-	uint32_t m_lastFrameSequence;
-
-	XrMatrix4x4f m_lastDispWorldToCameraProjectionLeft;
-	XrMatrix4x4f m_lastDispWorldToCameraProjectionRight;
-	XrMatrix4x4f m_lastDisparityViewToWorldLeft;
-	XrMatrix4x4f m_lastDisparityViewToWorldRight;
-
 	std::deque<float> m_frameRetrievalTimes;
 	std::deque<float> m_blockQueueFrameRetrievalTimes;
 	float m_averageFrameRetrievalTime;
 	float m_averageBlockQueueFrameRetrievalTime;
-
-	std::shared_ptr<std::vector<RenderModel>> m_renderModels;
 };
 
 
@@ -245,14 +226,10 @@ public:
 	float GetCPUFrameRetrievalPerfTime() { return m_averageFrameRetrievalTime; }
 	bool GetCameraFrame(std::shared_ptr<CameraFrame>& frame);
 	bool GetCameraCPUFrame(std::shared_ptr<CameraCPUFrame>& frame);
-	void CalculateFrameProjection(std::shared_ptr<CameraFrame>& frame, std::shared_ptr<DepthFrame> depthFrame, const XrCompositionLayerProjection& layer, float timeToPhotons, const XrReferenceSpaceCreateInfo& refSpaceInfo, UVDistortionParameters& distortionParams);
+	void UpdateFrameProjectionMatrix(std::shared_ptr<CameraFrame>& frame);
 
 private:
 	void ServeFrames();
-	void UpdateRenderModels();
-	XrMatrix4x4f GetHMDWorldToViewMatrix(const ERenderEye eye, const XrCompositionLayerProjection& layer, const XrReferenceSpaceCreateInfo& refSpaceInfo);
-	void UpdateProjectionMatrix(std::shared_ptr<CameraFrame>& frame);
-	void CalculateFrameProjectionForEye(const ERenderEye eye, std::shared_ptr<CameraFrame>& frame, const XrCompositionLayerProjection& layer, const XrReferenceSpaceCreateInfo& refSpaceInfo, UVDistortionParameters& distortionParams);
 
 	std::shared_ptr<ConfigManager> m_configManager;
 	std::shared_ptr<OpenVRManager> m_openVRManager;
@@ -301,31 +278,9 @@ private:
 	vr::TrackedCameraHandle_t m_cameraHandle;
 	EStereoFrameLayout m_frameLayout;
 
-	XrMatrix4x4f m_HMDViewToProjectionLeft{};
-	XrMatrix4x4f m_HMDViewToProjectionRight{};
-	XrMatrix4x4f m_viewToHMDLeft{};
-	XrMatrix4x4f m_viewToHMDRight{};
-	XrMatrix4x4f m_HMDToViewLeft{};
-	XrMatrix4x4f m_HMDToViewRight{};
-
 	XrMatrix4x4f m_cameraProjectionInvLeft{};
 	XrMatrix4x4f m_cameraProjectionInvRight{};
 
-	XrMatrix4x4f m_lastWorldToCameraProjectionLeft;
-	XrMatrix4x4f m_lastWorldToCameraProjectionRight;
-	XrMatrix4x4f m_lastCameraFrame_WorldToHMDProjectionLeft;
-	XrMatrix4x4f m_lastCameraFrame_WorldToHMDProjectionRight;
-	XrMatrix4x4f m_lastHMDFrame_WorldToHMDProjectionLeft;
-	XrMatrix4x4f m_lastHMDFrame_WorldToHMDProjectionRight;
-	uint32_t m_lastFrameSequence;
-
-	XrMatrix4x4f m_lastDispWorldToCameraProjectionLeft;
-	XrMatrix4x4f m_lastDispWorldToCameraProjectionRight;
-	XrMatrix4x4f m_lastDisparityViewToWorldLeft;
-	XrMatrix4x4f m_lastDisparityViewToWorldRight;
-
 	std::deque<float> m_frameRetrievalTimes;
 	float m_averageFrameRetrievalTime;
-
-	std::shared_ptr<std::vector<RenderModel>> m_renderModels;
 };

@@ -62,9 +62,8 @@ void UploadTexture(ComPtr<ID3D11DeviceContext> deviceContext, ComPtr<ID3D11Textu
 
 
 
-PassthroughRendererDX11::PassthroughRendererDX11(ID3D11Device* device, HMODULE dllMoudule, std::shared_ptr<ConfigManager> configManager)
+PassthroughRendererDX11::PassthroughRendererDX11(ID3D11Device* device, std::shared_ptr<ConfigManager> configManager)
 	: m_d3dDevice(device)
-	, m_dllModule(dllMoudule)
 	, m_configManager(configManager)
 	, m_cameraTextureWidth(0)
 	, m_cameraTextureHeight(0)
@@ -1315,9 +1314,14 @@ void PassthroughRendererDX11::GenerateDepthMesh(uint32_t width, uint32_t height)
 }
 
 
-void PassthroughRendererDX11::UpdateRenderModels(std::shared_ptr<CameraFrame> frame)
+void PassthroughRendererDX11::UpdateRenderModels(const FrameRenderParameters& renderParams)
 {
-	for (RenderModel& model : *frame->renderModels)
+	if (!renderParams.RenderModels.get())
+	{
+		return;
+	}
+
+	for (RenderModel& model : *renderParams.RenderModels)
 	{
 		bool bFound = false;
 		for (DX11RenderModel& dxModel : m_renderModels)
@@ -1445,7 +1449,7 @@ void PassthroughRendererDX11::RenderPassthroughFrame(const XrCompositionLayerPro
 
 	if (mainConf.ProjectToRenderModels)
 	{
-		UpdateRenderModels(frame);
+		UpdateRenderModels(renderParams);
 	}
 
 	if (mainConf.EnableTemporalFiltering)

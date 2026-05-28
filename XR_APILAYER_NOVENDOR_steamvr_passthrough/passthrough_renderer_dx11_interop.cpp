@@ -40,8 +40,8 @@ static PFN_glCopyImageSubData glCopyImageSubData = nullptr;
 
 
 
-PassthroughRendererDX11Interop::PassthroughRendererDX11Interop(ID3D12Device* device, ID3D12CommandQueue* commandQueue, HMODULE dllModule, std::shared_ptr<ConfigManager> configManager)
-	: PassthroughRendererDX11(nullptr, dllModule, configManager)
+PassthroughRendererDX11Interop::PassthroughRendererDX11Interop(ID3D12Device* device, ID3D12CommandQueue* commandQueue, std::shared_ptr<ConfigManager> configManager)
+	: PassthroughRendererDX11(nullptr, configManager)
 	, m_applicationRenderAPI(RenderAPI_Direct3D12)
 	, m_d3d12Device(device)
 	, m_d3d12CommandQueue(commandQueue)
@@ -54,8 +54,8 @@ PassthroughRendererDX11Interop::PassthroughRendererDX11Interop(ID3D12Device* dev
 {
 }
 
-PassthroughRendererDX11Interop::PassthroughRendererDX11Interop(const XrGraphicsBindingVulkanKHR& binding, HMODULE dllModule, std::shared_ptr<ConfigManager> configManager)
-	: PassthroughRendererDX11(nullptr, dllModule, configManager)
+PassthroughRendererDX11Interop::PassthroughRendererDX11Interop(const XrGraphicsBindingVulkanKHR& binding, std::shared_ptr<ConfigManager> configManager)
+	: PassthroughRendererDX11(nullptr, configManager)
 	, m_applicationRenderAPI(RenderAPI_Vulkan)
 	, m_d3d12Device(nullptr)
 	, m_d3d12CommandQueue(nullptr)
@@ -68,8 +68,8 @@ PassthroughRendererDX11Interop::PassthroughRendererDX11Interop(const XrGraphicsB
 {
 }
 
-PassthroughRendererDX11Interop::PassthroughRendererDX11Interop(const XrGraphicsBindingOpenGLWin32KHR& binding, HMODULE dllModule, std::shared_ptr<ConfigManager> configManager)
-	: PassthroughRendererDX11(nullptr, dllModule, configManager)
+PassthroughRendererDX11Interop::PassthroughRendererDX11Interop(const XrGraphicsBindingOpenGLWin32KHR& binding, std::shared_ptr<ConfigManager> configManager)
+	: PassthroughRendererDX11(nullptr, configManager)
 	, m_applicationRenderAPI(RenderAPI_OpenGL)
 	, m_d3d12Device(nullptr)
 	, m_d3d12CommandQueue(nullptr)

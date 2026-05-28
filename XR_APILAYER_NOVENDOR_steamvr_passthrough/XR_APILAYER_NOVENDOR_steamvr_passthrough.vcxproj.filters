@@ -104,6 +104,9 @@
     <ClInclude Include="..\shared\renderutil.h">
       <Filter>Shared</Filter>
     </ClInclude>
+    <ClInclude Include="passthrough_system.h">
+      <Filter>Header Files</Filter>
+    </ClInclude>
   </ItemGroup>
   <ItemGroup>
     <ClCompile Include="pch.cpp">
@@ -167,6 +170,9 @@
       <Filter>Shared</Filter>
     </ClCompile>
     <ClCompile Include="async_renderer.cpp">
+      <Filter>Source Files</Filter>
+    </ClCompile>
+    <ClCompile Include="passthrough_system.cpp">
       <Filter>Source Files</Filter>
     </ClCompile>
   </ItemGroup>

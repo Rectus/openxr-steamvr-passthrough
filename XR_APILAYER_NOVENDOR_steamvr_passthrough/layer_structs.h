@@ -6,6 +6,16 @@
 
 #define NEAR_PROJECTION_DISTANCE 0.05f
 
+struct ExtensionData
+{
+	bool bAndroidPassthroughStateExtensionEnabled = false;
+	bool bInverseAlphaExtensionEnabled = false;
+	bool bFBPassthroughExtensionEnabled = false;
+	bool bVarjoDepthExtensionEnabled = false;
+	bool bVarjoCompositionExtensionEnabled = false;
+	bool bVulkan2ExtensionEnabled = false;
+};
+
 struct RenderModel
 {
 	RenderModel()
@@ -83,8 +93,6 @@ struct CameraFrame
 	bool bHasReversedDepth;
 	bool bIsFirstRender;
 	bool bIsRenderingMirrored;
-
-	std::shared_ptr<std::vector<RenderModel>> renderModels;
 };
 
 struct CameraCPUFrame
@@ -173,16 +181,32 @@ struct DepthFrame
 	bool bIsFirstRender;
 };
 
+struct FBPassthroughLayerInstance
+{
+	// Only the type 0 (reconstruction) XrPassthroughLayerPurposeFB is supported.
+	XrPassthroughLayerFB Handle;
+	bool LayerStarted;
+	bool DepthEnabled;
+	float Opacity;
+	bool ColorAdjustmentEnabled;
+	float Brightness;
+	float Contrast;
+	float Saturation;
+};
+
 struct FrameRenderParameters
 {
 	EPassthroughBlendMode BlendMode = Opaque;
 	bool bInvertLayerAlpha = false;
+	uint64_t DisplayTime = 0;
+	XrReferenceSpaceCreateInfo ReferenceSpace{};
 
 	int LeftFrameIndex = -1;
 	int RightFrameIndex = -1;
 	int LeftDepthIndex = -1;
 	int RightDepthIndex = -1;
 
+	bool bReadApplicationDepth = false;
 	bool bEnableDepthBlending = false;
 	bool bEnableDepthRange = false;
 	float DepthRangeMin = 0.0f;
@@ -194,6 +218,12 @@ struct FrameRenderParameters
 	float ForcedSaturation = 0.0f;
 
 	float RenderOpacity = 1.0f;
+
+	bool bUseFBPassthrough = false; 
+	FBPassthroughLayerInstance* FBLayer = nullptr;
+	bool bVarjoDepthEnabled = false;
+
+	std::shared_ptr<std::vector<RenderModel>> RenderModels;
 };
 
 struct UVDistortionParameters
@@ -215,19 +245,6 @@ struct UVDistortionParameters
 	XrMatrix4x4f rectifiedRotationLeft;
 	XrMatrix4x4f rectifiedRotationRight;
 	float fovScale;
-};
-
-struct FBPassthroughLayerInstance
-{
-	// Only the type 0 (reconstruction) XrPassthroughLayerPurposeFB is supported.
-	XrPassthroughLayerFB Handle;
-	bool LayerStarted;
-	bool DepthEnabled;
-	float Opacity;
-	bool ColorAdjustmentEnabled;
-	float Brightness;
-	float Contrast;
-	float Saturation;
 };
 
 struct FBPassthroughInstance

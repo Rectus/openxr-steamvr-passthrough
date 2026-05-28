@@ -25,7 +25,7 @@ CameraManagerOpenVR::CameraManagerOpenVR(std::shared_ptr<IPassthroughRenderer> r
     m_servedFrameCPU = std::make_shared<CameraCPUFrame>();
     m_underConstructionFrameCPU = std::make_shared<CameraCPUFrame>();
 
-    m_renderModels = std::make_shared<std::vector<RenderModel>>();
+    
 }
 
 CameraManagerOpenVR::~CameraManagerOpenVR()
@@ -490,20 +490,6 @@ void CameraManagerOpenVR::UpdateStaticCameraParameters()
         m_cameraUndistortedFrameHeight = m_cameraUndistortedTextureHeight;
     }
 
-    vr::HmdMatrix44_t vrHMDProjectionLeft = vrSystem->GetProjectionMatrix(vr::Hmd_Eye::Eye_Left, NEAR_PROJECTION_DISTANCE, m_projectionDistanceFar * 2.0f);
-    m_HMDViewToProjectionLeft = ToXRMatrix4x4(vrHMDProjectionLeft);
-
-    vr::HmdMatrix34_t vrHMDViewLeft = vrSystem->GetEyeToHeadTransform(vr::Hmd_Eye::Eye_Left);
-    m_viewToHMDLeft = ToXRMatrix4x4(vrHMDViewLeft);
-    m_HMDToViewLeft = ToXRMatrix4x4Inverted(vrHMDViewLeft);
-
-    vr::HmdMatrix44_t vrHMDProjectionRight = vrSystem->GetProjectionMatrix(vr::Hmd_Eye::Eye_Right, NEAR_PROJECTION_DISTANCE, m_projectionDistanceFar * 2.0f);
-    m_HMDViewToProjectionRight = ToXRMatrix4x4(vrHMDProjectionRight);
-
-    vr::HmdMatrix34_t vrHMDViewRight = vrSystem->GetEyeToHeadTransform(vr::Hmd_Eye::Eye_Right);
-    m_viewToHMDRight = ToXRMatrix4x4(vrHMDViewRight);
-    m_HMDToViewRight = ToXRMatrix4x4Inverted(vrHMDViewRight);
-
     GetTrackedCameraEyePoses(m_cameraToHMDLeft, m_cameraToHMDRight, false);
     XrMatrix4x4f_Invert(&m_HMDToCameraLeft, &m_cameraToHMDLeft);
     XrMatrix4x4f_Invert(&m_HMDToCameraRight, &m_cameraToHMDRight);
@@ -557,12 +543,6 @@ void CameraManagerOpenVR::ReleaseCameraFrameForWrite(std::shared_ptr<CameraFrame
 {
     if (m_extrenalFrameWriteLock.owns_lock())
     {
-        if (m_configManager->GetConfig_Main().ProjectToRenderModels)
-        {
-            UpdateRenderModels();
-        }
-        frame->renderModels = m_renderModels;
-
         std::lock_guard<std::mutex> lock(m_serveMutex);
         m_servedFrame.swap(m_underConstructionFrame);
 
@@ -791,12 +771,6 @@ void CameraManagerOpenVR::ServeFrames()
         m_underConstructionFrame->bIsValid = true;
         m_underConstructionFrame->frameLayout = m_frameLayout;
 
-        if (mainConf.ProjectToRenderModels)
-        {
-            UpdateRenderModels();
-        }
-        m_underConstructionFrame->renderModels = m_renderModels;
-
         vr::TrackedDevicePose_t hmdPose;
 
         LARGE_INTEGER time, freq;
@@ -819,6 +793,26 @@ void CameraManagerOpenVR::ServeFrames()
 
         XrMatrix4x4f_Multiply(&m_underConstructionFrame->cameraViewToWorldLeft, &headToTrackingPose, &m_cameraToHMDLeft);
         XrMatrix4x4f_Multiply(&m_underConstructionFrame->cameraViewToWorldRight, &headToTrackingPose, &m_cameraToHMDRight);
+
+
+        // Camera projection matrix for Room View mode
+        if (mainConf.ProjectionMode == Projection_RoomView2D)
+        {
+            XrMatrix4x4f worldToCameraProjectionLeft;
+            XrMatrix4x4f_Multiply(&worldToCameraProjectionLeft, &m_underConstructionFrame->cameraViewToWorldLeft, &m_cameraProjectionInvLeft);
+            XrMatrix4x4f_Invert(&m_underConstructionFrame->worldToCameraProjectionLeft, &worldToCameraProjectionLeft);
+
+            XrMatrix4x4f worldToCameraProjectionRight;
+            if (m_frameLayout != EStereoFrameLayout::FrameLayout_Mono)
+            {
+                XrMatrix4x4f_Multiply(&worldToCameraProjectionRight, &m_underConstructionFrame->cameraViewToWorldRight, &m_cameraProjectionInvRight);
+            }
+            else
+            {
+                XrMatrix4x4f_Multiply(&worldToCameraProjectionRight, &m_underConstructionFrame->cameraViewToWorldLeft, &m_cameraProjectionInvLeft);
+            }
+            XrMatrix4x4f_Invert(&m_underConstructionFrame->worldToCameraProjectionRight, &worldToCameraProjectionRight);
+        }
 
         if (bGotCPUFrame)
         {
@@ -1131,100 +1125,10 @@ void CameraManagerOpenVR::ServeBlockQueueFrames()
 }
 
 
-void CameraManagerOpenVR::UpdateRenderModels()
-{
-    vr::IVRSystem* vrSystem = m_openVRManager->GetVRSystem();
-    vr::IVRRenderModels* vrRenderModels = m_openVRManager->GetVRRenderModels();
-
-    static char modelName[vr::k_unMaxPropertyStringSize];
-
-    for (int i = 1; i < vr::k_unMaxTrackedDeviceCount; i++)
-    {
-        if (!vrSystem->IsTrackedDeviceConnected(i))
-        {
-            break;
-        }
-
-        vr::TrackedPropertyError error;
-        uint32_t numBytes = m_openVRManager->GetVRSystem()->GetStringTrackedDeviceProperty(i, vr::Prop_RenderModelName_String, modelName, vr::k_unMaxPropertyStringSize, &error);
-
-        bool bFoundModel = false;
-
-        for (RenderModel model : *m_renderModels)
-        {
-            if (model.deviceId == i)
-            {
-                if (strncmp(model.modelName.data(), modelName, numBytes) != 0)
-                {
-                    vr::RenderModel_t* newModel;
-
-                    if (vrRenderModels->LoadRenderModel_Async(modelName, &newModel) == vr::VRRenderModelError_None)
-                    {
-                        model.modelName = modelName;
-                        MeshCreateRenderModel(model.mesh, newModel);
-                    }
-                }
-
-                bFoundModel = true;
-                break;
-            }
-        }
-
-        if (!bFoundModel)
-        {
-            vr::RenderModel_t* newModel;
-
-            if (vrRenderModels->LoadRenderModel_Async(modelName, &newModel) == vr::VRRenderModelError_None)
-            {
-                RenderModel rm;
-                rm.deviceId = i;
-                rm.modelName = modelName;
-                MeshCreateRenderModel(rm.mesh, newModel);
-                m_renderModels->push_back(rm);
-            }
-        }
-    }
-}
 
 
-// Constructs a matrix from the roomscale origin to the HMD eye pose.
-XrMatrix4x4f CameraManagerOpenVR::GetHMDWorldToViewMatrix(const ERenderEye eye, const XrCompositionLayerProjection& layer, const XrReferenceSpaceCreateInfo& refSpaceInfo)
-{
-    vr::IVRSystem* vrSystem = m_openVRManager->GetVRSystem();
 
-    XrMatrix4x4f output, pose, viewToTracking, trackingToStage, refSpacePose;
-
-    int viewNum = eye == RenderEye_Left ? 0 : 1;
-
-    XrVector3f scale = { 1, 1, 1 };
-
-    // The application provided HMD pose used to make sure reprojection works correctly.
-    XrMatrix4x4f_CreateTranslationRotationScale(&pose, &layer.views[viewNum].pose.position, &layer.views[viewNum].pose.orientation, &scale);
-    XrMatrix4x4f_Invert(&viewToTracking, &pose);    
-
-    // Apply any pose the application might have configured in its reference spaces.
-    XrMatrix4x4f_CreateTranslationRotationScale(&pose, &refSpaceInfo.poseInReferenceSpace.position, &refSpaceInfo.poseInReferenceSpace.orientation, &scale);
-    XrMatrix4x4f_Invert(&refSpacePose, &pose);
-
-
-    if (refSpaceInfo.referenceSpaceType == XR_REFERENCE_SPACE_TYPE_LOCAL)
-    {
-        vr::HmdMatrix34_t mat = vrSystem->GetSeatedZeroPoseToStandingAbsoluteTrackingPose();
-        trackingToStage = ToXRMatrix4x4Inverted(mat);
-
-        XrMatrix4x4f_Multiply(&pose, &refSpacePose, &trackingToStage);
-        XrMatrix4x4f_Multiply(&output,  &viewToTracking, &pose);
-    }
-    // TODO: Add cases for handling view and local floor
-    else
-    {
-        XrMatrix4x4f_Multiply(&output, &viewToTracking, &refSpacePose);
-    }
-
-    return output;
-}
-
-void CameraManagerOpenVR::UpdateProjectionMatrix(std::shared_ptr<CameraFrame>& frame)
+void CameraManagerOpenVR::UpdateFrameProjectionMatrix(std::shared_ptr<CameraFrame>& frame)
 {
     bool bIsStereo = m_frameLayout != EStereoFrameLayout::FrameLayout_Mono;
 
@@ -1288,227 +1192,5 @@ void CameraManagerOpenVR::UpdateProjectionMatrix(std::shared_ptr<CameraFrame>& f
             XrMatrix4x4f_Multiply(&m_cameraProjectionInvRight, &projectionMatrix, &transMatrix);
 
         }
-    }
-}
-
-
-void CameraManagerOpenVR::CalculateFrameProjection(std::shared_ptr<CameraFrame>& frame, std::shared_ptr<DepthFrame> depthFrame, const XrCompositionLayerProjection& layer, float timeToPhotons, const XrReferenceSpaceCreateInfo& refSpaceInfo, UVDistortionParameters& distortionParams)
-{
-    UpdateProjectionMatrix(frame);
-
-    CalculateFrameProjectionForEye(RenderEye_Left, frame, layer, refSpaceInfo, distortionParams);
-    CalculateFrameProjectionForEye(RenderEye_Right, frame, layer, refSpaceInfo, distortionParams);
-
-    // Detect the FOV being upside-down in order to prevent triangles from being backface culled
-    frame->bIsRenderingMirrored = (layer.views[0].fov.angleUp - layer.views[0].fov.angleDown) < 0.0f;
-
-    if (m_appRenderAPI == RenderAPI_OpenGL)
-    {
-        // Flip mirrored setting on OpenGL to get correct backface culling on rendering to upside down texture.
-        frame->bIsRenderingMirrored = !frame->bIsRenderingMirrored;
-    }
-
-    if (depthFrame->bIsFirstRender)
-    {
-        depthFrame->prevDispWorldToCameraProjectionLeft = m_lastDispWorldToCameraProjectionLeft;
-        depthFrame->prevDispWorldToCameraProjectionRight = m_lastDispWorldToCameraProjectionRight;
-        depthFrame->prevDisparityViewToWorldLeft = m_lastDisparityViewToWorldLeft;
-        depthFrame->prevDisparityViewToWorldRight = m_lastDisparityViewToWorldRight;
-
-        m_lastDispWorldToCameraProjectionLeft = frame->worldToCameraProjectionLeft;
-        m_lastDispWorldToCameraProjectionRight = frame->worldToCameraProjectionRight;
-        m_lastDisparityViewToWorldLeft = depthFrame->disparityViewToWorldLeft;
-        m_lastDisparityViewToWorldRight = depthFrame->disparityViewToWorldRight;
-    }
-
-    if (frame->header.nFrameSequence != m_lastFrameSequence)
-    {
-        frame->prevWorldToCameraProjectionLeft = m_lastWorldToCameraProjectionLeft;
-        frame->prevWorldToCameraProjectionRight = m_lastWorldToCameraProjectionRight;
-        frame->prevCameraFrame_WorldToHMDProjectionLeft = m_lastCameraFrame_WorldToHMDProjectionLeft;
-        frame->prevCameraFrame_WorldToHMDProjectionRight = m_lastCameraFrame_WorldToHMDProjectionRight;
-
-        m_lastCameraFrame_WorldToHMDProjectionLeft = frame->worldToHMDProjectionLeft;
-        m_lastCameraFrame_WorldToHMDProjectionRight = frame->worldToHMDProjectionRight;
-
-        m_lastWorldToCameraProjectionLeft = frame->worldToCameraProjectionLeft;
-        m_lastWorldToCameraProjectionRight = frame->worldToCameraProjectionRight;
-
-        m_lastFrameSequence = frame->header.nFrameSequence;
-
-        frame->bIsFirstRender = true;
-    }
-    else
-    {
-        // Previous HMD frame was rendered from the same camera frame
-        frame->prevWorldToCameraProjectionLeft = frame->worldToCameraProjectionLeft;
-        frame->prevWorldToCameraProjectionRight = frame->worldToCameraProjectionRight;
-
-        frame->bIsFirstRender = false;
-    }
-
-    frame->prevHMDFrame_WorldToHMDProjectionLeft = m_lastHMDFrame_WorldToHMDProjectionLeft;
-    frame->prevHMDFrame_WorldToHMDProjectionRight = m_lastHMDFrame_WorldToHMDProjectionRight;
-
-    m_lastHMDFrame_WorldToHMDProjectionLeft = frame->worldToHMDProjectionLeft;
-    m_lastHMDFrame_WorldToHMDProjectionRight = frame->worldToHMDProjectionRight;
-
-
-    if (m_configManager->GetConfig_Main().ProjectToRenderModels)
-    {
-        LARGE_INTEGER time, freq;
-        QueryPerformanceCounter(&time);
-        QueryPerformanceFrequency(&freq);
-
-        float exposureRelativeTime = -(float)(time.QuadPart - frame->header.ulFrameExposureTime);
-        exposureRelativeTime /= ((float)freq.QuadPart);
-
-        vr::TrackedDevicePose_t trackedDevicePoseArray[vr::k_unMaxTrackedDeviceCount];
-
-        m_openVRManager->GetVRSystem()->GetDeviceToAbsoluteTrackingPose(vr::TrackingUniverseStanding, exposureRelativeTime, trackedDevicePoseArray, vr::k_unMaxTrackedDeviceCount);
-
-        for (RenderModel& model : *m_renderModels.get())
-        {
-            model.meshToWorldTransform = ToXRMatrix4x4(trackedDevicePoseArray[model.deviceId].mDeviceToAbsoluteTracking);
-        }
-    }
-}
-
-void CameraManagerOpenVR::CalculateFrameProjectionForEye(const ERenderEye eye, std::shared_ptr<CameraFrame>& frame, const XrCompositionLayerProjection& layer, const XrReferenceSpaceCreateInfo& refSpaceInfo, UVDistortionParameters& distortionParams)
-{
-    Config_Main& mainConf = m_configManager->GetConfig_Main();
-
-    bool bIsStereo = m_frameLayout != EStereoFrameLayout::FrameLayout_Mono;
-    uint32_t cameraId = (eye == RenderEye_Right && bIsStereo) ? 1 : 0;
-
-    XrMatrix4x4f hmdWorldToView = GetHMDWorldToViewMatrix(eye, layer, refSpaceInfo);
-    
-    XrVector3f* projectionOriginWorld = (eye == RenderEye_Left) ? &frame->projectionOriginWorldLeft : &frame->projectionOriginWorldRight;
-    XrMatrix4x4f hmdViewToWorld;
-    XrMatrix4x4f_Invert(&hmdViewToWorld, &hmdWorldToView);
-    XrVector3f inPos{ 0,0,0 };
-    XrMatrix4x4f_TransformVector3f(projectionOriginWorld, &hmdViewToWorld, &inPos);
-
-
-    float nearZ = NEAR_PROJECTION_DISTANCE;
-    float farZ = m_projectionDistanceFar;
-
-    const XrCompositionLayerDepthInfoKHR* depthInfo = nullptr;
-
-    if (m_configManager->GetConfig_Depth().DepthReadFromApplication)
-    {
-        depthInfo = (const XrCompositionLayerDepthInfoKHR*)layer.views[(eye == RenderEye_Left) ? 0 : 1].next;
-
-        while (depthInfo != nullptr)
-        {
-            if (depthInfo->type == XR_TYPE_COMPOSITION_LAYER_DEPTH_INFO_KHR)
-            {
-                break;
-            }
-            depthInfo = (const XrCompositionLayerDepthInfoKHR*)depthInfo->next;
-        }
-
-        // Match the near and far plane with application
-        if (depthInfo)
-        {
-            // Handle reversed depth
-            if (depthInfo->farZ < depthInfo->nearZ)
-            {
-                nearZ = depthInfo->farZ;
-                farZ = depthInfo->nearZ;
-                frame->bHasReversedDepth = true;
-            }
-            else
-            {
-                nearZ = depthInfo->nearZ;
-                farZ = depthInfo->farZ;
-                frame->bHasReversedDepth = false;
-            }
-        }
-        else
-        {
-            frame->bHasReversedDepth = false;
-        }
-    }
-    else
-    {
-        frame->bHasReversedDepth = false;
-    }
-
-    XrMatrix4x4f hmdProjection;
-    XrMatrix4x4f_CreateProjectionFov(&hmdProjection, GRAPHICS_D3D, layer.views[(eye == RenderEye_Left) ? 0 : 1].fov, nearZ, farZ);
-
-    // Handle infinite and reversed Z - XrMatrix4x4f_CreateProjectionFov sets it up wrong.
-    if (depthInfo && (farZ == (std::numeric_limits<float>::max)() || !std::isfinite(farZ) ))
-    {
-        hmdProjection.m[10] = 0;
-        hmdProjection.m[14] = nearZ;
-    }
-    else if (depthInfo)
-    {
-        hmdProjection.m[10] = -(depthInfo->farZ * depthInfo->maxDepth - depthInfo->nearZ * depthInfo->minDepth) / (depthInfo->farZ - depthInfo->nearZ);
-        hmdProjection.m[14] = -(depthInfo->farZ * depthInfo->nearZ * (depthInfo->maxDepth - depthInfo->minDepth)) / (depthInfo->farZ - depthInfo->nearZ);
-    }
-
-    if (m_appRenderAPI == RenderAPI_OpenGL)
-    {
-        // Flip vertical axis to render to upside down texture.
-        hmdProjection.m[1] *= -1;
-        hmdProjection.m[5] *= -1;
-        hmdProjection.m[9] *= -1;
-        hmdProjection.m[13] *= -1;
-    }
-
-    XrMatrix4x4f* worldToHMDMatrix = (eye == RenderEye_Left) ? &frame->worldToHMDProjectionLeft : &frame->worldToHMDProjectionRight;
-
-    XrMatrix4x4f_Multiply(worldToHMDMatrix, &hmdProjection, &hmdWorldToView);
-
-
-
-    if (mainConf.ProjectionMode == Projection_RoomView2D)
-    {
-        if (eye == RenderEye_Left)
-        {
-            XrMatrix4x4f worldToCameraProjectionLeft;
-            XrMatrix4x4f_Multiply(&worldToCameraProjectionLeft, &frame->cameraViewToWorldLeft, &m_cameraProjectionInvLeft);
-
-            XrMatrix4x4f_Invert(&frame->worldToCameraProjectionLeft, &worldToCameraProjectionLeft);
-        }
-        else
-        {
-            XrMatrix4x4f worldToCameraProjectionRight;
-            if (bIsStereo)
-            {
-                XrMatrix4x4f_Multiply(&worldToCameraProjectionRight, &frame->cameraViewToWorldRight, &m_cameraProjectionInvRight);
-            }
-            else
-            {
-                XrMatrix4x4f_Multiply(&worldToCameraProjectionRight, &frame->cameraViewToWorldLeft, &m_cameraProjectionInvLeft);
-            }
-
-            XrMatrix4x4f_Invert(&frame->worldToCameraProjectionRight, &worldToCameraProjectionRight);
-        }
-    }
-    else
-    {
-        std::shared_lock readLock(distortionParams.readWriteMutex);
-
-        XrMatrix4x4f frameProjection = (cameraId == 0) ? 
-            distortionParams.cameraProjectionLeft : distortionParams.cameraProjectionRight;
-
-        XrMatrix4x4f worldToCameraView;
-        XrMatrix4x4f_Invert(&worldToCameraView, (cameraId == 0) ? 
-            &frame->cameraViewToWorldLeft : &frame->cameraViewToWorldRight);
-
-        XrMatrix4x4f rectifiedRotation = (cameraId == 0) ? 
-            distortionParams.rectifiedRotationLeft : distortionParams.rectifiedRotationRight;
-
-
-        XrMatrix4x4f& worldToCameraProjection = (eye == RenderEye_Left) ? 
-            frame->worldToCameraProjectionLeft : frame->worldToCameraProjectionRight;
-
-        XrMatrix4x4f worldToRectView;
-        XrMatrix4x4f_Multiply(&worldToRectView, &rectifiedRotation, &worldToCameraView);
-        XrMatrix4x4f_Multiply(&worldToCameraProjection, &frameProjection, &worldToRectView);
     }
 }

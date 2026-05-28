@@ -24,7 +24,7 @@ public:
 	}
 	float GetReconstructionPerfTime() { return m_averageReconstructionTime; }
 	float GetRenderPerfTime() { return m_averageRenderTime; }
-
+	void CalculateCameraProjection(std::shared_ptr<CameraFrame>& cameraFrame, FrameRenderParameters& renderParams);
 private:
 	void InitReconstruction();
 	void RunThread();

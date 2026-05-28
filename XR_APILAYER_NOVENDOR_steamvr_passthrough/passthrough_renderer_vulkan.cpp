@@ -167,9 +167,8 @@ void UploadImage(VkCommandBuffer commandBuffer, VkDevice device, VkBuffer upload
 
 
 
-PassthroughRendererVulkan::PassthroughRendererVulkan(const XrGraphicsBindingVulkanKHR& binding, HMODULE dllMoudule, std::shared_ptr<ConfigManager> configManager)
-	: m_dllModule(dllMoudule)
-	, m_configManager(configManager)
+PassthroughRendererVulkan::PassthroughRendererVulkan(const XrGraphicsBindingVulkanKHR& binding, std::shared_ptr<ConfigManager> configManager)
+	: m_configManager(configManager)
 	, m_cameraTextureWidth(0)
 	, m_cameraTextureHeight(0)
 	, m_cameraFrameBufferSize(0)

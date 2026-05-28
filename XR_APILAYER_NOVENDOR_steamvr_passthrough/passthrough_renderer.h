@@ -302,7 +302,7 @@ public:
 class PassthroughRendererDX11 : public IPassthroughRenderer
 {
 public:
-	PassthroughRendererDX11(ID3D11Device* device, HMODULE dllModule, std::shared_ptr<ConfigManager> configManager);
+	PassthroughRendererDX11(ID3D11Device* device, std::shared_ptr<ConfigManager> configManager);
 	~PassthroughRendererDX11() {};
 
 	bool InitRenderer();
@@ -331,7 +331,7 @@ protected:
 	void GenerateMesh();
 	void GenerateDepthMesh(uint32_t width, uint32_t height);
 	void SetupTemporalUAV(const uint32_t viewIndex, const uint32_t swapchainIndex, const uint32_t width, const uint32_t height);
-	void UpdateRenderModels(std::shared_ptr<CameraFrame> frame);
+	void UpdateRenderModels(const FrameRenderParameters& renderParams);
 
 	void RenderSetupView(const ERenderEye eye, const XrCompositionLayerProjection* layer, std::shared_ptr<CameraFrame> frame, std::shared_ptr<DepthFrame> depthFrame, FrameRenderParameters& renderParams);
 
@@ -352,7 +352,6 @@ protected:
 	void RenderFrameFinish();
 
 	std::shared_ptr<ConfigManager> m_configManager;
-	HMODULE m_dllModule;
 	std::shared_timed_mutex m_accessRendererMutex;
 
 	bool m_bUsingDeferredContext = false;
@@ -470,9 +469,9 @@ protected:
 class PassthroughRendererDX11Interop : public PassthroughRendererDX11
 {
 public:
-	PassthroughRendererDX11Interop(ID3D12Device* device, ID3D12CommandQueue* commandQueue, HMODULE dllModule, std::shared_ptr<ConfigManager> configManager);
-	PassthroughRendererDX11Interop(const XrGraphicsBindingVulkanKHR& binding, HMODULE dllModule, std::shared_ptr<ConfigManager> configManager);
-	PassthroughRendererDX11Interop(const XrGraphicsBindingOpenGLWin32KHR& binding, HMODULE dllModule, std::shared_ptr<ConfigManager> configManager);
+	PassthroughRendererDX11Interop(ID3D12Device* device, ID3D12CommandQueue* commandQueue, std::shared_ptr<ConfigManager> configManager);
+	PassthroughRendererDX11Interop(const XrGraphicsBindingVulkanKHR& binding, std::shared_ptr<ConfigManager> configManager);
+	PassthroughRendererDX11Interop(const XrGraphicsBindingOpenGLWin32KHR& binding, std::shared_ptr<ConfigManager> configManager);
 	~PassthroughRendererDX11Interop();
 
 	bool InitRenderer();
@@ -573,7 +572,7 @@ private:
 class PassthroughRendererVulkan : public IPassthroughRenderer
 {
 public:
-	PassthroughRendererVulkan(const XrGraphicsBindingVulkanKHR& binding, HMODULE dllModule, std::shared_ptr<ConfigManager> configManager);
+	PassthroughRendererVulkan(const XrGraphicsBindingVulkanKHR& binding, std::shared_ptr<ConfigManager> configManager);
 	~PassthroughRendererVulkan();
 
 	bool InitRenderer();
@@ -600,7 +599,6 @@ private:
 	void RenderMaskedPrepassView(const ERenderEye eye, const int32_t imageIndex, const XrCompositionLayerProjection* layer, std::shared_ptr<CameraFrame> frame);
 
 	std::shared_ptr<ConfigManager> m_configManager;
-	HMODULE m_dllModule;
 	std::shared_timed_mutex m_accessRendererMutex;
 
 	std::deque<std::function<void()>> m_deletionQueue;
