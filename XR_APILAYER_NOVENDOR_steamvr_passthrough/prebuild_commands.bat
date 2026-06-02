@@ -14,3 +14,4 @@ python framework\dispatch_generator.py
 
 %VULKAN_SDK%\Bin\glslangValidator.exe -D -V -S comp -e main --vn g_FillHolesCS shaders/fill_holes_vulkan_cs.hlsl  -o shaders\fill_holes_vulkan_cs.spv.h
 %VULKAN_SDK%\Bin\glslangValidator.exe -D -V -S comp -e main --vn g_JointBilateralCS shaders/joint_bilateral_vulkan_cs.hlsl  -o shaders\joint_bilateral_vulkan_cs.spv.h
+%VULKAN_SDK%\Bin\glslangValidator.exe -V -S comp -e main --vn g_TextureDecodeCS shaders/texture_decode_vulkan.comp.glsl  -o shaders\texture_decode_vulkan.comp.spv.h

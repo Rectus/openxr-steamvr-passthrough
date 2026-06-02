@@ -63,6 +63,7 @@ struct CameraFrame
 		, bHasReversedDepth(false)
 		, bIsFirstRender(true)
 		, bIsRenderingMirrored(false)
+		, bColorsPreadjusted(false)
 	{
 	}
 
@@ -93,6 +94,7 @@ struct CameraFrame
 	bool bHasReversedDepth;
 	bool bIsFirstRender;
 	bool bIsRenderingMirrored;
+	bool bColorsPreadjusted;
 };
 
 struct CameraCPUFrame
@@ -101,7 +103,7 @@ struct CameraCPUFrame
 		: ReadWriteMutex()
 		, CameraViewToWorldLeft()
 		, CameraViewToWorldRight()
-		, RawFrameFormat(0)
+		, RawFrameFormat(FrameFormat_Unknown)
 		, RawFrameDataBytes(0)
 		, FrameSequence(0)
 		, FrameExposureTimestamp(0)
@@ -120,7 +122,7 @@ struct CameraCPUFrame
 	XrMatrix4x4f CameraViewToWorldLeft;
 	XrMatrix4x4f CameraViewToWorldRight;
 	
-	int32_t RawFrameFormat;
+	ECameraFrameFormat RawFrameFormat;
 	int32_t RawFrameDataBytes;
 	int32_t RawFrameSize[2];
 
@@ -254,4 +256,23 @@ struct FBPassthroughInstance
 	bool PassthroughStarted = false;
 	std::vector<FBPassthroughLayerInstance>Layers;
 	XrPassthroughLayerFB LastLayerHandle = XR_NULL_HANDLE;
+};
+
+struct VulkanTexture
+{
+	VkImage Image = VK_NULL_HANDLE;
+	VkDeviceMemory 	Memory = VK_NULL_HANDLE;
+	VkImageView View = VK_NULL_HANDLE;
+	VkFramebuffer Framebuffer = VK_NULL_HANDLE;
+	VkBuffer StagingBuffer = VK_NULL_HANDLE;
+	VkDeviceMemory 	StagingBufferMemory = VK_NULL_HANDLE;
+	uint8_t* MappedMemory = nullptr;
+
+	HANDLE SharedHandle = INVALID_HANDLE_VALUE;
+	void* nativeTexture = NULL;
+
+	VkExtent2D Extent = { 0, 0 };
+	bool bIsValid = false;
+	VkImageLayout Layout = VK_IMAGE_LAYOUT_UNDEFINED;
+	VkFormat Format = VK_FORMAT_UNDEFINED;
 };

@@ -157,8 +157,6 @@ float4 main(VS_OUTPUT input) : SV_TARGET
     float prevConfidenceInv = clamp((abs(prevTexCoords.x - prevPixel.x - 0.5) + abs(prevTexCoords.y - prevPixel.y - 0.5)),
 0.05, 1);  
     
-    float vLenSq = dot(input.prevCameraFrameVelocity, input.prevCameraFrameVelocity);
-    float factor = saturate(min(g_temporalFilteringFactor, 1 - vLenSq * 500));
     float confidence = confidenceInv + (1 - prevConfidenceInv);
 
     float finalFactor = clamp(confidence, 0, g_temporalFilteringFactor);

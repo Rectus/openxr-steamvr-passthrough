@@ -1,66 +1,29 @@
 
 #pragma once
 
+uint64_t GetCurrentTimeSytemTicks();
+uint64_t GetSytemTickFrequency();
 
-inline LARGE_INTEGER StartPerfTimer()
+float GetPerfTimeDiffMS(const uint64_t first, const uint64_t second);
+
+class PerfTimer
 {
-	LARGE_INTEGER startTime;
-	QueryPerformanceCounter(&startTime);
-	return startTime;
-}
+public:
+	PerfTimer();
+	PerfTimer(int numAverages);
+	uint64_t StartPerfTimer();
+	uint64_t EndPerfTimer();
+	float EndPerfTimerMS();
+	float GetStartTimeDiffMS(const PerfTimer& compare) const;
+	float GetStartTimeDiffMS(const uint64_t compare) const;
 
-inline float EndPerfTimer(LARGE_INTEGER startTime)
-{
-	LARGE_INTEGER endTime, perfFrequency;
+	uint64_t AveragesAddTimeToNow(const uint64_t startTime);
+	void AveragesAddTimeInterval(const uint64_t startTime, const uint64_t endTime);
+	float GetAverageTimeMS() const;
 
-	QueryPerformanceCounter(&endTime);
-	QueryPerformanceFrequency(&perfFrequency);
-
-	float perfTime = (float)(endTime.QuadPart - startTime.QuadPart);
-	perfTime *= 1000.0f;
-	perfTime /= perfFrequency.QuadPart;
-	return perfTime;
-}
-
-inline float EndPerfTimer(uint64_t startTimeQuadPart)
-{
-	LARGE_INTEGER endTime, perfFrequency;
-
-	QueryPerformanceCounter(&endTime);
-	QueryPerformanceFrequency(&perfFrequency);
-
-	float perfTime = (float)(endTime.QuadPart - startTimeQuadPart);
-	perfTime *= 1000.0f;
-	perfTime /= perfFrequency.QuadPart;
-	return perfTime;
-}
-
-inline float GetPerfTimerDiff(uint64_t startTimeQuadPart, uint64_t endTimeQuadPart)
-{
-	LARGE_INTEGER perfFrequency;
-
-	QueryPerformanceFrequency(&perfFrequency);
-
-	float perfTime = (float)(endTimeQuadPart - startTimeQuadPart);
-	perfTime *= 1000.0f;
-	perfTime /= perfFrequency.QuadPart;
-	return perfTime;
-}
-
-inline float UpdateAveragePerfTime(std::deque<float>& times, float newTime, int numAverages)
-{
-	if (times.size() >= numAverages)
-	{
-		times.pop_front();
-	}
-
-	times.push_back(newTime);
-
-	float average = 0;
-
-	for (const float& val : times)
-	{
-		average += val;
-	}
-	return average / times.size();
-}
+	uint64_t m_startTime = 0;
+private:
+	uint32_t m_numAverages;
+	std::vector<float> m_lastTimesMS;
+	uint32_t m_lastTimeIndex = 0;
+};

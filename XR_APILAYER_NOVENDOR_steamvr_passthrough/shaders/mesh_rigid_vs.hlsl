@@ -24,9 +24,7 @@ VS_OUTPUT main(float3 inPosition : POSITION, uint vertexID : SV_VertexID)
     output.prevHMDFrameScreenPos = mul(g_prevHMDFrame_WorldToHMDProjection, worldPos);
     output.projectionConfidence = 1.0;
 	
-    float4 prevOutCoords = mul((g_disparityUVBounds.x < 0.5) ? g_worldToPrevCameraFrameProjectionLeft : g_worldToPrevCameraFrameProjectionRight, worldPos);  
-
-    output.prevCameraFrameVelocity = clipSpacePos.xyz / clipSpacePos.w - prevOutCoords.xyz / prevOutCoords.w;
+    float4 prevOutCoords = mul((g_disparityUVBounds.x < 0.5) ? g_worldToPrevCameraFrameProjectionLeft : g_worldToPrevCameraFrameProjectionRight, worldPos);
 
     output.cameraBlendConfidence = 1.0;
     output.crossCameraReprojectedPos = 0;

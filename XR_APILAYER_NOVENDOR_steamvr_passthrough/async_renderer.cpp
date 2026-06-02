@@ -4,11 +4,14 @@
 #include "mathutil.h"
 #include "renderdoc_app.h"
 #include "pathutil.h"
+#include "renderutil.h"
+#include "vulkan_util.h"
 
 #include "passthrough_renderer.h"
 
 #include "shaders\fill_holes_vulkan_cs.spv.h"
 #include "shaders\joint_bilateral_vulkan_cs.spv.h"
+
 
 
 #define RENDERDOC_DLL_PATH_REG_KEY L"SOFTWARE\\Classes\\RenderDoc.RDCCapture.1\\DefaultIcon\\"
@@ -45,168 +48,31 @@ static RENDERDOC_API_1_7_0* g_renderDocAPI = nullptr;
 static bool g_bRenderDocCaptured = false;
 
 
-static void TransitionImage(VkCommandBuffer commandBuffer, VkImage image, VkImageLayout oldLayout, VkImageLayout newLayout)
+inline VkFormat CameraFrameFormatToVulkan(const ECameraFrameFormat in)
 {
-	VkImageMemoryBarrier barrier{ VK_STRUCTURE_TYPE_IMAGE_MEMORY_BARRIER };
-	barrier.oldLayout = oldLayout;
-	barrier.newLayout = newLayout;
-	barrier.srcQueueFamilyIndex = VK_QUEUE_FAMILY_IGNORED;
-	barrier.dstQueueFamilyIndex = VK_QUEUE_FAMILY_IGNORED;
-	barrier.image = image;
-	barrier.subresourceRange.aspectMask = VK_IMAGE_ASPECT_COLOR_BIT;
-	barrier.subresourceRange.baseMipLevel = 0;
-	barrier.subresourceRange.levelCount = 1;
-	barrier.subresourceRange.baseArrayLayer = 0;
-	barrier.subresourceRange.layerCount = 1;
-	barrier.srcAccessMask = 0;
-	barrier.dstAccessMask = 0;
-
-	VkPipelineStageFlags srcStageMask = 0;
-	VkPipelineStageFlags dstStageMask = 0;
-	VkDependencyFlags depFlags = 0;
-
-	if (oldLayout == VK_IMAGE_LAYOUT_UNDEFINED && newLayout == VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL)
+	switch (in)
 	{
-		barrier.srcAccessMask = 0;
-		barrier.dstAccessMask = VK_ACCESS_TRANSFER_WRITE_BIT;
-		srcStageMask = VK_PIPELINE_STAGE_TOP_OF_PIPE_BIT;
-		dstStageMask = VK_PIPELINE_STAGE_TRANSFER_BIT;
-		depFlags = 0;
-	}
-	else if (oldLayout == VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL && newLayout == VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL)
-	{
-		barrier.srcAccessMask = VK_ACCESS_TRANSFER_WRITE_BIT;
-		barrier.dstAccessMask = VK_ACCESS_SHADER_READ_BIT;
-		srcStageMask = VK_PIPELINE_STAGE_TRANSFER_BIT;
-		//dstStageMask = VK_PIPELINE_STAGE_FRAGMENT_SHADER_BIT | VK_PIPELINE_STAGE_COMPUTE_SHADER_BIT;
-		dstStageMask = VK_PIPELINE_STAGE_COMPUTE_SHADER_BIT;
-		depFlags = VK_DEPENDENCY_BY_REGION_BIT;
-	}
-	else if (oldLayout == VK_IMAGE_LAYOUT_UNDEFINED && newLayout == VK_IMAGE_LAYOUT_COLOR_ATTACHMENT_OPTIMAL)
-	{
-		barrier.srcAccessMask = 0;
-		barrier.dstAccessMask = VK_ACCESS_COLOR_ATTACHMENT_WRITE_BIT;
-		srcStageMask = VK_PIPELINE_STAGE_TOP_OF_PIPE_BIT;
-		dstStageMask = VK_PIPELINE_STAGE_COLOR_ATTACHMENT_OUTPUT_BIT;
-		depFlags = 0;
-	}
-	else if (oldLayout == VK_IMAGE_LAYOUT_COLOR_ATTACHMENT_OPTIMAL
-		&& newLayout == VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL)
-	{
-		barrier.srcAccessMask = VK_ACCESS_COLOR_ATTACHMENT_WRITE_BIT;
-		barrier.dstAccessMask = VK_ACCESS_SHADER_READ_BIT;
-		srcStageMask = VK_PIPELINE_STAGE_COLOR_ATTACHMENT_OUTPUT_BIT;
-		//dstStageMask = VK_PIPELINE_STAGE_FRAGMENT_SHADER_BIT | VK_PIPELINE_STAGE_COMPUTE_SHADER_BIT;
-		dstStageMask = VK_PIPELINE_STAGE_COMPUTE_SHADER_BIT;
-		depFlags = 0;
-	}
-	else if (oldLayout == VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL && newLayout == VK_IMAGE_LAYOUT_COLOR_ATTACHMENT_OPTIMAL)
-	{
-		barrier.srcAccessMask = 0;
-		barrier.dstAccessMask = VK_ACCESS_COLOR_ATTACHMENT_WRITE_BIT;
-		//srcStageMask = VK_PIPELINE_STAGE_FRAGMENT_SHADER_BIT | VK_PIPELINE_STAGE_COMPUTE_SHADER_BIT;
-		srcStageMask = VK_PIPELINE_STAGE_COMPUTE_SHADER_BIT;
-		dstStageMask = VK_PIPELINE_STAGE_COLOR_ATTACHMENT_OUTPUT_BIT;
-		depFlags = 0;
-	}
-	else if (oldLayout == VK_IMAGE_LAYOUT_UNDEFINED && newLayout == VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL)
-	{
-		barrier.srcAccessMask = 0;
-		barrier.dstAccessMask = VK_ACCESS_SHADER_READ_BIT;
-		srcStageMask = VK_PIPELINE_STAGE_TOP_OF_PIPE_BIT;
-		//dstStageMask = VK_PIPELINE_STAGE_FRAGMENT_SHADER_BIT | VK_PIPELINE_STAGE_COMPUTE_SHADER_BIT;
-		dstStageMask = VK_PIPELINE_STAGE_COMPUTE_SHADER_BIT;
-		depFlags = 0;
-	}
-	else if (oldLayout == VK_IMAGE_LAYOUT_UNDEFINED && newLayout == VK_IMAGE_LAYOUT_GENERAL)
-	{
-		barrier.srcAccessMask = 0;
-		barrier.dstAccessMask = VK_ACCESS_SHADER_READ_BIT | VK_ACCESS_SHADER_WRITE_BIT;
-		srcStageMask = VK_PIPELINE_STAGE_TOP_OF_PIPE_BIT;
-		dstStageMask = VK_PIPELINE_STAGE_COMPUTE_SHADER_BIT;
-		depFlags = 0;
-	}
-	else if (oldLayout == VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL && newLayout == VK_IMAGE_LAYOUT_GENERAL)
-	{
-		barrier.srcAccessMask = VK_ACCESS_TRANSFER_WRITE_BIT;
-		barrier.dstAccessMask = VK_ACCESS_SHADER_READ_BIT | VK_ACCESS_SHADER_WRITE_BIT;
-		srcStageMask = VK_PIPELINE_STAGE_TRANSFER_BIT;
-		dstStageMask = VK_PIPELINE_STAGE_COMPUTE_SHADER_BIT;
-		depFlags = 0;
-	}
-	else if (oldLayout == VK_IMAGE_LAYOUT_GENERAL && newLayout == VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL)
-	{
-		barrier.srcAccessMask = VK_ACCESS_SHADER_READ_BIT | VK_ACCESS_SHADER_WRITE_BIT;
-		barrier.dstAccessMask = VK_ACCESS_TRANSFER_WRITE_BIT;
-		srcStageMask = VK_PIPELINE_STAGE_COMPUTE_SHADER_BIT;
-		dstStageMask = VK_PIPELINE_STAGE_TRANSFER_BIT;
-		depFlags = 0;
-	}
-	else if (oldLayout == VK_IMAGE_LAYOUT_GENERAL && newLayout == VK_IMAGE_LAYOUT_GENERAL)
-	{
-		barrier.srcAccessMask = VK_ACCESS_SHADER_READ_BIT | VK_ACCESS_SHADER_WRITE_BIT;
-		barrier.dstAccessMask = VK_ACCESS_SHADER_READ_BIT | VK_ACCESS_SHADER_WRITE_BIT;
-		srcStageMask = VK_PIPELINE_STAGE_COMPUTE_SHADER_BIT;
-		dstStageMask = VK_PIPELINE_STAGE_COMPUTE_SHADER_BIT;
-		depFlags = 0;
-	}
-	else
-	{
-		g_logger->error("Unknown layout transition!");
-		return;
-	}
-
-	vkCmdPipelineBarrier(commandBuffer, srcStageMask, dstStageMask, depFlags, 0, nullptr, 0, nullptr, 1, &barrier);
-}
-
-void CopyTextureToGPU(VkCommandBuffer commandBuffer, VulkanTexture texture, VkImageLayout newLayout)
-{
-
-	TransitionImage(commandBuffer, texture.Image, texture.Layout, VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL);
-	texture.Layout = VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL;
-
-	VkBufferImageCopy region{};
-	region.bufferOffset = 0;
-	region.bufferRowLength = 0;
-	region.bufferImageHeight = 0;
-	region.imageSubresource = { VK_IMAGE_ASPECT_COLOR_BIT, 0, 0, 1 };
-	region.imageOffset = { 0, 0, 0 };
-	region.imageExtent = { texture.Extent.width, texture.Extent.height, 1 };
-
-	vkCmdCopyBufferToImage(commandBuffer, texture.StagingBuffer, texture.Image, VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL, 1, &region);
-
-	TransitionImage(commandBuffer, texture.Image, texture.Layout, newLayout);
-	texture.Layout = newLayout;
-}
-
-void CopyHostImageToGPU(VkDevice device, VulkanTexture texture, std::vector<uint8_t>& buffer)
-{
-	VkMemoryToImageCopy region{ VK_STRUCTURE_TYPE_MEMORY_TO_IMAGE_COPY };
-	region.pHostPointer = buffer.data();
-	region.memoryRowLength = 0;
-	region.memoryImageHeight = 0;
-	region.imageSubresource.aspectMask = VK_IMAGE_ASPECT_COLOR_BIT;
-	region.imageSubresource.baseArrayLayer = 0;
-	region.imageSubresource.layerCount = 1;
-	region.imageSubresource.mipLevel = 0;
-	region.imageOffset = { 0, 0, 0 };
-	region.imageExtent = { texture.Extent.width, texture.Extent.height, 1 };
-
-	VkCopyMemoryToImageInfo copyInfo{ VK_STRUCTURE_TYPE_COPY_MEMORY_TO_IMAGE_INFO };
-	copyInfo.flags = 0;
-	copyInfo.dstImage = texture.Image;
-	copyInfo.dstImageLayout = VK_IMAGE_LAYOUT_GENERAL;
-	copyInfo.regionCount = 1;
-	copyInfo.pRegions = &region;
-
-	VkResult res = vkCopyMemoryToImage(device, &copyInfo);
-	if (res != VK_SUCCESS)
-	{
-		g_logger->error("vkCopyMemoryToImage failure: {}", (int32_t)res);
+	case FrameFormat_RGBX32:
+		return VK_FORMAT_R8G8B8A8_SRGB;
+	case FrameFormat_RGB24:
+		return VK_FORMAT_R8G8B8_SRGB;
+	case FrameFormat_YUYV16:
+		//return VK_FORMAT_G8B8G8R8_422_UNORM;
+		return VK_FORMAT_R8G8B8A8_UNORM;
+	case FrameFormat_NV12:
+		return VK_FORMAT_G8_B8R8_2PLANE_420_UNORM;
+	case FrameFormat_NV12_2:
+		return VK_FORMAT_G8_B8R8_2PLANE_420_UNORM;
+	case FrameFormat_BAYER16BG:
+	case FrameFormat_MJPEG:
+	case FrameFormat_RAW10:
+	default:
+		return VK_FORMAT_UNDEFINED;
 	}
 }
 
-void SetVulkanDebugName(const VkDevice device, const void* object, const VkObjectType type, const char* name)
+
+static void SetVulkanDebugName(const VkDevice device, const void* object, const VkObjectType type, const char* name)
 {
 	if (!_vkSetDebugUtilsObjectNameEXT)
 	{
@@ -223,8 +89,11 @@ void SetVulkanDebugName(const VkDevice device, const void* object, const VkObjec
 
 
 
+
 AsyncRenderer::~AsyncRenderer()
 {
+	std::unique_lock destructLock(m_accessMutex);
+
 	if (!m_device || !m_queue)
 	{
 		return;
@@ -235,12 +104,15 @@ AsyncRenderer::~AsyncRenderer()
 		return;
 	}
 
+	m_frameDecoder.Deinit();
+
 	DestroyTexture(m_bwRectifiedCameraTexture);
 	DestroyTexture(m_disparityTexture);
 	DestroyTexture(m_confidenceTexture);
 	for (int i = 0; i < 3; i++)
 	{
-		DestroyTexture(m_cameraTexture[i]);
+		DestroyTexture(m_rawCameraTexture[i]);
+		DestroyTexture(m_sharedCameraTexture[i]);
 		DestroyTexture(m_outputTexture[i]);
 	}
 
@@ -248,6 +120,8 @@ AsyncRenderer::~AsyncRenderer()
 	{
 		deleteFunc();
 	}
+
+	vkDestroyDevice(m_device, nullptr);
 }
 
 
@@ -256,6 +130,9 @@ AsyncRenderer::~AsyncRenderer()
 
 bool AsyncRenderer::InitRenderer()
 {
+	std::unique_lock initLock(m_accessMutex);
+	if (m_bIsInitialized) { g_logger->error("m_bIsInitialized"); }
+
 	Config_Main& mainConfig = m_configManager->GetConfig_Main();
 
 	if (mainConfig.EnableRenderDocDebugging)
@@ -347,7 +224,7 @@ bool AsyncRenderer::InitRenderer()
 
 	bool bFoundPhysDevice = false;
 
-	uint64_t gpuLUID = m_baseRenderer->GetRenderDeviceLUID();
+	uint64_t gpuLUID = m_inlineRenderer.lock()->GetRenderDeviceLUID();
 
 	for (uint32_t i = 0; i < deviceCount; i++)
 	{
@@ -373,7 +250,7 @@ bool AsyncRenderer::InitRenderer()
 
 	vkGetPhysicalDeviceMemoryProperties(m_physDevice, &m_memProps);
 
-#if 1
+#if 0
 	for (uint32_t i = 0; i < m_memProps.memoryTypeCount; i++)
 	{
 		VkMemoryHeap& heap = m_memProps.memoryHeaps[m_memProps.memoryTypes[i].heapIndex];
@@ -413,15 +290,17 @@ bool AsyncRenderer::InitRenderer()
 		// Prioritize queues without graphics
 		if ((familyProps[i].queueFlags & VK_QUEUE_TRANSFER_BIT) &&
 			(familyProps[i].queueFlags & VK_QUEUE_COMPUTE_BIT) &&
-			(familyProps[i].queueFlags & VK_QUEUE_GRAPHICS_BIT) == 0)
+			(familyProps[i].queueFlags & VK_QUEUE_GRAPHICS_BIT) == 0 &&
+			familyProps[i].queueCount >= 2)
 		{
 			bFoundQueue = true;
 			m_queueFamilyIndex = i;
 			break;
 		}
-		else if (!bFoundQueue && 
+		else if (!bFoundQueue &&
 			(familyProps[i].queueFlags & VK_QUEUE_TRANSFER_BIT) &&
-			(familyProps[i].queueFlags & VK_QUEUE_COMPUTE_BIT))
+			(familyProps[i].queueFlags & VK_QUEUE_COMPUTE_BIT) &&
+			familyProps[i].queueCount >= 2)
 		{
 			bFoundQueue = true;
 			m_queueFamilyIndex = i;
@@ -437,14 +316,18 @@ bool AsyncRenderer::InitRenderer()
 	float queuePriority = 0.0;
 
 	VkDeviceQueueCreateInfo queueInfo = { VK_STRUCTURE_TYPE_DEVICE_QUEUE_CREATE_INFO };
-	queueInfo.queueCount = 1;
+	queueInfo.queueCount = 2;
 	queueInfo.queueFamilyIndex = m_queueFamilyIndex;
 	queueInfo.pQueuePriorities = &queuePriority;
 
+	VkPhysicalDeviceSamplerYcbcrConversionFeatures enabledConversionFeatures{ VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_SAMPLER_YCBCR_CONVERSION_FEATURES };
 	VkPhysicalDeviceVulkan14Features enabledFeatures14{ VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_VULKAN_1_4_FEATURES };
+	enabledFeatures14.pNext = &enabledConversionFeatures;
 
 	{
+		VkPhysicalDeviceSamplerYcbcrConversionFeatures conversionFeatures{ VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_SAMPLER_YCBCR_CONVERSION_FEATURES };
 		VkPhysicalDeviceVulkan14Features physFeatures14{ VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_VULKAN_1_4_FEATURES };
+		physFeatures14.pNext = &conversionFeatures;
 		VkPhysicalDeviceFeatures2 physFeatures{ VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_FEATURES_2 };
 		physFeatures.pNext = &physFeatures14;
 
@@ -454,6 +337,10 @@ bool AsyncRenderer::InitRenderer()
 		{
 			enabledFeatures14.hostImageCopy = true;
 			m_bHostImageCopyEnabled = true;
+		}
+		if (conversionFeatures.samplerYcbcrConversion)
+		{
+			enabledConversionFeatures.samplerYcbcrConversion = true;
 		}
 	}
 
@@ -491,6 +378,7 @@ bool AsyncRenderer::InitRenderer()
 		g_logger->error("vkCreateCommandPool failure!");
 		return false;
 	}
+	m_deletionQueue.push_back([=]() { vkDestroyCommandPool(m_device, m_commandPool, nullptr); });
 
 	VkCommandBufferAllocateInfo allocInfo{ VK_STRUCTURE_TYPE_COMMAND_BUFFER_ALLOCATE_INFO };
 	allocInfo.commandPool = m_commandPool;
@@ -500,11 +388,12 @@ bool AsyncRenderer::InitRenderer()
 	if (vkAllocateCommandBuffers(m_device, &allocInfo, &m_commandBuffer) != VK_SUCCESS)
 	{
 		g_logger->error("vkAllocateCommandBuffers failure!");
-		vkDestroyCommandPool(m_device, m_commandPool, nullptr);
 		return false;
 	}
+	m_deletionQueue.push_back([=]() { vkFreeCommandBuffers(m_device, m_commandPool, 1, &m_commandBuffer); });
 
-	m_disparityFillHolesCS = CreateShaderModule(g_FillHolesCS, ARRAYSIZE(g_FillHolesCS) * sizeof(g_FillHolesCS[0]));
+
+	m_disparityFillHolesCS = CreateShaderModule(m_device, g_FillHolesCS, ARRAYSIZE(g_FillHolesCS) * sizeof(g_FillHolesCS[0]));
 	if (m_disparityFillHolesCS == nullptr)
 	{
 		g_logger->error("Failed to create m_disparityFillHolesCS");
@@ -513,7 +402,7 @@ bool AsyncRenderer::InitRenderer()
 	SetVulkanDebugName(m_device, m_disparityFillHolesCS, VK_OBJECT_TYPE_SHADER_MODULE, "m_disparityFillHolesCS");
 	m_deletionQueue.push_back([=]() { vkDestroyShaderModule(m_device, m_disparityFillHolesCS, nullptr); });
 
-	m_disparityJointBilateralCS = CreateShaderModule(g_JointBilateralCS, ARRAYSIZE(g_JointBilateralCS) * sizeof(g_JointBilateralCS[0]));
+	m_disparityJointBilateralCS = CreateShaderModule(m_device, g_JointBilateralCS, ARRAYSIZE(g_JointBilateralCS) * sizeof(g_JointBilateralCS[0]));
 	if (m_disparityJointBilateralCS == nullptr)
 	{
 		g_logger->error("Failed to create m_disparityJointBilateralCS");
@@ -521,6 +410,8 @@ bool AsyncRenderer::InitRenderer()
 	}
 	SetVulkanDebugName(m_device, m_disparityJointBilateralCS, VK_OBJECT_TYPE_SHADER_MODULE, "m_disparityJointBilateralCS");
 	m_deletionQueue.push_back([=]() { vkDestroyShaderModule(m_device, m_disparityJointBilateralCS, nullptr); });
+
+	
 
 
 
@@ -538,11 +429,28 @@ bool AsyncRenderer::InitRenderer()
 		g_logger->error("vkCreateFence failure!");
 		return false;
 	}
+	m_deletionQueue.push_back([=]() { vkDestroyFence(m_device, m_renderFence, nullptr); });
+	
+
+	VkSamplerCreateInfo samplerInfo{ VK_STRUCTURE_TYPE_SAMPLER_CREATE_INFO };
+	samplerInfo.magFilter = VK_FILTER_NEAREST;
+	samplerInfo.minFilter = VK_FILTER_NEAREST;
+	samplerInfo.addressModeU = VK_SAMPLER_ADDRESS_MODE_CLAMP_TO_EDGE;
+	samplerInfo.addressModeV = VK_SAMPLER_ADDRESS_MODE_CLAMP_TO_EDGE;
+	samplerInfo.addressModeW = VK_SAMPLER_ADDRESS_MODE_CLAMP_TO_EDGE;
+
+	if (vkCreateSampler(m_device, &samplerInfo, nullptr, &m_sampler) != VK_SUCCESS)
+	{
+		g_logger->error("vkCreateSampler failure!");
+		return false;
+	}
+	m_deletionQueue.push_back([=]() { vkDestroySampler(m_device, m_sampler, nullptr); });
+
 
 	VkDescriptorPoolSize poolSizes[3] =
 	{
 		{VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER, 1},
-		{VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER, 1},
+		{VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER, 2},
 		{VK_DESCRIPTOR_TYPE_STORAGE_IMAGE, 3}
 	};
 
@@ -568,8 +476,7 @@ bool AsyncRenderer::InitRenderer()
 	};
 
 
-	VkDescriptorSetLayoutCreateInfo layoutInfo{};
-	layoutInfo.sType = VK_STRUCTURE_TYPE_DESCRIPTOR_SET_LAYOUT_CREATE_INFO;
+	VkDescriptorSetLayoutCreateInfo layoutInfo{ VK_STRUCTURE_TYPE_DESCRIPTOR_SET_LAYOUT_CREATE_INFO };
 	layoutInfo.bindingCount = 5;
 	layoutInfo.pBindings = layoutBindings;
 
@@ -579,6 +486,7 @@ bool AsyncRenderer::InitRenderer()
 		return false;
 	}
 	m_deletionQueue.push_back([=]() { vkDestroyDescriptorSetLayout(m_device, m_descriptorLayout, nullptr); });
+
 
 	VkDescriptorSetAllocateInfo descAllocInfo{};
 	descAllocInfo.sType = VK_STRUCTURE_TYPE_DESCRIPTOR_SET_ALLOCATE_INFO;
@@ -591,22 +499,6 @@ bool AsyncRenderer::InitRenderer()
 		g_logger->error("vkAllocateDescriptorSets failure!");
 		return false;
 	}
-
-
-	VkSamplerCreateInfo samplerInfo{ VK_STRUCTURE_TYPE_SAMPLER_CREATE_INFO };
-	samplerInfo.magFilter = VK_FILTER_NEAREST;// VK_FILTER_LINEAR;
-	samplerInfo.minFilter = VK_FILTER_NEAREST;
-	samplerInfo.addressModeU = VK_SAMPLER_ADDRESS_MODE_CLAMP_TO_EDGE;
-	samplerInfo.addressModeV = VK_SAMPLER_ADDRESS_MODE_CLAMP_TO_EDGE;
-	samplerInfo.addressModeW = VK_SAMPLER_ADDRESS_MODE_CLAMP_TO_EDGE;
-
-	if (vkCreateSampler(m_device, &samplerInfo, nullptr, &m_sampler) != VK_SUCCESS)
-	{
-		g_logger->error("vkCreateSampler failure!");
-		return false;
-	}
-	m_deletionQueue.push_back([=]() { vkDestroySampler(m_device, m_sampler, nullptr); });
-
 
 
 	VkPushConstantRange pushRange{};
@@ -666,6 +558,13 @@ bool AsyncRenderer::InitRenderer()
 	m_deletionQueue.push_back([=]() { vkDestroyPipeline(m_device, m_pipelineFillHoles, nullptr); });
 	m_deletionQueue.push_back([=]() { vkDestroyPipeline(m_device, m_pipelineJointBilateral, nullptr); });
 
+
+	if (!m_frameDecoder.Init(m_device, m_physDevice, m_queueFamilyIndex, 1, g_renderDocAPI != nullptr))
+	{
+		g_logger->error("Failed to init acync frame decoder!");
+		return false;
+	}
+
 	g_logger->info("Asynchronous depth renderer initialized");
 
 	return true;
@@ -715,7 +614,7 @@ bool AsyncRenderer::CreateBuffer(VkBuffer& buffer, VkDeviceMemory& bufferMem, Vk
 	}
 
 	vkBindBufferMemory(m_device, buffer, bufferMem, 0);
-
+	m_bIsInitialized = true;
 	return true;
 }
 
@@ -838,11 +737,12 @@ bool AsyncRenderer::CreateTexture(VulkanTexture& texture, VkExtent2D extent, VkF
 	}
 
 	texture.bIsValid = true;
+	texture.Format = format;
 	return true;
 }
 
 
-bool AsyncRenderer::CreateSharedTexture(VulkanTexture& texture, VkExtent2D extent, VkFormat format, VkImageUsageFlags usageFlags, bool bCPUTransfer)
+bool AsyncRenderer::CreateSharedTexture(VulkanTexture& texture, VkExtent2D extent, VkFormat format, VkImageUsageFlags usageFlags)
 {
 	texture.Extent = extent;
 	texture.Layout = VK_IMAGE_LAYOUT_UNDEFINED;
@@ -950,47 +850,10 @@ bool AsyncRenderer::CreateSharedTexture(VulkanTexture& texture, VkExtent2D exten
 		return false;
 	}
 
-	// Create staging buffer if the texture will be updated from the CPU.
-	if (bCPUTransfer &&	(usageFlags & VK_IMAGE_USAGE_HOST_TRANSFER_BIT) == 0)
-	{
-		if (!CreateBuffer(texture.StagingBuffer, texture.StagingBufferMemory, memReq.memoryRequirements.size, VK_BUFFER_USAGE_TRANSFER_SRC_BIT, VK_MEMORY_PROPERTY_HOST_VISIBLE_BIT, nullptr))
-		{
-			g_logger->error("Staging buffer creation failure!");
-			return false;
-		}
-
-		if (vkMapMemory(m_device, texture.StagingBufferMemory, 0, VK_WHOLE_SIZE, 0, reinterpret_cast<void**>(&texture.MappedMemory)) != VK_SUCCESS)
-		{
-			g_logger->error("Failed to map staging buffer!");
-			return false;
-		}
-	}
-
-	if (bCPUTransfer && (usageFlags & VK_IMAGE_USAGE_HOST_TRANSFER_BIT))
-	{
-		VkHostImageLayoutTransitionInfo info{ VK_STRUCTURE_TYPE_HOST_IMAGE_LAYOUT_TRANSITION_INFO };
-		info.image = texture.Image;
-		info.oldLayout = VK_IMAGE_LAYOUT_UNDEFINED;
-		info.newLayout = VK_IMAGE_LAYOUT_GENERAL;
-		info.subresourceRange.aspectMask = VK_IMAGE_ASPECT_COLOR_BIT;
-		info.subresourceRange.baseMipLevel = 0;
-		info.subresourceRange.levelCount = 1;
-		info.subresourceRange.baseArrayLayer = 0;
-		info.subresourceRange.layerCount = 1;
-
-		if (vkTransitionImageLayout(m_device, 1, &info) != VK_SUCCESS)
-		{
-			g_logger->error("vkTransitionImageLayout failed!");
-			return false;
-		}
-
-		texture.Layout = VK_IMAGE_LAYOUT_GENERAL;
-	}
-
 	texture.bIsValid = true;
+	texture.Format = format;
 	return true;
 }
-
 
 void AsyncRenderer::DestroyTexture(VulkanTexture& texture)
 {
@@ -1003,6 +866,13 @@ void AsyncRenderer::DestroyTexture(VulkanTexture& texture)
 	
 	texture.nativeTexture = nullptr;
 
+
+
+	if (texture.Framebuffer != VK_NULL_HANDLE)
+	{
+		vkDestroyFramebuffer(m_device, texture.Framebuffer, nullptr);
+		texture.Framebuffer = VK_NULL_HANDLE;
+	}
 	if (texture.View != VK_NULL_HANDLE)
 	{
 		vkDestroyImageView(m_device, texture.View, nullptr);
@@ -1033,14 +903,71 @@ void AsyncRenderer::DestroyTexture(VulkanTexture& texture)
 }
 
 
+// Caller is resposible for aquiring camera frame locks.
+bool AsyncRenderer::CopyAndDecodeCameraFrame(std::shared_ptr<CameraCPUFrame> inFrame, void** nativeTexture)
+{
+	std::shared_lock acessLock(m_accessMutex);
+	if (!m_bIsInitialized) { return false; }
+
+	m_cameraTextureIndex = (m_cameraTextureIndex + 1) % 3;
+	VulkanTexture& rawTexture = m_rawCameraTexture[m_cameraTextureIndex];
+	VulkanTexture& sharedTexture = m_sharedCameraTexture[m_cameraTextureIndex];
+
+	VkFormat rawFormat = CameraFrameFormatToVulkan(inFrame->RawFrameFormat);
+
+	VkExtent2D rawExtent = { (uint32_t)inFrame->RawFrameSize[0], (uint32_t)inFrame->RawFrameSize[1] };
+	if (inFrame->RawFrameFormat == FrameFormat_YUYV16) { rawExtent.width /= 2; }
+
+	if (!rawTexture.bIsValid || rawTexture.Extent.width != rawExtent.width || rawTexture.Extent.height != rawExtent.height || rawTexture.Format != rawFormat)
+	{
+		DestroyTexture(rawTexture);
+
+		VkImageUsageFlags usageFlags = VK_IMAGE_USAGE_TRANSFER_SRC_BIT | VK_IMAGE_USAGE_TRANSFER_DST_BIT | VK_IMAGE_USAGE_SAMPLED_BIT;
+		if (m_bHostImageCopyEnabled) { usageFlags |= VK_IMAGE_USAGE_HOST_TRANSFER_BIT; }
+
+		if (!CreateTexture(rawTexture, rawExtent, rawFormat, usageFlags))
+		{
+			g_logger->error("Failed to create m_rawCameraTexture!");
+			return false;
+		}
+	}
+
+	if (!sharedTexture.bIsValid || sharedTexture.Extent.width != inFrame->FrameSize[0] || sharedTexture.Extent.height != inFrame->FrameSize[1])
+	{
+		DestroyTexture(sharedTexture);
+
+		if (!m_inlineRenderer.lock()->CreateSharedCameraTexture(&sharedTexture.SharedHandle, &sharedTexture.nativeTexture, { (uint32_t)inFrame->FrameSize[0], (uint32_t)inFrame->FrameSize[1] }, VK_FORMAT_R8G8B8A8_SRGB))
+		{
+			g_logger->error("Failed to create shared camera texture {}!", m_cameraTextureIndex);
+			return false;
+		}
+
+		if (!CreateSharedTexture(sharedTexture, { (uint32_t)inFrame->FrameSize[0], (uint32_t)inFrame->FrameSize[1] }, VK_FORMAT_R8G8B8A8_UNORM, VK_IMAGE_USAGE_TRANSFER_DST_BIT | VK_IMAGE_USAGE_SAMPLED_BIT | VK_IMAGE_USAGE_STORAGE_BIT))
+		{
+			g_logger->error("Failed to create m_sharedCameraTexture!");
+			return false;
+		}
+	}
+
+	if (!m_frameDecoder.CopyAndDecodeCameraFrame(inFrame, rawTexture, sharedTexture))
+	{
+		return false;
+	}
+
+	*nativeTexture = sharedTexture.nativeTexture;
+
+	return true;
+}
+
 
 
 
 bool AsyncRenderer::BeginRender(std::shared_ptr<DepthFrame> depthFrame)
 {
+	std::shared_lock accessLock(m_accessMutex);
 	int textureIndex = depthFrame->disparityTextureIndex;
 
-	if (!depthFrame.get() || !depthFrame->bIsValid)
+	if (!m_bIsInitialized || !depthFrame.get() || !depthFrame->bIsValid)
 	{
 		return false;
 	}
@@ -1072,13 +999,13 @@ bool AsyncRenderer::BeginRender(std::shared_ptr<DepthFrame> depthFrame)
 	{
 		DestroyTexture(m_outputTexture[textureIndex]);
 
-		if (!m_baseRenderer->CreateSharedDisparityMap(&m_outputTexture[textureIndex].SharedHandle, &m_outputTexture[textureIndex].nativeTexture, { depthFrame->outputDisparityTextureSize[0], depthFrame->outputDisparityTextureSize[1] }, VK_FORMAT_R16G16_SNORM))
+		if (!m_inlineRenderer.lock()->CreateSharedDisparityMap(&m_outputTexture[textureIndex].SharedHandle, &m_outputTexture[textureIndex].nativeTexture, { depthFrame->outputDisparityTextureSize[0], depthFrame->outputDisparityTextureSize[1] }, VK_FORMAT_R16G16_SNORM))
 		{
 			g_logger->error("Failed to create shared disparity map {}!", textureIndex);
 			return false;
 		}
 
-		if (!CreateSharedTexture(m_outputTexture[textureIndex], { depthFrame->outputDisparityTextureSize[0], depthFrame->outputDisparityTextureSize[1] }, VK_FORMAT_R16G16_SNORM, VK_IMAGE_USAGE_TRANSFER_SRC_BIT | VK_IMAGE_USAGE_TRANSFER_DST_BIT | VK_IMAGE_USAGE_SAMPLED_BIT | VK_IMAGE_USAGE_STORAGE_BIT, false))
+		if (!CreateSharedTexture(m_outputTexture[textureIndex], { depthFrame->outputDisparityTextureSize[0], depthFrame->outputDisparityTextureSize[1] }, VK_FORMAT_R16G16_SNORM, VK_IMAGE_USAGE_TRANSFER_SRC_BIT | VK_IMAGE_USAGE_TRANSFER_DST_BIT | VK_IMAGE_USAGE_SAMPLED_BIT | VK_IMAGE_USAGE_STORAGE_BIT))
 		{
 			g_logger->error("Failed to create m_outputTexture {}!", textureIndex);
 			return false;
@@ -1120,6 +1047,7 @@ bool AsyncRenderer::BeginRender(std::shared_ptr<DepthFrame> depthFrame)
 
 void AsyncRenderer::CopyDisparityToGPU(std::vector<uint8_t>& buffer)
 {
+	std::shared_lock accessLock(m_accessMutex);
 	if (m_disparityTexture.StagingBuffer == VK_NULL_HANDLE)
 	{
 		CopyHostImageToGPU(m_device, m_disparityTexture, buffer);
@@ -1133,6 +1061,7 @@ void AsyncRenderer::CopyDisparityToGPU(std::vector<uint8_t>& buffer)
 
 void AsyncRenderer::CopyConfidenceToGPU(std::vector<uint8_t>& buffer)
 {
+	std::shared_lock accessLock(m_accessMutex);
 	if (m_confidenceTexture.StagingBuffer == VK_NULL_HANDLE)
 	{
 		CopyHostImageToGPU(m_device, m_confidenceTexture, buffer);
@@ -1144,66 +1073,9 @@ void AsyncRenderer::CopyConfidenceToGPU(std::vector<uint8_t>& buffer)
 	}
 }
 
-bool AsyncRenderer::CopyCameraFrameToGPU(std::vector<uint8_t>& buffer, VkExtent2D extent, void** nativeTexture)
-{
-	m_cameraTextureIndex = (m_cameraTextureIndex + 1) % 3;
-	VulkanTexture& texture = m_cameraTexture[m_cameraTextureIndex];
-
-	if (!texture.bIsValid || texture.Extent.width != extent.width || texture.Extent.height != extent.height)
-	{
-		DestroyTexture(texture);
-
-		if (!m_baseRenderer->CreateSharedCameraTexture(&texture.SharedHandle, &texture.nativeTexture, extent, VK_FORMAT_R8G8B8A8_SRGB))
-		{
-			g_logger->error("Failed to create shared camera texture {}!", m_cameraTextureIndex);
-			return false;
-		}
-
-		VkImageUsageFlags usageFlags = VK_IMAGE_USAGE_TRANSFER_DST_BIT | VK_IMAGE_USAGE_SAMPLED_BIT;
-
-		if (!CreateSharedTexture(texture, { extent.width , extent.height }, VK_FORMAT_R8G8B8A8_SRGB, usageFlags, true))
-		{
-			g_logger->error("Failed to create m_cameraTexture!");
-			return false;
-		}
-	}
-
-	{
-		vkResetFences(m_device, 1, &m_renderFence);
-
-		VkCommandBufferBeginInfo beginInfo{ VK_STRUCTURE_TYPE_COMMAND_BUFFER_BEGIN_INFO };
-		beginInfo.flags = 0;
-
-		vkBeginCommandBuffer(m_commandBuffer, &beginInfo);
-
-		memcpy(texture.MappedMemory, buffer.data(), buffer.size());
-		CopyTextureToGPU(m_commandBuffer, texture, VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL);
-
-		vkEndCommandBuffer(m_commandBuffer);
-
-		VkSubmitInfo submitInfo{ VK_STRUCTURE_TYPE_SUBMIT_INFO };
-		submitInfo.commandBufferCount = 1;
-		submitInfo.pCommandBuffers = &m_commandBuffer;
-
-		vkQueueSubmit(m_queue, 1, &submitInfo, m_renderFence);
-
-		VkResult res = vkWaitForFences(m_device, 1, &m_renderFence, true, 1000 * 1000 * 100);
-		if (res == VK_TIMEOUT)
-		{
-			g_logger->warn("vkWaitForFences timeout!");
-		}
-		if (res != VK_SUCCESS)
-		{
-			g_logger->error("vkWaitForFences failure: {}", (int32_t)res);
-		}
-	}
-
-	*nativeTexture = texture.nativeTexture;
-	return true;
-}
-
 void AsyncRenderer::CopyBWRectifiedCameraFrameToGPU(std::vector<uint8_t>& buffer)
 {
+	std::shared_lock accessLock(m_accessMutex);
 	if (m_bwRectifiedCameraTexture.StagingBuffer == VK_NULL_HANDLE)
 	{
 		CopyHostImageToGPU(m_device, m_bwRectifiedCameraTexture, buffer);
@@ -1218,6 +1090,7 @@ void AsyncRenderer::CopyBWRectifiedCameraFrameToGPU(std::vector<uint8_t>& buffer
 
 void AsyncRenderer::Render(std::shared_ptr<DepthFrame> depthFrame, const Config_Stereo& stereoConf)
 {
+	std::shared_lock accessLock(m_accessMutex);
 	int textureIndex = depthFrame->disparityTextureIndex;
 
 	{
@@ -1398,24 +1271,6 @@ void AsyncRenderer::Render(std::shared_ptr<DepthFrame> depthFrame, const Config_
 	{
 		g_bRenderDocCaptured = g_renderDocAPI->EndFrameCapture(RENDERDOC_DEVICEPOINTER_FROM_VKINSTANCE(m_instance), NULL);
 	}*/
-}
-
-
-VkShaderModule AsyncRenderer::CreateShaderModule(const uint32_t* bytecode, size_t codeSize)
-{
-	VkShaderModuleCreateInfo createInfo{ VK_STRUCTURE_TYPE_SHADER_MODULE_CREATE_INFO };
-	createInfo.codeSize = codeSize;
-	createInfo.pCode = bytecode;
-
-	VkShaderModule module;
-
-	if (vkCreateShaderModule(m_device, &createInfo, nullptr, &module) != VK_SUCCESS)
-	{
-		g_logger->error("vkCreateShaderModule failure!");
-		return nullptr;
-	}
-
-	return module;
 }
 
 

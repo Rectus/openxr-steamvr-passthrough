@@ -168,7 +168,10 @@ VS_OUTPUT main(float3 inPosition : POSITION, uint vertexID : SV_VertexID)
     
     output.screenPos = output.position;  
 	
-#ifndef VULKAN
+#ifdef VULKAN
+	output.position.y *= -1.0;
+    
+#else
     float4 outCoords = mul((g_cameraViewIndex == 0) ? g_worldToCameraFrameProjectionLeft : g_worldToCameraFrameProjectionRight, worldSpacePoint);
 	output.cameraReprojectedPos = outCoords;
     
@@ -177,11 +180,6 @@ VS_OUTPUT main(float3 inPosition : POSITION, uint vertexID : SV_VertexID)
     output.prevCameraFrameScreenPos = mul(g_prevCameraFrame_WorldToHMDProjection, worldSpacePoint);
     output.prevHMDFrameScreenPos = mul(g_prevHMDFrame_WorldToHMDProjection, worldSpacePoint);
     
-    output.prevCameraFrameVelocity = outCoords.xyz / outCoords.w - prevOutCoords.xyz / prevOutCoords.w;
-#endif
-    
-#ifdef VULKAN
-	output.position.y *= -1.0;
 #endif
     
     output.crossCameraReprojectedPos = 0;

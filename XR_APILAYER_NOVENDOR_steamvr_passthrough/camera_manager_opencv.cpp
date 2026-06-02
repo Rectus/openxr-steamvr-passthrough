@@ -10,8 +10,9 @@
 
 
 
-CameraManagerOpenCV::CameraManagerOpenCV(std::shared_ptr<IPassthroughRenderer> renderer, ERenderAPI renderAPI, ERenderAPI appRenderAPI, std::shared_ptr<ConfigManager> configManager, std::shared_ptr<OpenVRManager> openVRManager, bool bIsAugmented)
-    : m_renderer(renderer)
+CameraManagerOpenCV::CameraManagerOpenCV(std::shared_ptr<IPassthroughRenderer> inlineRenderer, std::shared_ptr<AsyncRenderer> asyncRenderer, ERenderAPI renderAPI, ERenderAPI appRenderAPI, std::shared_ptr<ConfigManager> configManager, std::shared_ptr<OpenVRManager> openVRManager, bool bIsAugmented)
+    : m_inlineRenderer(inlineRenderer)
+    , m_asyncRenderer(asyncRenderer)
     , m_renderAPI(renderAPI)
     , m_appRenderAPI(appRenderAPI)
     , m_configManager(configManager)
@@ -357,11 +358,10 @@ void CameraManagerOpenCV::ServeFrames()
 
     bool bHasFrame = false;
     uint32_t lastFrameSequence = 0;
-    LARGE_INTEGER startFrameRetrievalTime;
     vr::TrackedDevicePose_t trackedDevicePoseArray[vr::k_unMaxTrackedDeviceCount];
     cv::Mat frameBuffer;
-    LARGE_INTEGER exposureTime, perfCounterfreq;
-    QueryPerformanceFrequency(&perfCounterfreq);
+    uint64_t exposureTime;
+    uint64_t tickFreq = GetSytemTickFrequency();
 
     while (m_bRunThread && m_videoCapture.isOpened())
     {
@@ -375,7 +375,7 @@ void CameraManagerOpenCV::ServeFrames()
         std::unique_lock writeLock(m_underConstructionFrame->readWriteMutex);
         std::unique_lock cpuFrameWriteLock(m_underConstructionFrameCPU->ReadWriteMutex);
 
-        startFrameRetrievalTime = StartPerfTimer();
+        m_cpuFrameTimer.StartPerfTimer();
 
         Config_Main& mainConf = m_configManager->GetConfig_Main();
         Config_Camera& cameraConf = m_configManager->GetConfig_Camera();
@@ -401,12 +401,12 @@ void CameraManagerOpenCV::ServeFrames()
         }
 
         // Frame latency is approximated from when grab() returns.
-        QueryPerformanceCounter(&exposureTime);
+        exposureTime = GetCurrentTimeSytemTicks();
 
         vrSystem->GetDeviceToAbsoluteTrackingPose(vr::TrackingUniverseStanding, -cameraConf.FrameDelayOffset, trackedDevicePoseArray, vr::k_unMaxTrackedDeviceCount);
 
-        uint64_t delayOffsetTicks = (uint64_t)(cameraConf.FrameDelayOffset * perfCounterfreq.QuadPart);
-        m_underConstructionFrame->header.ulFrameExposureTime = (exposureTime.QuadPart - delayOffsetTicks);
+        uint64_t delayOffsetTicks = (uint64_t)(cameraConf.FrameDelayOffset * tickFreq);
+        m_underConstructionFrame->header.ulFrameExposureTime = (exposureTime - delayOffsetTicks);
 
         if (!m_videoCapture.retrieve(frameBuffer))
         {
@@ -525,7 +525,7 @@ void CameraManagerOpenCV::ServeFrames()
             m_servedFrame.swap(m_underConstructionFrame);
         }
 
-        m_averageFrameRetrievalTime = UpdateAveragePerfTime(m_frameRetrievalTimes, EndPerfTimer(startFrameRetrievalTime), 20);
+        m_cpuFrameTimer.EndPerfTimer();
     }
 }
 

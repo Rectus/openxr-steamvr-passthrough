@@ -1691,7 +1691,7 @@ void PassthroughRendererDX11::RenderPassthroughFrame(const XrCompositionLayerPro
 	psPassBuffer.temporalFilteringFactor = mainConf.TemporalFilteringFactor;
 	psPassBuffer.temporalFilteringColorRangeCutoff = mainConf.TemporalFilteringRejectionOffset;
 	psPassBuffer.cutoutCombineFactor = stereoConf.StereoCutoutCombineFactor;
-	psPassBuffer.bDoColorAdjustment = fabsf(mainConf.Brightness) > 0.01f || fabsf(mainConf.Contrast - 1.0f) > 0.01f || fabsf(mainConf.Saturation - 1.0f) > 0.01f || fabsf(mainConf.GammaCorrection- 1.0f) > 0.01f;
+	psPassBuffer.bDoColorAdjustment = !frame->bColorsPreadjusted && (fabsf(mainConf.Brightness) > 0.01f || fabsf(mainConf.Contrast - 1.0f) > 0.01f || fabsf(mainConf.Saturation - 1.0f) > 0.01f || fabsf(mainConf.GammaCorrection- 1.0f) > 0.01f);
 	psPassBuffer.depthTemporalFilterFactor = stereoConf.StereoDisparityTemporalFilteringStrength;
 	psPassBuffer.depthTemporalFilterDistance = stereoConf.StereoDisparityTemporalFilteringDistance;
 	psPassBuffer.bDebugDepth = mainConf.DebugSource == DebugSource_OutputDepth;

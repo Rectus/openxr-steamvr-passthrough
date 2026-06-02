@@ -8,16 +8,12 @@
 #include <opencv2/imgcodecs.hpp>
 
 
-DepthReconstruction::DepthReconstruction(std::shared_ptr<ConfigManager> configManager, std::shared_ptr<OpenVRManager> openVRManager, std::shared_ptr<ICameraManager> cameraManager,std::shared_ptr<IPassthroughRenderer> baseRenderer)
-    : m_renderer(configManager, baseRenderer)
+DepthReconstruction::DepthReconstruction(std::shared_ptr<ConfigManager> configManager, std::shared_ptr<OpenVRManager> openVRManager, std::shared_ptr<ICameraManager> cameraManager, std::shared_ptr<AsyncRenderer> asyncRenderer)
+    : m_asyncRenderer(asyncRenderer)
     , m_configManager(configManager)
     , m_openVRManager(openVRManager)
     , m_cameraManager(cameraManager)
     , m_distortionParams()
-    , m_reconstructionTimes({0.0f})
-    , m_averageReconstructionTime(0.0f)
-    , m_renderTimes({ 0.0f })
-    , m_averageRenderTime(0.0f)
 {
     Config_Stereo& stereoConfig = m_configManager->GetConfig_Stereo();
 
@@ -34,13 +30,10 @@ DepthReconstruction::DepthReconstruction(std::shared_ptr<ConfigManager> configMa
     m_bUseMulticore = stereoConfig.StereoUseMulticore;
     cv::setNumThreads(m_bUseMulticore ? -1 : 0);
 
-    if (m_renderer.InitRenderer())
-    {
-        InitReconstruction();
+    InitReconstruction();
 
-        m_bRunThread = true;
-        m_thread = std::thread(&DepthReconstruction::RunThread, this);
-    }
+    m_bRunThread = true;
+    m_thread = std::thread(&DepthReconstruction::RunThread, this);
 }
 
 DepthReconstruction::~DepthReconstruction()
@@ -200,8 +193,6 @@ void DepthReconstruction::InitReconstruction()
 
     int disparityWidth = m_bDisparityBothEyes ? m_cvImageWidth + m_maxDisparity * 2 : m_cvImageWidth + m_maxDisparity;
 
-    m_inputFrameColorBuffer.resize(m_cameraTextureHeight * m_cameraTextureWidth * 4);
-    m_inputFrameColor = cv::Mat(m_cameraTextureHeight, m_cameraTextureWidth, CV_8UC4, m_inputFrameColorBuffer.data());
     m_inputFrameLeft = cv::Mat(m_cameraFrameHeight, m_cameraFrameWidth, frameFormat);
     m_inputFrameRight = cv::Mat(m_cameraFrameHeight, m_cameraFrameWidth, frameFormat);
     m_rectifiedFrameLeft = cv::Mat(m_cvImageHeight, m_cvImageWidth, frameFormat);
@@ -392,8 +383,7 @@ void DepthReconstruction::RunThread()
     {
         std::this_thread::sleep_for(std::chrono::microseconds(100));
 
-        LARGE_INTEGER startReconstructionTime = StartPerfTimer();
-        LARGE_INTEGER startRenderTime;
+        m_reconstructionTimer.StartPerfTimer();
 
         // Make local copies for consistency
         Config_Main mainConfig = m_configManager->GetConfig_Main();
@@ -429,9 +419,7 @@ void DepthReconstruction::RunThread()
         if (mainConfig.ProjectionMode != Projection_StereoReconstruction || mainConfig.DebugStereoReconstructionFreeze || !m_cameraManager->GetCameraCPUFrame(frame))
         {
             continue;
-        }
-
-        bool bCopyCameraFrame = mainConfig.CameraProvider != CameraProvider_OpenCV && cameraConfig.OpenVR_UseBlockQueueForColor;
+        }     
 
         {
             cv::Rect frameROILeft, frameROIRight;
@@ -455,26 +443,26 @@ void DepthReconstruction::RunThread()
             {
                 switch (frame->RawFrameFormat)
                 {
-                case 3: // CVS_FORMAT_RGB24
+                case FrameFormat_RGB24:
                     frameMinMemSize = frame->RawFrameSize[0] * frame->RawFrameSize[1] * 3;
                     break;
 
-                case 1: // CVS_FORMAT_RAW10
-                case 5: // CVS_FORMAT_YUYV16
-                case 6: // CVS_FORMAT_BAYER16BG
+                case FrameFormat_RAW10:
+                case FrameFormat_YUYV16:
+                case FrameFormat_BAYER16BG:
                     frameMinMemSize = frame->RawFrameSize[0] * frame->RawFrameSize[1] * 2;
                     break;
 
-                case 2: // CVS_FORMAT_NV12
-                case 4: // CVS_FORMAT_NV12_2
+                case FrameFormat_NV12:
+                case FrameFormat_NV12_2:
                     frameMinMemSize = frame->RawFrameSize[0] * frame->RawFrameSize[1] * 12 / 8;
                     break;
 
-                case 7: // CVS_FORMAT_MJPEG
+                case FrameFormat_MJPEG:
                     frameMinMemSize = 1;
                     break;
 
-                case 8: // CVS_FORMAT_RGBX32
+                case FrameFormat_RGBX32:
                 default:
                     frameMinMemSize = frame->RawFrameSize[0] * frame->RawFrameSize[1] * 4;
                 }
@@ -499,7 +487,7 @@ void DepthReconstruction::RunThread()
             {
                 switch (frame->RawFrameFormat)
                 {
-                case 8: // CVS_FORMAT_RGBX32
+                case FrameFormat_RGBX32:
                 {
                     m_inputFrame = cv::Mat(frame->RawFrameSize[1], frame->RawFrameSize[0], CV_8UC4, frame->FrameBuffer->data());
 
@@ -515,14 +503,9 @@ void DepthReconstruction::RunThread()
                     }
                     break;
                 }
-                case 3: // CVS_FORMAT_RGB24
+                case FrameFormat_RGB24:
                 {
                     m_inputFrame = cv::Mat(frame->RawFrameSize[1], frame->RawFrameSize[0], CV_8UC3, frame->FrameBuffer->data());
-
-                    if (bCopyCameraFrame)
-                    {
-                        cv::cvtColor(m_inputFrame, m_inputFrameColor, cv::COLOR_RGB2RGBA);
-                    }
 
                     if (m_bUseColor)
                     {
@@ -536,14 +519,9 @@ void DepthReconstruction::RunThread()
                     }
                     break;
                 }
-                case 5: // CVS_FORMAT_YUYV16
+                case FrameFormat_YUYV16:
                 {
                     m_inputFrame = cv::Mat(frame->RawFrameSize[1], frame->RawFrameSize[0], CV_8UC2, frame->FrameBuffer->data());
-
-                    if (bCopyCameraFrame)
-                    {
-                        cv::cvtColor(m_inputFrame, m_inputFrameColor, cv::COLOR_YUV2RGBA_YUY2);
-                    }
 
                     if (m_bUseColor)
                     {
@@ -557,32 +535,29 @@ void DepthReconstruction::RunThread()
                     }
                     break;
                 }
-                case 2: // CVS_FORMAT_NV12
+                case FrameFormat_NV12:
                 {
                     m_inputFrame = cv::Mat(frame->RawFrameSize[1], frame->RawFrameSize[0], CV_8UC1, frame->FrameBuffer->data());
 
-                    cv::cvtColor(m_inputFrame, m_inputFrameColor, cv::COLOR_YUV2RGBA_NV12);
+                    m_inputFrameColor = cv::Mat(m_cameraTextureHeight, m_cameraTextureWidth, CV_8UC3);
+
+                    cv::cvtColor(m_inputFrame, m_inputFrameColor, cv::COLOR_YUV2RGB_NV12);
 
                     if (m_bUseColor)
                     {
-                        m_inputFrame(frameROILeft).copyTo(m_inputFrameLeft);
-                        m_inputFrame(frameROIRight).copyTo(m_inputFrameRight);
+                        m_inputFrameColor(frameROILeft).copyTo(m_inputFrameLeft);
+                        m_inputFrameColor(frameROIRight).copyTo(m_inputFrameRight);
                     }
                     else
                     {
-                        cv::cvtColor(m_inputFrame(frameROILeft), m_inputFrameLeft, cv::COLOR_RGB2GRAY);
-                        cv::cvtColor(m_inputFrame(frameROIRight), m_inputFrameRight, cv::COLOR_RGB2GRAY);
+                        cv::cvtColor(m_inputFrameColor(frameROILeft), m_inputFrameLeft, cv::COLOR_RGB2GRAY);
+                        cv::cvtColor(m_inputFrameColor(frameROIRight), m_inputFrameRight, cv::COLOR_RGB2GRAY);
                     }
                     break;
                 }
-                case 6: // CVS_FORMAT_BAYER16BG
+                case FrameFormat_BAYER16BG:
                 {
                     m_inputFrame = cv::Mat(frame->RawFrameSize[1], frame->RawFrameSize[0], CV_16UC1, frame->FrameBuffer->data());
-
-                    if (bCopyCameraFrame)
-                    {
-                        cv::cvtColor(m_inputFrame, m_inputFrameColor, cv::COLOR_BayerBG2RGBA);
-                    }
 
                     if (m_bUseColor)
                     {
@@ -596,7 +571,7 @@ void DepthReconstruction::RunThread()
                     }
                     break;
                 }
-                case 7: // CVS_FORMAT_MJPEG 
+                case FrameFormat_MJPEG:
                 {
                     m_inputFrame = cv::imdecode(*frame->FrameBuffer.get(), cv::IMREAD_COLOR, &m_rawInputFrame);
 
@@ -604,11 +579,6 @@ void DepthReconstruction::RunThread()
                     {
                         g_logger->warn("Falied to decode MJPEG camera frame!");
                         continue;
-                    }
-
-                    if (bCopyCameraFrame)
-                    {
-                        cv::cvtColor(m_inputFrame, m_inputFrameColor, cv::COLOR_BGR2RGBA);
                     }
 
                     if (m_bUseColor)
@@ -624,8 +594,8 @@ void DepthReconstruction::RunThread()
                     break;
                 }
 
-                case 1: // CVS_FORMAT_RAW10 // TODO
-                case 4: // CVS_FORMAT_NV12_2 // TODO
+                case FrameFormat_RAW10: // TODO
+                case FrameFormat_NV12_2: // TODO
                 default:
                 {
                     continue;
@@ -635,11 +605,6 @@ void DepthReconstruction::RunThread()
             else
             {
                 m_inputFrame = cv::Mat(m_cameraTextureHeight, m_cameraTextureWidth, CV_8UC4, frame->FrameBuffer->data());
-
-                if (bCopyCameraFrame)
-                {
-                    m_inputFrame.copyTo(m_inputFrameColor);
-                }
 
                 if (m_bUseColor)
                 {
@@ -662,34 +627,6 @@ void DepthReconstruction::RunThread()
                 }
             }
         }
-
-        if (bCopyCameraFrame)
-        {
-            std::shared_ptr<CameraFrame> colorOutFrame;
-
-            if (m_cameraManager->GetCameraFrameForWrite(colorOutFrame))
-            {
-                if (m_renderer.CopyCameraFrameToGPU(m_inputFrameColorBuffer, { m_cameraTextureWidth, m_cameraTextureHeight }, &colorOutFrame->frameTextureResource))
-                {
-                    colorOutFrame->bIsValid = true;
-                    colorOutFrame->bHasReversedDepth = false;
-                    colorOutFrame->bIsFirstRender = true;
-                    colorOutFrame->bIsRenderingMirrored = false;
-                    colorOutFrame->frameLayout = m_frameLayout;
-                    colorOutFrame->header.nFrameSequence = m_lastFrameSequence;
-                    colorOutFrame->header.ulFrameExposureTime = frameTimestamp;
-                    colorOutFrame->cameraViewToWorldLeft = viewToWorldLeft;
-                    colorOutFrame->cameraViewToWorldRight = viewToWorldRight;
-                }
-                else
-                {
-                    colorOutFrame->bIsValid = false;
-                }
-
-                m_cameraManager->ReleaseCameraFrameForWrite(colorOutFrame);
-            }
-        }
-
 
         int filter = stereoConfig.StereoRectificationFiltering ? CV_INTER_LINEAR : CV_INTER_NN;
 
@@ -811,61 +748,61 @@ void DepthReconstruction::RunThread()
 
         {
             std::unique_lock writeLock(m_underConstructionDepthFrame->readWriteMutex);
+            std::shared_ptr<DepthFrame> frame = m_underConstructionDepthFrame;
 
             XrMatrix4x4f rectifiedRotationInvLeft;
             XrMatrix4x4f_Transpose(&rectifiedRotationInvLeft, &m_rectifiedRotationLeft);
-            XrMatrix4x4f_Multiply(&m_underConstructionDepthFrame->disparityViewToWorldLeft, &viewToWorldLeft, &rectifiedRotationInvLeft);
+            XrMatrix4x4f_Multiply(&frame->disparityViewToWorldLeft, &viewToWorldLeft, &rectifiedRotationInvLeft);
 
             if (m_bDisparityBothEyes)
             {
                 XrMatrix4x4f rectifiedRotationInvRight;
                 XrMatrix4x4f_Transpose(&rectifiedRotationInvRight, &m_rectifiedRotationRight);
-                XrMatrix4x4f_Multiply(&m_underConstructionDepthFrame->disparityViewToWorldRight, &viewToWorldRight, &rectifiedRotationInvRight);
+                XrMatrix4x4f_Multiply(&frame->disparityViewToWorldRight, &viewToWorldRight, &rectifiedRotationInvRight);
             }
             else
             {
-                m_underConstructionDepthFrame->disparityViewToWorldRight = m_underConstructionDepthFrame->disparityViewToWorldLeft;
+                frame->disparityViewToWorldRight = frame->disparityViewToWorldLeft;
             }
 
             int outputScale = stereoConfig.StereoFilteringBilateral_Enable ? stereoConfig.StereoFilteringBilateral_OutputScale : 1;
 
 
             // Precompute disparity-to-depth scaling factors for the shader inputs.
-            m_underConstructionDepthFrame->disparityToDepth = m_disparityToDepth;
-            m_underConstructionDepthFrame->disparityToDepth.m[0] *= (float)m_cvImageWidth;
-            m_underConstructionDepthFrame->disparityToDepth.m[5] *= -(float)m_cvImageHeight;
-            m_underConstructionDepthFrame->disparityToDepth.m[12] /= (float)m_downscaleFactor;
-            m_underConstructionDepthFrame->disparityToDepth.m[13] /= -(float)m_downscaleFactor;
-            m_underConstructionDepthFrame->disparityToDepth.m[14] /= -(float)m_downscaleFactor;
+            frame->disparityToDepth = m_disparityToDepth;
+            frame->disparityToDepth.m[0] *= (float)m_cvImageWidth;
+            frame->disparityToDepth.m[5] *= -(float)m_cvImageHeight;
+            frame->disparityToDepth.m[12] /= (float)m_downscaleFactor;
+            frame->disparityToDepth.m[13] /= -(float)m_downscaleFactor;
+            frame->disparityToDepth.m[14] /= -(float)m_downscaleFactor;
             // Convert z to int16 range with 4 bit fixed decimal: 65536 / 2 / 16 = 2048
-            m_underConstructionDepthFrame->disparityToDepth.m[11] *= 2048.0f;
+            frame->disparityToDepth.m[11] *= 2048.0f;
 
-            m_underConstructionDepthFrame->inputDisparityTextureSize[0] = m_cvImageWidth * 2;
-            m_underConstructionDepthFrame->inputDisparityTextureSize[1] = m_cvImageHeight;
-            m_underConstructionDepthFrame->outputDisparityTextureSize[0] = m_cvImageWidth * 2 * outputScale;
-            m_underConstructionDepthFrame->outputDisparityTextureSize[1] = m_cvImageHeight * outputScale;
-            m_underConstructionDepthFrame->cameraFrameTextureSize[0] = m_cameraFrameWidth * 2;
-            m_underConstructionDepthFrame->cameraFrameTextureSize[1] = m_cameraFrameHeight;
-            m_underConstructionDepthFrame->disparityDownscaleFactor = (float)m_downscaleFactor / outputScale;
-            m_underConstructionDepthFrame->frameExposureTimestamp = frameTimestamp;
-            m_underConstructionDepthFrame->minDisparity = stereoConfig.StereoMinDisparity / 2048.0f;
-            m_underConstructionDepthFrame->maxDisparity = m_maxDisparity / 2048.0f;
-            m_underConstructionDepthFrame->bIsValid = true;
-            m_underConstructionDepthFrame->bIsFirstRender = true;
-
-
-            startRenderTime = StartPerfTimer();
-            float reconstructionToRenderTime = GetPerfTimerDiff(startReconstructionTime.QuadPart, startRenderTime.QuadPart);
-            m_averageReconstructionTime = UpdateAveragePerfTime(m_reconstructionTimes, reconstructionToRenderTime, 20);
+            frame->inputDisparityTextureSize[0] = m_cvImageWidth * 2;
+            frame->inputDisparityTextureSize[1] = m_cvImageHeight;
+            frame->outputDisparityTextureSize[0] = m_cvImageWidth * 2 * outputScale;
+            frame->outputDisparityTextureSize[1] = m_cvImageHeight * outputScale;
+            frame->cameraFrameTextureSize[0] = m_cameraFrameWidth * 2;
+            frame->cameraFrameTextureSize[1] = m_cameraFrameHeight;
+            frame->disparityDownscaleFactor = (float)m_downscaleFactor / outputScale;
+            frame->frameExposureTimestamp = frameTimestamp;
+            frame->minDisparity = stereoConfig.StereoMinDisparity / 2048.0f;
+            frame->maxDisparity = m_maxDisparity / 2048.0f;
+            frame->bIsValid = true;
+            frame->bIsFirstRender = true;
 
 
-            if (!m_renderer.BeginRender(m_underConstructionDepthFrame))
+            m_reconstructionTimer.EndPerfTimer();
+            m_renderTimer.StartPerfTimer();
+
+
+            if (!m_asyncRenderer->BeginRender(frame))
             {
                 continue;
             }
 
             // Write disparity and confidence to texture
-#if 1
+
             cv::Rect copySrcRegion = cv::Rect(numDisparities, 0, m_cvImageWidth, m_cvImageHeight);
 
             m_outputDisparityBuffer.resize(m_cvImageHeight * 2 * m_cvImageWidth * 2);
@@ -887,7 +824,7 @@ void DepthReconstruction::RunThread()
                 (*outputMatrixRight)(copySrcRegion).copyTo(m_outputDisparityRight);
             }
 
-            m_renderer.CopyDisparityToGPU(m_outputDisparityBuffer);
+            m_asyncRenderer->CopyDisparityToGPU(m_outputDisparityBuffer);
 
             m_outputConfidenceBuffer.resize(m_cvImageHeight * 2 * m_cvImageWidth * 2);
 
@@ -937,7 +874,7 @@ void DepthReconstruction::RunThread()
                 m_outputConfidenceRight = cv::Mat::zeros(m_cvImageHeight, m_cvImageWidth, CV_16S);
             }
 
-            m_renderer.CopyConfidenceToGPU(m_outputConfidenceBuffer);
+            m_asyncRenderer->CopyConfidenceToGPU(m_outputConfidenceBuffer);
 
             // Copy rectified camera frame associated with disparity
             if(stereoConfig.StereoFilteringBilateral_Enable)
@@ -960,10 +897,10 @@ void DepthReconstruction::RunThread()
                     m_rectifiedFrameRight.copyTo(m_outputCameraFrameRight);
                 }
 
-                m_renderer.CopyBWRectifiedCameraFrameToGPU(m_outputCameraFrameBuffer);
+                m_asyncRenderer->CopyBWRectifiedCameraFrameToGPU(m_outputCameraFrameBuffer);
             }
-#endif
-            m_renderer.Render(m_underConstructionDepthFrame, stereoConfig);
+
+            m_asyncRenderer->Render(frame, stereoConfig);
 
             {
                 std::lock_guard<std::mutex> lock(m_serveMutex);
@@ -1057,9 +994,7 @@ void DepthReconstruction::RunThread()
             }
         }
         
-        m_averageRenderTime = UpdateAveragePerfTime(m_renderTimes, EndPerfTimer(startRenderTime.QuadPart), 20);
+        m_renderTimer.EndPerfTimer();
     }
 }
-
-
 

@@ -194,6 +194,7 @@ copy $(SolutionDir)THIRD_PARTY $(OutDir)THIRD_PARTY.txt</Command>
     <ClInclude Include="..\shared\shared_structs.h" />
     <ClInclude Include="..\shared\spdlog_ipc_sink.h" />
     <ClInclude Include="..\shared\version.h" />
+    <ClInclude Include="async_frame_decoder.h" />
     <ClInclude Include="async_renderer.h" />
     <ClInclude Include="camera_manager.h" />
     <ClInclude Include="check.h" />
@@ -211,6 +212,7 @@ copy $(SolutionDir)THIRD_PARTY $(OutDir)THIRD_PARTY.txt</Command>
     <ClInclude Include="passthrough_system.h" />
     <ClInclude Include="pch.h" />
     <ClInclude Include="resource.h" />
+    <ClInclude Include="vulkan_util.h" />
   </ItemGroup>
   <ItemGroup>
     <ClCompile Include="..\external\lodepng\lodepng.cpp">
@@ -221,6 +223,8 @@ copy $(SolutionDir)THIRD_PARTY $(OutDir)THIRD_PARTY.txt</Command>
     <ClCompile Include="..\shared\menu_ipc.cpp" />
     <ClCompile Include="..\shared\menu_ipc_client.cpp" />
     <ClCompile Include="..\shared\pathutil.cpp" />
+    <ClCompile Include="..\shared\perfutil.cpp" />
+    <ClCompile Include="async_frame_decoder.cpp" />
     <ClCompile Include="async_renderer.cpp" />
     <ClCompile Include="camera_manager_opencv.cpp" />
     <ClCompile Include="camera_manager_openvr.cpp" />
@@ -283,6 +287,7 @@ copy $(SolutionDir)THIRD_PARTY $(OutDir)THIRD_PARTY.txt</Command>
       <ShaderType Condition="'$(Configuration)|$(Platform)'=='Release|x64'">Pixel</ShaderType>
       <HeaderFileOutput Condition="'$(Configuration)|$(Platform)'=='Release|x64'">shaders\alpha_prepass_ps.h</HeaderFileOutput>
     </FxCompile>
+    <None Include="shaders\texture_decode_vulkan.comp.glsl" />
     <None Include="shaders\vs_outputs.hlsl">
       <FileType>Document</FileType>
     </None>

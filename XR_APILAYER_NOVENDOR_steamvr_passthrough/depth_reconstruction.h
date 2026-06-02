@@ -5,6 +5,7 @@
 #include "config_manager.h"
 #include "camera_manager.h"
 #include "async_renderer.h"
+#include "perfutil.h"
 
 #include <opencv2/imgproc/types_c.h>
 #include <opencv2/calib3d.hpp>
@@ -14,7 +15,7 @@
 class DepthReconstruction
 {
 public:
-	DepthReconstruction(std::shared_ptr<ConfigManager> configManager, std::shared_ptr<OpenVRManager> openVRManager, std::shared_ptr<ICameraManager> cameraManager, std::shared_ptr<IPassthroughRenderer> baseRenderer);
+	DepthReconstruction(std::shared_ptr<ConfigManager> configManager, std::shared_ptr<OpenVRManager> openVRManager, std::shared_ptr<ICameraManager> cameraManager, std::shared_ptr<AsyncRenderer> asyncRenderer);
 	~DepthReconstruction();
 
 	std::shared_ptr<DepthFrame> GetDepthFrame();
@@ -22,15 +23,13 @@ public:
 	{
 		return m_distortionParams;
 	}
-	float GetReconstructionPerfTime() { return m_averageReconstructionTime; }
-	float GetRenderPerfTime() { return m_averageRenderTime; }
+	float GetReconstructionPerfTime() { return m_reconstructionTimer.GetAverageTimeMS(); }
+	float GetRenderPerfTime() { return m_renderTimer.GetAverageTimeMS(); }
 	void CalculateCameraProjection(std::shared_ptr<CameraFrame>& cameraFrame, FrameRenderParameters& renderParams);
 private:
 	void InitReconstruction();
 	void RunThread();
 	void CreateDistortionMap();
-
-	AsyncRenderer m_renderer;
 
 	std::thread m_thread;
 	std::atomic_bool m_bRunThread;
@@ -39,6 +38,7 @@ private:
 	std::shared_ptr<ConfigManager> m_configManager;
 	std::shared_ptr<OpenVRManager> m_openVRManager;
 	std::shared_ptr<ICameraManager> m_cameraManager;
+	std::shared_ptr<AsyncRenderer> m_asyncRenderer;
 
 	std::shared_ptr<DepthFrame> m_servedDepthFrame;
 	std::shared_ptr<DepthFrame> m_depthFrame;
@@ -131,10 +131,8 @@ private:
 	std::vector<uint8_t> m_outputConfidenceBuffer;
 	std::vector<uint8_t> m_outputCameraFrameBuffer;
 
-	std::deque<float> m_reconstructionTimes;
-	float m_averageReconstructionTime;
-	std::deque<float> m_renderTimes;
-	float m_averageRenderTime;
+	PerfTimer m_reconstructionTimer{ 20 };
+	PerfTimer m_renderTimer{ 20 };
 
 	cv::Mat m_colorRectifyInput;
 	cv::Mat m_colorRectifyLeft;

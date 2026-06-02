@@ -21,7 +21,7 @@ public:
 	void SetExtensions(ExtensionData& data);
 	bool SetupRenderer(const XrInstance instance, const XrSessionCreateInfo* createInfo, const XrSession* session);
 	bool SetupProcessingPipeline();
-	void ResetRenderer();
+	void ShutdownRenderer();
 	EPassthroughCameraState GetCameraState() const;
 	bool IsDepthSupportedByRenderer() const { return m_bDepthSupportedByRenderer; }
 	ERenderAPI GetLayerRenderAPI() const { return m_renderAPI; };
@@ -54,13 +54,13 @@ private:
 	std::shared_ptr<DepthReconstruction> m_depthReconstruction;
 	std::shared_ptr<DepthReconstruction> m_augmentedDepthReconstruction;
 
-	std::deque<float> m_frameToRenderTimes;
-	std::deque<float> m_frameToPhotonTimes;
-	std::deque<float> m_depthToRenderTimes;
-	std::deque<float> m_depthToPhotonTimes;
-	std::deque<float> m_passthroughRenderTimes;
+	PerfTimer m_frameToRenderTime{ 20 };
+	PerfTimer m_frameToPhotonTime{ 20 };
+	PerfTimer m_depthToRenderTime{ 20 };
+	PerfTimer m_depthToPhotonTime{ 20 };
+	PerfTimer m_passthroughRenderTime{ 20 };
+	PerfTimer m_lastRenderTime{};
 
-	LARGE_INTEGER m_lastRenderTime{};
 	bool m_bIsPaused = false;
 	bool m_bIsInitialConfig = false;
 	bool m_bCamerasInitialized = false;
@@ -71,6 +71,8 @@ private:
 	ERenderAPI m_appRenderAPI = RenderAPI_Direct3D11;
 
 	std::shared_ptr<std::vector<RenderModel>> m_renderModels;
+	std::shared_ptr<DepthFrame> m_dummyDepthFrame;
+	UVDistortionParameters m_dummyDistParams{};
 
 	XrMatrix4x4f m_lastWorldToCameraProjectionLeft{};
 	XrMatrix4x4f m_lastWorldToCameraProjectionRight{};

@@ -5,11 +5,13 @@
 #include <xr_linear.h>
 #include "layer_structs.h"
 #include "passthrough_renderer.h"
+#include "async_renderer.h"
 #include "openvr_manager.h"
 #include "mesh.h"
 #include <opencv2/videoio.hpp>
 #include "lodepng.h"
 #include "pathutil.h"
+#include "perfutil.h"
 
 
 enum ETrackedCameraFrameType
@@ -54,8 +56,6 @@ public:
 	virtual float GetGPUFrameRetrievalPerfTime() { return -1.0f; }
 	virtual float GetCPUFrameRetrievalPerfTime() { return -1.0f; }
 	virtual bool GetCameraFrame(std::shared_ptr<CameraFrame>& frame) = 0;
-	virtual bool GetCameraFrameForWrite(std::shared_ptr<CameraFrame>& frame) { return false; }
-	virtual void ReleaseCameraFrameForWrite(std::shared_ptr<CameraFrame>& frame) { }
 	virtual bool GetCameraCPUFrame(std::shared_ptr<CameraCPUFrame>& frame) = 0;
 	virtual void UpdateFrameProjectionMatrix(std::shared_ptr<CameraFrame>& frame) = 0;
 
@@ -88,7 +88,7 @@ class CameraManagerOpenVR : public ICameraManager
 {
 public:
 
-	CameraManagerOpenVR(std::shared_ptr<IPassthroughRenderer> renderer, ERenderAPI renderAPI, ERenderAPI appRenderAPI, std::shared_ptr<ConfigManager> configManager, std::shared_ptr<OpenVRManager> openVRManager);
+	CameraManagerOpenVR(std::shared_ptr<IPassthroughRenderer> inlineRenderer, std::shared_ptr<AsyncRenderer> asyncRenderer, ERenderAPI renderAPI, ERenderAPI appRenderAPI, std::shared_ptr<ConfigManager> configManager, std::shared_ptr<OpenVRManager> openVRManager);
 	~CameraManagerOpenVR();
 
 	bool InitCamera();
@@ -110,17 +110,17 @@ public:
 	bool IsUsingFisheyeModel() const;
 	XrMatrix4x4f GetLeftToRightCameraTransform() const;
 	void UpdateStaticCameraParameters();
-	float GetGPUFrameRetrievalPerfTime() { return m_averageFrameRetrievalTime; }
-	float GetCPUFrameRetrievalPerfTime() { return m_averageBlockQueueFrameRetrievalTime; }
+	float GetGPUFrameRetrievalPerfTime() { return m_gpuFrameTimer.GetAverageTimeMS(); }
+	float GetCPUFrameRetrievalPerfTime() { return m_cpuFrameTimer.GetAverageTimeMS(); }
 	bool GetCameraFrame(std::shared_ptr<CameraFrame>& frame);
-	bool GetCameraFrameForWrite(std::shared_ptr<CameraFrame>& frame);
-	void ReleaseCameraFrameForWrite(std::shared_ptr<CameraFrame>& frame);
 	bool GetCameraCPUFrame(std::shared_ptr<CameraCPUFrame>& frame);
 	void UpdateFrameProjectionMatrix(std::shared_ptr<CameraFrame>& frame);
 
 private:
 	void ServeFrames();
 	void ServeBlockQueueFrames();
+	void CopyCPUFrameToGPU(std::shared_ptr<CameraCPUFrame> frame);
+	bool GetHMDPoseForTime(XrMatrix4x4f& headToTrackingPose, const uint64_t time);
 	void GetTrackedCameraEyePoses(XrMatrix4x4f& LeftPose, XrMatrix4x4f& RightPose, bool bForceOpenVRValue);
 
 	std::shared_ptr<ConfigManager> m_configManager;
@@ -145,7 +145,8 @@ private:
 	float m_projectionDistanceFar;
 	bool m_useAlternateProjectionCalc;
 
-	std::weak_ptr<IPassthroughRenderer> m_renderer;
+	std::weak_ptr<IPassthroughRenderer> m_inlineRenderer;
+	std::weak_ptr<AsyncRenderer> m_asyncRenderer;
 	ERenderAPI m_renderAPI;
 	ERenderAPI m_appRenderAPI;
 	std::thread m_serveThread;
@@ -189,10 +190,8 @@ private:
 
 	XrMatrix4x4f m_cameraLeftToRightPose{};
 
-	std::deque<float> m_frameRetrievalTimes;
-	std::deque<float> m_blockQueueFrameRetrievalTimes;
-	float m_averageFrameRetrievalTime;
-	float m_averageBlockQueueFrameRetrievalTime;
+	PerfTimer m_gpuFrameTimer{ 20 };
+	PerfTimer m_cpuFrameTimer{ 20 };
 };
 
 
@@ -200,7 +199,7 @@ class CameraManagerOpenCV : public ICameraManager
 {
 public:
 
-	CameraManagerOpenCV(std::shared_ptr<IPassthroughRenderer> renderer, ERenderAPI renderAPI, ERenderAPI appRenderAPI, std::shared_ptr<ConfigManager> configManager, std::shared_ptr<OpenVRManager> openVRManager, bool bIsAugmented = false);
+	CameraManagerOpenCV(std::shared_ptr<IPassthroughRenderer> inlineRenderer, std::shared_ptr<AsyncRenderer> asyncRenderer, ERenderAPI renderAPI, ERenderAPI appRenderAPI, std::shared_ptr<ConfigManager> configManager, std::shared_ptr<OpenVRManager> openVRManager, bool bIsAugmented = false);
 	~CameraManagerOpenCV();
 
 	bool InitCamera();
@@ -222,8 +221,8 @@ public:
 	bool IsUsingFisheyeModel() const;
 	XrMatrix4x4f GetLeftToRightCameraTransform() const;
 	void UpdateStaticCameraParameters();
-	float GetGPUFrameRetrievalPerfTime() { return -1.0f; }
-	float GetCPUFrameRetrievalPerfTime() { return m_averageFrameRetrievalTime; }
+	float GetGPUFrameRetrievalPerfTime() { return m_gpuFrameTimer.GetAverageTimeMS(); }
+	float GetCPUFrameRetrievalPerfTime() { return m_cpuFrameTimer.GetAverageTimeMS(); }
 	bool GetCameraFrame(std::shared_ptr<CameraFrame>& frame);
 	bool GetCameraCPUFrame(std::shared_ptr<CameraCPUFrame>& frame);
 	void UpdateFrameProjectionMatrix(std::shared_ptr<CameraFrame>& frame);
@@ -258,7 +257,8 @@ private:
 	float m_projectionDistanceFar;
 	bool m_useAlternateProjectionCalc;
 
-	std::weak_ptr<IPassthroughRenderer> m_renderer;
+	std::weak_ptr<IPassthroughRenderer> m_inlineRenderer;
+	std::weak_ptr<AsyncRenderer> m_asyncRenderer;
 	ERenderAPI m_renderAPI;
 	ERenderAPI m_appRenderAPI;
 	std::thread m_serveThread;
@@ -281,6 +281,6 @@ private:
 	XrMatrix4x4f m_cameraProjectionInvLeft{};
 	XrMatrix4x4f m_cameraProjectionInvRight{};
 
-	std::deque<float> m_frameRetrievalTimes;
-	float m_averageFrameRetrievalTime;
+	PerfTimer m_gpuFrameTimer{ 20 };
+	PerfTimer m_cpuFrameTimer{ 20 };
 };

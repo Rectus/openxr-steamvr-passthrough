@@ -3,55 +3,43 @@
 
 #include "layer_structs.h"
 #include "config_manager.h"
+#include "async_frame_decoder.h"
+
+class IPassthroughRenderer;
 
 
- class IPassthroughRenderer;
-
-struct VulkanTexture
-{
-	VkImage Image = VK_NULL_HANDLE;
-	VkDeviceMemory 	Memory = VK_NULL_HANDLE;
-	VkImageView View = VK_NULL_HANDLE;
-	VkBuffer StagingBuffer = VK_NULL_HANDLE;
-	VkDeviceMemory 	StagingBufferMemory = VK_NULL_HANDLE;
-	uint8_t* MappedMemory = nullptr;
-
-	HANDLE SharedHandle = INVALID_HANDLE_VALUE;
-	void* nativeTexture = NULL;
-
-	VkExtent2D Extent = { 0, 0 };
-	bool bIsValid = false;
-	VkImageLayout Layout = VK_IMAGE_LAYOUT_UNDEFINED;
-};
 
 class AsyncRenderer
 {
 public:
 	AsyncRenderer(std::shared_ptr<ConfigManager> configManager, std::shared_ptr<IPassthroughRenderer> baseRenderer)
 		: m_configManager(configManager)
-		, m_baseRenderer(baseRenderer)
+		, m_inlineRenderer(baseRenderer)
+		, m_frameDecoder(configManager)
+		, m_bIsInitialized(false)
 	{}
 	~AsyncRenderer();
 	bool InitRenderer();
+	bool CopyAndDecodeCameraFrame(std::shared_ptr<CameraCPUFrame> inFrame, void** nativeTexture);
 	bool BeginRender(std::shared_ptr<DepthFrame> depthFrame);
 	void CopyDisparityToGPU(std::vector<uint8_t>& buffer);
 	void CopyConfidenceToGPU(std::vector<uint8_t>& buffer);
-	bool CopyCameraFrameToGPU(std::vector<uint8_t>& buffer, VkExtent2D extent, void** nativeTexture);
 	void CopyBWRectifiedCameraFrameToGPU(std::vector<uint8_t>& buffer);
 	void Render(std::shared_ptr<DepthFrame> depthFrame, const Config_Stereo& stereoConf);
 
 private:
 
-	VkShaderModule CreateShaderModule(const uint32_t* bytecode, size_t codeSize);
 	bool CreateBuffer(VkBuffer& buffer, VkDeviceMemory& bufferMem, VkDeviceSize bufferSize, VkBufferUsageFlags usageFlags, VkMemoryPropertyFlags memFlags, std::deque<std::function<void()>>* deletionQueue);
 	bool CreateTexture(VulkanTexture& texture, VkExtent2D extent, VkFormat format, VkImageUsageFlags usageFlags);
-	bool CreateSharedTexture(VulkanTexture& texture, VkExtent2D extent, VkFormat format, VkImageUsageFlags usageFlags, bool bCPUTransfer);
+	bool CreateSharedTexture(VulkanTexture& texture, VkExtent2D extent, VkFormat format, VkImageUsageFlags usageFlags);
 	void DestroyTexture(VulkanTexture& texture);
 	void ComputeFilterKernels();
 
+	AsyncFrameDecoder m_frameDecoder;
+	std::shared_mutex m_accessMutex;
 
 	std::shared_ptr<ConfigManager> m_configManager;
-	std::shared_ptr<IPassthroughRenderer> m_baseRenderer;
+	std::weak_ptr<IPassthroughRenderer> m_inlineRenderer;
 
 	std::deque<std::function<void()>> m_deletionQueue;
 	VkInstance m_instance = VK_NULL_HANDLE;
@@ -64,9 +52,9 @@ private:
 	VkCommandPool m_commandPool = VK_NULL_HANDLE;
 	VkCommandBuffer m_commandBuffer = VK_NULL_HANDLE;
 	bool m_bHostImageCopyEnabled = false;
+	std::atomic_bool m_bIsInitialized = false;
 
 	VkFence m_renderFence = VK_NULL_HANDLE;
-	VkFence m_transferFence = VK_NULL_HANDLE;
 
 	VkShaderModule m_disparityFillHolesCS = VK_NULL_HANDLE;
 	VkShaderModule m_disparityJointBilateralCS = VK_NULL_HANDLE;
@@ -78,11 +66,13 @@ private:
 	VkDescriptorPool m_descriptorPool = VK_NULL_HANDLE;
 	VkDescriptorSet m_descriptorSet = VK_NULL_HANDLE;
 	VkDescriptorSetLayout m_descriptorLayout = VK_NULL_HANDLE;
-	
+
 	VkSampler m_sampler = VK_NULL_HANDLE;
 
-	VulkanTexture m_cameraTexture[3] = {};
+	VulkanTexture m_rawCameraTexture[3] = {};
+	VulkanTexture m_sharedCameraTexture[3] = {};
 	int m_cameraTextureIndex = -1;
+
 	VulkanTexture m_bwRectifiedCameraTexture;
 	VulkanTexture m_disparityTexture;
 	VulkanTexture m_confidenceTexture;

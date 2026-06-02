@@ -23,7 +23,6 @@ VS_OUTPUT main(uint vertexID : SV_VertexID)
     output.crossCameraReprojectedPos = 0;
     output.prevHMDFrameScreenPos = 0;
     output.prevCameraFrameScreenPos = 0;
-    output.prevCameraFrameVelocity = 0;
     output.cameraDepth = 0;
     
     return output;

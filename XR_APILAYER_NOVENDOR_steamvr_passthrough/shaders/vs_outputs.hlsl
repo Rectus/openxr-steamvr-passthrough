@@ -12,8 +12,7 @@ struct VS_OUTPUT
     float4 crossCameraReprojectedPos : TEXCOORD4;
     float4 prevHMDFrameScreenPos : TEXCOORD5;
     float4 prevCameraFrameScreenPos : TEXCOORD6;
-    float3 prevCameraFrameVelocity : TEXCOORD7;
-    float2 cameraDepth : TEXCOORD8;
+    float2 cameraDepth : TEXCOORD7;
 };
 
 #endif //_VS_OUTPUTS_INCLUDED

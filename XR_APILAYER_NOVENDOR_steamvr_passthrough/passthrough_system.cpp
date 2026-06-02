@@ -23,6 +23,7 @@ PassthroughSystem::PassthroughSystem(HMODULE dllModule, std::shared_ptr<ConfigMa
 	m_menuIPCClient->RegisterReader(m_menuHandler);
 
 	m_renderModels = std::make_shared<std::vector<RenderModel>>();
+	m_dummyDepthFrame = std::make_shared<DepthFrame>();
 }
 
 PassthroughSystem::~PassthroughSystem()
@@ -62,6 +63,7 @@ bool PassthroughSystem::SetupRenderer(const XrInstance instance, const XrSession
 
 			const XrGraphicsBindingD3D11KHR* bindings = reinterpret_cast<const XrGraphicsBindingD3D11KHR*>(entry);
 			m_inlineRenderer = std::make_shared<PassthroughRendererDX11>(bindings->device, m_configManager);
+			m_asyncRenderer = std::make_shared<AsyncRenderer>(m_configManager, m_inlineRenderer);
 			m_renderAPI = RenderAPI_Direct3D11;
 			m_appRenderAPI = RenderAPI_Direct3D11;
 
@@ -86,7 +88,8 @@ bool PassthroughSystem::SetupRenderer(const XrInstance instance, const XrSession
 
 			const XrGraphicsBindingD3D12KHR* bindings = reinterpret_cast<const XrGraphicsBindingD3D12KHR*>(entry);
 
-			m_inlineRenderer = std::make_unique<PassthroughRendererDX11Interop>(bindings->device, bindings->queue, m_configManager);
+			m_inlineRenderer = std::make_shared<PassthroughRendererDX11Interop>(bindings->device, bindings->queue, m_configManager);
+			m_asyncRenderer = std::make_shared<AsyncRenderer>(m_configManager, m_inlineRenderer);
 			m_renderAPI = RenderAPI_Direct3D11;
 			m_appRenderAPI = RenderAPI_Direct3D12;
 
@@ -115,7 +118,7 @@ bool PassthroughSystem::SetupRenderer(const XrInstance instance, const XrSession
 			if (m_configManager->GetConfig_Main().UseLegacyVulkanRenderer)
 			{
 
-				m_inlineRenderer = std::make_unique<PassthroughRendererVulkan>(*bindings, m_configManager);
+				m_inlineRenderer = std::make_shared<PassthroughRendererVulkan>(*bindings, m_configManager);
 				g_logger->info("Using legacy Vulkan renderer");
 			}
 			else
@@ -133,9 +136,10 @@ bool PassthroughSystem::SetupRenderer(const XrInstance instance, const XrSession
 				}
 
 				usedAPI = RenderAPI_Direct3D11;
-				m_inlineRenderer = std::make_unique<PassthroughRendererDX11Interop>(*bindings, m_configManager);
+				m_inlineRenderer = std::make_shared<PassthroughRendererDX11Interop>(*bindings, m_configManager);
 			}
 
+			m_asyncRenderer = std::make_shared<AsyncRenderer>(m_configManager, m_inlineRenderer);
 			m_renderAPI = usedAPI;
 			m_appRenderAPI = RenderAPI_Vulkan;
 
@@ -158,12 +162,12 @@ bool PassthroughSystem::SetupRenderer(const XrInstance instance, const XrSession
 		{
 			g_logger->info("Initializing rendering for OpenGL...");
 
-			m_appRenderAPI = RenderAPI_OpenGL;
-			m_renderAPI = RenderAPI_Direct3D11;
-
 			const XrGraphicsBindingOpenGLWin32KHR* bindings = reinterpret_cast<const XrGraphicsBindingOpenGLWin32KHR*>(entry);
 
-			m_inlineRenderer = std::make_unique<PassthroughRendererDX11Interop>(*bindings, m_configManager);
+			m_inlineRenderer = std::make_shared<PassthroughRendererDX11Interop>(*bindings, m_configManager);
+			m_asyncRenderer = std::make_shared<AsyncRenderer>(m_configManager, m_inlineRenderer);
+			m_appRenderAPI = RenderAPI_OpenGL;
+			m_renderAPI = RenderAPI_Direct3D11;
 
 			if (!SetupProcessingPipeline())
 			{
@@ -212,11 +216,11 @@ bool PassthroughSystem::SetupProcessingPipeline()
 	Config_Main& mainConfig = m_configManager->GetConfig_Main();
 
 	m_bIsPaused = false;
-	m_lastRenderTime = StartPerfTimer();
+	m_lastRenderTime.StartPerfTimer();
 
 	if (mainConfig.CameraProvider == CameraProvider_OpenVR)
 	{
-		m_cameraManager = std::make_shared<CameraManagerOpenVR>(m_inlineRenderer, m_renderAPI, m_appRenderAPI, m_configManager, m_openVRManager);
+		m_cameraManager = std::make_shared<CameraManagerOpenVR>(m_inlineRenderer, m_asyncRenderer, m_renderAPI, m_appRenderAPI, m_configManager, m_openVRManager);
 
 		if (!m_cameraManager->InitCamera())
 		{
@@ -245,8 +249,8 @@ bool PassthroughSystem::SetupProcessingPipeline()
 	}
 	else if (mainConfig.CameraProvider == CameraProvider_Augmented)
 	{
-		m_cameraManager = std::make_shared<CameraManagerOpenVR>(m_inlineRenderer, m_renderAPI, m_appRenderAPI, m_configManager, m_openVRManager);
-		m_augmentedCameraManager = std::make_shared<CameraManagerOpenCV>(m_inlineRenderer, m_renderAPI, m_appRenderAPI, m_configManager, m_openVRManager, true);
+		m_cameraManager = std::make_shared<CameraManagerOpenVR>(m_inlineRenderer, m_asyncRenderer, m_renderAPI, m_appRenderAPI, m_configManager, m_openVRManager);
+		m_augmentedCameraManager = std::make_shared<CameraManagerOpenCV>(m_inlineRenderer, m_asyncRenderer, m_renderAPI, m_appRenderAPI, m_configManager, m_openVRManager, true);
 
 		if (!m_cameraManager->InitCamera() || !m_augmentedCameraManager->InitCamera())
 		{
@@ -262,7 +266,7 @@ bool PassthroughSystem::SetupProcessingPipeline()
 	}
 	else
 	{
-		m_cameraManager = std::make_shared<CameraManagerOpenCV>(m_inlineRenderer, m_renderAPI, m_appRenderAPI, m_configManager, m_openVRManager);
+		m_cameraManager = std::make_shared<CameraManagerOpenCV>(m_inlineRenderer, m_asyncRenderer, m_renderAPI, m_appRenderAPI, m_configManager, m_openVRManager);
 
 		if (!m_cameraManager->InitCamera())
 		{
@@ -282,22 +286,30 @@ bool PassthroughSystem::SetupProcessingPipeline()
 	m_inlineRenderer->SetFrameSize(cameraTextureWidth, cameraTextureHeight, cameraFrameBufferSize, cameraUndistortedTextureWidth, cameraUndistortedTextureHeight, cameraUndistortedFrameBufferSize);
 	if (!m_inlineRenderer->InitRenderer())
 	{
-		g_logger->error("Failed to initialize renderer!");
+		g_logger->error("Failed to initialize inline renderer!");
 		return false;
 	}
 
-
-	m_depthReconstruction = std::make_shared<DepthReconstruction>(m_configManager, m_openVRManager, m_cameraManager, m_inlineRenderer);
-
-	if (m_configManager->GetConfig_Main().CameraProvider == CameraProvider_Augmented)
+	if (m_configManager->GetConfig_Main().ProjectionMode != Projection_RoomView2D)
 	{
-		m_augmentedDepthReconstruction = std::make_shared<DepthReconstruction>(m_configManager, m_openVRManager, m_augmentedCameraManager, m_inlineRenderer);
+		if (!m_asyncRenderer->InitRenderer())
+		{
+			g_logger->error("Failed to initialize async renderer!");
+			return false;
+		}
+
+		m_depthReconstruction = std::make_shared<DepthReconstruction>(m_configManager, m_openVRManager, m_cameraManager, m_asyncRenderer);
+
+		if (m_configManager->GetConfig_Main().CameraProvider == CameraProvider_Augmented)
+		{
+			m_augmentedDepthReconstruction = std::make_shared<DepthReconstruction>(m_configManager, m_openVRManager, m_augmentedCameraManager, m_asyncRenderer);
+		}
 	}
 
 	return true;
 }
 
-void PassthroughSystem::ResetRenderer()
+void PassthroughSystem::ShutdownRenderer()
 {
 	m_depthReconstruction.reset();
 	m_augmentedDepthReconstruction.reset();
@@ -480,6 +492,7 @@ bool PassthroughSystem::RenderPassthroughOnAppLayer(const XrFrameEndInfo* frameE
 	XrCompositionLayerProjection* layer = (XrCompositionLayerProjection*)frameEndInfo->layers[layerNum];
 	std::shared_ptr<CameraFrame> frame;
 	std::shared_ptr<CameraCPUFrame> cpuFrame;
+	std::shared_ptr<DepthFrame> depthFrame;
 
 	std::shared_lock<std::shared_mutex> cpuFrameReadLock;
 	std::shared_lock<std::shared_mutex> depthFrameReadLock;
@@ -504,40 +517,30 @@ bool PassthroughSystem::RenderPassthroughOnAppLayer(const XrFrameEndInfo* frameE
 		cpuFrameReadLock = std::shared_lock<std::shared_mutex>(cpuFrame->ReadWriteMutex);
 	}
 
-	std::shared_ptr<DepthFrame> depthFrame = m_depthReconstruction->GetDepthFrame();
-	if (depthFrame.get())
+	bool bUseDepth = mainConf.ProjectionMode == Projection_StereoReconstruction && m_depthReconstruction.get();
+
+	if (bUseDepth)
 	{
-		depthFrameReadLock = std::shared_lock<std::shared_mutex>(depthFrame->readWriteMutex);
+		depthFrame = m_depthReconstruction->GetDepthFrame();
+		if (depthFrame.get())
+		{
+			depthFrameReadLock = std::shared_lock<std::shared_mutex>(depthFrame->readWriteMutex);
+		}
+		else
+		{
+			return false;
+		}
 	}
 	else
 	{
-		return false;
+		depthFrame = m_dummyDepthFrame;
 	}
-
 
 	ClientData& clientData = m_menuHandler->GetClientData();
 
-	LARGE_INTEGER preRenderTime = StartPerfTimer();
-
-	float frameToRenderTime = GetPerfTimerDiff(frame->header.ulFrameExposureTime, preRenderTime.QuadPart);
-	clientData.Values.FrameToRenderLatencyMS = UpdateAveragePerfTime(m_frameToRenderTimes, frameToRenderTime, 20);
-
-	
-
-	float frameToPhotonsTime = GetPerfTimerDiff(frame->header.ulFrameExposureTime, renderParams.DisplayTime);
-	clientData.Values.FrameToPhotonsLatencyMS = UpdateAveragePerfTime(m_frameToPhotonTimes, frameToPhotonsTime, 20);
-
-	if (depthFrame->bIsValid)
-	{
-		float depthToRenderTime = GetPerfTimerDiff(depthFrame->frameExposureTimestamp, preRenderTime.QuadPart);
-		clientData.Values.DepthToRenderLatencyMS = UpdateAveragePerfTime(m_depthToRenderTimes, depthToRenderTime, 20);
-
-		float depthToPhotonsTime = GetPerfTimerDiff(depthFrame->frameExposureTimestamp, renderParams.DisplayTime);
-		clientData.Values.DepthToPhotonsLatencyMS = UpdateAveragePerfTime(m_depthToPhotonTimes, depthToPhotonsTime, 20);
-	}
+	uint64_t preRenderTime = m_passthroughRenderTime.StartPerfTimer();
 
 
-	float timeToPhotons = GetPerfTimerDiff(preRenderTime.QuadPart, renderParams.DisplayTime);
 
 	Config_Core& coreConf = m_configManager->GetConfig_Core();
 	Config_Extensions& extConf = m_configManager->GetConfig_Extensions();
@@ -550,15 +553,22 @@ bool PassthroughSystem::RenderPassthroughOnAppLayer(const XrFrameEndInfo* frameE
 	{
 		if (extConf.ExtFBPassthroughAllowColorSettings && renderParams.FBLayer->ColorAdjustmentEnabled)
 		{
+			m_configManager->SetEnableAsyncColorAdjustment(false);
 			renderParams.bForceColorSettings = true;
 			renderParams.ForcedBrightness = renderParams.FBLayer->Brightness;
 			renderParams.ForcedContrast = renderParams.FBLayer->Contrast;
 			renderParams.ForcedSaturation = renderParams.FBLayer->Saturation;
 		}
-
+		else
+		{
+			m_configManager->SetEnableAsyncColorAdjustment(true);
+		}
 		renderParams.RenderOpacity = renderParams.FBLayer->Opacity;
 	}
-
+	else
+	{
+		m_configManager->SetEnableAsyncColorAdjustment(true);
+	}
 	
 
 	if (renderParams.LeftFrameIndex < 0 || renderParams.RightFrameIndex < 0)
@@ -659,10 +669,11 @@ bool PassthroughSystem::RenderPassthroughOnAppLayer(const XrFrameEndInfo* frameE
 		renderParams.DepthRangeMax = depthConf.DepthForceRangeTestMax;
 	}
 
-	UVDistortionParameters& distParams =
-		m_configManager->GetConfig_Main().CameraProvider == CameraProvider_Augmented ?
+	UVDistortionParameters& distParams = (mainConf.ProjectionMode == Projection_RoomView2D || !m_depthReconstruction.get()) ?
+		m_dummyDistParams :
+		(m_configManager->GetConfig_Main().CameraProvider == CameraProvider_Augmented ?
 		m_augmentedDepthReconstruction->GetDistortionParameters() :
-		m_depthReconstruction->GetDistortionParameters();
+		m_depthReconstruction->GetDistortionParameters());
 
 	if (mainConf.ProjectToRenderModels)
 	{
@@ -674,6 +685,39 @@ bool PassthroughSystem::RenderPassthroughOnAppLayer(const XrFrameEndInfo* frameE
 
 	depthFrame->bIsFirstRender = false;
 
+	
+	m_passthroughRenderTime.EndPerfTimer();
+	clientData.Values.RenderTimeMS = m_passthroughRenderTime.GetAverageTimeMS();
+
+	m_frameToRenderTime.AveragesAddTimeInterval(frame->header.ulFrameExposureTime, preRenderTime);
+	clientData.Values.FrameToRenderLatencyMS = m_frameToRenderTime.GetAverageTimeMS();
+
+	m_frameToPhotonTime.AveragesAddTimeInterval(frame->header.ulFrameExposureTime, renderParams.DisplayTime);
+	clientData.Values.FrameToPhotonsLatencyMS = m_frameToPhotonTime.GetAverageTimeMS();
+
+	if (depthFrame->bIsValid)
+	{
+		m_depthToRenderTime.AveragesAddTimeInterval(depthFrame->frameExposureTimestamp, preRenderTime);
+		clientData.Values.DepthToRenderLatencyMS = m_depthToRenderTime.GetAverageTimeMS();
+
+		m_depthToPhotonTime.AveragesAddTimeInterval(depthFrame->frameExposureTimestamp, renderParams.DisplayTime);
+		clientData.Values.DepthToPhotonsLatencyMS = m_depthToPhotonTime.GetAverageTimeMS();
+	}
+
+	if (mainConf.ProjectionMode == Projection_RoomView2D || !m_depthReconstruction.get())
+	{
+		clientData.Values.StereoReconstructionTimeMS = 0.0f;
+		clientData.Values.StereoRenderTimeMS = 0.0f;
+	}
+	else
+	{
+		clientData.Values.StereoReconstructionTimeMS = m_depthReconstruction->GetReconstructionPerfTime();
+		clientData.Values.StereoRenderTimeMS = m_depthReconstruction->GetRenderPerfTime();
+	}
+	clientData.Values.GPUFrameRetrievalTimeMS = m_cameraManager->GetGPUFrameRetrievalPerfTime();
+	clientData.Values.CPUFrameRetrievalTimeMS = m_cameraManager->GetCPUFrameRetrievalPerfTime();
+
+
 	if (depthFrameReadLock.owns_lock())
 	{
 		depthFrameReadLock.unlock();
@@ -684,14 +728,6 @@ bool PassthroughSystem::RenderPassthroughOnAppLayer(const XrFrameEndInfo* frameE
 		cpuFrameReadLock.unlock();
 	}
 
-	float renderTime = EndPerfTimer(preRenderTime.QuadPart);
-	clientData.Values.RenderTimeMS = UpdateAveragePerfTime(m_passthroughRenderTimes, renderTime, 20);
-
-	clientData.Values.StereoReconstructionTimeMS = m_depthReconstruction->GetReconstructionPerfTime();
-	clientData.Values.StereoRenderTimeMS = m_depthReconstruction->GetRenderPerfTime();
-	clientData.Values.GPUFrameRetrievalTimeMS = m_cameraManager->GetGPUFrameRetrievalPerfTime();
-	clientData.Values.CPUFrameRetrievalTimeMS = m_cameraManager->GetCPUFrameRetrievalPerfTime();
-
 	return true;
 }
 
@@ -699,8 +735,7 @@ void PassthroughSystem::OnPostRenderFrame(bool bDidRender, bool bInhibitIdle)
 {
 	if (bDidRender)
 	{
-		m_lastRenderTime = StartPerfTimer();
-		m_menuHandler->GetClientData().Values.LastFrameTimestamp = m_lastRenderTime.QuadPart;
+		m_menuHandler->GetClientData().Values.LastFrameTimestamp = m_lastRenderTime.StartPerfTimer();
 		m_menuHandler->DispatchClientDataValues();
 	}
 	else
@@ -710,13 +745,12 @@ void PassthroughSystem::OnPostRenderFrame(bool bDidRender, bool bInhibitIdle)
 			ClientData& data = m_menuHandler->GetClientData();
 			data.Values.bCorePassthroughActive = false;
 			data.Values.bFBPassthroughActive = false;
-			uint64_t frameTime = StartPerfTimer().QuadPart;
-			data.Values.LastFrameTimestamp = frameTime;
+			data.Values.LastFrameTimestamp = GetCurrentTimeSytemTicks();
 
 			m_menuHandler->DispatchClientDataValues();
 		}
 
-		float time = EndPerfTimer(m_lastRenderTime);
+		float time = m_lastRenderTime.EndPerfTimerMS();
 
 		Config_Main& mainConf = m_configManager->GetConfig_Main();
 		

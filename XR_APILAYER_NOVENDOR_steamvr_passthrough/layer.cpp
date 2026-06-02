@@ -483,7 +483,7 @@ namespace
 			{
 				g_logger->info("Passthrough session ending...");
 
-				m_passthroughSystem->ResetRenderer();
+				m_passthroughSystem->ShutdownRenderer();
 
 				m_currentSession = XR_NULL_HANDLE;
 				m_currentInstance = XR_NULL_HANDLE;

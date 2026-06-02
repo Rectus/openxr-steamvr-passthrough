@@ -847,6 +847,13 @@ public:
 		return bPending;
 	}
 
+	// TODO: make better system for things like this
+	void SetEnableAsyncColorAdjustment(bool bEnable) { m_bEnableAsyncColorAdjustment = bEnable; }
+	bool CheckEnableAsyncColorAdjustment()
+	{
+		return m_bEnableAsyncColorAdjustment;
+	}
+
 	Config_Main& GetConfig_Main() { return m_configMain; }
 	Config_Camera& GetConfig_Camera() { return m_configCamera; }
 	Config_Core& GetConfig_Core() { return m_configCore; }
@@ -869,6 +876,7 @@ private:
 	bool m_bRendererResetPending = false;
 	bool m_bCameraParamChangesPending = false;
 	bool m_bFrameTextureDumpPending = false;
+	bool m_bEnableAsyncColorAdjustment = true;
 
 	Config_Main m_configMain;
 	Config_Camera m_configCamera;

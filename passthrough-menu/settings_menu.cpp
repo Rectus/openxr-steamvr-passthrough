@@ -870,7 +870,7 @@ if (bIsActiveTab) { ImGui::PopStyleColor(1); bIsActiveTab = false; }
 		}
 
 
-		if (CollapsingHeaderPersistent("Misc."))
+		if (CollapsingHeaderPersistent("Misc.###MainMisc"))
 		{
 			ImGui::Checkbox("Show Descriptions", &mainConfig.ShowSettingDescriptions);
 
@@ -933,10 +933,17 @@ if (bIsActiveTab) { ImGui::PopStyleColor(1); bIsActiveTab = false; }
 			{
 				ImGui::PushItemWidth(ImGui::GetContentRegionAvail().x * 0.45f);
 				bImmediateUpdate |= ScrollableSlider("Brightness", &mainConfig.Brightness, -50.0f, 50.0f, "%.0f", 1.0f);
-				bImmediateUpdate |= ScrollableSlider("Contrast", &mainConfig.Contrast, 0.0f, 2.0f, "%.1f", 0.1f);
-				bImmediateUpdate |= ScrollableSlider("Saturation", &mainConfig.Saturation, 0.0f, 2.0f, "%.1f", 0.1f);
+				if (fabsf(mainConfig.Brightness) < 1.0f) { mainConfig.Brightness = 0.0f; }
+
+				bImmediateUpdate |= ScrollableSlider("Contrast", &mainConfig.Contrast, 0.0f, 2.0f, "%.2f", 0.01f);
+				if (fabsf(mainConfig.Contrast - 1.0f) < 0.009) { mainConfig.Contrast = 1.0f; }
+
+				bImmediateUpdate |= ScrollableSlider("Saturation", &mainConfig.Saturation, 0.0f, 2.0f, "%.2f", 0.01f);
+				if (fabsf(mainConfig.Saturation - 1.0f) < 0.009) { mainConfig.Saturation = 1.0f; }
+
 				bImmediateUpdate |= ScrollableSlider("Gamma Correction", &mainConfig.GammaCorrection, 0.01f, 2.0f, "%.2f", 0.01f);
-				if (fabsf(mainConfig.GammaCorrection - 1.0f) < 0.1) { mainConfig.GammaCorrection = 1.0f; }
+				if (fabsf(mainConfig.GammaCorrection - 1.0f) < 0.009) { mainConfig.GammaCorrection = 1.0f; }
+
 				bImmediateUpdate |= ScrollableSlider("Sharpness", &mainConfig.Sharpness, -1.0f, 1.0f, "%.1f", 0.1f);
 				if (fabsf(mainConfig.Sharpness) < 0.1) { mainConfig.Sharpness = 0.0f; }
 				ImGui::PopItemWidth();
@@ -946,7 +953,7 @@ if (bIsActiveTab) { ImGui::PopStyleColor(1); bIsActiveTab = false; }
 				ImGui::Checkbox("Enable Temporal Filter", &mainConfig.EnableTemporalFiltering);
 				TextDescriptionSpaced("Improves image quality by removing noise and flickering, and sharpening it. Possibly slightly increases image resolution. Expensive on the GPU.");
 
-				if (TreeNodePersistent("Advanced"))
+				if (TreeNodePersistent("Advanced###AdvancedImageControls"))
 				{
 					ImGui::PushItemWidth(ImGui::GetContentRegionAvail().x * 0.45f);
 					bImmediateUpdate |= ScrollableSlider("Temporal Filter Factor", &mainConfig.TemporalFilteringFactor, 0.0f, 1.0f, "%.2f", 0.01f);
@@ -1163,7 +1170,7 @@ if (bIsActiveTab) { ImGui::PopStyleColor(1); bIsActiveTab = false; }
 				ImGui::TreePop();
 			}
 
-			if (TreeNodePersistent("OpenXR Core"))
+			if (TreeNodePersistent("OpenXR Core###CompOpenXRCore"))
 			{
 				TextDescriptionSpaced("Options for application controlled passthrough features built into the OpenXR core specification. Allows using the environment blend modes for passthrough.");
 
@@ -1205,7 +1212,7 @@ if (bIsActiveTab) { ImGui::PopStyleColor(1); bIsActiveTab = false; }
 
 			if (TreeNodePersistent("OpenXR Extensions"))
 			{
-				if (TreeNodePersistent("Facebook", ImGuiTreeNodeFlags_DefaultOpen))
+				if (TreeNodePersistent("Facebook###ExtensionsFacebook", ImGuiTreeNodeFlags_DefaultOpen))
 				{
 					ImGui::Checkbox("Enable Facebook Passthrough", &extConfig.ExtFBPassthrough);
 					TextDescription("Allow applications to use passthrough through the XR_FB_passthrough extension. Requires a restart to apply.");
@@ -1223,7 +1230,7 @@ if (bIsActiveTab) { ImGui::PopStyleColor(1); bIsActiveTab = false; }
 					ImGui::TreePop();
 				}
 
-				if (TreeNodePersistent("Varjo", ImGuiTreeNodeFlags_DefaultOpen))
+				if (TreeNodePersistent("Varjo###ExtensionsVarjo", ImGuiTreeNodeFlags_DefaultOpen))
 				{
 					ImGui::Checkbox("Enable Varjo Depth estimation", &extConfig.ExtVarjoDepthEstimation);
 					TextDescription("Allow applications to use depth blending using the XR_VARJO_environment_depth_estimation extension. Requires a restart to apply.");
@@ -1238,9 +1245,9 @@ if (bIsActiveTab) { ImGui::PopStyleColor(1); bIsActiveTab = false; }
 			}
 		}
 
-		if (CollapsingHeaderPersistent("User Overrides", ImGuiTreeNodeFlags_DefaultOpen))
+		if (CollapsingHeaderPersistent("User Overrides###CompositionOverrides", ImGuiTreeNodeFlags_DefaultOpen))
 		{
-			if (TreeNodePersistent("Mode", ImGuiTreeNodeFlags_DefaultOpen))
+			if (TreeNodePersistent("Mode###CompositionOverrideMode", ImGuiTreeNodeFlags_DefaultOpen))
 			{
 				ImGui::Checkbox("Force Passthrough Mode", &coreConfig.CoreForcePassthrough);
 				TextDescription("Forces passthrough on even if the application does not support it.");
@@ -1292,49 +1299,10 @@ if (bIsActiveTab) { ImGui::PopStyleColor(1); bIsActiveTab = false; }
 
 				IMGUI_BIG_SPACING;
 
-				if (TreeNodePersistent("Advanced"))
-				{
-					bImmediateUpdate |= ScrollableSlider("Passthrough Opacity", &mainConfig.PassthroughOpacity, 0.0f, 1.0f, "%.1f", 0.1f);
-					ImGui::Spacing();
-
-					ImGui::Text("Premultiplied Alpha");
-					ImGui::BeginGroup();
-					if (ImGui::RadioButton("Application Controlled", coreConfig.CoreForcePremultipliedAlpha == -1))
-					{
-						coreConfig.CoreForcePremultipliedAlpha = -1;
-					}
-					ImGui::SameLine();
-					if (ImGui::RadioButton("Force On", coreConfig.CoreForcePremultipliedAlpha == 1))
-					{
-						coreConfig.CoreForcePremultipliedAlpha = 1;
-					}
-					ImGui::SameLine();
-					if (ImGui::RadioButton("Force Off", coreConfig.CoreForcePremultipliedAlpha == 0))
-					{
-						coreConfig.CoreForcePremultipliedAlpha = 0;
-					}
-					TextDescription("Overrides alpha premultiplication handling for applications that report it incorrectly.");
-					ImGui::EndGroup();
-
-					ImGui::Checkbox("Read Depth Buffers", &depthConfig.DepthReadFromApplication);
-					TextDescription("Allow reading depth buffers submitted by the application.");
-
-					BeginSoftDisabled(!depthConfig.DepthReadFromApplication);
-					ImGui::Checkbox("Write Depth", &depthConfig.DepthWriteOutput);
-					TextDescription("Allows writing passthrough depth to depth buffers submitted to the runtime.");
-					EndSoftDisabled(!depthConfig.DepthReadFromApplication);
-
-					IMGUI_BIG_SPACING;
-
-					ImGui::TreePop();
-				}
-
-				
 				ImGui::TreePop();
 			}
 
 			BeginSoftDisabled(!coreConfig.CoreForcePassthrough);
-
 			if (TreeNodePersistent("Masked Croma Key Settings", ImGuiTreeNodeFlags_DefaultOpen))
 			{
 				ImGui::BeginGroup();
@@ -1367,10 +1335,51 @@ if (bIsActiveTab) { ImGui::PopStyleColor(1); bIsActiveTab = false; }
 				bImmediateUpdate |= ImGui::ColorPicker3("Key", coreConfig.CoreForceMaskedKeyColor, ImGuiColorEditFlags_Uint8 | ImGuiColorEditFlags_DisplayRGB | ImGuiColorEditFlags_DisplayHSV | ImGuiColorEditFlags_PickerHueBar);
 				ImGui::EndGroup();
 
+				IMGUI_BIG_SPACING;
+
 				ImGui::TreePop();
 			}
-
 			EndSoftDisabled(!coreConfig.CoreForcePassthrough);
+
+				
+			if (TreeNodePersistent("Advanced##AdvOverrides", ImGuiTreeNodeFlags_DefaultOpen))
+			{
+				ImGui::PushItemWidth(ImGui::GetContentRegionAvail().x * 0.45f);
+				bImmediateUpdate |= ScrollableSlider("Passthrough Opacity", &mainConfig.PassthroughOpacity, 0.0f, 1.0f, "%.1f", 0.1f);
+				ImGui::PopItemWidth();
+				IMGUI_BIG_SPACING;
+
+				ImGui::Text("Premultiplied Alpha");
+				ImGui::BeginGroup();
+				if (ImGui::RadioButton("Application Controlled", coreConfig.CoreForcePremultipliedAlpha == -1))
+				{
+					coreConfig.CoreForcePremultipliedAlpha = -1;
+				}
+				ImGui::SameLine();
+				if (ImGui::RadioButton("Force On", coreConfig.CoreForcePremultipliedAlpha == 1))
+				{
+					coreConfig.CoreForcePremultipliedAlpha = 1;
+				}
+				ImGui::SameLine();
+				if (ImGui::RadioButton("Force Off", coreConfig.CoreForcePremultipliedAlpha == 0))
+				{
+					coreConfig.CoreForcePremultipliedAlpha = 0;
+				}
+				TextDescription("Overrides alpha premultiplication handling for applications that report it incorrectly.");
+				ImGui::EndGroup();
+
+				IMGUI_BIG_SPACING;
+
+				ImGui::Checkbox("Read Depth Buffers", &depthConfig.DepthReadFromApplication);
+				TextDescription("Allow reading depth buffers submitted by the application.");
+
+				BeginSoftDisabled(!depthConfig.DepthReadFromApplication);
+				ImGui::Checkbox("Write Depth", &depthConfig.DepthWriteOutput);
+				TextDescription("Allows writing passthrough depth to depth buffers submitted to the runtime.");
+				EndSoftDisabled(!depthConfig.DepthReadFromApplication);
+
+				ImGui::TreePop();
+			}
 		}
 
 		ImGui::EndChild();
@@ -1451,7 +1460,7 @@ if (bIsActiveTab) { ImGui::PopStyleColor(1); bIsActiveTab = false; }
 			ImGui::PopFont();
 		}
 
-		if (CollapsingHeaderPersistent("Common", ImGuiTreeNodeFlags_DefaultOpen))
+		if (CollapsingHeaderPersistent("Common###CameraCommon", ImGuiTreeNodeFlags_DefaultOpen))
 		{
 			ImGui::Text("Camera Provider");
 			TextDescription("Source for passthrough camera images.");
@@ -1670,7 +1679,7 @@ if (bIsActiveTab) { ImGui::PopStyleColor(1); bIsActiveTab = false; }
 
 			IMGUI_BIG_SPACING;
 
-			if (TreeNodePersistent("Left Camera", ImGuiTreeNodeFlags_DefaultOpen))
+			if (TreeNodePersistent("Left Camera###LeftCamCalibration", ImGuiTreeNodeFlags_DefaultOpen))
 			{
 				ImGui::Text("Camera Extrinsics");
 				ImGui::DragFloat3("Camera Offset (m)", cameraConfig.Camera0_Translation, 0.001f, 0.0f, 0.0f, "%.3f");
@@ -1687,7 +1696,7 @@ if (bIsActiveTab) { ImGui::PopStyleColor(1); bIsActiveTab = false; }
 				ImGui::TreePop();
 			}
 
-			if (TreeNodePersistent("Right Camera", ImGuiTreeNodeFlags_DefaultOpen))
+			if (TreeNodePersistent("Right Camera###RightCamCalibration", ImGuiTreeNodeFlags_DefaultOpen))
 			{
 				ImGui::Text("Camera Extrinsics");
 				ImGui::DragFloat3("Camera Offset (m)###RightOffset", cameraConfig.Camera1_Translation, 0.001f, 0.0f, 0.0f, "%.3f");
@@ -1710,10 +1719,13 @@ if (bIsActiveTab) { ImGui::PopStyleColor(1); bIsActiveTab = false; }
 
 		if (CollapsingHeaderPersistent("SteamVR Camera Configuration", ImGuiTreeNodeFlags_DefaultOpen))
 		{
-			ImGui::Checkbox("Use OpenVR Block Queue Interface for Camera Frames", &cameraConfig.OpenVR_UseBlockQueueForColor);
-			TextDescription("Uses a lower latency interface for color calculation. Disable if there are block queue related errors in the log.");
 			ImGui::Checkbox("Use OpenVR Block Queue Interface for Depth Frames", &cameraConfig.OpenVR_UseBlockQueueForDepth);
 			TextDescription("Uses a lower latency interface for depth calculation. Disable if there are block queue related errors in the log.");
+
+			ImGui::BeginDisabled(!cameraConfig.OpenVR_UseBlockQueueForDepth);
+			ImGui::Checkbox("Use OpenVR Block Queue Interface for Camera Frames", &cameraConfig.OpenVR_UseBlockQueueForColor);
+			TextDescription("Uses a lower latency interface for color frames. Disable if there are block queue related errors in the log.");
+			ImGui::EndDisabled();
 
 			IMGUI_BIG_SPACING;
 
@@ -1936,7 +1948,7 @@ if (bIsActiveTab) { ImGui::PopStyleColor(1); bIsActiveTab = false; }
 	{
 		ImGui::BeginChild("Stereo#TabStereo");
 
-		if (CollapsingHeaderPersistent("Status", ImGuiTreeNodeFlags_DefaultOpen))
+		if (CollapsingHeaderPersistent("Status###StereoStatus", ImGuiTreeNodeFlags_DefaultOpen))
 		{
 			ImGui::PushFont(m_fixedFont);
 
@@ -2004,7 +2016,7 @@ if (bIsActiveTab) { ImGui::PopStyleColor(1); bIsActiveTab = false; }
 
 		BeginSoftDisabled(mainConfig.StereoPreset != StereoPreset_Custom);
 
-		if (CollapsingHeaderPersistent("Main Settings", ImGuiTreeNodeFlags_DefaultOpen))
+		if (CollapsingHeaderPersistent("Main Settings###StereoMainSettings", ImGuiTreeNodeFlags_DefaultOpen))
 		{
 			ImGui::SetNextItemWidth(ImGui::GetContentRegionAvail().x * 0.45f);
 			ScrollableSliderInt("Image Downscale Factor", &stereoCustomConfig.StereoDownscaleFactor, 1, 16, "%d", 1);
@@ -2025,7 +2037,7 @@ if (bIsActiveTab) { ImGui::PopStyleColor(1); bIsActiveTab = false; }
 
 			IMGUI_BIG_SPACING;
 
-			if (TreeNodePersistent("Performance", ImGuiTreeNodeFlags_DefaultOpen))
+			if (TreeNodePersistent("Performance###StereoPerformance", ImGuiTreeNodeFlags_DefaultOpen))
 			{
 				ImGui::Checkbox("Use Multiple Cores", &stereoCustomConfig.StereoUseMulticore);
 				TextDescriptionSpaced("Allows the stereo calculations to use multiple CPU cores. This can be turned off for CPU limited applications.");
@@ -2042,9 +2054,9 @@ if (bIsActiveTab) { ImGui::PopStyleColor(1); bIsActiveTab = false; }
 		}
 
 
-		if (CollapsingHeaderPersistent("Advanced GPU Settings", ImGuiTreeNodeFlags_DefaultOpen))
+		if (CollapsingHeaderPersistent("Advanced GPU Settings###StereoAdvGPUSettings", ImGuiTreeNodeFlags_DefaultOpen))
 		{
-			if (TreeNodePersistent("Projection", ImGuiTreeNodeFlags_DefaultOpen))
+			if (TreeNodePersistent("Projection###StereoAdvGPUSettingsProjection", ImGuiTreeNodeFlags_DefaultOpen))
 			{
 				ImGui::Spacing();
 
@@ -2071,7 +2083,7 @@ if (bIsActiveTab) { ImGui::PopStyleColor(1); bIsActiveTab = false; }
 				ImGui::TreePop();
 			}
 
-			if (TreeNodePersistent("Camera Composition", ImGuiTreeNodeFlags_DefaultOpen))
+			if (TreeNodePersistent("Camera Composition###StereoAdvGPUSettingsComp", ImGuiTreeNodeFlags_DefaultOpen))
 			{
 				ImGui::PushItemWidth(ImGui::GetContentRegionAvail().x * 0.45f);
 				BeginSoftDisabled(!stereoCustomConfig.StereoCutoutEnabled);
@@ -2090,7 +2102,7 @@ if (bIsActiveTab) { ImGui::PopStyleColor(1); bIsActiveTab = false; }
 			}
 
 
-			if (TreeNodePersistent("Depth Fold", ImGuiTreeNodeFlags_DefaultOpen))
+			if (TreeNodePersistent("Depth Fold###StereoAdvGPUSettingsFold", ImGuiTreeNodeFlags_DefaultOpen))
 			{
 				TextDescription("Adjusts depth mesh vertices to smooth out contours in areas with large depth discontinuities.\nThis helps with depth aliasing.");
 				ImGui::PushItemWidth(ImGui::GetContentRegionAvail().x * 0.45f);
@@ -2104,7 +2116,7 @@ if (bIsActiveTab) { ImGui::PopStyleColor(1); bIsActiveTab = false; }
 				ImGui::TreePop();
 			}
 
-			if (TreeNodePersistent("Fullscreen Contour", ImGuiTreeNodeFlags_DefaultOpen))
+			if (TreeNodePersistent("Fullscreen Contour###StereoAdvGPUSettingsCont", ImGuiTreeNodeFlags_DefaultOpen))
 			{
 				TextDescription("Detects edges in the depth map and moves pixels toward the front or back to provide sharp contours.\nThis reduces interpolation artifacts from low resolution depth maps.");
 
@@ -2136,7 +2148,7 @@ if (bIsActiveTab) { ImGui::PopStyleColor(1); bIsActiveTab = false; }
 			IMGUI_BIG_SPACING;
 		}
 
-		if (CollapsingHeaderPersistent("Advanced CPU Settings", ImGuiTreeNodeFlags_DefaultOpen))
+		if (CollapsingHeaderPersistent("Advanced CPU Settings###StereoAdvCPUSettings", ImGuiTreeNodeFlags_DefaultOpen))
 		{
 			if (TreeNodePersistent("Block Matching", ImGuiTreeNodeFlags_DefaultOpen))
 			{
@@ -2260,7 +2272,7 @@ if (bIsActiveTab) { ImGui::PopStyleColor(1); bIsActiveTab = false; }
 
 		ImGui::BeginChild("TabDebug");
 
-		if (CollapsingHeaderPersistent("Debug", ImGuiTreeNodeFlags_DefaultOpen))
+		if (CollapsingHeaderPersistent("Debug###DebugMain", ImGuiTreeNodeFlags_DefaultOpen))
 		{
 			ImGui::BeginGroup();
 			ImGui::Checkbox("Freeze Stereo Projection", &mainConfig.DebugStereoReconstructionFreeze);
@@ -2826,7 +2838,7 @@ if (bIsActiveTab) { ImGui::PopStyleColor(1); bIsActiveTab = false; }
 			IMGUI_BIG_SPACING;
 		}
 
-		if (CollapsingHeaderPersistent("Log", ImGuiTreeNodeFlags_DefaultOpen))
+		if (CollapsingHeaderPersistent("Log###LogView", ImGuiTreeNodeFlags_DefaultOpen))
 		{
 			ImGui::PushFont(m_fixedFont);
 			ImGui::PushTextWrapPos(ImGui::GetContentRegionAvail().x);
