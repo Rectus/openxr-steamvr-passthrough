@@ -69,14 +69,14 @@ private:
 
 	VkSampler m_sampler = VK_NULL_HANDLE;
 
-	VulkanTexture m_rawCameraTexture[3] = {};
-	VulkanTexture m_sharedCameraTexture[3] = {};
+	VulkanTexture m_rawCameraTexture[5] = {};
+	VulkanTexture m_sharedCameraTexture[5] = {};
 	int m_cameraTextureIndex = -1;
 
 	VulkanTexture m_bwRectifiedCameraTexture;
 	VulkanTexture m_disparityTexture;
 	VulkanTexture m_confidenceTexture;
-	VulkanTexture m_outputTexture[3] = {};
+	VulkanTexture m_outputTexture[5] = {};
 
 	VkBuffer m_filterKernelBuffer = VK_NULL_HANDLE;
 	VkDeviceMemory m_filterKernelBufferMem = VK_NULL_HANDLE;

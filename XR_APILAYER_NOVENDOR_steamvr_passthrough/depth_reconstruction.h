@@ -18,7 +18,7 @@ public:
 	DepthReconstruction(std::shared_ptr<ConfigManager> configManager, std::shared_ptr<OpenVRManager> openVRManager, std::shared_ptr<ICameraManager> cameraManager, std::shared_ptr<AsyncRenderer> asyncRenderer);
 	~DepthReconstruction();
 
-	std::shared_ptr<DepthFrame> GetDepthFrame();
+	FramePtr<DepthFrame> GetDepthFrame();
 	UVDistortionParameters& GetDistortionParameters()
 	{
 		return m_distortionParams;
@@ -40,10 +40,8 @@ private:
 	std::shared_ptr<ICameraManager> m_cameraManager;
 	std::shared_ptr<AsyncRenderer> m_asyncRenderer;
 
-	std::shared_ptr<DepthFrame> m_servedDepthFrame;
-	std::shared_ptr<DepthFrame> m_depthFrame;
-	std::shared_ptr<DepthFrame> m_underConstructionDepthFrame;
-
+	FrameQueue<DepthFrame> m_depthFrameQueue;
+	int m_depthFrameIndex = 0;
 	UVDistortionParameters m_distortionParams;
 
 	XrVector2f m_cameraCenter[2];

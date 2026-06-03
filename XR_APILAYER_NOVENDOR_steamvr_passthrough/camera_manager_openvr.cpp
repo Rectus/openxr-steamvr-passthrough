@@ -1141,12 +1141,7 @@ bool CameraManagerOpenVR::GetHMDPoseForTime(XrMatrix4x4f& headToTrackingPose, co
 {
     vr::TrackedDevicePose_t hmdPose;
 
-    LARGE_INTEGER currentTime, freq;
-    QueryPerformanceCounter(&currentTime);
-    QueryPerformanceFrequency(&freq);
-
-    float exposureRelativeTime = -(float)(currentTime.QuadPart - time);
-    exposureRelativeTime /= ((float)freq.QuadPart);
+    float exposureRelativeTime = -GetPerfTimeDiffSeconds(time, GetCurrentTimeSytemTicks());
 
     m_openVRManager->GetVRSystem()->GetDeviceToAbsoluteTrackingPose(vr::TrackingUniverseStanding, exposureRelativeTime, &hmdPose, 1);
 

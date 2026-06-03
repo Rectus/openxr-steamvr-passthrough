@@ -1431,7 +1431,7 @@ void PassthroughRendererDX11::RenderPassthroughFrame(const XrCompositionLayerPro
 		m_renderContext = m_deviceContext;
 	}
 
-	if (renderParams.ProjectionMode == Projection_StereoReconstruction && !depthFrame->bIsValid)
+	if (renderParams.ProjectionMode == Projection_StereoReconstruction && (!depthFrame.get() || !depthFrame->bIsValid))
 	{
 		return;
 	}
@@ -1471,13 +1471,13 @@ void PassthroughRendererDX11::RenderPassthroughFrame(const XrCompositionLayerPro
 	{
 		bool bDisparityMapReset = false;
 
-		if (depthFrame->outputDisparityTextureSize[0] != m_disparityMapWidth || (stereoConf.StereoUseDisparityTemporalFiltering && frameData.disparityFilter.Texture == nullptr))
+		if (depthFrame->OutputDisparityTextureSize[0] != m_disparityMapWidth || (stereoConf.StereoUseDisparityTemporalFiltering && frameData.disparityFilter.Texture == nullptr))
 		{
-			m_disparityMapWidth = depthFrame->outputDisparityTextureSize[0];
+			m_disparityMapWidth = depthFrame->OutputDisparityTextureSize[0];
 
 			if (stereoConf.StereoUseDisparityTemporalFiltering)
 			{
-				SetupDisparityFilter(depthFrame->outputDisparityTextureSize[0], depthFrame->outputDisparityTextureSize[1]);
+				SetupDisparityFilter(depthFrame->OutputDisparityTextureSize[0], depthFrame->OutputDisparityTextureSize[1]);
 			}
 
 			for (int i = 0; i < m_viewData[0].size(); i++)
@@ -1493,7 +1493,7 @@ void PassthroughRendererDX11::RenderPassthroughFrame(const XrCompositionLayerPro
 		bool bHasDisparityMap = false;
 		for (auto dispMap : m_sharedDisparityMaps)
 		{
-			if (dispMap.Texture.Get() == reinterpret_cast<ID3D11Texture2D*>(depthFrame->outputDisparityMapNativeTexture))
+			if (dispMap.Texture.Get() == reinterpret_cast<ID3D11Texture2D*>(depthFrame->OutputDisparityMapNativeTexture))
 			{
 				frameData.disparityMap.SRV = dispMap.SRV;
 				frameData.disparityMap.Texture = dispMap.Texture;
@@ -1516,11 +1516,11 @@ void PassthroughRendererDX11::RenderPassthroughFrame(const XrCompositionLayerPro
 
 		if(viewDataLeft.passthroughDepthStencil[0].Texture == nullptr || 
 			viewDataRight.passthroughDepthStencil[0].Texture == nullptr ||
-			(viewDataLeft.passthroughDepthStencil[0].Width != depthFrame->outputDisparityTextureSize[0] * stereoConf.StereoDepthMapScale / 2) ||
-			(viewDataLeft.passthroughDepthStencil[0].Height != depthFrame->outputDisparityTextureSize[1] * stereoConf.StereoDepthMapScale))
+			(viewDataLeft.passthroughDepthStencil[0].Width != depthFrame->OutputDisparityTextureSize[0] * stereoConf.StereoDepthMapScale / 2) ||
+			(viewDataLeft.passthroughDepthStencil[0].Height != depthFrame->OutputDisparityTextureSize[1] * stereoConf.StereoDepthMapScale))
 		{
-			uint32_t width = depthFrame->outputDisparityTextureSize[0] * stereoConf.StereoDepthMapScale / 2;
-			uint32_t height = depthFrame->outputDisparityTextureSize[1] * stereoConf.StereoDepthMapScale;
+			uint32_t width = depthFrame->OutputDisparityTextureSize[0] * stereoConf.StereoDepthMapScale / 2;
+			uint32_t height = depthFrame->OutputDisparityTextureSize[1] * stereoConf.StereoDepthMapScale;
 
 			SetupPassthroughDepthStencil(0, renderParams.LeftFrameIndex, width, height);
 			SetupPassthroughDepthStencil(1, renderParams.RightFrameIndex, width, height);
@@ -1533,7 +1533,7 @@ void PassthroughRendererDX11::RenderPassthroughFrame(const XrCompositionLayerPro
 		{
 			m_bUseHexagonGridMesh = stereoConf.StereoUseHexagonGridMesh;
 
-			GenerateDepthMesh(depthFrame->outputDisparityTextureSize[0] * stereoConf.StereoDepthMapScale / 2, depthFrame->outputDisparityTextureSize[1] * stereoConf.StereoDepthMapScale);
+			GenerateDepthMesh(depthFrame->OutputDisparityTextureSize[0] * stereoConf.StereoDepthMapScale / 2, depthFrame->OutputDisparityTextureSize[1] * stereoConf.StereoDepthMapScale);
 		}
 	}
 
@@ -1546,14 +1546,14 @@ void PassthroughRendererDX11::RenderPassthroughFrame(const XrCompositionLayerPro
 
 	if (renderParams.ProjectionMode == Projection_StereoReconstruction)
 	{
-		vsBuffer.depthFrameViewToWorldLeft = depthFrame->disparityViewToWorldLeft;
-		vsBuffer.depthFrameViewToWorldRight = depthFrame->disparityViewToWorldRight;
-		vsBuffer.disparityToDepth = depthFrame->disparityToDepth;
-		vsBuffer.disparityDownscaleFactor = depthFrame->disparityDownscaleFactor;
-		vsBuffer.disparityTextureSize[0] = depthFrame->outputDisparityTextureSize[0];
-		vsBuffer.disparityTextureSize[1] = depthFrame->outputDisparityTextureSize[1];
-		vsBuffer.minDisparity = depthFrame->minDisparity;
-		vsBuffer.maxDisparity = depthFrame->maxDisparity;
+		vsBuffer.depthFrameViewToWorldLeft = depthFrame->DisparityViewToWorldLeft;
+		vsBuffer.depthFrameViewToWorldRight = depthFrame->DisparityViewToWorldRight;
+		vsBuffer.disparityToDepth = depthFrame->DisparityToDepth;
+		vsBuffer.disparityDownscaleFactor = depthFrame->DisparityDownscaleFactor;
+		vsBuffer.disparityTextureSize[0] = depthFrame->OutputDisparityTextureSize[0];
+		vsBuffer.disparityTextureSize[1] = depthFrame->OutputDisparityTextureSize[1];
+		vsBuffer.minDisparity = depthFrame->MinDisparity;
+		vsBuffer.maxDisparity = depthFrame->MaxDisparity;
 		vsBuffer.cutoutFactor = stereoConf.StereoCutoutFactor;
 		vsBuffer.cutoutOffset = stereoConf.StereoCutoutOffset;
 		vsBuffer.cutoutFilterWidth = stereoConf.StereoCutoutFilterWidth;

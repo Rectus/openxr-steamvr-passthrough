@@ -23,7 +23,6 @@ PassthroughSystem::PassthroughSystem(HMODULE dllModule, std::shared_ptr<ConfigMa
 	m_menuIPCClient->RegisterReader(m_menuHandler);
 
 	m_renderModels = std::make_shared<std::vector<RenderModel>>();
-	m_dummyDepthFrame = std::make_shared<DepthFrame>();
 }
 
 PassthroughSystem::~PassthroughSystem()
@@ -506,10 +505,6 @@ bool PassthroughSystem::RenderPassthroughOnAppLayer(const XrFrameEndInfo* frameE
 
 	XrCompositionLayerProjection* layer = (XrCompositionLayerProjection*)frameEndInfo->layers[layerNum];
 	
-	std::shared_ptr<DepthFrame> depthFrame;
-
-	std::shared_lock<std::shared_mutex> depthFrameReadLock;
-
 	std::shared_ptr <ICameraManager>& cameraFrameManager = 
 		m_cameraProvider == CameraProvider_Augmented ?
 		m_augmentedCameraManager : m_cameraManager;
@@ -529,35 +524,19 @@ bool PassthroughSystem::RenderPassthroughOnAppLayer(const XrFrameEndInfo* frameE
 
 	bool bUseDepth = m_projectionMode == Projection_StereoReconstruction && m_depthReconstruction.get();
 
-	if (bUseDepth)
+	FramePtr<DepthFrame> depthFrame = GetDepthFrame();
+	if (bUseDepth && !depthFrame.HasFrame())
 	{
-		depthFrame = m_depthReconstruction->GetDepthFrame();
-		if (depthFrame.get())
-		{
-			depthFrameReadLock = std::shared_lock<std::shared_mutex>(depthFrame->readWriteMutex);
-		}
-		else
-		{
-			return false;
-		}
-	}
-	else
-	{
-		depthFrame = m_dummyDepthFrame;
+		return false;
 	}
 
 	ClientData& clientData = m_menuHandler->GetClientData();
 
 	uint64_t preRenderTime = m_passthroughRenderTime.StartPerfTimer();
 
-
-
 	Config_Core& coreConf = m_configManager->GetConfig_Core();
 	Config_Extensions& extConf = m_configManager->GetConfig_Extensions();
 	Config_Depth& depthConf = m_configManager->GetConfig_Depth();
-
-
-	CalculateFrameProjection(gpuFrame.GetSharedPointer(), depthFrame, *layer, renderParams);
 
 	if (renderParams.bUseFBPassthrough)
 	{
@@ -691,10 +670,16 @@ bool PassthroughSystem::RenderPassthroughOnAppLayer(const XrFrameEndInfo* frameE
 		renderParams.RenderModels = m_renderModels;
 	}
 
-	m_inlineRenderer->RenderPassthroughFrame(layer, gpuFrame.GetSharedPointer(), cpuFrame.GetSharedPointer(), renderParams, depthFrame, distParams);
 
-	depthFrame->bIsFirstRender = false;
+	CalculateFrameProjection(gpuFrame.GetSharedPointer(), depthFrame.GetSharedPointer(), *layer, renderParams);
 
+	m_inlineRenderer->RenderPassthroughFrame(layer, gpuFrame.GetSharedPointer(), cpuFrame.GetSharedPointer(), renderParams, depthFrame.GetSharedPointer(), distParams);
+
+	// TODO move
+	if (depthFrame.HasFrame())
+	{
+		depthFrame->bIsFirstRender = false;
+	}
 	
 	m_passthroughRenderTime.EndPerfTimer();
 	clientData.Values.RenderTimeMS = m_passthroughRenderTime.GetAverageTimeMS();
@@ -705,12 +690,12 @@ bool PassthroughSystem::RenderPassthroughOnAppLayer(const XrFrameEndInfo* frameE
 	m_frameToPhotonTime.AveragesAddTimeInterval(gpuFrame->FrameExposureTimestamp, renderParams.DisplayTime);
 	clientData.Values.FrameToPhotonsLatencyMS = m_frameToPhotonTime.GetAverageTimeMS();
 
-	if (depthFrame->bIsValid)
+	if (depthFrame.HasFrame() && depthFrame->bIsValid)
 	{
-		m_depthToRenderTime.AveragesAddTimeInterval(depthFrame->frameExposureTimestamp, preRenderTime);
+		m_depthToRenderTime.AveragesAddTimeInterval(depthFrame->FrameExposureTimestamp, preRenderTime);
 		clientData.Values.DepthToRenderLatencyMS = m_depthToRenderTime.GetAverageTimeMS();
 
-		m_depthToPhotonTime.AveragesAddTimeInterval(depthFrame->frameExposureTimestamp, renderParams.DisplayTime);
+		m_depthToPhotonTime.AveragesAddTimeInterval(depthFrame->FrameExposureTimestamp, renderParams.DisplayTime);
 		clientData.Values.DepthToPhotonsLatencyMS = m_depthToPhotonTime.GetAverageTimeMS();
 	}
 
@@ -726,12 +711,6 @@ bool PassthroughSystem::RenderPassthroughOnAppLayer(const XrFrameEndInfo* frameE
 	}
 	clientData.Values.GPUFrameRetrievalTimeMS = m_cameraManager->GetGPUFrameRetrievalPerfTime();
 	clientData.Values.CPUFrameRetrievalTimeMS = m_cameraManager->GetCPUFrameRetrievalPerfTime();
-
-
-	if (depthFrameReadLock.owns_lock())
-	{
-		depthFrameReadLock.unlock();
-	}
 
 	return true;
 }
@@ -783,6 +762,19 @@ void PassthroughSystem::OnPostRenderFrame(bool bDidRender, bool bInhibitIdle)
 	}
 }
 
+// Hack to be able to get a dummy depth frame in RenderPassthroughOnAppLayer when not calcualting depth.
+FramePtr<DepthFrame> PassthroughSystem::GetDepthFrame()
+{
+	if (m_depthReconstruction.get())
+	{
+		return m_depthReconstruction->GetDepthFrame();
+	}
+	else
+	{
+		return FramePtr<DepthFrame>();
+	}
+}
+
 void PassthroughSystem::CalculateFrameProjection(std::shared_ptr<CameraGPUFrame> cameraFrame, std::shared_ptr<DepthFrame> depthFrame, const XrCompositionLayerProjection& layer, FrameRenderParameters& renderParams)
 {
 	if (m_cameraProvider == CameraProvider_Augmented)
@@ -812,17 +804,18 @@ void PassthroughSystem::CalculateFrameProjection(std::shared_ptr<CameraGPUFrame>
 		cameraFrame->bIsRenderingMirrored = !cameraFrame->bIsRenderingMirrored;
 	}
 
-	if (depthFrame->bIsFirstRender)
+	// TODO: Put all the output into renderParams instead of writing to the read-only frames.
+	if (depthFrame.get() && depthFrame->bIsFirstRender)
 	{
-		depthFrame->prevDispWorldToCameraProjectionLeft = m_lastDispWorldToCameraProjectionLeft;
-		depthFrame->prevDispWorldToCameraProjectionRight = m_lastDispWorldToCameraProjectionRight;
-		depthFrame->prevDisparityViewToWorldLeft = m_lastDisparityViewToWorldLeft;
-		depthFrame->prevDisparityViewToWorldRight = m_lastDisparityViewToWorldRight;
+		depthFrame->PrevDispWorldToCameraProjectionLeft = m_lastDispWorldToCameraProjectionLeft;
+		depthFrame->PrevDispWorldToCameraProjectionRight = m_lastDispWorldToCameraProjectionRight;
+		depthFrame->PrevDisparityViewToWorldLeft = m_lastDisparityViewToWorldLeft;
+		depthFrame->PrevDisparityViewToWorldRight = m_lastDisparityViewToWorldRight;
 
 		m_lastDispWorldToCameraProjectionLeft = cameraFrame->WorldToCameraProjectionLeft;
 		m_lastDispWorldToCameraProjectionRight = cameraFrame->WorldToCameraProjectionRight;
-		m_lastDisparityViewToWorldLeft = depthFrame->disparityViewToWorldLeft;
-		m_lastDisparityViewToWorldRight = depthFrame->disparityViewToWorldRight;
+		m_lastDisparityViewToWorldLeft = depthFrame->DisparityViewToWorldLeft;
+		m_lastDisparityViewToWorldRight = depthFrame->DisparityViewToWorldRight;
 	}
 
 	if (cameraFrame->FrameSequence != m_lastFrameSequence)
@@ -1043,12 +1036,8 @@ void PassthroughSystem::UpdateRenderModels(const uint64_t cameraFrameTimestamp)
 		}
 	}
 
-	LARGE_INTEGER time, freq;
-	QueryPerformanceCounter(&time);
-	QueryPerformanceFrequency(&freq);
-
-	float exposureRelativeTime = -(float)(time.QuadPart - cameraFrameTimestamp);
-	exposureRelativeTime /= ((float)freq.QuadPart);
+	
+	float exposureRelativeTime = -GetPerfTimeDiffSeconds(cameraFrameTimestamp, GetCurrentTimeSytemTicks());
 
 	std::vector<vr::TrackedDevicePose_t> poses(numDevices);
 

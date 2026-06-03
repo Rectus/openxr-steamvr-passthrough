@@ -9,7 +9,8 @@
 
 
 DepthReconstruction::DepthReconstruction(std::shared_ptr<ConfigManager> configManager, std::shared_ptr<OpenVRManager> openVRManager, std::shared_ptr<ICameraManager> cameraManager, std::shared_ptr<AsyncRenderer> asyncRenderer)
-    : m_asyncRenderer(asyncRenderer)
+    : m_depthFrameQueue(5)
+    , m_asyncRenderer(asyncRenderer)
     , m_configManager(configManager)
     , m_openVRManager(openVRManager)
     , m_cameraManager(cameraManager)
@@ -19,9 +20,6 @@ DepthReconstruction::DepthReconstruction(std::shared_ptr<ConfigManager> configMa
 
     m_maxDisparity = stereoConfig.StereoMaxDisparity;
     m_downscaleFactor = stereoConfig.StereoDownscaleFactor;
-    m_depthFrame = std::make_shared<DepthFrame>();
-    m_servedDepthFrame = std::make_shared<DepthFrame>();
-    m_underConstructionDepthFrame = std::make_shared<DepthFrame>();
 
     m_fovScale = m_configManager->GetConfig_Main().FieldOfViewScale;
     m_bUseColor = stereoConfig.StereoUseColor;
@@ -45,16 +43,9 @@ DepthReconstruction::~DepthReconstruction()
     }
 }
 
-std::shared_ptr<DepthFrame> DepthReconstruction::GetDepthFrame()
+FramePtr<DepthFrame> DepthReconstruction::GetDepthFrame()
 {
-    std::unique_lock<std::mutex> lock(m_serveMutex, std::try_to_lock);
-    if (lock.owns_lock() && m_servedDepthFrame->bIsValid)
-    {
-        m_depthFrame->bIsValid = false;
-        m_depthFrame.swap(m_servedDepthFrame);
-    }
-
-    return m_depthFrame;
+    return m_depthFrameQueue.AcquireRead();
 }
 
 void DepthReconstruction::CalculateCameraProjection(std::shared_ptr<CameraGPUFrame>& cameraFrame, FrameRenderParameters& renderParams)
@@ -209,16 +200,6 @@ void DepthReconstruction::InitReconstruction()
     m_bilateralDisparityLeft = cv::Mat(m_cvImageHeight, disparityWidth, CV_16S);
     m_filteredDisparityRight = cv::Mat(m_cvImageHeight, disparityWidth, CV_16S);
     m_bilateralDisparityRight = cv::Mat(m_cvImageHeight, disparityWidth, CV_16S);
-
-    {
-        std::unique_lock writeLock(m_depthFrame->readWriteMutex);
-        std::unique_lock writeLock2(m_servedDepthFrame->readWriteMutex);
-        std::unique_lock writeLock3(m_underConstructionDepthFrame->readWriteMutex);
-
-        m_depthFrame->disparityTextureIndex = 0;
-        m_servedDepthFrame->disparityTextureIndex = 1;
-        m_underConstructionDepthFrame->disparityTextureIndex = 2;
-    }
 }
 
 
@@ -328,53 +309,7 @@ void DepthReconstruction::CreateDistortionMap()
 }
 
 
-void DisparityFillHoles(cv::Mat& disparity, cv::Mat& confidence, int maxDisparity, int minDisparity, bool bRightToLeft)
-{
-    confidence = cv::Mat(disparity.rows, disparity.cols, CV_32F, 255.0);
 
-    for (int x = (bRightToLeft ? disparity.cols - 1 : 0); bRightToLeft ? (x > 0) : (x < disparity.cols - 1); x += (bRightToLeft ? -1 : 1))
-    {
-        for (int y = 0; y < disparity.rows; y++)
-        {
-            int16_t disp = disparity.at<int16_t>(y, x);
-            if (disp < maxDisparity * 16 && disp > minDisparity * 16)
-            {
-                int pos = x + (bRightToLeft ? -1 : 1);
-                bool bFirst = true;
-                while (pos >= 0 && pos < disparity.rows - 1)
-                {
-                    
-                    int16_t& element = disparity.at<int16_t>(y, pos);
-
-                    if (element <= maxDisparity * 16 && element >= minDisparity * 16)
-                    {
-                        if (!bFirst)
-                        {
-                            confidence.at<float>(y, pos) = 0.0;
-                        }
-                        break;
-                    }
-
-                    if (bFirst)
-                    {
-                        confidence.at<float>(y, x) = 0.0;
-                    }
-
-                    confidence.at<float>(y, pos) = 0.0;
-
-                    element = disp;
-
-                    pos += (bRightToLeft ? -1 : 1);
-                }
-            }
-            else
-            {
-                disparity.at<int16_t>(y, x) = (minDisparity < 0 ? maxDisparity * 16 : minDisparity * 16);
-                confidence.at<float>(y, x) = 0.0;
-            }
-        }
-    }
-}
 
 
 void DepthReconstruction::RunThread()
@@ -684,16 +619,6 @@ void DepthReconstruction::RunThread()
             outputConfMatrixRight = &m_confidenceLeft;
         }
 
-        /*if (!stereoConfig.StereoFilteringWLS_Enable && stereoConfig.StereoFillHoles)
-        {
-            DisparityFillHoles(m_rawDisparityLeft, m_confidenceLeft, m_maxDisparity, minDisparity, false);
-
-            if (m_bDisparityBothEyes)
-            {
-                DisparityFillHoles(m_rawDisparityRight, m_confidenceRight, minDisparity, -m_maxDisparity, true);
-            }
-        }*/
-
 
         if(stereoConfig.StereoFilteringWLS_Enable)
         {
@@ -745,47 +670,51 @@ void DepthReconstruction::RunThread()
         }
 
         {
-            std::unique_lock writeLock(m_underConstructionDepthFrame->readWriteMutex);
-            std::shared_ptr<DepthFrame> frame = m_underConstructionDepthFrame;
+            FramePtr<DepthFrame> frame = m_depthFrameQueue.AcquireWrite();
+
+            if (frame->DisparityTextureIndex < 0)
+            {
+                frame->DisparityTextureIndex = m_depthFrameIndex++;
+            }
 
             XrMatrix4x4f rectifiedRotationInvLeft;
             XrMatrix4x4f_Transpose(&rectifiedRotationInvLeft, &m_rectifiedRotationLeft);
-            XrMatrix4x4f_Multiply(&frame->disparityViewToWorldLeft, &viewToWorldLeft, &rectifiedRotationInvLeft);
+            XrMatrix4x4f_Multiply(&frame->DisparityViewToWorldLeft, &viewToWorldLeft, &rectifiedRotationInvLeft);
 
             if (m_bDisparityBothEyes)
             {
                 XrMatrix4x4f rectifiedRotationInvRight;
                 XrMatrix4x4f_Transpose(&rectifiedRotationInvRight, &m_rectifiedRotationRight);
-                XrMatrix4x4f_Multiply(&frame->disparityViewToWorldRight, &viewToWorldRight, &rectifiedRotationInvRight);
+                XrMatrix4x4f_Multiply(&frame->DisparityViewToWorldRight, &viewToWorldRight, &rectifiedRotationInvRight);
             }
             else
             {
-                frame->disparityViewToWorldRight = frame->disparityViewToWorldLeft;
+                frame->DisparityViewToWorldRight = frame->DisparityViewToWorldLeft;
             }
 
             int outputScale = stereoConfig.StereoFilteringBilateral_Enable ? stereoConfig.StereoFilteringBilateral_OutputScale : 1;
 
 
             // Precompute disparity-to-depth scaling factors for the shader inputs.
-            frame->disparityToDepth = m_disparityToDepth;
-            frame->disparityToDepth.m[0] *= (float)m_cvImageWidth;
-            frame->disparityToDepth.m[5] *= -(float)m_cvImageHeight;
-            frame->disparityToDepth.m[12] /= (float)m_downscaleFactor;
-            frame->disparityToDepth.m[13] /= -(float)m_downscaleFactor;
-            frame->disparityToDepth.m[14] /= -(float)m_downscaleFactor;
+            frame->DisparityToDepth = m_disparityToDepth;
+            frame->DisparityToDepth.m[0] *= (float)m_cvImageWidth;
+            frame->DisparityToDepth.m[5] *= -(float)m_cvImageHeight;
+            frame->DisparityToDepth.m[12] /= (float)m_downscaleFactor;
+            frame->DisparityToDepth.m[13] /= -(float)m_downscaleFactor;
+            frame->DisparityToDepth.m[14] /= -(float)m_downscaleFactor;
             // Convert z to int16 range with 4 bit fixed decimal: 65536 / 2 / 16 = 2048
-            frame->disparityToDepth.m[11] *= 2048.0f;
+            frame->DisparityToDepth.m[11] *= 2048.0f;
 
-            frame->inputDisparityTextureSize[0] = m_cvImageWidth * 2;
-            frame->inputDisparityTextureSize[1] = m_cvImageHeight;
-            frame->outputDisparityTextureSize[0] = m_cvImageWidth * 2 * outputScale;
-            frame->outputDisparityTextureSize[1] = m_cvImageHeight * outputScale;
-            frame->cameraFrameTextureSize[0] = m_cameraFrameWidth * 2;
-            frame->cameraFrameTextureSize[1] = m_cameraFrameHeight;
-            frame->disparityDownscaleFactor = (float)m_downscaleFactor / outputScale;
-            frame->frameExposureTimestamp = frameTimestamp;
-            frame->minDisparity = stereoConfig.StereoMinDisparity / 2048.0f;
-            frame->maxDisparity = m_maxDisparity / 2048.0f;
+            frame->InputDisparityTextureSize[0] = m_cvImageWidth * 2;
+            frame->InputDisparityTextureSize[1] = m_cvImageHeight;
+            frame->OutputDisparityTextureSize[0] = m_cvImageWidth * 2 * outputScale;
+            frame->OutputDisparityTextureSize[1] = m_cvImageHeight * outputScale;
+            frame->CameraFrameTextureSize[0] = m_cameraFrameWidth * 2;
+            frame->CameraFrameTextureSize[1] = m_cameraFrameHeight;
+            frame->DisparityDownscaleFactor = (float)m_downscaleFactor / outputScale;
+            frame->FrameExposureTimestamp = frameTimestamp;
+            frame->MinDisparity = stereoConfig.StereoMinDisparity / 2048.0f;
+            frame->MaxDisparity = m_maxDisparity / 2048.0f;
             frame->bIsValid = true;
             frame->bIsFirstRender = true;
 
@@ -794,7 +723,7 @@ void DepthReconstruction::RunThread()
             m_renderTimer.StartPerfTimer();
 
 
-            if (!m_asyncRenderer->BeginRender(frame))
+            if (!m_asyncRenderer->BeginRender(frame.GetSharedPointer()))
             {
                 continue;
             }
@@ -831,7 +760,7 @@ void DepthReconstruction::RunThread()
             m_outputConfidenceLeft = m_outputConfidence(cv::Rect(0, 0, m_cvImageWidth, m_cvImageHeight));
             m_outputConfidenceRight = m_outputConfidence(cv::Rect(m_cvImageWidth, 0, m_cvImageWidth, m_cvImageHeight));
 
-            if (stereoConfig.StereoFilteringWLS_Enable)// || stereoConfig.StereoFillHoles)
+            if (stereoConfig.StereoFilteringWLS_Enable)
             {
                 float confFactor = stereoConfig.StereoFilteringWLS_Enable ? 32768.0f / 255.0f : 32768.0f;
 
@@ -898,12 +827,9 @@ void DepthReconstruction::RunThread()
                 m_asyncRenderer->CopyBWRectifiedCameraFrameToGPU(m_outputCameraFrameBuffer);
             }
 
-            m_asyncRenderer->Render(frame, stereoConfig);
+            m_asyncRenderer->Render(frame.GetSharedPointer(), stereoConfig);
 
-            {
-                std::lock_guard<std::mutex> lock(m_serveMutex);
-                m_underConstructionDepthFrame.swap(m_servedDepthFrame);
-            }
+            frame.CommitWrite();
         }
 
         if (mainConfig.DebugTexture != DebugTexture_None)

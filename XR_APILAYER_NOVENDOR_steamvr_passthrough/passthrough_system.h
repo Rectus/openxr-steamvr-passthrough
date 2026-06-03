@@ -36,6 +36,7 @@ public:
 	void OnPostRenderFrame(bool bDidRender, bool bInhibitIdle);
 
 private:
+	FramePtr<DepthFrame> GetDepthFrame();
 	void CalculateFrameProjection(std::shared_ptr<CameraGPUFrame> cameraFrame, std::shared_ptr<DepthFrame> depthFrame, const XrCompositionLayerProjection& layer, FrameRenderParameters& renderParams);
 	void CalculateHMDProjectionForEye(const ERenderEye eye, std::shared_ptr<CameraGPUFrame>& cameraFrame, const XrCompositionLayerProjection& layer, FrameRenderParameters& renderParams);
 	XrMatrix4x4f GetHMDWorldToViewMatrix(const ERenderEye eye, const XrCompositionLayerProjection& layer, const XrReferenceSpaceCreateInfo& refSpaceInfo);
@@ -73,7 +74,6 @@ private:
 	ERenderAPI m_appRenderAPI = RenderAPI_Direct3D11;
 
 	std::shared_ptr<std::vector<RenderModel>> m_renderModels;
-	std::shared_ptr<DepthFrame> m_dummyDepthFrame;
 	UVDistortionParameters m_dummyDistParams{};
 
 	XrMatrix4x4f m_lastWorldToCameraProjectionLeft{};

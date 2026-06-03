@@ -31,17 +31,18 @@ public:
 
 	}
 
-	FramePtr(FramePtr&& other)
+	FramePtr(FramePtr&& other) noexcept
 	{
 		m_queue = other.m_queue;
 		m_entry = other.m_entry;
+		m_bIsWrite = false;
 	}
 
 	FramePtr(const FramePtr& other) = delete;
 
 	~FramePtr()
 	{
-		if (m_entry)
+		if (m_queue && m_entry)
 		{
 			m_bIsWrite ? m_queue->RescindWrite(m_entry) : m_queue->ReleaseRead(m_entry);
 		}

@@ -143,48 +143,46 @@ struct CameraCPUFrame
 struct DepthFrame
 {
 	DepthFrame()
-		: readWriteMutex()
-		, disparityViewToWorldLeft()
-		, disparityViewToWorldRight()
-		, disparityToDepth()
-		, prevDisparityViewToWorldLeft()
-		, prevDisparityViewToWorldRight()
-		, prevDispWorldToCameraProjectionLeft()
-		, prevDispWorldToCameraProjectionRight()
-		, disparityDownscaleFactor(0.0f)
-		, frameExposureTimestamp(0)
-		, minDisparity(0.0f)
-		, maxDisparity(0.0f)
+		: DisparityViewToWorldLeft()
+		, DisparityViewToWorldRight()
+		, DisparityToDepth()
+		, PrevDisparityViewToWorldLeft()
+		, PrevDisparityViewToWorldRight()
+		, PrevDispWorldToCameraProjectionLeft()
+		, PrevDispWorldToCameraProjectionRight()
+		, DisparityDownscaleFactor(0.0f)
+		, FrameExposureTimestamp(0)
+		, MinDisparity(0.0f)
+		, MaxDisparity(0.0f)
 		, bIsValid(false)
 		, bIsFirstRender(true)
-		, outputDisparityMapNativeTexture(nullptr)
-		, disparityTextureIndex(-1)
+		, OutputDisparityMapNativeTexture(nullptr)
+		, DisparityTextureIndex(-1)
 	{
-		inputDisparityTextureSize[0] = 0;
-		inputDisparityTextureSize[1] = 0;
-		outputDisparityTextureSize[0] = 0;
-		outputDisparityTextureSize[1] = 0;
-		cameraFrameTextureSize[0] = 0;
-		cameraFrameTextureSize[1] = 0;
+		InputDisparityTextureSize[0] = 0;
+		InputDisparityTextureSize[1] = 0;
+		OutputDisparityTextureSize[0] = 0;
+		OutputDisparityTextureSize[1] = 0;
+		CameraFrameTextureSize[0] = 0;
+		CameraFrameTextureSize[1] = 0;
 	}
 
-	std::shared_mutex readWriteMutex;
-	void* outputDisparityMapNativeTexture;
-	int disparityTextureIndex;
-	XrMatrix4x4f disparityViewToWorldLeft;
-	XrMatrix4x4f disparityViewToWorldRight;
-	XrMatrix4x4f disparityToDepth;
-	XrMatrix4x4f prevDisparityViewToWorldLeft;
-	XrMatrix4x4f prevDisparityViewToWorldRight;
-	XrMatrix4x4f prevDispWorldToCameraProjectionLeft;
-	XrMatrix4x4f prevDispWorldToCameraProjectionRight;
-	uint32_t inputDisparityTextureSize[2];
-	uint32_t outputDisparityTextureSize[2];
-	uint32_t cameraFrameTextureSize[2];
-	uint64_t frameExposureTimestamp;
-	float disparityDownscaleFactor;
-	float minDisparity;
-	float maxDisparity;
+	void* OutputDisparityMapNativeTexture;
+	int DisparityTextureIndex;
+	XrMatrix4x4f DisparityViewToWorldLeft;
+	XrMatrix4x4f DisparityViewToWorldRight;
+	XrMatrix4x4f DisparityToDepth;
+	XrMatrix4x4f PrevDisparityViewToWorldLeft;
+	XrMatrix4x4f PrevDisparityViewToWorldRight;
+	XrMatrix4x4f PrevDispWorldToCameraProjectionLeft;
+	XrMatrix4x4f PrevDispWorldToCameraProjectionRight;
+	uint32_t InputDisparityTextureSize[2];
+	uint32_t OutputDisparityTextureSize[2];
+	uint32_t CameraFrameTextureSize[2];
+	uint64_t FrameExposureTimestamp;
+	float DisparityDownscaleFactor;
+	float MinDisparity;
+	float MaxDisparity;
 	bool bIsValid;
 	bool bIsFirstRender;
 };

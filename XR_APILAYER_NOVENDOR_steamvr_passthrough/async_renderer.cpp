@@ -963,7 +963,7 @@ bool AsyncRenderer::CopyAndDecodeCameraFrame(std::shared_ptr<CameraCPUFrame> inF
 bool AsyncRenderer::BeginRender(std::shared_ptr<DepthFrame> depthFrame)
 {
 	std::shared_lock accessLock(m_accessMutex);
-	int textureIndex = depthFrame->disparityTextureIndex;
+	int textureIndex = depthFrame->DisparityTextureIndex;
 
 	if (!m_bIsInitialized || !depthFrame.get() || !depthFrame->bIsValid)
 	{
@@ -971,10 +971,10 @@ bool AsyncRenderer::BeginRender(std::shared_ptr<DepthFrame> depthFrame)
 	}
 
 	if (!m_disparityTexture.bIsValid ||
-		m_disparityTexture.Extent.width != depthFrame->inputDisparityTextureSize[0] ||
-		m_disparityTexture.Extent.height != depthFrame->inputDisparityTextureSize[1])
+		m_disparityTexture.Extent.width != depthFrame->InputDisparityTextureSize[0] ||
+		m_disparityTexture.Extent.height != depthFrame->InputDisparityTextureSize[1])
 	{
-		VkExtent2D extent = { depthFrame->inputDisparityTextureSize[0], depthFrame->inputDisparityTextureSize[1] };
+		VkExtent2D extent = { depthFrame->InputDisparityTextureSize[0], depthFrame->InputDisparityTextureSize[1] };
 		VkImageUsageFlags usageFlags = VK_IMAGE_USAGE_TRANSFER_DST_BIT | VK_IMAGE_USAGE_SAMPLED_BIT | VK_IMAGE_USAGE_STORAGE_BIT;
 		if (m_bHostImageCopyEnabled) { usageFlags |= VK_IMAGE_USAGE_HOST_TRANSFER_BIT; }
 
@@ -992,40 +992,40 @@ bool AsyncRenderer::BeginRender(std::shared_ptr<DepthFrame> depthFrame)
 	}
 
 	if (!m_outputTexture[textureIndex].bIsValid ||
-		m_outputTexture[textureIndex].Extent.width != depthFrame->outputDisparityTextureSize[0] ||
-		m_outputTexture[textureIndex].Extent.height != depthFrame->outputDisparityTextureSize[1])
+		m_outputTexture[textureIndex].Extent.width != depthFrame->OutputDisparityTextureSize[0] ||
+		m_outputTexture[textureIndex].Extent.height != depthFrame->OutputDisparityTextureSize[1])
 	{
 		DestroyTexture(m_outputTexture[textureIndex]);
 
-		if (!m_inlineRenderer.lock()->CreateSharedDisparityMap(&m_outputTexture[textureIndex].SharedHandle, &m_outputTexture[textureIndex].nativeTexture, { depthFrame->outputDisparityTextureSize[0], depthFrame->outputDisparityTextureSize[1] }, VK_FORMAT_R16G16_SNORM))
+		if (!m_inlineRenderer.lock()->CreateSharedDisparityMap(&m_outputTexture[textureIndex].SharedHandle, &m_outputTexture[textureIndex].nativeTexture, { depthFrame->OutputDisparityTextureSize[0], depthFrame->OutputDisparityTextureSize[1] }, VK_FORMAT_R16G16_SNORM))
 		{
 			g_logger->error("Failed to create shared disparity map {}!", textureIndex);
 			return false;
 		}
 
-		if (!CreateSharedTexture(m_outputTexture[textureIndex], { depthFrame->outputDisparityTextureSize[0], depthFrame->outputDisparityTextureSize[1] }, VK_FORMAT_R16G16_SNORM, VK_IMAGE_USAGE_TRANSFER_SRC_BIT | VK_IMAGE_USAGE_TRANSFER_DST_BIT | VK_IMAGE_USAGE_SAMPLED_BIT | VK_IMAGE_USAGE_STORAGE_BIT))
+		if (!CreateSharedTexture(m_outputTexture[textureIndex], { depthFrame->OutputDisparityTextureSize[0], depthFrame->OutputDisparityTextureSize[1] }, VK_FORMAT_R16G16_SNORM, VK_IMAGE_USAGE_TRANSFER_SRC_BIT | VK_IMAGE_USAGE_TRANSFER_DST_BIT | VK_IMAGE_USAGE_SAMPLED_BIT | VK_IMAGE_USAGE_STORAGE_BIT))
 		{
 			g_logger->error("Failed to create m_outputTexture {}!", textureIndex);
 			return false;
 		}
 
-		depthFrame->outputDisparityMapNativeTexture = m_outputTexture[textureIndex].nativeTexture;
+		depthFrame->OutputDisparityMapNativeTexture = m_outputTexture[textureIndex].nativeTexture;
 	}
 
-	if (!m_bwRectifiedCameraTexture.bIsValid || m_bwRectifiedCameraTexture.Extent.width != depthFrame->cameraFrameTextureSize[0] || m_bwRectifiedCameraTexture.Extent.height != depthFrame->cameraFrameTextureSize[1])
+	if (!m_bwRectifiedCameraTexture.bIsValid || m_bwRectifiedCameraTexture.Extent.width != depthFrame->CameraFrameTextureSize[0] || m_bwRectifiedCameraTexture.Extent.height != depthFrame->CameraFrameTextureSize[1])
 	{
 		VkImageUsageFlags usageFlags = VK_IMAGE_USAGE_TRANSFER_DST_BIT | VK_IMAGE_USAGE_SAMPLED_BIT;
 		if (m_bHostImageCopyEnabled) { usageFlags |= VK_IMAGE_USAGE_HOST_TRANSFER_BIT; }
 
-		if (!CreateTexture(m_bwRectifiedCameraTexture, { depthFrame->cameraFrameTextureSize[0] , depthFrame->cameraFrameTextureSize[1] }, VK_FORMAT_R8_SRGB, usageFlags))
+		if (!CreateTexture(m_bwRectifiedCameraTexture, { depthFrame->CameraFrameTextureSize[0] , depthFrame->CameraFrameTextureSize[1] }, VK_FORMAT_R8_SRGB, usageFlags))
 		{
 			g_logger->error("Failed to create m_bwRectifiedCameraTexture!");
 			return false;
 		}
 	}
 
-	m_minDisparity = depthFrame->minDisparity;
-	m_maxDisparity = depthFrame->maxDisparity;
+	m_minDisparity = depthFrame->MinDisparity;
+	m_maxDisparity = depthFrame->MaxDisparity;
 
 	/*if (g_renderDocAPI && !g_bRenderDocCaptured)
 	{
@@ -1089,7 +1089,7 @@ void AsyncRenderer::CopyBWRectifiedCameraFrameToGPU(std::vector<uint8_t>& buffer
 void AsyncRenderer::Render(std::shared_ptr<DepthFrame> depthFrame, const Config_Stereo& stereoConf)
 {
 	std::shared_lock accessLock(m_accessMutex);
-	int textureIndex = depthFrame->disparityTextureIndex;
+	int textureIndex = depthFrame->DisparityTextureIndex;
 
 	{
 		VkDescriptorBufferInfo filterBufferInfo{};
@@ -1165,10 +1165,10 @@ void AsyncRenderer::Render(std::shared_ptr<DepthFrame> depthFrame, const Config_
 
 	CSAsyncConstantBuffer constants = {};
 
-	constants.g_disparitySize[0] = depthFrame->inputDisparityTextureSize[0];
-	constants.g_disparitySize[1] = depthFrame->inputDisparityTextureSize[1];
-	constants.minDisparity = depthFrame->minDisparity;
-	constants.maxDisparity = depthFrame->maxDisparity;
+	constants.g_disparitySize[0] = depthFrame->InputDisparityTextureSize[0];
+	constants.g_disparitySize[1] = depthFrame->InputDisparityTextureSize[1];
+	constants.minDisparity = depthFrame->MinDisparity;
+	constants.maxDisparity = depthFrame->MaxDisparity;
 	constants.bilateralDistance = stereoConf.StereoFilteringBilateral_Distance;
 	constants.bilateralDispCutoff = stereoConf.StereoFilteringBilateral_DispCutoff * (m_maxDisparity - m_minDisparity);
 	constants.bHoleFillLastPass = false;
@@ -1196,8 +1196,8 @@ void AsyncRenderer::Render(std::shared_ptr<DepthFrame> depthFrame, const Config_
 
 	if (stereoConf.StereoFillHoles)
 	{
-		int groupCountX = DivRoundUp(depthFrame->inputDisparityTextureSize[0], 32);
-		int groupCountY = DivRoundUp(depthFrame->inputDisparityTextureSize[1], 32);
+		int groupCountX = DivRoundUp(depthFrame->InputDisparityTextureSize[0], 32);
+		int groupCountY = DivRoundUp(depthFrame->InputDisparityTextureSize[1], 32);
 
 		vkCmdPushConstants(m_commandBuffer, m_pipelineLayout, VK_SHADER_STAGE_COMPUTE_BIT, 0, sizeof(CSAsyncConstantBuffer), &constants);
 
@@ -1216,8 +1216,8 @@ void AsyncRenderer::Render(std::shared_ptr<DepthFrame> depthFrame, const Config_
 
 	if (stereoConf.StereoFilteringBilateral_Enable)
 	{
-		int groupCountX = DivRoundUp(depthFrame->outputDisparityTextureSize[0], 32);
-		int groupCountY = DivRoundUp(depthFrame->outputDisparityTextureSize[1], 32);
+		int groupCountX = DivRoundUp(depthFrame->OutputDisparityTextureSize[0], 32);
+		int groupCountY = DivRoundUp(depthFrame->OutputDisparityTextureSize[1], 32);
 
 		vkCmdPushConstants(m_commandBuffer, m_pipelineLayout, VK_SHADER_STAGE_COMPUTE_BIT, 0, sizeof(CSAsyncConstantBuffer), &constants);
 
@@ -1226,8 +1226,8 @@ void AsyncRenderer::Render(std::shared_ptr<DepthFrame> depthFrame, const Config_
 	}
 	else
 	{
-		int groupCountX = DivRoundUp(depthFrame->outputDisparityTextureSize[0], 32);
-		int groupCountY = DivRoundUp(depthFrame->outputDisparityTextureSize[1], 32);
+		int groupCountX = DivRoundUp(depthFrame->OutputDisparityTextureSize[0], 32);
+		int groupCountY = DivRoundUp(depthFrame->OutputDisparityTextureSize[1], 32);
 
 		constants.bHoleFillLastPass = true;
 
