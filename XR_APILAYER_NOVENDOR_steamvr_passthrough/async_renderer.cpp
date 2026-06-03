@@ -131,7 +131,6 @@ AsyncRenderer::~AsyncRenderer()
 bool AsyncRenderer::InitRenderer()
 {
 	std::unique_lock initLock(m_accessMutex);
-	if (m_bIsInitialized) { g_logger->error("m_bIsInitialized"); }
 
 	Config_Main& mainConfig = m_configManager->GetConfig_Main();
 
@@ -903,7 +902,6 @@ void AsyncRenderer::DestroyTexture(VulkanTexture& texture)
 }
 
 
-// Caller is resposible for aquiring camera frame locks.
 bool AsyncRenderer::CopyAndDecodeCameraFrame(std::shared_ptr<CameraCPUFrame> inFrame, void** nativeTexture)
 {
 	std::shared_lock acessLock(m_accessMutex);

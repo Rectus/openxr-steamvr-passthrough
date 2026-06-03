@@ -38,70 +38,76 @@ struct RenderModel
 	XrMatrix4x4f meshToWorldTransform;
 };
 
-struct CameraFrame
+struct CameraGPUFrame
 {
-	CameraFrame()
-		: readWriteMutex()
-		, header()
-		, frameTextureResource(nullptr)
-		, cameraViewToWorldLeft()
-		, cameraViewToWorldRight()
-		, worldToCameraProjectionLeft()
-		, worldToCameraProjectionRight()
-		, worldToHMDProjectionLeft()
-		, worldToHMDProjectionRight()
-		, prevWorldToCameraProjectionLeft()
-		, prevWorldToCameraProjectionRight()
-		, prevCameraFrame_WorldToHMDProjectionLeft()
-		, prevCameraFrame_WorldToHMDProjectionRight()
-		, prevHMDFrame_WorldToHMDProjectionLeft()
-		, prevHMDFrame_WorldToHMDProjectionRight()
-		, projectionOriginWorldLeft()
-		, projectionOriginWorldRight()
-		, frameLayout(FrameLayout_Mono)
+	CameraGPUFrame()
+		: FrameTextureResource(nullptr)
+		, FrameSequence(0)
+		, FrameExposureTimestamp(0)
+		, CameraViewToWorldLeft()
+		, CameraViewToWorldRight()
+		, WorldToCameraProjectionLeft()
+		, WorldToCameraProjectionRight()
+		, WorldToHMDProjectionLeft()
+		, WorldToHMDProjectionRight()
+		, PrevWorldToCameraProjectionLeft()
+		, PrevWorldToCameraProjectionRight()
+		, PrevCameraFrame_WorldToHMDProjectionLeft()
+		, PrevCameraFrame_WorldToHMDProjectionRight()
+		, PrevHMDFrame_WorldToHMDProjectionLeft()
+		, PrevHMDFrame_WorldToHMDProjectionRight()
+		, ProjectionOriginWorldLeft()
+		, ProjectionOriginWorldRight()
+		, FrameLayout(FrameLayout_Mono)
 		, bIsValid(false)
 		, bHasReversedDepth(false)
 		, bIsFirstRender(true)
 		, bIsRenderingMirrored(false)
 		, bColorsPreadjusted(false)
+		, bisRectifiedFrame(false)
 	{
+		FrameSize[0] = 0;
+		FrameSize[1] = 0;
 	}
 
-	std::shared_mutex readWriteMutex;
-	vr::CameraVideoStreamFrameHeader_t header;
-	void* frameTextureResource;
-	XrMatrix4x4f cameraViewToWorldLeft;
-	XrMatrix4x4f cameraViewToWorldRight;
-	XrMatrix4x4f worldToCameraProjectionLeft;
-	XrMatrix4x4f worldToCameraProjectionRight;
-	XrMatrix4x4f worldToHMDProjectionLeft;
-	XrMatrix4x4f worldToHMDProjectionRight;
+
+	void* FrameTextureResource;
+	int32_t FrameSize[2];
+	uint32_t FrameSequence;
+	uint64_t FrameExposureTimestamp;
+
+	XrMatrix4x4f CameraViewToWorldLeft;
+	XrMatrix4x4f CameraViewToWorldRight;
+	XrMatrix4x4f WorldToCameraProjectionLeft;
+	XrMatrix4x4f WorldToCameraProjectionRight;
+	XrMatrix4x4f WorldToHMDProjectionLeft;
+	XrMatrix4x4f WorldToHMDProjectionRight;
 
 	// relative to the previous camera frame
-	XrMatrix4x4f prevWorldToCameraProjectionLeft;
-	XrMatrix4x4f prevWorldToCameraProjectionRight;
-	XrMatrix4x4f prevCameraFrame_WorldToHMDProjectionLeft;
-	XrMatrix4x4f prevCameraFrame_WorldToHMDProjectionRight;
+	XrMatrix4x4f PrevWorldToCameraProjectionLeft;
+	XrMatrix4x4f PrevWorldToCameraProjectionRight;
+	XrMatrix4x4f PrevCameraFrame_WorldToHMDProjectionLeft;
+	XrMatrix4x4f PrevCameraFrame_WorldToHMDProjectionRight;
 
 	// relative to the previous rendered frame
-	XrMatrix4x4f prevHMDFrame_WorldToHMDProjectionLeft;
-	XrMatrix4x4f prevHMDFrame_WorldToHMDProjectionRight;
+	XrMatrix4x4f PrevHMDFrame_WorldToHMDProjectionLeft;
+	XrMatrix4x4f PrevHMDFrame_WorldToHMDProjectionRight;
 
-	XrVector3f projectionOriginWorldLeft;
-	XrVector3f projectionOriginWorldRight;
-	EStereoFrameLayout frameLayout;
+	XrVector3f ProjectionOriginWorldLeft;
+	XrVector3f ProjectionOriginWorldRight;
+	EStereoFrameLayout FrameLayout;
 	bool bIsValid;
 	bool bHasReversedDepth;
 	bool bIsFirstRender;
 	bool bIsRenderingMirrored;
 	bool bColorsPreadjusted;
+	bool bisRectifiedFrame;
 };
 
 struct CameraCPUFrame
 {
 	CameraCPUFrame()
-		: ReadWriteMutex()
-		, CameraViewToWorldLeft()
+		: CameraViewToWorldLeft()
 		, CameraViewToWorldRight()
 		, RawFrameFormat(FrameFormat_Unknown)
 		, RawFrameDataBytes(0)
@@ -117,7 +123,7 @@ struct CameraCPUFrame
 		FrameSize[1] = 0;
 	}
 
-	std::shared_mutex ReadWriteMutex;
+
 	std::shared_ptr<std::vector<uint8_t>> FrameBuffer;
 	XrMatrix4x4f CameraViewToWorldLeft;
 	XrMatrix4x4f CameraViewToWorldRight;
@@ -198,6 +204,8 @@ struct FBPassthroughLayerInstance
 
 struct FrameRenderParameters
 {
+	ECameraProvider CameraProvider = CameraProvider_None;
+	EProjectionMode ProjectionMode = Projection_RoomView2D;
 	EPassthroughBlendMode BlendMode = Opaque;
 	bool bInvertLayerAlpha = false;
 	uint64_t DisplayTime = 0;

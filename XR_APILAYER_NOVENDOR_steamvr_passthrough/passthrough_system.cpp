@@ -49,6 +49,7 @@ void PassthroughSystem::SetExtensions(ExtensionData& data)
 
 bool PassthroughSystem::SetupRenderer(const XrInstance instance, const XrSessionCreateInfo* createInfo, const XrSession* session)
 {
+	Config_Main& mainConfig = m_configManager->GetConfig_Main();
 	ClientData& clientData = m_menuHandler->GetClientData();
 
 	const XrBaseInStructure* entry = reinterpret_cast<const XrBaseInStructure*>(createInfo->next);
@@ -63,7 +64,6 @@ bool PassthroughSystem::SetupRenderer(const XrInstance instance, const XrSession
 
 			const XrGraphicsBindingD3D11KHR* bindings = reinterpret_cast<const XrGraphicsBindingD3D11KHR*>(entry);
 			m_inlineRenderer = std::make_shared<PassthroughRendererDX11>(bindings->device, m_configManager);
-			m_asyncRenderer = std::make_shared<AsyncRenderer>(m_configManager, m_inlineRenderer);
 			m_renderAPI = RenderAPI_Direct3D11;
 			m_appRenderAPI = RenderAPI_Direct3D11;
 
@@ -89,7 +89,6 @@ bool PassthroughSystem::SetupRenderer(const XrInstance instance, const XrSession
 			const XrGraphicsBindingD3D12KHR* bindings = reinterpret_cast<const XrGraphicsBindingD3D12KHR*>(entry);
 
 			m_inlineRenderer = std::make_shared<PassthroughRendererDX11Interop>(bindings->device, bindings->queue, m_configManager);
-			m_asyncRenderer = std::make_shared<AsyncRenderer>(m_configManager, m_inlineRenderer);
 			m_renderAPI = RenderAPI_Direct3D11;
 			m_appRenderAPI = RenderAPI_Direct3D12;
 
@@ -115,7 +114,7 @@ bool PassthroughSystem::SetupRenderer(const XrInstance instance, const XrSession
 			ERenderAPI usedAPI = RenderAPI_Vulkan;
 
 			const XrGraphicsBindingVulkanKHR* bindings = reinterpret_cast<const XrGraphicsBindingVulkanKHR*>(entry);
-			if (m_configManager->GetConfig_Main().UseLegacyVulkanRenderer)
+			if (mainConfig.UseLegacyVulkanRenderer)
 			{
 
 				m_inlineRenderer = std::make_shared<PassthroughRendererVulkan>(*bindings, m_configManager);
@@ -123,7 +122,7 @@ bool PassthroughSystem::SetupRenderer(const XrInstance instance, const XrSession
 			}
 			else
 			{
-				if (!m_extensionData.bVulkan2ExtensionEnabled && m_configManager->GetConfig_Main().AllowVulkanWithoutConfirmedFeatures)
+				if (!m_extensionData.bVulkan2ExtensionEnabled && mainConfig.AllowVulkanWithoutConfirmedFeatures)
 				{
 
 					g_logger->warn("Application is using the XR_KHR_vulkan_enable extension. Required Vulkan features can not be confirmed");
@@ -139,7 +138,6 @@ bool PassthroughSystem::SetupRenderer(const XrInstance instance, const XrSession
 				m_inlineRenderer = std::make_shared<PassthroughRendererDX11Interop>(*bindings, m_configManager);
 			}
 
-			m_asyncRenderer = std::make_shared<AsyncRenderer>(m_configManager, m_inlineRenderer);
 			m_renderAPI = usedAPI;
 			m_appRenderAPI = RenderAPI_Vulkan;
 
@@ -165,7 +163,6 @@ bool PassthroughSystem::SetupRenderer(const XrInstance instance, const XrSession
 			const XrGraphicsBindingOpenGLWin32KHR* bindings = reinterpret_cast<const XrGraphicsBindingOpenGLWin32KHR*>(entry);
 
 			m_inlineRenderer = std::make_shared<PassthroughRendererDX11Interop>(*bindings, m_configManager);
-			m_asyncRenderer = std::make_shared<AsyncRenderer>(m_configManager, m_inlineRenderer);
 			m_appRenderAPI = RenderAPI_OpenGL;
 			m_renderAPI = RenderAPI_Direct3D11;
 
@@ -206,6 +203,7 @@ bool PassthroughSystem::SetupProcessingPipeline()
 	m_augmentedDepthReconstruction.reset();
 	m_cameraManager.reset();
 	m_augmentedCameraManager.reset();
+	m_asyncRenderer.reset();
 
 	if (!m_inlineRenderer.get())
 	{
@@ -215,12 +213,26 @@ bool PassthroughSystem::SetupProcessingPipeline()
 
 	Config_Main& mainConfig = m_configManager->GetConfig_Main();
 
+	m_cameraProvider = mainConfig.CameraProvider;
+	m_projectionMode = mainConfig.ProjectionMode;
+
 	m_bIsPaused = false;
 	m_lastRenderTime.StartPerfTimer();
 
-	if (mainConfig.CameraProvider == CameraProvider_OpenVR)
+	if (m_projectionMode != Projection_RoomView2D)
 	{
-		m_cameraManager = std::make_shared<CameraManagerOpenVR>(m_inlineRenderer, m_asyncRenderer, m_renderAPI, m_appRenderAPI, m_configManager, m_openVRManager);
+		m_asyncRenderer = std::make_shared<AsyncRenderer>(m_configManager, m_inlineRenderer);
+
+		if (!m_asyncRenderer->InitRenderer())
+		{
+			g_logger->error("Failed to initialize async renderer!");
+			return false;
+		}
+	}
+
+	if (m_cameraProvider == CameraProvider_OpenVR)
+	{
+		m_cameraManager = std::make_shared<CameraManagerOpenVR>(m_inlineRenderer, m_asyncRenderer, m_renderAPI, m_appRenderAPI, m_configManager, m_openVRManager, m_projectionMode);
 
 		if (!m_cameraManager->InitCamera())
 		{
@@ -236,7 +248,7 @@ bool PassthroughSystem::SetupProcessingPipeline()
 			// TODO: Just checks for the fisheye model at the moment, whitelist of known models would be better.
 			/*if (m_cameraManager->GetFrameLayout() != FrameLayout_Mono && m_cameraManager->IsUsingFisheyeModel())
 			{
-				m_configManager->GetConfig_Main().ProjectionMode = Projection_StereoReconstruction;
+				m_projectionMode = Projection_StereoReconstruction;
 			}*/
 		}
 
@@ -247,10 +259,10 @@ bool PassthroughSystem::SetupProcessingPipeline()
 		m_cameraManager->GetDistortedTextureSize(cameraTextureWidth, cameraTextureHeight, cameraFrameBufferSize);
 		m_cameraManager->GetUndistortedTextureSize(cameraUndistortedTextureWidth, cameraUndistortedTextureHeight, cameraUndistortedFrameBufferSize);
 	}
-	else if (mainConfig.CameraProvider == CameraProvider_Augmented)
+	else if (m_cameraProvider == CameraProvider_Augmented)
 	{
-		m_cameraManager = std::make_shared<CameraManagerOpenVR>(m_inlineRenderer, m_asyncRenderer, m_renderAPI, m_appRenderAPI, m_configManager, m_openVRManager);
-		m_augmentedCameraManager = std::make_shared<CameraManagerOpenCV>(m_inlineRenderer, m_asyncRenderer, m_renderAPI, m_appRenderAPI, m_configManager, m_openVRManager, true);
+		m_cameraManager = std::make_shared<CameraManagerOpenVR>(m_inlineRenderer, m_asyncRenderer, m_renderAPI, m_appRenderAPI, m_configManager, m_openVRManager, m_projectionMode);
+		m_augmentedCameraManager = std::make_shared<CameraManagerOpenCV>(m_inlineRenderer, m_asyncRenderer, m_renderAPI, m_appRenderAPI, m_configManager, m_openVRManager, m_projectionMode, true);
 
 		if (!m_cameraManager->InitCamera() || !m_augmentedCameraManager->InitCamera())
 		{
@@ -264,9 +276,9 @@ bool PassthroughSystem::SetupProcessingPipeline()
 		m_augmentedCameraManager->GetDistortedTextureSize(cameraTextureWidth, cameraTextureHeight, cameraFrameBufferSize);
 		m_augmentedCameraManager->GetDistortedTextureSize(cameraUndistortedTextureWidth, cameraUndistortedTextureHeight, cameraUndistortedFrameBufferSize);
 	}
-	else
+	else if (m_cameraProvider == CameraProvider_OpenCV)
 	{
-		m_cameraManager = std::make_shared<CameraManagerOpenCV>(m_inlineRenderer, m_asyncRenderer, m_renderAPI, m_appRenderAPI, m_configManager, m_openVRManager);
+		m_cameraManager = std::make_shared<CameraManagerOpenCV>(m_inlineRenderer, m_asyncRenderer, m_renderAPI, m_appRenderAPI, m_configManager, m_openVRManager, m_projectionMode);
 
 		if (!m_cameraManager->InitCamera())
 		{
@@ -280,6 +292,11 @@ bool PassthroughSystem::SetupProcessingPipeline()
 		m_cameraManager->GetDistortedTextureSize(cameraTextureWidth, cameraTextureHeight, cameraFrameBufferSize);
 		m_cameraManager->GetDistortedTextureSize(cameraUndistortedTextureWidth, cameraUndistortedTextureHeight, cameraUndistortedFrameBufferSize);
 	}
+	else
+	{
+		g_logger->error("No camera provider set!");
+		return false;
+	}
 
 	m_bCamerasInitialized = true;
 
@@ -290,17 +307,11 @@ bool PassthroughSystem::SetupProcessingPipeline()
 		return false;
 	}
 
-	if (m_configManager->GetConfig_Main().ProjectionMode != Projection_RoomView2D)
+	if (m_projectionMode != Projection_RoomView2D)
 	{
-		if (!m_asyncRenderer->InitRenderer())
-		{
-			g_logger->error("Failed to initialize async renderer!");
-			return false;
-		}
-
 		m_depthReconstruction = std::make_shared<DepthReconstruction>(m_configManager, m_openVRManager, m_cameraManager, m_asyncRenderer);
 
-		if (m_configManager->GetConfig_Main().CameraProvider == CameraProvider_Augmented)
+		if (m_cameraProvider == CameraProvider_Augmented)
 		{
 			m_augmentedDepthReconstruction = std::make_shared<DepthReconstruction>(m_configManager, m_openVRManager, m_augmentedCameraManager, m_asyncRenderer);
 		}
@@ -322,7 +333,7 @@ void PassthroughSystem::ShutdownRenderer()
 
 EPassthroughCameraState PassthroughSystem::GetCameraState() const
 {
-	if (m_configManager->GetConfig_Main().CameraProvider == CameraProvider_Augmented)
+	if (m_cameraProvider == CameraProvider_Augmented)
 	{
 		EPassthroughCameraState mainState = m_cameraManager->GetCameraState();
 		EPassthroughCameraState augState = m_augmentedCameraManager->GetCameraState();
@@ -463,7 +474,7 @@ bool PassthroughSystem::RenderPassthroughOnAppLayer(const XrFrameEndInfo* frameE
 
 	if (m_bIsPaused)
 	{
-		if (mainConf.CameraProvider == CameraProvider_Augmented)
+		if (m_cameraProvider == CameraProvider_Augmented)
 		{
 			m_augmentedCameraManager->SetPaused(false);
 		}
@@ -471,7 +482,7 @@ bool PassthroughSystem::RenderPassthroughOnAppLayer(const XrFrameEndInfo* frameE
 
 		if (!m_bCamerasInitialized)
 		{
-			if (mainConf.CameraProvider == CameraProvider_Augmented)
+			if (m_cameraProvider == CameraProvider_Augmented)
 			{
 				if ((!m_cameraManager->InitCamera() || !m_augmentedCameraManager->InitCamera()))
 				{
@@ -489,35 +500,34 @@ bool PassthroughSystem::RenderPassthroughOnAppLayer(const XrFrameEndInfo* frameE
 		m_bIsPaused = false;
 	}
 
+
+	renderParams.CameraProvider = m_cameraProvider;
+	renderParams.ProjectionMode = m_projectionMode;
+
 	XrCompositionLayerProjection* layer = (XrCompositionLayerProjection*)frameEndInfo->layers[layerNum];
-	std::shared_ptr<CameraFrame> frame;
-	std::shared_ptr<CameraCPUFrame> cpuFrame;
+	
 	std::shared_ptr<DepthFrame> depthFrame;
 
-	std::shared_lock<std::shared_mutex> cpuFrameReadLock;
 	std::shared_lock<std::shared_mutex> depthFrameReadLock;
 
-	if ((mainConf.CameraProvider == CameraProvider_Augmented) ?
-		!m_augmentedCameraManager->GetCameraFrame(frame) :
-		!m_cameraManager->GetCameraFrame(frame))
+	std::shared_ptr <ICameraManager>& cameraFrameManager = 
+		m_cameraProvider == CameraProvider_Augmented ?
+		m_augmentedCameraManager : m_cameraManager;
+
+	FramePtr<CameraGPUFrame> gpuFrame = cameraFrameManager->AcquireCameraGPUFrame();
+	if (!gpuFrame.HasFrame())
 	{
 		return false;
 	}
-	std::shared_lock readLock(frame->readWriteMutex);
 
 	// TODO: CPU-side camera frame only needed for OpenCV provider. Upload async instead.
-	if (mainConf.CameraProvider == CameraProvider_OpenCV)
+	FramePtr<CameraCPUFrame> cpuFrame = cameraFrameManager->AcquireCameraCPUFrame();
+	if (m_cameraProvider == CameraProvider_OpenCV && !cpuFrame.HasFrame())
 	{
-		if ((mainConf.CameraProvider == CameraProvider_Augmented) ?
-			!m_augmentedCameraManager->GetCameraCPUFrame(cpuFrame) :
-			!m_cameraManager->GetCameraCPUFrame(cpuFrame))
-		{
-			return false;
-		}
-		cpuFrameReadLock = std::shared_lock<std::shared_mutex>(cpuFrame->ReadWriteMutex);
+		return false;
 	}
 
-	bool bUseDepth = mainConf.ProjectionMode == Projection_StereoReconstruction && m_depthReconstruction.get();
+	bool bUseDepth = m_projectionMode == Projection_StereoReconstruction && m_depthReconstruction.get();
 
 	if (bUseDepth)
 	{
@@ -547,7 +557,7 @@ bool PassthroughSystem::RenderPassthroughOnAppLayer(const XrFrameEndInfo* frameE
 	Config_Depth& depthConf = m_configManager->GetConfig_Depth();
 
 
-	CalculateFrameProjection(frame, depthFrame, *layer, renderParams);	
+	CalculateFrameProjection(gpuFrame.GetSharedPointer(), depthFrame, *layer, renderParams);
 
 	if (renderParams.bUseFBPassthrough)
 	{
@@ -577,7 +587,7 @@ bool PassthroughSystem::RenderPassthroughOnAppLayer(const XrFrameEndInfo* frameE
 		return false;
 	}
 
-	clientData.Values.LastCameraTimestamp = frame->header.ulFrameExposureTime;
+	clientData.Values.LastCameraTimestamp = gpuFrame->FrameExposureTimestamp;
 
 	if (coreConf.CoreForcePassthrough && coreConf.CoreForceMode >= 0)
 	{
@@ -669,19 +679,19 @@ bool PassthroughSystem::RenderPassthroughOnAppLayer(const XrFrameEndInfo* frameE
 		renderParams.DepthRangeMax = depthConf.DepthForceRangeTestMax;
 	}
 
-	UVDistortionParameters& distParams = (mainConf.ProjectionMode == Projection_RoomView2D || !m_depthReconstruction.get()) ?
+	UVDistortionParameters& distParams = (m_projectionMode == Projection_RoomView2D || !m_depthReconstruction.get()) ?
 		m_dummyDistParams :
-		(m_configManager->GetConfig_Main().CameraProvider == CameraProvider_Augmented ?
+		(m_cameraProvider == CameraProvider_Augmented ?
 		m_augmentedDepthReconstruction->GetDistortionParameters() :
 		m_depthReconstruction->GetDistortionParameters());
 
 	if (mainConf.ProjectToRenderModels)
 	{
-		UpdateRenderModels(frame->header.ulFrameExposureTime);
+		UpdateRenderModels(gpuFrame->FrameExposureTimestamp);
 		renderParams.RenderModels = m_renderModels;
 	}
 
-	m_inlineRenderer->RenderPassthroughFrame(layer, frame, cpuFrame, renderParams, depthFrame, distParams);
+	m_inlineRenderer->RenderPassthroughFrame(layer, gpuFrame.GetSharedPointer(), cpuFrame.GetSharedPointer(), renderParams, depthFrame, distParams);
 
 	depthFrame->bIsFirstRender = false;
 
@@ -689,10 +699,10 @@ bool PassthroughSystem::RenderPassthroughOnAppLayer(const XrFrameEndInfo* frameE
 	m_passthroughRenderTime.EndPerfTimer();
 	clientData.Values.RenderTimeMS = m_passthroughRenderTime.GetAverageTimeMS();
 
-	m_frameToRenderTime.AveragesAddTimeInterval(frame->header.ulFrameExposureTime, preRenderTime);
+	m_frameToRenderTime.AveragesAddTimeInterval(gpuFrame->FrameExposureTimestamp, preRenderTime);
 	clientData.Values.FrameToRenderLatencyMS = m_frameToRenderTime.GetAverageTimeMS();
 
-	m_frameToPhotonTime.AveragesAddTimeInterval(frame->header.ulFrameExposureTime, renderParams.DisplayTime);
+	m_frameToPhotonTime.AveragesAddTimeInterval(gpuFrame->FrameExposureTimestamp, renderParams.DisplayTime);
 	clientData.Values.FrameToPhotonsLatencyMS = m_frameToPhotonTime.GetAverageTimeMS();
 
 	if (depthFrame->bIsValid)
@@ -704,7 +714,7 @@ bool PassthroughSystem::RenderPassthroughOnAppLayer(const XrFrameEndInfo* frameE
 		clientData.Values.DepthToPhotonsLatencyMS = m_depthToPhotonTime.GetAverageTimeMS();
 	}
 
-	if (mainConf.ProjectionMode == Projection_RoomView2D || !m_depthReconstruction.get())
+	if (m_projectionMode == Projection_RoomView2D || !m_depthReconstruction.get())
 	{
 		clientData.Values.StereoReconstructionTimeMS = 0.0f;
 		clientData.Values.StereoRenderTimeMS = 0.0f;
@@ -721,11 +731,6 @@ bool PassthroughSystem::RenderPassthroughOnAppLayer(const XrFrameEndInfo* frameE
 	if (depthFrameReadLock.owns_lock())
 	{
 		depthFrameReadLock.unlock();
-	}
-
-	if (cpuFrameReadLock.owns_lock())
-	{
-		cpuFrameReadLock.unlock();
 	}
 
 	return true;
@@ -758,7 +763,7 @@ void PassthroughSystem::OnPostRenderFrame(bool bDidRender, bool bInhibitIdle)
 		{
 			m_bIsPaused = true;
 
-			if (mainConf.CameraProvider == CameraProvider_Augmented)
+			if (m_cameraProvider == CameraProvider_Augmented)
 			{
 				m_augmentedCameraManager->SetPaused(true);
 			}
@@ -766,7 +771,7 @@ void PassthroughSystem::OnPostRenderFrame(bool bDidRender, bool bInhibitIdle)
 
 			if (mainConf.CloseCameraStreamOnPause)
 			{
-				if (mainConf.CameraProvider == CameraProvider_Augmented)
+				if (m_cameraProvider == CameraProvider_Augmented)
 				{
 					m_augmentedCameraManager->DeinitCamera();
 				}
@@ -778,9 +783,9 @@ void PassthroughSystem::OnPostRenderFrame(bool bDidRender, bool bInhibitIdle)
 	}
 }
 
-void PassthroughSystem::CalculateFrameProjection(std::shared_ptr<CameraFrame>& cameraFrame, std::shared_ptr<DepthFrame> depthFrame, const XrCompositionLayerProjection& layer, FrameRenderParameters& renderParams)
+void PassthroughSystem::CalculateFrameProjection(std::shared_ptr<CameraGPUFrame> cameraFrame, std::shared_ptr<DepthFrame> depthFrame, const XrCompositionLayerProjection& layer, FrameRenderParameters& renderParams)
 {
-	if (m_configManager->GetConfig_Main().CameraProvider == CameraProvider_Augmented)
+	if (m_cameraProvider == CameraProvider_Augmented)
 	{
 		m_augmentedCameraManager->UpdateFrameProjectionMatrix(cameraFrame);
 		m_augmentedDepthReconstruction->CalculateCameraProjection(cameraFrame, renderParams);
@@ -789,7 +794,7 @@ void PassthroughSystem::CalculateFrameProjection(std::shared_ptr<CameraFrame>& c
 	{
 		m_cameraManager->UpdateFrameProjectionMatrix(cameraFrame);
 
-		if (m_configManager->GetConfig_Main().ProjectionMode != Projection_RoomView2D)
+		if (m_projectionMode != Projection_RoomView2D)
 		{
 			m_depthReconstruction->CalculateCameraProjection(cameraFrame, renderParams);
 		}
@@ -814,55 +819,55 @@ void PassthroughSystem::CalculateFrameProjection(std::shared_ptr<CameraFrame>& c
 		depthFrame->prevDisparityViewToWorldLeft = m_lastDisparityViewToWorldLeft;
 		depthFrame->prevDisparityViewToWorldRight = m_lastDisparityViewToWorldRight;
 
-		m_lastDispWorldToCameraProjectionLeft = cameraFrame->worldToCameraProjectionLeft;
-		m_lastDispWorldToCameraProjectionRight = cameraFrame->worldToCameraProjectionRight;
+		m_lastDispWorldToCameraProjectionLeft = cameraFrame->WorldToCameraProjectionLeft;
+		m_lastDispWorldToCameraProjectionRight = cameraFrame->WorldToCameraProjectionRight;
 		m_lastDisparityViewToWorldLeft = depthFrame->disparityViewToWorldLeft;
 		m_lastDisparityViewToWorldRight = depthFrame->disparityViewToWorldRight;
 	}
 
-	if (cameraFrame->header.nFrameSequence != m_lastFrameSequence)
+	if (cameraFrame->FrameSequence != m_lastFrameSequence)
 	{
-		cameraFrame->prevWorldToCameraProjectionLeft = m_lastWorldToCameraProjectionLeft;
-		cameraFrame->prevWorldToCameraProjectionRight = m_lastWorldToCameraProjectionRight;
-		cameraFrame->prevCameraFrame_WorldToHMDProjectionLeft = m_lastCameraFrame_WorldToHMDProjectionLeft;
-		cameraFrame->prevCameraFrame_WorldToHMDProjectionRight = m_lastCameraFrame_WorldToHMDProjectionRight;
+		cameraFrame->PrevWorldToCameraProjectionLeft = m_lastWorldToCameraProjectionLeft;
+		cameraFrame->PrevWorldToCameraProjectionRight = m_lastWorldToCameraProjectionRight;
+		cameraFrame->PrevCameraFrame_WorldToHMDProjectionLeft = m_lastCameraFrame_WorldToHMDProjectionLeft;
+		cameraFrame->PrevCameraFrame_WorldToHMDProjectionRight = m_lastCameraFrame_WorldToHMDProjectionRight;
 
-		m_lastCameraFrame_WorldToHMDProjectionLeft = cameraFrame->worldToHMDProjectionLeft;
-		m_lastCameraFrame_WorldToHMDProjectionRight = cameraFrame->worldToHMDProjectionRight;
+		m_lastCameraFrame_WorldToHMDProjectionLeft = cameraFrame->WorldToHMDProjectionLeft;
+		m_lastCameraFrame_WorldToHMDProjectionRight = cameraFrame->WorldToHMDProjectionRight;
 
-		m_lastWorldToCameraProjectionLeft = cameraFrame->worldToCameraProjectionLeft;
-		m_lastWorldToCameraProjectionRight = cameraFrame->worldToCameraProjectionRight;
+		m_lastWorldToCameraProjectionLeft = cameraFrame->WorldToCameraProjectionLeft;
+		m_lastWorldToCameraProjectionRight = cameraFrame->WorldToCameraProjectionRight;
 
-		m_lastFrameSequence = cameraFrame->header.nFrameSequence;
+		m_lastFrameSequence = cameraFrame->FrameSequence;
 
 		cameraFrame->bIsFirstRender = true;
 	}
 	else
 	{
 		// Previous HMD frame was rendered from the same camera frame
-		cameraFrame->prevWorldToCameraProjectionLeft = cameraFrame->worldToCameraProjectionLeft;
-		cameraFrame->prevWorldToCameraProjectionRight = cameraFrame->worldToCameraProjectionRight;
+		cameraFrame->PrevWorldToCameraProjectionLeft = cameraFrame->WorldToCameraProjectionLeft;
+		cameraFrame->PrevWorldToCameraProjectionRight = cameraFrame->WorldToCameraProjectionRight;
 
 		cameraFrame->bIsFirstRender = false;
 	}
 
-	cameraFrame->prevHMDFrame_WorldToHMDProjectionLeft = m_lastHMDFrame_WorldToHMDProjectionLeft;
-	cameraFrame->prevHMDFrame_WorldToHMDProjectionRight = m_lastHMDFrame_WorldToHMDProjectionRight;
+	cameraFrame->PrevHMDFrame_WorldToHMDProjectionLeft = m_lastHMDFrame_WorldToHMDProjectionLeft;
+	cameraFrame->PrevHMDFrame_WorldToHMDProjectionRight = m_lastHMDFrame_WorldToHMDProjectionRight;
 
-	m_lastHMDFrame_WorldToHMDProjectionLeft = cameraFrame->worldToHMDProjectionLeft;
-	m_lastHMDFrame_WorldToHMDProjectionRight = cameraFrame->worldToHMDProjectionRight;
+	m_lastHMDFrame_WorldToHMDProjectionLeft = cameraFrame->WorldToHMDProjectionLeft;
+	m_lastHMDFrame_WorldToHMDProjectionRight = cameraFrame->WorldToHMDProjectionRight;
 }
 
-void PassthroughSystem::CalculateHMDProjectionForEye(const ERenderEye eye, std::shared_ptr<CameraFrame>& cameraFrame, const XrCompositionLayerProjection& layer, FrameRenderParameters& renderParams)
+void PassthroughSystem::CalculateHMDProjectionForEye(const ERenderEye eye, std::shared_ptr<CameraGPUFrame>& cameraFrame, const XrCompositionLayerProjection& layer, FrameRenderParameters& renderParams)
 {
 	Config_Main& mainConf = m_configManager->GetConfig_Main();
 
-	bool bIsStereo = cameraFrame->frameLayout != EStereoFrameLayout::FrameLayout_Mono;
+	bool bIsStereo = cameraFrame->FrameLayout != EStereoFrameLayout::FrameLayout_Mono;
 	uint32_t cameraId = (eye == RenderEye_Right && bIsStereo) ? 1 : 0;
 
 	XrMatrix4x4f hmdWorldToView = GetHMDWorldToViewMatrix(eye, layer, renderParams.ReferenceSpace);
 
-	XrVector3f* projectionOriginWorld = (eye == RenderEye_Left) ? &cameraFrame->projectionOriginWorldLeft : &cameraFrame->projectionOriginWorldRight;
+	XrVector3f* projectionOriginWorld = (eye == RenderEye_Left) ? &cameraFrame->ProjectionOriginWorldLeft : &cameraFrame->ProjectionOriginWorldRight;
 	XrMatrix4x4f hmdViewToWorld;
 	XrMatrix4x4f_Invert(&hmdViewToWorld, &hmdWorldToView);
 	XrVector3f inPos{ 0,0,0 };
@@ -938,7 +943,7 @@ void PassthroughSystem::CalculateHMDProjectionForEye(const ERenderEye eye, std::
 		hmdProjection.m[13] *= -1;
 	}
 
-	XrMatrix4x4f* worldToHMDMatrix = (eye == RenderEye_Left) ? &cameraFrame->worldToHMDProjectionLeft : &cameraFrame->worldToHMDProjectionRight;
+	XrMatrix4x4f* worldToHMDMatrix = (eye == RenderEye_Left) ? &cameraFrame->WorldToHMDProjectionLeft : &cameraFrame->WorldToHMDProjectionRight;
 
 	XrMatrix4x4f_Multiply(worldToHMDMatrix, &hmdProjection, &hmdWorldToView);
 }

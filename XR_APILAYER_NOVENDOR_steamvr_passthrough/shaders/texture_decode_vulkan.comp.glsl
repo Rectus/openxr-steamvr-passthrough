@@ -82,7 +82,7 @@ vec3 YUVToSRGB(in vec3 inYUV)
 {
     // Decoding narrow "TV" range according to ITU-T BT.709.
     vec3 yuvDecoded = (vec3(inYUV.x - (16.0 / 256.0), inYUV.y - 0.5, inYUV.z - 0.5) * 
-        vec3(219.0 / 256.0, 224.0 / 256.0, 224.0 / 256.0));
+        vec3(256.0 / 219.0, 256.0 / 224.0, 256.0 / 224.0));
 
     // Using ITU-T BT.601 (SMPTE 170M) YCrCb factors.
     mat3x3 conversion = mat3x3(

@@ -12,6 +12,7 @@
 #include "lodepng.h"
 #include "pathutil.h"
 #include "perfutil.h"
+#include "frame_queue.h"
 
 
 enum ETrackedCameraFrameType
@@ -55,9 +56,9 @@ public:
 	virtual void UpdateStaticCameraParameters() = 0;
 	virtual float GetGPUFrameRetrievalPerfTime() { return -1.0f; }
 	virtual float GetCPUFrameRetrievalPerfTime() { return -1.0f; }
-	virtual bool GetCameraFrame(std::shared_ptr<CameraFrame>& frame) = 0;
-	virtual bool GetCameraCPUFrame(std::shared_ptr<CameraCPUFrame>& frame) = 0;
-	virtual void UpdateFrameProjectionMatrix(std::shared_ptr<CameraFrame>& frame) = 0;
+	virtual FramePtr<CameraGPUFrame> AcquireCameraGPUFrame() = 0;
+	virtual FramePtr<CameraCPUFrame> AcquireCameraCPUFrame() = 0;
+	virtual void UpdateFrameProjectionMatrix(std::shared_ptr<CameraGPUFrame>& frame) = 0;
 
 	const void DumpCameraFrameTexture(const std::shared_ptr<std::vector<uint8_t>> frameBuffer, const uint32_t width, const uint32_t height, const std::string cameraProvider)
 	{
@@ -88,7 +89,7 @@ class CameraManagerOpenVR : public ICameraManager
 {
 public:
 
-	CameraManagerOpenVR(std::shared_ptr<IPassthroughRenderer> inlineRenderer, std::shared_ptr<AsyncRenderer> asyncRenderer, ERenderAPI renderAPI, ERenderAPI appRenderAPI, std::shared_ptr<ConfigManager> configManager, std::shared_ptr<OpenVRManager> openVRManager);
+	CameraManagerOpenVR(std::shared_ptr<IPassthroughRenderer> inlineRenderer, std::shared_ptr<AsyncRenderer> asyncRenderer, ERenderAPI renderAPI, ERenderAPI appRenderAPI, std::shared_ptr<ConfigManager> configManager, std::shared_ptr<OpenVRManager> openVRManager, EProjectionMode projectionMode);
 	~CameraManagerOpenVR();
 
 	bool InitCamera();
@@ -112,9 +113,9 @@ public:
 	void UpdateStaticCameraParameters();
 	float GetGPUFrameRetrievalPerfTime() { return m_gpuFrameTimer.GetAverageTimeMS(); }
 	float GetCPUFrameRetrievalPerfTime() { return m_cpuFrameTimer.GetAverageTimeMS(); }
-	bool GetCameraFrame(std::shared_ptr<CameraFrame>& frame);
-	bool GetCameraCPUFrame(std::shared_ptr<CameraCPUFrame>& frame);
-	void UpdateFrameProjectionMatrix(std::shared_ptr<CameraFrame>& frame);
+	FramePtr<CameraGPUFrame> AcquireCameraGPUFrame();
+	FramePtr<CameraCPUFrame> AcquireCameraCPUFrame();
+	void UpdateFrameProjectionMatrix(std::shared_ptr<CameraGPUFrame>& frame);
 
 private:
 	void ServeFrames();
@@ -128,19 +129,19 @@ private:
 
 	bool m_bCameraInitialized = false;
 
-	uint32_t m_cameraTextureWidth;
-	uint32_t m_cameraTextureHeight;
-	uint32_t m_cameraFrameBufferSize;
+	uint32_t m_cameraTextureWidth = 0;
+	uint32_t m_cameraTextureHeight = 0;
+	uint32_t m_cameraFrameBufferSize = 0;
 
-	uint32_t m_cameraUndistortedTextureWidth;
-	uint32_t m_cameraUndistortedTextureHeight;
-	uint32_t m_cameraUndistortedFrameBufferSize;
+	uint32_t m_cameraUndistortedTextureWidth = 0;
+	uint32_t m_cameraUndistortedTextureHeight = 0;
+	uint32_t m_cameraUndistortedFrameBufferSize = 0;
 
-	uint32_t m_cameraFrameWidth;
-	uint32_t m_cameraFrameHeight;
+	uint32_t m_cameraFrameWidth = 0;
+	uint32_t m_cameraFrameHeight = 0;
 
-	uint32_t m_cameraUndistortedFrameWidth;
-	uint32_t m_cameraUndistortedFrameHeight;
+	uint32_t m_cameraUndistortedFrameWidth = 0;
+	uint32_t m_cameraUndistortedFrameHeight = 0;
 
 	float m_projectionDistanceFar;
 	bool m_useAlternateProjectionCalc;
@@ -149,6 +150,7 @@ private:
 	std::weak_ptr<AsyncRenderer> m_asyncRenderer;
 	ERenderAPI m_renderAPI;
 	ERenderAPI m_appRenderAPI;
+	EProjectionMode m_projectionMode;
 	std::thread m_serveThread;
 	std::thread m_serveThreadBlockQueue;
 	std::atomic_bool m_bRunThread = true;
@@ -161,13 +163,8 @@ private:
 	bool m_bPoseAvailable = false;
 	std::atomic_bool m_bUseBlockQueue = false;
 
-	std::shared_ptr<CameraFrame> m_renderFrame;
-	std::shared_ptr<CameraFrame> m_servedFrame;
-	std::shared_ptr<CameraFrame> m_underConstructionFrame;
-
-	std::shared_ptr<CameraCPUFrame> m_renderFrameCPU;
-	std::shared_ptr<CameraCPUFrame> m_servedFrameCPU;
-	std::shared_ptr<CameraCPUFrame> m_underConstructionFrameCPU;
+	FrameQueue<CameraGPUFrame> m_gpuFrameQueue;
+	FrameQueue<CameraCPUFrame> m_cpuFrameQueue;
 
 	int m_hmdDeviceId = -1;
 	vr::TrackedCameraHandle_t m_cameraHandle;
@@ -199,7 +196,7 @@ class CameraManagerOpenCV : public ICameraManager
 {
 public:
 
-	CameraManagerOpenCV(std::shared_ptr<IPassthroughRenderer> inlineRenderer, std::shared_ptr<AsyncRenderer> asyncRenderer, ERenderAPI renderAPI, ERenderAPI appRenderAPI, std::shared_ptr<ConfigManager> configManager, std::shared_ptr<OpenVRManager> openVRManager, bool bIsAugmented = false);
+	CameraManagerOpenCV(std::shared_ptr<IPassthroughRenderer> inlineRenderer, std::shared_ptr<AsyncRenderer> asyncRenderer, ERenderAPI renderAPI, ERenderAPI appRenderAPI, std::shared_ptr<ConfigManager> configManager, std::shared_ptr<OpenVRManager> openVRManager, EProjectionMode projectionMode, bool bIsAugmented = false);
 	~CameraManagerOpenCV();
 
 	bool InitCamera();
@@ -223,9 +220,9 @@ public:
 	void UpdateStaticCameraParameters();
 	float GetGPUFrameRetrievalPerfTime() { return m_gpuFrameTimer.GetAverageTimeMS(); }
 	float GetCPUFrameRetrievalPerfTime() { return m_cpuFrameTimer.GetAverageTimeMS(); }
-	bool GetCameraFrame(std::shared_ptr<CameraFrame>& frame);
-	bool GetCameraCPUFrame(std::shared_ptr<CameraCPUFrame>& frame);
-	void UpdateFrameProjectionMatrix(std::shared_ptr<CameraFrame>& frame);
+	FramePtr<CameraGPUFrame> AcquireCameraGPUFrame();
+	FramePtr<CameraCPUFrame> AcquireCameraCPUFrame();
+	void UpdateFrameProjectionMatrix(std::shared_ptr<CameraGPUFrame>& frame);
 
 private:
 	void ServeFrames();
@@ -238,21 +235,21 @@ private:
 	bool m_bIsPaused = false;
 
 	cv::VideoCapture m_videoCapture;
-	uint32_t m_lastFrameTimestamp;
+	uint32_t m_lastFrameTimestamp = 0;
 
-	uint32_t m_cameraTextureWidth;
-	uint32_t m_cameraTextureHeight;
-	uint32_t m_cameraFrameBufferSize;
+	uint32_t m_cameraTextureWidth = 0;
+	uint32_t m_cameraTextureHeight = 0;
+	uint32_t m_cameraFrameBufferSize = 0;
 
-	uint32_t m_cameraUndistortedTextureWidth;
-	uint32_t m_cameraUndistortedTextureHeight;
-	uint32_t m_cameraUndistortedFrameBufferSize;
+	uint32_t m_cameraUndistortedTextureWidth = 0;
+	uint32_t m_cameraUndistortedTextureHeight = 0;
+	uint32_t m_cameraUndistortedFrameBufferSize = 0;
 
-	uint32_t m_cameraFrameWidth;
-	uint32_t m_cameraFrameHeight;
+	uint32_t m_cameraFrameWidth = 0;
+	uint32_t m_cameraFrameHeight = 0;
 
-	uint32_t m_cameraUndistortedFrameWidth;
-	uint32_t m_cameraUndistortedFrameHeight;
+	uint32_t m_cameraUndistortedFrameWidth = 0;
+	uint32_t m_cameraUndistortedFrameHeight = 0;
 
 	float m_projectionDistanceFar;
 	bool m_useAlternateProjectionCalc;
@@ -261,18 +258,14 @@ private:
 	std::weak_ptr<AsyncRenderer> m_asyncRenderer;
 	ERenderAPI m_renderAPI;
 	ERenderAPI m_appRenderAPI;
+	EProjectionMode m_projectionMode;
 	std::thread m_serveThread;
 	std::atomic_bool m_bRunThread = true;
 	std::mutex m_serveMutex;
 	std::mutex m_serveMutexCPU;
 
-	std::shared_ptr<CameraFrame> m_renderFrame;
-	std::shared_ptr<CameraFrame> m_servedFrame;
-	std::shared_ptr<CameraFrame> m_underConstructionFrame;
-
-	std::shared_ptr<CameraCPUFrame> m_renderFrameCPU;
-	std::shared_ptr<CameraCPUFrame> m_servedFrameCPU;
-	std::shared_ptr<CameraCPUFrame> m_underConstructionFrameCPU;
+	FrameQueue<CameraGPUFrame> m_gpuFrameQueue;
+	FrameQueue<CameraCPUFrame> m_cpuFrameQueue;
 
 	int m_hmdDeviceId = -1;
 	vr::TrackedCameraHandle_t m_cameraHandle;

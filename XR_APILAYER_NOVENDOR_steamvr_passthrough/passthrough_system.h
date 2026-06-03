@@ -36,8 +36,8 @@ public:
 	void OnPostRenderFrame(bool bDidRender, bool bInhibitIdle);
 
 private:
-	void CalculateFrameProjection(std::shared_ptr<CameraFrame>& cameraFrame, std::shared_ptr<DepthFrame> depthFrame, const XrCompositionLayerProjection& layer, FrameRenderParameters& renderParams);
-	void CalculateHMDProjectionForEye(const ERenderEye eye, std::shared_ptr<CameraFrame>& cameraFrame, const XrCompositionLayerProjection& layer, FrameRenderParameters& renderParams);
+	void CalculateFrameProjection(std::shared_ptr<CameraGPUFrame> cameraFrame, std::shared_ptr<DepthFrame> depthFrame, const XrCompositionLayerProjection& layer, FrameRenderParameters& renderParams);
+	void CalculateHMDProjectionForEye(const ERenderEye eye, std::shared_ptr<CameraGPUFrame>& cameraFrame, const XrCompositionLayerProjection& layer, FrameRenderParameters& renderParams);
 	XrMatrix4x4f GetHMDWorldToViewMatrix(const ERenderEye eye, const XrCompositionLayerProjection& layer, const XrReferenceSpaceCreateInfo& refSpaceInfo);
 	void UpdateRenderModels(const uint64_t cameraFrameTimestamp);
 
@@ -67,6 +67,8 @@ private:
 	bool m_bDepthSupportedByRenderer = false;
 	ExtensionData m_extensionData{};
 
+	ECameraProvider m_cameraProvider = CameraProvider_None;
+	EProjectionMode m_projectionMode = Projection_RoomView2D;
 	ERenderAPI m_renderAPI = RenderAPI_Direct3D11;
 	ERenderAPI m_appRenderAPI = RenderAPI_Direct3D11;
 

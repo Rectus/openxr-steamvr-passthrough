@@ -1648,7 +1648,7 @@ void PassthroughRendererVulkan::UpdateDescriptorSets(VkCommandBuffer commandBuff
 
 static bool g_bVulkanStereoErrorShown = false;
 
-void PassthroughRendererVulkan::RenderPassthroughFrame(const XrCompositionLayerProjection* layer, std::shared_ptr<CameraFrame> frame, std::shared_ptr<CameraCPUFrame> cpuFrame, FrameRenderParameters& renderParams, std::shared_ptr<DepthFrame> depthFrame, UVDistortionParameters& distortionParams)
+void PassthroughRendererVulkan::RenderPassthroughFrame(const XrCompositionLayerProjection* layer, std::shared_ptr<CameraGPUFrame> frame, std::shared_ptr<CameraCPUFrame> cpuFrame, FrameRenderParameters& renderParams, std::shared_ptr<DepthFrame> depthFrame, UVDistortionParameters& distortionParams)
 {
 
 	Config_Main& mainConf = m_configManager->GetConfig_Main();
@@ -1658,7 +1658,7 @@ void PassthroughRendererVulkan::RenderPassthroughFrame(const XrCompositionLayerP
 	beginInfo.flags = 0;
 
 	// TODO: Can't support stereo in Vulkan as long as SteamVR hangs when reading the camera frame buffer under it.
-	if (mainConf.ProjectionMode == Projection_StereoReconstruction)
+	if (renderParams.ProjectionMode == Projection_StereoReconstruction)
 	{
 		if (!g_bVulkanStereoErrorShown)
 		{
@@ -1692,9 +1692,9 @@ void PassthroughRendererVulkan::RenderPassthroughFrame(const XrCompositionLayerP
 		}
 	}
 
-	if (!mainConf.DebugTexture != DebugTexture_None && frame->frameTextureResource != nullptr)
+	if (!mainConf.DebugTexture != DebugTexture_None && frame->FrameTextureResource != nullptr)
 	{
-		if (!UpdateCameraFrameResource(m_commandBuffer[m_frameIndex], m_frameIndex, frame->frameTextureResource))
+		if (!UpdateCameraFrameResource(m_commandBuffer[m_frameIndex], m_frameIndex, frame->FrameTextureResource))
 		{
 			m_frameIndex = (m_frameIndex + 1) % NUM_SWAPCHAINS;
 			return;
@@ -1709,7 +1709,7 @@ void PassthroughRendererVulkan::RenderPassthroughFrame(const XrCompositionLayerP
 	{
 		std::shared_lock readLock(distortionParams.readWriteMutex);
 
-		if (mainConf.ProjectionMode != Projection_RoomView2D &&
+		if (renderParams.ProjectionMode != Projection_RoomView2D &&
 			(!m_uvDistortionMap || m_fovScale != distortionParams.fovScale))
 		{
 			m_fovScale = distortionParams.fovScale;
@@ -1719,10 +1719,10 @@ void PassthroughRendererVulkan::RenderPassthroughFrame(const XrCompositionLayerP
 
 	{
 		VSPassConstantBuffer vsPassBuffer = {};
-		vsPassBuffer.worldToCameraFrameProjectionLeft = frame->worldToCameraProjectionLeft;
-		vsPassBuffer.worldToCameraFrameProjectionRight = frame->worldToCameraProjectionRight;
-		vsPassBuffer.worldToPrevCameraFrameProjectionLeft = frame->prevWorldToCameraProjectionLeft;
-		vsPassBuffer.worldToPrevCameraFrameProjectionRight = frame->prevWorldToCameraProjectionRight;
+		vsPassBuffer.worldToCameraFrameProjectionLeft = frame->WorldToCameraProjectionLeft;
+		vsPassBuffer.worldToCameraFrameProjectionRight = frame->WorldToCameraProjectionRight;
+		vsPassBuffer.worldToPrevCameraFrameProjectionLeft = frame->PrevWorldToCameraProjectionLeft;
+		vsPassBuffer.worldToPrevCameraFrameProjectionRight = frame->PrevWorldToCameraProjectionRight;
 
 		memcpy(m_vsPassConstantBufferMappings[m_frameIndex], &vsPassBuffer, sizeof(VSPassConstantBuffer));
 	}
@@ -1740,7 +1740,7 @@ void PassthroughRendererVulkan::RenderPassthroughFrame(const XrCompositionLayerP
 		psPassBuffer.bDoColorAdjustment = !frame->bColorsPreadjusted && (fabsf(mainConf.Brightness) > 0.01f || fabsf(mainConf.Contrast - 1.0f) > 0.01f || fabsf(mainConf.Saturation - 1.0f) > 0.01f || fabsf(mainConf.GammaCorrection - 1.0f) > 0.01f);
 		psPassBuffer.bDebugDepth = mainConf.DebugSource == DebugSource_OutputDepth;
 		psPassBuffer.debugOverlay = mainConf.DebugOverlay;
-		psPassBuffer.bUseFisheyeCorrection = mainConf.ProjectionMode != Projection_RoomView2D;
+		psPassBuffer.bUseFisheyeCorrection = renderParams.ProjectionMode != Projection_RoomView2D;
 		psPassBuffer.bUseDepthCutoffRange = renderParams.bEnableDepthRange;
 		psPassBuffer.bClampCameraFrame = m_configManager->GetConfig_Camera().ClampCameraFrame;
 
@@ -1785,7 +1785,7 @@ void PassthroughRendererVulkan::RenderPassthroughFrame(const XrCompositionLayerP
 }
 
 
-void PassthroughRendererVulkan::RenderPassthroughView(const ERenderEye eye, const int32_t swapchainIndex, const XrCompositionLayerProjection* layer, std::shared_ptr<CameraFrame> frame, EPassthroughBlendMode blendMode)
+void PassthroughRendererVulkan::RenderPassthroughView(const ERenderEye eye, const int32_t swapchainIndex, const XrCompositionLayerProjection* layer, std::shared_ptr<CameraGPUFrame> frame, EPassthroughBlendMode blendMode)
 {
 	if (swapchainIndex < 0) { return; }
 
@@ -1824,9 +1824,9 @@ void PassthroughRendererVulkan::RenderPassthroughView(const ERenderEye eye, cons
 		Config_Main& mainConf = m_configManager->GetConfig_Main();
 
 		VSViewConstantBuffer vsViewBuffer = {};
-		vsViewBuffer.worldToHMDProjection = (eye == RenderEye_Left) ? frame->worldToHMDProjectionLeft : frame->worldToHMDProjectionRight;
+		vsViewBuffer.worldToHMDProjection = (eye == RenderEye_Left) ? frame->WorldToHMDProjectionLeft : frame->WorldToHMDProjectionRight;
 		vsViewBuffer.disparityUVBounds = GetFrameUVBounds(eye, FrameLayout_StereoHorizontal);
-		vsViewBuffer.projectionOriginWorld = (eye == RenderEye_Left) ? frame->projectionOriginWorldLeft : frame->projectionOriginWorldRight;
+		vsViewBuffer.projectionOriginWorld = (eye == RenderEye_Left) ? frame->ProjectionOriginWorldLeft : frame->ProjectionOriginWorldRight;
 		vsViewBuffer.projectionDistance = mainConf.ProjectionDistanceFar;
 		vsViewBuffer.floorHeightOffset = mainConf.FloorHeightOffset;
 		vsViewBuffer.cameraViewIndex = (eye == RenderEye_Left) ? 0 : 1;
@@ -1834,7 +1834,7 @@ void PassthroughRendererVulkan::RenderPassthroughView(const ERenderEye eye, cons
 		memcpy(m_vsViewConstantBufferMappings[bufferIndex], &vsViewBuffer, sizeof(VSViewConstantBuffer));
 
 		PSViewConstantBuffer psViewBuffer = {};
-		psViewBuffer.frameUVBounds = GetFrameUVBounds(eye, frame->frameLayout);
+		psViewBuffer.frameUVBounds = GetFrameUVBounds(eye, frame->FrameLayout);
 		psViewBuffer.prepassUVBounds = psViewBuffer.frameUVBounds;
 		psViewBuffer.rtArrayIndex = layer->views[viewIndex].subImage.imageArrayIndex;
 		psViewBuffer.bDoCutout = false;
@@ -1892,7 +1892,7 @@ void PassthroughRendererVulkan::RenderPassthroughView(const ERenderEye eye, cons
 }
 
 
-void PassthroughRendererVulkan::RenderMaskedPrepassView(const ERenderEye eye, const int32_t swapchainIndex, const XrCompositionLayerProjection* layer, std::shared_ptr<CameraFrame> frame)
+void PassthroughRendererVulkan::RenderMaskedPrepassView(const ERenderEye eye, const int32_t swapchainIndex, const XrCompositionLayerProjection* layer, std::shared_ptr<CameraGPUFrame> frame)
 {
 	if (swapchainIndex < 0) { return; }
 
@@ -1932,9 +1932,9 @@ void PassthroughRendererVulkan::RenderMaskedPrepassView(const ERenderEye eye, co
 	Config_Main& mainConf = m_configManager->GetConfig_Main();
 
 	VSViewConstantBuffer vsViewBuffer = {};
-	vsViewBuffer.worldToHMDProjection = (eye == RenderEye_Left) ? frame->worldToHMDProjectionLeft : frame->worldToHMDProjectionRight;
+	vsViewBuffer.worldToHMDProjection = (eye == RenderEye_Left) ? frame->WorldToHMDProjectionLeft : frame->WorldToHMDProjectionRight;
 	vsViewBuffer.disparityUVBounds = GetFrameUVBounds(eye, FrameLayout_StereoHorizontal);
-	vsViewBuffer.projectionOriginWorld = (eye == RenderEye_Left) ? frame->projectionOriginWorldLeft : frame->projectionOriginWorldRight;
+	vsViewBuffer.projectionOriginWorld = (eye == RenderEye_Left) ? frame->ProjectionOriginWorldLeft : frame->ProjectionOriginWorldRight;
 	vsViewBuffer.projectionDistance = mainConf.ProjectionDistanceFar;
 	vsViewBuffer.floorHeightOffset = mainConf.FloorHeightOffset;
 	vsViewBuffer.cameraViewIndex = (eye == RenderEye_Left) ? 0 : 1;
@@ -1942,7 +1942,7 @@ void PassthroughRendererVulkan::RenderMaskedPrepassView(const ERenderEye eye, co
 	memcpy(m_vsViewConstantBufferMappings[bufferIndex], &vsViewBuffer, sizeof(VSViewConstantBuffer));
 
 	PSViewConstantBuffer psViewBuffer = {};
-	psViewBuffer.frameUVBounds = GetFrameUVBounds(eye, frame->frameLayout);
+	psViewBuffer.frameUVBounds = GetFrameUVBounds(eye, frame->FrameLayout);
 	psViewBuffer.rtArrayIndex = layer->views[viewIndex].subImage.imageArrayIndex;
 	psViewBuffer.bDoCutout = false;
 	psViewBuffer.bPremultiplyAlpha = false;

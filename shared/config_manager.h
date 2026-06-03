@@ -14,13 +14,6 @@ enum ECameraDistortionMode
 	CameraDistortionMode_Fisheye = 2
 };
 
-enum EProjectionMode
-{
-	Projection_RoomView2D = 0,
-	Projection_Custom2D = 1,
-	Projection_StereoReconstruction = 2
-};
-
 enum ESelectedDebugSource
 {
 	DebugSource_None = 0,

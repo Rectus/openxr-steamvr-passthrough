@@ -10,11 +10,12 @@
 
 
 
-CameraManagerOpenCV::CameraManagerOpenCV(std::shared_ptr<IPassthroughRenderer> inlineRenderer, std::shared_ptr<AsyncRenderer> asyncRenderer, ERenderAPI renderAPI, ERenderAPI appRenderAPI, std::shared_ptr<ConfigManager> configManager, std::shared_ptr<OpenVRManager> openVRManager, bool bIsAugmented)
+CameraManagerOpenCV::CameraManagerOpenCV(std::shared_ptr<IPassthroughRenderer> inlineRenderer, std::shared_ptr<AsyncRenderer> asyncRenderer, ERenderAPI renderAPI, ERenderAPI appRenderAPI, std::shared_ptr<ConfigManager> configManager, std::shared_ptr<OpenVRManager> openVRManager, EProjectionMode projectionMode, bool bIsAugmented)
     : m_inlineRenderer(inlineRenderer)
     , m_asyncRenderer(asyncRenderer)
     , m_renderAPI(renderAPI)
     , m_appRenderAPI(appRenderAPI)
+    , m_projectionMode(projectionMode)
     , m_configManager(configManager)
     , m_openVRManager(openVRManager)
     , m_frameLayout(EStereoFrameLayout::FrameLayout_Mono)
@@ -22,14 +23,9 @@ CameraManagerOpenCV::CameraManagerOpenCV(std::shared_ptr<IPassthroughRenderer> i
     , m_useAlternateProjectionCalc(false)
     , m_videoCapture()
     , m_bIsAugmented(bIsAugmented)
+    , m_gpuFrameQueue(5)
+    , m_cpuFrameQueue(5)
 {
-    m_renderFrame = std::make_shared<CameraFrame>();
-    m_servedFrame = std::make_shared<CameraFrame>();
-    m_underConstructionFrame = std::make_shared<CameraFrame>();
-
-    m_renderFrameCPU = std::make_shared<CameraCPUFrame>();
-    m_servedFrameCPU = std::make_shared<CameraCPUFrame>();
-    m_underConstructionFrameCPU = std::make_shared<CameraCPUFrame>();
 }
 
 CameraManagerOpenCV::~CameraManagerOpenCV()
@@ -304,49 +300,18 @@ void CameraManagerOpenCV::UpdateStaticCameraParameters()
     }
 }
 
-bool CameraManagerOpenCV::GetCameraFrame(std::shared_ptr<CameraFrame>& frame)
+FramePtr<CameraGPUFrame> CameraManagerOpenCV::AcquireCameraGPUFrame()
 {
-    if (!m_bCameraInitialized) { return false; }
+    if (!m_bCameraInitialized) { return FramePtr<CameraGPUFrame>(); }
 
-    std::unique_lock<std::mutex> lock(m_serveMutex, std::try_to_lock);
-    if (lock.owns_lock() && m_servedFrame->bIsValid)
-    {
-        m_renderFrame->bIsValid = false;
-        m_renderFrame->frameTextureResource = nullptr;
-        m_renderFrame.swap(m_servedFrame);
-
-        frame = m_renderFrame;
-        return true;
-    }
-    else if (m_renderFrame->bIsValid)
-    {
-        frame = m_renderFrame;
-        return true;
-    }
-
-    return false;
+    return m_gpuFrameQueue.AcquireRead();
 }
 
-bool CameraManagerOpenCV::GetCameraCPUFrame(std::shared_ptr<CameraCPUFrame>& frame)
+FramePtr<CameraCPUFrame> CameraManagerOpenCV::AcquireCameraCPUFrame()
 {
-    if (!m_bCameraInitialized) { return false; }
+    if (!m_bCameraInitialized) { return FramePtr<CameraCPUFrame>(); }
 
-    std::unique_lock<std::mutex> lock(m_serveMutexCPU, std::try_to_lock);
-    if (lock.owns_lock() && m_servedFrameCPU->bIsValid)
-    {
-        m_renderFrameCPU->bIsValid = false;
-        m_renderFrameCPU.swap(m_servedFrameCPU);
-
-        frame = m_renderFrameCPU;
-        return true;
-    }
-    else if (m_renderFrameCPU->bIsValid)
-    {
-        frame = m_renderFrameCPU;
-        return true;
-    }
-
-    return false;
+    return m_cpuFrameQueue.AcquireRead();
 }
 
 void CameraManagerOpenCV::ServeFrames()
@@ -370,10 +335,6 @@ void CameraManagerOpenCV::ServeFrames()
             std::this_thread::sleep_for(POSTFRAME_SLEEP_INTERVAL);
             continue; 
         }
-
-        // Wait for the old frame struct to be available in case someone is still reading from it.
-        std::unique_lock writeLock(m_underConstructionFrame->readWriteMutex);
-        std::unique_lock cpuFrameWriteLock(m_underConstructionFrameCPU->ReadWriteMutex);
 
         m_cpuFrameTimer.StartPerfTimer();
 
@@ -400,46 +361,60 @@ void CameraManagerOpenCV::ServeFrames()
             continue;
         }
 
+        FramePtr<CameraGPUFrame> gpuFrame = m_gpuFrameQueue.AcquireWrite();
+        if (!gpuFrame.HasFrame())
+        {
+            continue;
+        }
+
+        FramePtr<CameraCPUFrame> cpuFrame = m_cpuFrameQueue.AcquireWrite();
+        if (!cpuFrame.HasFrame())
+        {
+            continue;
+        }
+
         // Frame latency is approximated from when grab() returns.
         exposureTime = GetCurrentTimeSytemTicks();
 
         vrSystem->GetDeviceToAbsoluteTrackingPose(vr::TrackingUniverseStanding, -cameraConf.FrameDelayOffset, trackedDevicePoseArray, vr::k_unMaxTrackedDeviceCount);
 
         uint64_t delayOffsetTicks = (uint64_t)(cameraConf.FrameDelayOffset * tickFreq);
-        m_underConstructionFrame->header.ulFrameExposureTime = (exposureTime - delayOffsetTicks);
+        gpuFrame->FrameExposureTimestamp = (exposureTime - delayOffsetTicks);
 
         if (!m_videoCapture.retrieve(frameBuffer))
         {
             g_logger->error("Failed to retrieve VideoCapture!");
-            std::this_thread::sleep_for(FRAME_POLL_INTERVAL);
             continue;
         }
 
         if (!m_bRunThread) { return; }
 
-        if (m_underConstructionFrameCPU->FrameBuffer.get() == nullptr)
+        if (cpuFrame->FrameBuffer.get() == nullptr)
         {
-            m_underConstructionFrameCPU->FrameBuffer = std::make_shared<std::vector<uint8_t>>(m_cameraFrameBufferSize);
+            cpuFrame->FrameBuffer = std::make_shared<std::vector<uint8_t>>(m_cameraFrameBufferSize);
         }
 
-        cv::Mat paddedBuffer = cv::Mat(frameBuffer.rows, frameBuffer.cols, CV_8UC4, (void*)m_underConstructionFrameCPU->FrameBuffer->data());
+        cv::Mat paddedBuffer = cv::Mat(frameBuffer.rows, frameBuffer.cols, CV_8UC4, (void*)cpuFrame->FrameBuffer->data());
 
         int from_to[] = { 0,2, 1,1, 2,0, -1,3 };
         cv::mixChannels(&frameBuffer, 1, &paddedBuffer, 1, from_to, frameBuffer.channels());
 
+        //m_gpuFrameTimer.StartPerfTimer();
+        //m_gpuFrameTimer.EndPerfTimer();
+
         if (m_configManager->CheckFrameTextureDumpPending())
         {
-            DumpCameraFrameTexture(m_underConstructionFrameCPU->FrameBuffer, m_cameraTextureWidth, m_cameraTextureHeight, "OpenCV");
+            DumpCameraFrameTexture(cpuFrame->FrameBuffer, m_cameraTextureWidth, m_cameraTextureHeight, "OpenCV");
         }
 
         bHasFrame = true;
  
-        m_underConstructionFrame->header.nFrameSequence = ++m_lastFrameTimestamp;
-        m_underConstructionFrame->header.nWidth = m_cameraTextureWidth;
-        m_underConstructionFrame->header.nHeight = m_cameraTextureHeight;
-        m_underConstructionFrame->header.nBytesPerPixel = 4;
-
+        gpuFrame->FrameSequence = ++m_lastFrameTimestamp;
+        gpuFrame->FrameSize[0] = m_cameraTextureWidth;
+        gpuFrame->FrameSize[1] = m_cameraTextureHeight;
         
+        XrMatrix4x4f trackedDevicePose;
+
         if (cameraConf.UseTrackedDevice)
         {
             int trackedDeviceIndex = 0;
@@ -458,7 +433,7 @@ void CameraManagerOpenCV::ServeFrames()
                 }
 
             }
-            m_underConstructionFrame->header.trackedDevicePose = trackedDevicePoseArray[trackedDeviceIndex];
+            trackedDevicePose = ToXRMatrix4x4(trackedDevicePoseArray[trackedDeviceIndex].mDeviceToAbsoluteTracking);
         }
         else
         {
@@ -466,14 +441,13 @@ void CameraManagerOpenCV::ServeFrames()
             pose.m[0][0] = 1.0;
             pose.m[1][1] = 1.0;
             pose.m[2][2] = 1.0;
-            m_underConstructionFrame->header.trackedDevicePose.mDeviceToAbsoluteTracking = pose;
+            trackedDevicePose = ToXRMatrix4x4(pose);
         }
 
-        m_underConstructionFrame->bIsValid = true;
-        m_underConstructionFrame->frameLayout = m_frameLayout;
+        gpuFrame->bIsValid = true;
+        gpuFrame->FrameLayout = m_frameLayout;
+        gpuFrame->bisRectifiedFrame = false;
 
-
-        XrMatrix4x4f trackedDevicePose = ToXRMatrix4x4(m_underConstructionFrame->header.trackedDevicePose.mDeviceToAbsoluteTracking);
 
         XrMatrix4x4f camera0ToWorld, camera1ToWorld, camera0Pose, camera1Pose, transMatrix, rotMatrix, temp;
 
@@ -487,8 +461,8 @@ void CameraManagerOpenCV::ServeFrames()
         {
             XrMatrix4x4f_Multiply(&camera0ToWorld, &trackedDevicePose, &camera0Pose);
 
-            m_underConstructionFrame->cameraViewToWorldLeft = camera0ToWorld;
-            m_underConstructionFrame->cameraViewToWorldRight = camera0ToWorld;
+            gpuFrame->CameraViewToWorldLeft = camera0ToWorld;
+            gpuFrame->CameraViewToWorldRight = camera0ToWorld;
         }
         else
         {
@@ -501,36 +475,29 @@ void CameraManagerOpenCV::ServeFrames()
             XrMatrix4x4f_Multiply(&camera0ToWorld, &trackedDevicePose, &camera0Pose);
             XrMatrix4x4f_Multiply(&camera1ToWorld, &trackedDevicePose, &camera1Pose);
 
-            m_underConstructionFrame->cameraViewToWorldLeft = camera0ToWorld;
-            m_underConstructionFrame->cameraViewToWorldRight = camera1ToWorld;
+            gpuFrame->CameraViewToWorldLeft = camera0ToWorld;
+            gpuFrame->CameraViewToWorldRight = camera1ToWorld;
         }
 
-        m_underConstructionFrameCPU->bIsValid = true;
-        m_underConstructionFrameCPU->bIsRaw = false;
-        m_underConstructionFrameCPU->FrameExposureTimestamp = m_underConstructionFrame->header.ulFrameExposureTime;
-        m_underConstructionFrameCPU->FrameLayout = m_frameLayout;
-        m_underConstructionFrameCPU->FrameSequence = m_underConstructionFrame->header.nFrameSequence;
-        m_underConstructionFrameCPU->FrameSize[0] = m_cameraTextureWidth;
-        m_underConstructionFrameCPU->FrameSize[1] = m_cameraTextureHeight;
-        m_underConstructionFrame->cameraViewToWorldLeft = m_underConstructionFrame->cameraViewToWorldLeft;
-        m_underConstructionFrame->cameraViewToWorldRight = m_underConstructionFrame->cameraViewToWorldRight;
+        cpuFrame->bIsValid = true;
+        cpuFrame->bIsRaw = false;
+        cpuFrame->FrameExposureTimestamp = gpuFrame->FrameExposureTimestamp;
+        cpuFrame->FrameLayout = m_frameLayout;
+        cpuFrame->FrameSequence = gpuFrame->FrameSequence;
+        cpuFrame->FrameSize[0] = m_cameraTextureWidth;
+        cpuFrame->FrameSize[1] = m_cameraTextureHeight;
+        cpuFrame->CameraViewToWorldLeft = gpuFrame->CameraViewToWorldLeft;
+        cpuFrame->CameraViewToWorldRight = gpuFrame->CameraViewToWorldRight;
    
-        {
-            std::lock_guard<std::mutex> lock(m_serveMutexCPU);
-            m_servedFrameCPU.swap(m_underConstructionFrameCPU);
-        }
-
-        {
-            std::lock_guard<std::mutex> lock(m_serveMutex);
-            m_servedFrame.swap(m_underConstructionFrame);
-        }
+        gpuFrame.CommitWrite();
+        cpuFrame.CommitWrite();
 
         m_cpuFrameTimer.EndPerfTimer();
     }
 }
 
 
-void CameraManagerOpenCV::UpdateFrameProjectionMatrix(std::shared_ptr<CameraFrame>& frame)
+void CameraManagerOpenCV::UpdateFrameProjectionMatrix(std::shared_ptr<CameraGPUFrame>& frame)
 {
     bool bIsStereo = m_frameLayout != EStereoFrameLayout::FrameLayout_Mono;
 

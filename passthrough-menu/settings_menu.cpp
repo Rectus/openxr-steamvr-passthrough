@@ -798,21 +798,33 @@ if (bIsActiveTab) { ImGui::PopStyleColor(1); bIsActiveTab = false; }
 			if (!bAllowRoomView) { ImGui::BeginDisabled(); }
 			if (ImGui::RadioButton("2D Room View", mainConfig.ProjectionMode == Projection_RoomView2D))
 			{
-				mainConfig.ProjectionMode = Projection_RoomView2D;
+				if (mainConfig.ProjectionMode != Projection_RoomView2D)
+				{
+					mainConfig.ProjectionMode = Projection_RoomView2D;
+					rendererResetPending = true;
+				}
 			}
 			if (!bAllowRoomView) { ImGui::EndDisabled(); }
 
 			if (!bAllowCustom2D) { ImGui::BeginDisabled(); }
 			if (ImGui::RadioButton("2D Custom", mainConfig.ProjectionMode == Projection_Custom2D))
 			{
-				mainConfig.ProjectionMode = Projection_Custom2D;
+				if (mainConfig.ProjectionMode != Projection_Custom2D)
+				{
+					mainConfig.ProjectionMode = Projection_Custom2D;
+					rendererResetPending = true;
+				}
 			}
 			if (!bAllowCustom2D) { ImGui::EndDisabled(); }
 
 			if (!bAllowCustom3D) { ImGui::BeginDisabled(); }
 			if (ImGui::RadioButton("3D Stereo", mainConfig.ProjectionMode == Projection_StereoReconstruction))
 			{
-				mainConfig.ProjectionMode = Projection_StereoReconstruction;
+				if (mainConfig.ProjectionMode != Projection_StereoReconstruction)
+				{
+					mainConfig.ProjectionMode = Projection_StereoReconstruction;
+					rendererResetPending = true;
+				}
 			}
 			if (!bAllowCustom3D) { ImGui::EndDisabled(); }
 
@@ -1003,7 +1015,11 @@ if (bIsActiveTab) { ImGui::PopStyleColor(1); bIsActiveTab = false; }
 
 			if (ImGui::RadioButton("2D Room View", mainConfig.ProjectionMode == Projection_RoomView2D))
 			{
-				mainConfig.ProjectionMode = Projection_RoomView2D;
+				if (mainConfig.ProjectionMode != Projection_RoomView2D)
+				{
+					mainConfig.ProjectionMode = Projection_RoomView2D;
+					rendererResetPending = true;
+				}
 			}
 			TextDescription("Cylindrical projection with floor. Matches the projection in the SteamVR Room View 2D mode.");
 
@@ -1013,7 +1029,11 @@ if (bIsActiveTab) { ImGui::PopStyleColor(1); bIsActiveTab = false; }
 
 			if (ImGui::RadioButton("2D Custom", mainConfig.ProjectionMode == Projection_Custom2D))
 			{
-				mainConfig.ProjectionMode = Projection_Custom2D;
+				if (mainConfig.ProjectionMode != Projection_Custom2D)
+				{
+					mainConfig.ProjectionMode = Projection_Custom2D;
+					rendererResetPending = true;
+				}
 			}
 			TextDescription("Cylindrical projection with floor. Custom distortion correction and projection calculation.");
 
@@ -1023,7 +1043,11 @@ if (bIsActiveTab) { ImGui::PopStyleColor(1); bIsActiveTab = false; }
 
 			if (ImGui::RadioButton("3D Stereo", mainConfig.ProjectionMode == Projection_StereoReconstruction))
 			{
-				mainConfig.ProjectionMode = Projection_StereoReconstruction;
+				if (mainConfig.ProjectionMode != Projection_StereoReconstruction)
+				{
+					mainConfig.ProjectionMode = Projection_StereoReconstruction;
+					rendererResetPending = true;
+				}
 			}
 			TextDescriptionSpaced("Full depth estimation.");
 
@@ -1722,10 +1746,10 @@ if (bIsActiveTab) { ImGui::PopStyleColor(1); bIsActiveTab = false; }
 			ImGui::Checkbox("Use OpenVR Block Queue Interface for Depth Frames", &cameraConfig.OpenVR_UseBlockQueueForDepth);
 			TextDescription("Uses a lower latency interface for depth calculation. Disable if there are block queue related errors in the log.");
 
-			ImGui::BeginDisabled(!cameraConfig.OpenVR_UseBlockQueueForDepth);
+			BeginSoftDisabled(!cameraConfig.OpenVR_UseBlockQueueForDepth);
 			ImGui::Checkbox("Use OpenVR Block Queue Interface for Camera Frames", &cameraConfig.OpenVR_UseBlockQueueForColor);
 			TextDescription("Uses a lower latency interface for color frames. Disable if there are block queue related errors in the log.");
-			ImGui::EndDisabled();
+			EndSoftDisabled(!cameraConfig.OpenVR_UseBlockQueueForDepth);
 
 			IMGUI_BIG_SPACING;
 

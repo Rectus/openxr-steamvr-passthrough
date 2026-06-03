@@ -1134,7 +1134,7 @@ void VulkanCopyImages(VkCommandBuffer commandBuffer, std::vector<ImageCopyData>&
 
 
 
-void PassthroughRendererDX11Interop::RenderPassthroughFrame(const XrCompositionLayerProjection* layer, std::shared_ptr<CameraFrame> frame, std::shared_ptr<CameraCPUFrame> cpuFrame, FrameRenderParameters& renderParams, std::shared_ptr<DepthFrame> depthFrame, UVDistortionParameters& distortionParams)
+void PassthroughRendererDX11Interop::RenderPassthroughFrame(const XrCompositionLayerProjection* layer, std::shared_ptr<CameraGPUFrame> frame, std::shared_ptr<CameraCPUFrame> cpuFrame, FrameRenderParameters& renderParams, std::shared_ptr<DepthFrame> depthFrame, UVDistortionParameters& distortionParams)
 {
 	DX11ViewData& viewDataLeft = m_viewData[0][renderParams.LeftFrameIndex];
 	DX11ViewData& viewDataRight = m_viewData[1][renderParams.RightFrameIndex];

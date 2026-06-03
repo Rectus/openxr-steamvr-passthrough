@@ -34,6 +34,13 @@ enum ECameraProvider
 	CameraProvider_Augmented = 2
 };
 
+enum EProjectionMode
+{
+	Projection_RoomView2D = 0,
+	Projection_Custom2D = 1,
+	Projection_StereoReconstruction = 2
+};
+
 enum EStereoFrameLayout
 {
 	FrameLayout_Mono = 0,

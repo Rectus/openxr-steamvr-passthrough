@@ -7,26 +7,20 @@
 
 
 
-CameraManagerOpenVR::CameraManagerOpenVR(std::shared_ptr<IPassthroughRenderer> inlineRenderer, std::shared_ptr<AsyncRenderer> asyncRenderer, ERenderAPI renderAPI, ERenderAPI appRenderAPI, std::shared_ptr<ConfigManager> configManager, std::shared_ptr<OpenVRManager> openVRManager)
+CameraManagerOpenVR::CameraManagerOpenVR(std::shared_ptr<IPassthroughRenderer> inlineRenderer, std::shared_ptr<AsyncRenderer> asyncRenderer, ERenderAPI renderAPI, ERenderAPI appRenderAPI, std::shared_ptr<ConfigManager> configManager, std::shared_ptr<OpenVRManager> openVRManager, EProjectionMode projectionMode)
     : m_inlineRenderer(inlineRenderer)
     , m_asyncRenderer(asyncRenderer)
     , m_renderAPI(renderAPI)
     , m_appRenderAPI(appRenderAPI)
+    , m_projectionMode(projectionMode)
     , m_configManager(configManager)
     , m_openVRManager(openVRManager)
     , m_frameLayout(EStereoFrameLayout::FrameLayout_Mono)
     , m_projectionDistanceFar(5.0f)
     , m_useAlternateProjectionCalc(false)
+    , m_gpuFrameQueue(5)
+    , m_cpuFrameQueue(5)
 {
-    m_renderFrame = std::make_shared<CameraFrame>();
-    m_servedFrame = std::make_shared<CameraFrame>();
-    m_underConstructionFrame = std::make_shared<CameraFrame>();
-
-    m_renderFrameCPU = std::make_shared<CameraCPUFrame>();
-    m_servedFrameCPU = std::make_shared<CameraCPUFrame>();
-    m_underConstructionFrameCPU = std::make_shared<CameraCPUFrame>();
-
-    
 }
 
 CameraManagerOpenVR::~CameraManagerOpenVR()
@@ -49,6 +43,9 @@ CameraManagerOpenVR::~CameraManagerOpenVR()
 bool CameraManagerOpenVR::InitCamera()
 {
     if (m_bCameraInitialized) { return true; }
+
+    Config_Main& mainConf = m_configManager->GetConfig_Main();
+    Config_Camera& cameraConf = m_configManager->GetConfig_Camera();
 
     m_bCameraFailed = false;
 
@@ -91,7 +88,9 @@ bool CameraManagerOpenVR::InitCamera()
     m_bRunThread = true;
     m_bIsPaused = false;
 
-    m_bUseBlockQueue = m_configManager->GetConfig_Camera().OpenVR_UseBlockQueueForDepth;
+    m_bUseBlockQueue = (cameraConf.OpenVR_UseBlockQueueForDepth &&
+        m_projectionMode != Projection_StereoReconstruction) ||
+        (cameraConf.OpenVR_UseBlockQueueForDepth && cameraConf.OpenVR_UseBlockQueueForColor);
 
     if (!m_serveThread.joinable())
     {
@@ -498,51 +497,22 @@ void CameraManagerOpenVR::UpdateStaticCameraParameters()
     XrMatrix4x4f_Multiply(&m_cameraLeftToRightPose, &m_HMDToCameraRight, &m_cameraToHMDLeft);
 }
 
-bool CameraManagerOpenVR::GetCameraFrame(std::shared_ptr<CameraFrame>& frame)
+
+FramePtr<CameraGPUFrame> CameraManagerOpenVR::AcquireCameraGPUFrame()
 {
-    if (!m_bCameraInitialized) { return false; }
+    if (!m_bCameraInitialized) { return FramePtr<CameraGPUFrame>(); }
 
-    std::unique_lock<std::mutex> lock(m_serveMutex, std::try_to_lock);
-    if (lock.owns_lock() && m_servedFrame->bIsValid)
-    {
-        m_renderFrame->bIsValid = false;        
-        m_renderFrame->frameTextureResource = nullptr;
-        m_renderFrame.swap(m_servedFrame);
+    return m_gpuFrameQueue.AcquireRead();
+}
 
-        frame = m_renderFrame;
-        return true;
-    }
-    else if (m_renderFrame->bIsValid)
-    {
-        frame = m_renderFrame;
-        return true;
-    }
+FramePtr<CameraCPUFrame>  CameraManagerOpenVR::AcquireCameraCPUFrame()
+{
+    if (!m_bCameraInitialized) { return FramePtr<CameraCPUFrame>(); }
 
-    return false;
+    return m_cpuFrameQueue.AcquireRead();
 }
 
 
-bool CameraManagerOpenVR::GetCameraCPUFrame(std::shared_ptr<CameraCPUFrame>& frame)
-{
-    if (!m_bCameraInitialized) { return false; }
-
-    std::unique_lock<std::mutex> lock(m_serveMutexCPU, std::try_to_lock);
-    if (lock.owns_lock() && m_servedFrameCPU->bIsValid)
-    {
-        m_renderFrameCPU->bIsValid = false;
-        m_renderFrameCPU.swap(m_servedFrameCPU);
-
-        frame = m_renderFrameCPU;
-        return true;
-    }
-    else if (m_renderFrameCPU->bIsValid)
-    {
-        frame = m_renderFrameCPU;
-        return true;
-    }
-
-    return false;
-}
 
 void CameraManagerOpenVR::ServeFrames()
 {
@@ -573,34 +543,38 @@ void CameraManagerOpenVR::ServeFrames()
 
         if (m_bIsPaused) { continue; }
 
-        bool bUseBlockQueue = cameraConf.OpenVR_UseBlockQueueForDepth;
-        if (!m_bUseBlockQueue && bUseBlockQueue && !m_serveThreadBlockQueue.joinable())
+        m_bUseBlockQueue = (cameraConf.OpenVR_UseBlockQueueForDepth &&
+            m_projectionMode != Projection_StereoReconstruction) ||
+            (cameraConf.OpenVR_UseBlockQueueForDepth && cameraConf.OpenVR_UseBlockQueueForColor);
+
+        bool bUseBlockQueueColor = cameraConf.OpenVR_UseBlockQueueForDepth && 
+            cameraConf.OpenVR_UseBlockQueueForColor && 
+            m_projectionMode != Projection_RoomView2D;
+
+        if (m_bUseBlockQueue && !m_serveThreadBlockQueue.joinable())
         {
             m_serveThreadBlockQueue = std::thread(&CameraManagerOpenVR::ServeBlockQueueFrames, this);
         }
-        m_bUseBlockQueue = bUseBlockQueue;
 
-        if (m_bUseBlockQueue && cameraConf.OpenVR_UseBlockQueueForColor)
+        if (bUseBlockQueueColor)
         {
             continue;
         }
         
-        // Wait for the old frame struct to be available in case someone is still reading from it.
-        std::unique_lock writeLock(m_underConstructionFrame->readWriteMutex);
 
-        std::unique_lock<std::shared_mutex> cpuFrameWriteLock;
+        vr::CameraVideoStreamFrameHeader_t frameHeader{};
 
         while (true)
         {
             m_gpuFrameTimer.StartPerfTimer();
 
-            vr::EVRTrackedCameraFrameType frameType = mainConf.ProjectionMode == Projection_RoomView2D ? vr::VRTrackedCameraFrameType_MaximumUndistorted : vr::VRTrackedCameraFrameType_Distorted;
+            vr::EVRTrackedCameraFrameType frameType = m_projectionMode == Projection_RoomView2D ? vr::VRTrackedCameraFrameType_MaximumUndistorted : vr::VRTrackedCameraFrameType_Distorted;
 
-            vr::EVRTrackedCameraError error = trackedCamera->GetVideoStreamFrameBuffer(m_cameraHandle, frameType, nullptr, 0, &m_underConstructionFrame->header, sizeof(vr::CameraVideoStreamFrameHeader_t));
+            vr::EVRTrackedCameraError error = trackedCamera->GetVideoStreamFrameBuffer(m_cameraHandle, frameType, nullptr, 0, &frameHeader, sizeof(vr::CameraVideoStreamFrameHeader_t));
 
             if (error == vr::VRTrackedCameraError_None)
             {
-                float frameLatencyMS = m_gpuFrameTimer.GetStartTimeDiffMS(m_underConstructionFrame->header.ulFrameExposureTime);
+                float frameLatencyMS = m_gpuFrameTimer.GetStartTimeDiffMS(frameHeader.ulFrameExposureTime);
 
                 if (frameLatencyMS > FRAME_TIMEOUT_MS) // We were served a too old frame to be useful.
                 {
@@ -610,7 +584,7 @@ void CameraManagerOpenVR::ServeFrames()
                 {
                     break;
                 }
-                else if (m_underConstructionFrame->header.nFrameSequence != lastFrameSequence) // Normal wait for the next frame.
+                else if (frameHeader.nFrameSequence != lastFrameSequence) // Normal wait for the next frame.
                 {
                     break;
                 }
@@ -624,6 +598,8 @@ void CameraManagerOpenVR::ServeFrames()
                 g_logger->error("GetVideoStreamFrameBuffer-header error {}", static_cast<int32_t>(error));
             }
 
+
+
             if (!m_bRunThread) { return; }
 
             std::this_thread::sleep_for(FRAME_POLL_INTERVAL);
@@ -633,9 +609,15 @@ void CameraManagerOpenVR::ServeFrames()
 
         if (!m_bRunThread) { return; }
 
-        
 
-        vr::EVRTrackedCameraFrameType frameType = mainConf.ProjectionMode == Projection_RoomView2D ? vr::VRTrackedCameraFrameType_MaximumUndistorted : vr::VRTrackedCameraFrameType_Distorted;
+
+        FramePtr<CameraGPUFrame> gpuFrame = m_gpuFrameQueue.AcquireWrite();
+        if (!gpuFrame.HasFrame())
+        {
+            continue;
+        }
+
+        vr::EVRTrackedCameraFrameType frameType = m_projectionMode == Projection_RoomView2D ? vr::VRTrackedCameraFrameType_MaximumUndistorted : vr::VRTrackedCameraFrameType_Distorted;
 
         if (m_renderAPI == RenderAPI_Direct3D11)
         {
@@ -652,7 +634,7 @@ void CameraManagerOpenVR::ServeFrames()
                 continue;
             }
 
-            vr::EVRTrackedCameraError error = trackedCamera->GetVideoStreamTextureD3D11(m_cameraHandle, frameType, renderer->GetRenderDevice(), &m_underConstructionFrame->frameTextureResource, nullptr, 0);
+            vr::EVRTrackedCameraError error = trackedCamera->GetVideoStreamTextureD3D11(m_cameraHandle, frameType, renderer->GetRenderDevice(), &gpuFrame->FrameTextureResource, nullptr, 0);
             if (error != vr::VRTrackedCameraError_None)
             {
                 g_logger->error("GetVideoStreamTextureD3D11 error {}", static_cast<int32_t>(error));
@@ -674,152 +656,138 @@ void CameraManagerOpenVR::ServeFrames()
             ID3D11Resource* res;
             srv->GetResource(&res);
             res->QueryInterface(IID_PPV_ARGS(&dxgiRes));
-            dxgiRes->GetSharedHandle(&m_underConstructionFrame->frameTextureResource);
-        }
-
-        bool bDoFrameDump = !m_bUseBlockQueue && m_configManager->CheckFrameTextureDumpPending();
-        bool bWantsCPUFrameBuffer = bDoFrameDump ||
-            (!m_bUseBlockQueue && mainConf.ProjectionMode == Projection_StereoReconstruction);
-        bool bGotCPUFrame = false;
-
-        m_gpuFrameTimer.EndPerfTimer();
-
-        if (bWantsCPUFrameBuffer)
-        {
-            m_cpuFrameTimer.StartPerfTimer();
-
-            // Construct here to allow unlocking outside the scope.
-            cpuFrameWriteLock = std::unique_lock<std::shared_mutex>(m_underConstructionFrameCPU->ReadWriteMutex);
-            std::shared_ptr<CameraCPUFrame> cpuFrame = m_underConstructionFrameCPU;
-
-            // Get the CPU frame for depth reconstruction.
-            if(m_appRenderAPI == RenderAPI_Direct3D11 || m_appRenderAPI == RenderAPI_Direct3D12)
-            {
-                if (cpuFrame->FrameBuffer.get() == nullptr || cpuFrame->FrameBuffer->size() < m_cameraFrameBufferSize)
-                {
-                    cpuFrame->FrameBuffer = std::make_shared<std::vector<uint8_t>>(m_cameraFrameBufferSize);
-                }
-
-                vr::EVRTrackedCameraError error = trackedCamera->GetVideoStreamFrameBuffer(m_cameraHandle, frameType, cpuFrame->FrameBuffer->data(), (uint32_t)cpuFrame->FrameBuffer->size(), nullptr, 0);
-                if (error != vr::VRTrackedCameraError_None)
-                {
-                    g_logger->error("GetVideoStreamFrameBuffer error {}", static_cast<int32_t>(error));
-                    cpuFrameWriteLock.unlock();
-                    continue;
-                }
-
-                bGotCPUFrame = true;
-            }
-            // GetVideoStreamFrameBuffer crashes when used with Vulkan and OpenGL apps,
-            // for those APIs we manually copy it from the GPU texture instead.
-            else if (m_renderAPI == RenderAPI_Direct3D11 && m_underConstructionFrame->frameTextureResource != nullptr)
-            {
-                if (cpuFrame->FrameBuffer.get() == nullptr || cpuFrame->FrameBuffer->size() < m_cameraFrameBufferSize)
-                {
-                    cpuFrame->FrameBuffer = std::make_shared<std::vector<uint8_t>>(m_cameraFrameBufferSize);
-                }
-
-                std::shared_ptr<IPassthroughRenderer> renderer = m_inlineRenderer.lock();
-
-                if (!renderer.get())
-                {
-                    cpuFrameWriteLock.unlock();
-                    continue;
-                }
-
-                std::shared_lock accessLock(renderer->GetAccessMutex(), std::try_to_lock);
-                if (!accessLock.owns_lock())
-                {
-                    cpuFrameWriteLock.unlock();
-                    continue;
-                }
-
-                if (renderer->DownloadTextureToCPU(m_underConstructionFrame->frameTextureResource, m_underConstructionFrame->header.nWidth, m_underConstructionFrame->header.nHeight, (uint32_t)cpuFrame->FrameBuffer->size(), cpuFrame->FrameBuffer->data()))
-                {
-                    bGotCPUFrame = true;
-                }
-            }
-
-            if (!bGotCPUFrame)
-            {
-                cpuFrameWriteLock.unlock();
-            }
-
-            m_cpuFrameTimer.EndPerfTimer();
+            dxgiRes->GetSharedHandle(&gpuFrame->FrameTextureResource);
         }
 
         m_bWaitingForCamera = false;
-        lastFrameSequence = m_underConstructionFrame->header.nFrameSequence;
+        lastFrameSequence = frameHeader.nFrameSequence;
 
-        m_underConstructionFrame->bIsValid = true;
-        m_underConstructionFrame->frameLayout = m_frameLayout;
-        m_underConstructionFrame->bColorsPreadjusted = false;
+        gpuFrame->bIsValid = true;
+        gpuFrame->FrameLayout = m_frameLayout;
+        gpuFrame->bColorsPreadjusted = false;
+        gpuFrame->FrameSequence = frameHeader.nFrameSequence;
+        gpuFrame->FrameExposureTimestamp = frameHeader.ulFrameExposureTime;
+        gpuFrame->FrameSize[0] = frameHeader.nWidth;
+        gpuFrame->FrameSize[1] = frameHeader.nHeight;
+        gpuFrame->bisRectifiedFrame = frameType != vr::VRTrackedCameraFrameType_Distorted;
 
         XrMatrix4x4f headToTrackingPose;
-        if (!GetHMDPoseForTime(headToTrackingPose, m_underConstructionFrame->header.ulFrameExposureTime))
+        if (!GetHMDPoseForTime(headToTrackingPose, frameHeader.ulFrameExposureTime))
         {
             m_bPoseAvailable = false;
-            if (bGotCPUFrame)
-            {
-                cpuFrameWriteLock.unlock();
-            }
             continue;
         }
         m_bPoseAvailable = true;
 
-        XrMatrix4x4f_Multiply(&m_underConstructionFrame->cameraViewToWorldLeft, &headToTrackingPose, &m_cameraToHMDLeft);
-        XrMatrix4x4f_Multiply(&m_underConstructionFrame->cameraViewToWorldRight, &headToTrackingPose, &m_cameraToHMDRight);
+        XrMatrix4x4f viewToWorldLeft, viewToWorldRight;
+        XrMatrix4x4f_Multiply(&viewToWorldLeft, &headToTrackingPose, &m_cameraToHMDLeft);
+        XrMatrix4x4f_Multiply(&viewToWorldRight, &headToTrackingPose, &m_cameraToHMDRight);
 
+        gpuFrame->CameraViewToWorldLeft = viewToWorldLeft;
+        gpuFrame->CameraViewToWorldRight = viewToWorldRight;
 
         // Camera projection matrix for Room View mode
-        if (mainConf.ProjectionMode == Projection_RoomView2D)
+        if (m_projectionMode == Projection_RoomView2D)
         {
             XrMatrix4x4f worldToCameraProjectionLeft;
-            XrMatrix4x4f_Multiply(&worldToCameraProjectionLeft, &m_underConstructionFrame->cameraViewToWorldLeft, &m_cameraProjectionInvLeft);
-            XrMatrix4x4f_Invert(&m_underConstructionFrame->worldToCameraProjectionLeft, &worldToCameraProjectionLeft);
+            XrMatrix4x4f_Multiply(&worldToCameraProjectionLeft, &viewToWorldLeft, &m_cameraProjectionInvLeft);
+            XrMatrix4x4f_Invert(&gpuFrame->WorldToCameraProjectionLeft, &worldToCameraProjectionLeft);
 
             XrMatrix4x4f worldToCameraProjectionRight;
             if (m_frameLayout != EStereoFrameLayout::FrameLayout_Mono)
             {
-                XrMatrix4x4f_Multiply(&worldToCameraProjectionRight, &m_underConstructionFrame->cameraViewToWorldRight, &m_cameraProjectionInvRight);
+                XrMatrix4x4f_Multiply(&worldToCameraProjectionRight, &viewToWorldRight, &m_cameraProjectionInvRight);
             }
             else
             {
-                XrMatrix4x4f_Multiply(&worldToCameraProjectionRight, &m_underConstructionFrame->cameraViewToWorldLeft, &m_cameraProjectionInvLeft);
+                XrMatrix4x4f_Multiply(&worldToCameraProjectionRight, &viewToWorldLeft, &m_cameraProjectionInvLeft);
             }
-            XrMatrix4x4f_Invert(&m_underConstructionFrame->worldToCameraProjectionRight, &worldToCameraProjectionRight);
+            XrMatrix4x4f_Invert(&gpuFrame->WorldToCameraProjectionRight, &worldToCameraProjectionRight);
         }
+
+        m_gpuFrameTimer.EndPerfTimer();
+
+
+        
+
+        if (m_bUseBlockQueue || m_projectionMode != Projection_StereoReconstruction)
+        {
+            gpuFrame.CommitWrite();
+            continue;
+        }
+
+        m_cpuFrameTimer.StartPerfTimer();
+
+        FramePtr<CameraCPUFrame> cpuFrame = m_cpuFrameQueue.AcquireWrite();
+        if (!cpuFrame.HasFrame())
+        {
+            continue;
+        }
+
+        bool bGotCPUFrame = false;
+
+        // Get the CPU frame for depth reconstruction.
+        if(m_appRenderAPI == RenderAPI_Direct3D11 || m_appRenderAPI == RenderAPI_Direct3D12)
+        {
+            if (cpuFrame->FrameBuffer.get() == nullptr || cpuFrame->FrameBuffer->size() < m_cameraFrameBufferSize)
+            {
+                cpuFrame->FrameBuffer = std::make_shared<std::vector<uint8_t>>(m_cameraFrameBufferSize);
+            }
+
+            vr::EVRTrackedCameraError error = trackedCamera->GetVideoStreamFrameBuffer(m_cameraHandle, frameType, cpuFrame->FrameBuffer->data(), (uint32_t)cpuFrame->FrameBuffer->size(), nullptr, 0);
+            if (error != vr::VRTrackedCameraError_None)
+            {
+                g_logger->error("GetVideoStreamFrameBuffer error {}", static_cast<int32_t>(error));
+            }
+            else
+            {
+                bGotCPUFrame = true;
+            }
+        }
+        // GetVideoStreamFrameBuffer crashes when used with Vulkan and OpenGL apps,
+        // for those APIs we manually copy it from the GPU texture instead.
+        else if (m_renderAPI == RenderAPI_Direct3D11 && gpuFrame->FrameTextureResource != nullptr)
+        {
+            if (cpuFrame->FrameBuffer.get() == nullptr || cpuFrame->FrameBuffer->size() < m_cameraFrameBufferSize)
+            {
+                cpuFrame->FrameBuffer = std::make_shared<std::vector<uint8_t>>(m_cameraFrameBufferSize);
+            }
+
+            std::shared_ptr<IPassthroughRenderer> renderer = m_inlineRenderer.lock();
+
+            if (renderer.get())
+            {
+                std::shared_lock accessLock(renderer->GetAccessMutex(), std::try_to_lock);
+                if (accessLock.owns_lock())
+                {
+                    bGotCPUFrame = renderer->DownloadTextureToCPU(gpuFrame->FrameTextureResource, frameHeader.nWidth, frameHeader.nHeight, (uint32_t)cpuFrame->FrameBuffer->size(), cpuFrame->FrameBuffer->data());
+                }
+            }
+        }
+
+        gpuFrame.CommitWrite();
 
         if (bGotCPUFrame)
         {
-            std::shared_ptr<CameraCPUFrame> cpuFrame = m_underConstructionFrameCPU;
             cpuFrame->bIsValid = true;
             cpuFrame->bIsRaw = false;
-            cpuFrame->FrameExposureTimestamp = m_underConstructionFrame->header.ulFrameExposureTime;
+            cpuFrame->RawFrameDataBytes = 0;
+            cpuFrame->FrameExposureTimestamp = frameHeader.ulFrameExposureTime;
             cpuFrame->FrameLayout = m_frameLayout;
-            cpuFrame->FrameSequence = m_underConstructionFrame->header.nFrameSequence;
+            cpuFrame->FrameSequence = lastFrameSequence;
             cpuFrame->FrameSize[0] = m_cameraTextureWidth;
             cpuFrame->FrameSize[1] = m_cameraTextureHeight;
-            cpuFrame->CameraViewToWorldLeft = m_underConstructionFrame->cameraViewToWorldLeft;
-            cpuFrame->CameraViewToWorldRight = m_underConstructionFrame->cameraViewToWorldRight;
+            cpuFrame->CameraViewToWorldLeft = viewToWorldLeft;
+            cpuFrame->CameraViewToWorldRight = viewToWorldRight;
 
-            if (bDoFrameDump)
+            if (m_configManager->CheckFrameTextureDumpPending())
             {
                 DumpCameraFrameTexture(cpuFrame->FrameBuffer, m_cameraTextureWidth, m_cameraTextureHeight, "OpenVR");
             }
 
-            if(bWantsCPUFrameBuffer)
-            {
-                std::lock_guard<std::mutex> lock(m_serveMutexCPU);
-                m_servedFrameCPU.swap(m_underConstructionFrameCPU);
-            }
-            cpuFrameWriteLock.unlock();
-        }
+            cpuFrame.CommitWrite();
 
-
-        {
-            std::lock_guard<std::mutex> lock(m_serveMutex);
-            m_servedFrame.swap(m_underConstructionFrame);
+            m_cpuFrameTimer.EndPerfTimer();
         }
     }
 }
@@ -828,6 +796,9 @@ void CameraManagerOpenVR::ServeFrames()
 
 void CameraManagerOpenVR::ServeBlockQueueFrames()
 {
+    Config_Main& mainConf = m_configManager->GetConfig_Main();
+    Config_Camera& cameraConf = m_configManager->GetConfig_Camera();
+
     vr::IVRBlockQueue* vrBlockQueue = m_openVRManager->GetVRBlockQueue();
     vr::IVRPaths* vrPaths = m_openVRManager->GetVRPaths();
 
@@ -917,20 +888,21 @@ void CameraManagerOpenVR::ServeBlockQueueFrames()
     vr::PropertyContainerHandle_t readHandle = 0;
     uint8_t* readBuffer = nullptr;
 
-    std::unique_lock<std::shared_mutex> writeLock;
-
     while (m_bRunThread)
     {
         std::this_thread::sleep_for(FRAME_POLL_INTERVAL);
 
         if (!m_bRunThread) { return; }
 
-        if (m_bIsPaused || !m_bUseBlockQueue || m_configManager->GetConfig_Main().ProjectionMode != Projection_StereoReconstruction) { continue; }
+        if (m_bIsPaused || !m_bUseBlockQueue) { continue; }
 
-        // Wait for the old frame struct to be available in case someone is still reading from it.
-        // Construct here to allow unlocking outside the scope.
-        writeLock = std::unique_lock<std::shared_mutex>(m_underConstructionFrameCPU->ReadWriteMutex);
-        std::shared_ptr<CameraCPUFrame> frame = m_underConstructionFrameCPU;
+        bool bUseBlockQueueColor = cameraConf.OpenVR_UseBlockQueueForDepth &&
+            cameraConf.OpenVR_UseBlockQueueForColor &&
+            m_projectionMode != Projection_RoomView2D;
+
+        uint64_t frameSequence = 0;
+        uint64_t frameExposureTimestamp = 0;
+        int32_t rawFrameDataBytes = 0;
 
         bool bGotFrame = false;
 
@@ -938,7 +910,7 @@ void CameraManagerOpenVR::ServeBlockQueueFrames()
         {
             if (!m_bRunThread) { return; }
 
-            if (m_bIsPaused || !m_bUseBlockQueue || m_configManager->GetConfig_Main().ProjectionMode != Projection_StereoReconstruction)
+            if (m_bIsPaused || !m_bUseBlockQueue)
             {
                 std::this_thread::sleep_for(POSTFRAME_SLEEP_INTERVAL);
                 break;
@@ -958,6 +930,7 @@ void CameraManagerOpenVR::ServeBlockQueueFrames()
                 // Start measuring here to not include wait.
                 m_cpuFrameTimer.StartPerfTimer();
 
+
                 vr::ETrackedPropertyError propError;
 
                 vr::PathRead_t read = {};
@@ -965,7 +938,7 @@ void CameraManagerOpenVR::ServeBlockQueueFrames()
                 read.pszPath = nullptr;
 
                 read.ulPath = frameSequenceHandle;
-                read.pvBuffer = &frame->FrameSequence;
+                read.pvBuffer = &frameSequence;
                 read.unBufferSize = sizeof(uint64_t);
                 read.unTag = vr::k_unUint64PropertyTag;
 
@@ -976,7 +949,7 @@ void CameraManagerOpenVR::ServeBlockQueueFrames()
                 }
 
                 read.ulPath = serverTimeTicksHandle;
-                read.pvBuffer = &frame->FrameExposureTimestamp;
+                read.pvBuffer = &frameExposureTimestamp;
                 read.unBufferSize = sizeof(uint64_t);
                 read.unTag = vr::k_unUint64PropertyTag;
 
@@ -987,31 +960,35 @@ void CameraManagerOpenVR::ServeBlockQueueFrames()
                 }
 
                 read.ulPath = frameSizeHandle;
-                read.pvBuffer = &frame->RawFrameDataBytes;
+                read.pvBuffer = &rawFrameDataBytes;
                 read.unBufferSize = sizeof(int32_t);
                 read.unTag = vr::k_unInt32PropertyTag;
 
                 propError = vrPaths->ReadPathBatch(readHandle, &read, 1);
                 if (propError != vr::TrackedProp_Success)
                 {
-                    frame->RawFrameDataBytes = 0;
+                    rawFrameDataBytes = 0;
                     g_logger->error("Error reading /frame_size {}", static_cast<int32_t>(propError));
                 }
 
 
-                float frameLatencyMS = m_cpuFrameTimer.GetStartTimeDiffMS(frame->FrameExposureTimestamp);
+                float frameLatencyMS = m_cpuFrameTimer.GetStartTimeDiffMS(frameExposureTimestamp);
 
                 if (frameLatencyMS > FRAME_TIMEOUT_MS) // We were served a too old frame to be useful.
                 {
                     bWaitingForCamera = true;
                     m_bWaitingForCamera = true;
                 }
+                else if (rawFrameDataBytes <= 0) // Infalid frame
+                {
+                    g_logger->warn("0 byte block queue frame received!");
+                }
                 else if (bWaitingForCamera) // Always accept the first frame offered if we were timed out.
                 {
                     bGotFrame = true;
                     break;
                 }
-                else if (frame->FrameSequence != lastFrameSequence) // Normal wait for the next frame.
+                else if (frameSequence != lastFrameSequence) // Normal wait for the next frame.
                 {
                     bGotFrame = true;
                     break;
@@ -1022,25 +999,21 @@ void CameraManagerOpenVR::ServeBlockQueueFrames()
                 {
                     g_logger->error("ReleaseReadOnlyBlock error {}", static_cast<int32_t>(queueError));
                 }
-            } 
 
-            if (!m_bRunThread) 
-            {
-                writeLock.unlock();
-                return; 
             }
+
+            if (!m_bRunThread) {  return; }
         }
 
         if (!bGotFrame)
         {
-            writeLock.unlock();
             continue;
         }
+
 
         // check that we are still running before doing a costly memcpy.
         if (!m_bRunThread) 
         { 
-            writeLock.unlock();
             queueError = vrBlockQueue->ReleaseReadOnlyBlock(rawFrameQueue, readHandle);
             if (queueError != vr::EBlockQueueError_BlockQueueError_None)
             {
@@ -1049,12 +1022,24 @@ void CameraManagerOpenVR::ServeBlockQueueFrames()
             return; 
         }
 
-        if (frame->FrameBuffer.get() == nullptr || frame->FrameBuffer->size() < frame->RawFrameDataBytes)
+        FramePtr<CameraCPUFrame> cpuFrame = m_cpuFrameQueue.AcquireWrite();
+        if (!cpuFrame.HasFrame())
         {
-            frame->FrameBuffer = std::make_shared<std::vector<uint8_t>>(frame->RawFrameDataBytes);
+            queueError = vrBlockQueue->ReleaseReadOnlyBlock(rawFrameQueue, readHandle);
+            if (queueError != vr::EBlockQueueError_BlockQueueError_None)
+            {
+                g_logger->error("ReleaseReadOnlyBlock error {}", static_cast<int32_t>(queueError));
+            }
+
+            continue;
         }
 
-        memcpy(frame->FrameBuffer->data(), readBuffer, frame->RawFrameDataBytes);
+        if (cpuFrame->FrameBuffer.get() == nullptr || cpuFrame->FrameBuffer->size() < rawFrameDataBytes)
+        {
+            cpuFrame->FrameBuffer = std::make_shared<std::vector<uint8_t>>(rawFrameDataBytes);
+        }
+
+        memcpy(cpuFrame->FrameBuffer->data(), readBuffer, rawFrameDataBytes);
 
         queueError = vrBlockQueue->ReleaseReadOnlyBlock(rawFrameQueue, readHandle);
         if (queueError != vr::EBlockQueueError_BlockQueueError_None)
@@ -1064,88 +1049,89 @@ void CameraManagerOpenVR::ServeBlockQueueFrames()
 
         if (m_configManager->CheckFrameTextureDumpPending())
         {
-            DumpCameraFrameTexture(frame->FrameBuffer, rawFrameWidth, rawFrameHeight, "OpenVR-BlockQueue");
+            DumpCameraFrameTexture(cpuFrame->FrameBuffer, rawFrameWidth, rawFrameHeight, "OpenVR-BlockQueue");
         }
-
 
         bWaitingForCamera = false;
         m_bWaitingForCamera = false;
-        lastFrameSequence = frame->FrameSequence;
-
-        frame->bIsValid = true;
-        frame->bIsRaw = true;
-        frame->FrameLayout = m_frameLayout;
-        frame->RawFrameFormat = frameFormat;
-        frame->FrameSize[0] = m_cameraTextureWidth;
-        frame->FrameSize[1] = m_cameraTextureHeight;
-        frame->RawFrameSize[0] = rawFrameWidth;
-        frame->RawFrameSize[1] = rawFrameHeight;
+        lastFrameSequence = frameSequence;
 
         XrMatrix4x4f headToTrackingPose;
-        if (!GetHMDPoseForTime(headToTrackingPose, frame->FrameExposureTimestamp))
+        if (!GetHMDPoseForTime(headToTrackingPose, frameExposureTimestamp))
         {
             m_bPoseAvailable = false;
-            writeLock.unlock();
             continue;
         }
         m_bPoseAvailable = true;
 
-        XrMatrix4x4f_Multiply(&frame->CameraViewToWorldLeft, &headToTrackingPose, &m_cameraToHMDLeft);
-        XrMatrix4x4f_Multiply(&frame->CameraViewToWorldRight, &headToTrackingPose, &m_cameraToHMDRight);
+        cpuFrame->bIsValid = true;
+        cpuFrame->bIsRaw = true;
+        cpuFrame->FrameLayout = m_frameLayout;
+        cpuFrame->RawFrameFormat = frameFormat;
+        cpuFrame->FrameSize[0] = m_cameraTextureWidth;
+        cpuFrame->FrameSize[1] = m_cameraTextureHeight;
+        cpuFrame->RawFrameSize[0] = rawFrameWidth;
+        cpuFrame->RawFrameSize[1] = rawFrameHeight;
+        cpuFrame->RawFrameDataBytes = rawFrameDataBytes;
+        cpuFrame->FrameExposureTimestamp = frameExposureTimestamp;
+        cpuFrame->FrameSequence = frameSequence;
 
-        {
-            std::lock_guard<std::mutex> lock(m_serveMutexCPU);
-            m_servedFrameCPU.swap(m_underConstructionFrameCPU);
-        }
+        XrMatrix4x4f_Multiply(&cpuFrame->CameraViewToWorldLeft, &headToTrackingPose, &m_cameraToHMDLeft);
+        XrMatrix4x4f_Multiply(&cpuFrame->CameraViewToWorldRight, &headToTrackingPose, &m_cameraToHMDRight);
 
-        writeLock.unlock();
+        
 
         m_cpuFrameTimer.EndPerfTimer();
 
-        if (m_configManager->GetConfig_Camera().OpenVR_UseBlockQueueForColor)
+        if (bUseBlockQueueColor)
         {
-            CopyCPUFrameToGPU(frame);
-        }   
+            cpuFrame.CommitWriteAndAcuireRead();
+            CopyCPUFrameToGPU(cpuFrame.GetSharedPointer());
+        }  
+        else
+        {
+            cpuFrame.CommitWrite();
+        }
     }
 }
 
 
 void CameraManagerOpenVR::CopyCPUFrameToGPU(std::shared_ptr<CameraCPUFrame> inFrame)
 {
-    std::shared_ptr<AsyncRenderer> renderer = m_asyncRenderer.lock();
-    if (!renderer.get())
+    m_gpuFrameTimer.StartPerfTimer();
+
+    std::shared_ptr<AsyncRenderer> asyncRenderer = m_asyncRenderer.lock();
+    if (!asyncRenderer.get())
     {
         return;
     }
-    m_gpuFrameTimer.StartPerfTimer();
 
-    std::unique_lock writeLock(m_underConstructionFrame->readWriteMutex);
-    std::shared_lock readLock(inFrame->ReadWriteMutex);
+    FramePtr<CameraGPUFrame> gpuFrame = m_gpuFrameQueue.AcquireWrite();
+    if (!gpuFrame.HasFrame())
+    {
+        return;
+    }
 
-    std::shared_ptr<CameraFrame> gpuFrame = m_underConstructionFrame;
-
-    if (renderer->CopyAndDecodeCameraFrame(inFrame, &gpuFrame->frameTextureResource))
+    if (asyncRenderer->CopyAndDecodeCameraFrame(inFrame, &gpuFrame->FrameTextureResource))
     {
         
         gpuFrame->bIsValid = true;
         gpuFrame->bHasReversedDepth = false;
         gpuFrame->bIsFirstRender = true;
         gpuFrame->bIsRenderingMirrored = false;
-        gpuFrame->frameLayout = m_frameLayout;
-        gpuFrame->header.nFrameSequence = (uint32_t)inFrame->FrameSequence;
-        gpuFrame->header.ulFrameExposureTime = inFrame->FrameExposureTimestamp;
-        gpuFrame->cameraViewToWorldLeft = inFrame->CameraViewToWorldLeft;
-        gpuFrame->cameraViewToWorldRight = inFrame->CameraViewToWorldRight;
+        gpuFrame->FrameLayout = m_frameLayout;
+        gpuFrame->FrameSequence = (uint32_t)inFrame->FrameSequence;
+        gpuFrame->FrameExposureTimestamp = inFrame->FrameExposureTimestamp;
+        gpuFrame->CameraViewToWorldLeft = inFrame->CameraViewToWorldLeft;
+        gpuFrame->CameraViewToWorldRight = inFrame->CameraViewToWorldRight;
         gpuFrame->bColorsPreadjusted = m_configManager->CheckEnableAsyncColorAdjustment();
+        gpuFrame->bisRectifiedFrame = false;
+
+        gpuFrame.CommitWrite();
     }
     else
     {
         gpuFrame->bIsValid = false;
-    }
-
-    {
-        std::lock_guard<std::mutex> lock(m_serveMutex);
-        m_servedFrame.swap(m_underConstructionFrame);
     }
 
     m_gpuFrameTimer.EndPerfTimer();
@@ -1170,7 +1156,7 @@ bool CameraManagerOpenVR::GetHMDPoseForTime(XrMatrix4x4f& headToTrackingPose, co
 
 
 
-void CameraManagerOpenVR::UpdateFrameProjectionMatrix(std::shared_ptr<CameraFrame>& frame)
+void CameraManagerOpenVR::UpdateFrameProjectionMatrix(std::shared_ptr<CameraGPUFrame>& frame)
 {
     bool bIsStereo = m_frameLayout != EStereoFrameLayout::FrameLayout_Mono;
 
