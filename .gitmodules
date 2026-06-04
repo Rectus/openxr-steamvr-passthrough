@@ -25,3 +25,7 @@
 [submodule "external/spdlog"]
 	path = external/spdlog
 	url = https://github.com/gabime/spdlog.git
+	
+[submodule "external/volk"]
+	path = external/volk
+	url = https://github.com/zeux/volk.git

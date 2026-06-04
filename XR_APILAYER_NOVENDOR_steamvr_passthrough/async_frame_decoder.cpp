@@ -19,13 +19,10 @@ struct alignas(16) ConversionPushConstants
 };
 
 
-static PFN_vkCmdInsertDebugUtilsLabelEXT _vkCmdInsertDebugUtilsLabelEXT = nullptr;
-static PFN_vkSetDebugUtilsObjectNameEXT _vkSetDebugUtilsObjectNameEXT = nullptr;
-
 
 static void SetVulkanDebugName(const VkDevice device, const void* object, const VkObjectType type, const char* name)
 {
-	if (!_vkSetDebugUtilsObjectNameEXT)
+	if (!vkSetDebugUtilsObjectNameEXT)
 	{
 		return;
 	}
@@ -34,7 +31,7 @@ static void SetVulkanDebugName(const VkDevice device, const void* object, const 
 	nameInfo.objectHandle = reinterpret_cast<uint64_t>(object);
 	nameInfo.pObjectName = name;
 
-	_vkSetDebugUtilsObjectNameEXT(device, &nameInfo);
+	vkSetDebugUtilsObjectNameEXT(device, &nameInfo);
 }
 
 
@@ -57,9 +54,6 @@ bool AsyncFrameDecoder::Init(VkDevice device, VkPhysicalDevice physDevice, uint3
 	m_physDevice = physDevice;
 	m_queueFamilyIndex = queueFamilyIndex;
 	m_bRenderDocEnabled = bRenderDocEnabled;
-
-	_vkCmdInsertDebugUtilsLabelEXT = reinterpret_cast<PFN_vkCmdInsertDebugUtilsLabelEXT>(vkGetDeviceProcAddr(m_device, "vkCmdInsertDebugUtilsLabelEXT"));
-	_vkSetDebugUtilsObjectNameEXT = reinterpret_cast<PFN_vkSetDebugUtilsObjectNameEXT>(vkGetDeviceProcAddr(m_device, "vkSetDebugUtilsObjectNameEXT"));
 
 	// Get second queue allocated by main class.
 	vkGetDeviceQueue(m_device, m_queueFamilyIndex, queueIndex, &m_queue);
@@ -333,7 +327,7 @@ bool AsyncFrameDecoder::CopyAndDecodeCameraFrame(std::shared_ptr<CameraCPUFrame>
 	{
 		VkDebugUtilsLabelEXT label{ VK_STRUCTURE_TYPE_DEBUG_UTILS_LABEL_EXT };
 		label.pLabelName = "vr-marker,frame_end,type,application";
-		_vkCmdInsertDebugUtilsLabelEXT(m_commandBuffer, &label);
+		vkCmdInsertDebugUtilsLabelEXT(m_commandBuffer, &label);
 	}
 
 	vkEndCommandBuffer(m_commandBuffer);

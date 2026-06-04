@@ -4,6 +4,7 @@
 
 #include <xr_linear.h>
 #include "lodepng.h"
+#include "volk.h"
 
 #include "shaders\fullscreen_quad_vs.spv.h"
 #include "shaders\passthrough_vs.spv.h"
@@ -269,6 +270,8 @@ PassthroughRendererVulkan::~PassthroughRendererVulkan()
 
 bool PassthroughRendererVulkan::InitRenderer()
 {
+	volkLoadInstance(m_instance);
+
 	vkGetDeviceQueue(m_device, m_queueFamilyIndex, m_queueIndex, &m_queue);
 	
 	{

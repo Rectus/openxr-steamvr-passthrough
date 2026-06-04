@@ -1236,13 +1236,12 @@ void PassthroughRendererDX11::InitDepthBuffer(const ERenderEye eye, void* depthB
 
 	}
 
+	depthData.depthStencil = bufferRes;
+
 	if (FAILED(m_d3dDevice->CreateShaderResourceView(bufferRes, &srvDesc, depthData.depthSRV.GetAddressOf())))
 	{
-		g_logger->error("Depth map CreateShaderResourceView error!");
-		return;
+		g_logger->warn("Depth map CreateShaderResourceView error!");
 	}
-
-	depthData.depthStencil = bufferRes;
 }
 
 
@@ -2952,4 +2951,10 @@ bool PassthroughRendererDX11::CreateSharedDisparityMap(HANDLE* sharedHandle, voi
 	tempResource->Release();
 
 	return true;
+}
+
+void PassthroughRendererDX11::DestroySharedTextures()
+{
+	m_sharedCameraTextures.clear();
+	m_sharedDisparityMaps.clear();
 }

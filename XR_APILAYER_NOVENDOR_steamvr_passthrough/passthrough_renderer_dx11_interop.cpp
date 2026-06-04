@@ -2,6 +2,7 @@
 #include "passthrough_renderer.h"
 #include "comdef.h"
 #include "renderutil.h"
+#include "volk.h"
 
 
 
@@ -261,6 +262,8 @@ bool PassthroughRendererDX11Interop::InitRenderer()
 
 	case RenderAPI_Vulkan:
 	{
+		volkLoadInstance(m_vulkanInstance);
+
 		vkGetDeviceQueue(m_vulkanDevice, m_vulkanQueueFamilyIndex, m_vulkanQueueIndex, &m_vulkanQueue);
 
 		VkPhysicalDeviceProperties2 deviceProps = { VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_PROPERTIES_2 };
@@ -511,6 +514,8 @@ bool PassthroughRendererDX11Interop::InitRenderer()
 			return false;
 		}
 
+		volkLoadInstance(m_vulkanInstance);
+
 		uint32_t deviceCount = 0;
 		vkEnumeratePhysicalDevices(m_vulkanInstance, &deviceCount, nullptr);
 
@@ -544,7 +549,7 @@ bool PassthroughRendererDX11Interop::InitRenderer()
 
 		if (!bFoundPhysDevice)
 		{
-			g_logger->error("No matching Vulkan physical device found!");
+			g_logger->error("No matching Vulkan physical device found for LUID {}:{}!", adapterDesc.AdapterLuid.HighPart, adapterDesc.AdapterLuid.LowPart);
 			return false;
 		}
 

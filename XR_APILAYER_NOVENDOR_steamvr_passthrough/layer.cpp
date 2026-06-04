@@ -34,6 +34,8 @@
 #include <queue>
 #include "psapi.h"
 
+#define VOLK_IMPLEMENTATION
+#include "volk.h"
 
 
 HMODULE g_dllModule = NULL;
@@ -66,7 +68,7 @@ namespace
 		{
 			if (createInfo->type != XR_TYPE_INSTANCE_CREATE_INFO)
 			{
-			return XR_ERROR_VALIDATION_FAILURE;
+				return XR_ERROR_VALIDATION_FAILURE;
 			}
 
 			m_extensionData = ExtensionData{};

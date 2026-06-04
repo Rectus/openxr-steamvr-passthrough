@@ -6,6 +6,7 @@
 #include "pathutil.h"
 #include "renderutil.h"
 #include "vulkan_util.h"
+#include "volk.h"
 
 #include "passthrough_renderer.h"
 
@@ -39,10 +40,6 @@ struct  CSFilterKernels
 };
 
 
-static PFN_vkGetMemoryWin32HandleKHR _vkGetMemoryWin32HandleKHR = nullptr;
-static PFN_vkGetMemoryWin32HandlePropertiesKHR _vkGetMemoryWin32HandlePropertiesKHR = nullptr;
-static PFN_vkCmdInsertDebugUtilsLabelEXT _vkCmdInsertDebugUtilsLabelEXT = nullptr;
-static PFN_vkSetDebugUtilsObjectNameEXT _vkSetDebugUtilsObjectNameEXT = nullptr;
 
 static RENDERDOC_API_1_7_0* g_renderDocAPI = nullptr;
 static bool g_bRenderDocCaptured = false;
@@ -74,7 +71,7 @@ inline VkFormat CameraFrameFormatToVulkan(const ECameraFrameFormat in)
 
 static void SetVulkanDebugName(const VkDevice device, const void* object, const VkObjectType type, const char* name)
 {
-	if (!_vkSetDebugUtilsObjectNameEXT)
+	if (!vkSetDebugUtilsObjectNameEXT)
 	{
 		return;
 	}
@@ -83,7 +80,7 @@ static void SetVulkanDebugName(const VkDevice device, const void* object, const 
 	nameInfo.objectHandle = reinterpret_cast<uint64_t>(object);
 	nameInfo.pObjectName = name;
 
-	_vkSetDebugUtilsObjectNameEXT(device, &nameInfo);
+	vkSetDebugUtilsObjectNameEXT(device, &nameInfo);
 }
 
 
@@ -181,7 +178,7 @@ bool AsyncRenderer::InitRenderer()
 		}
 	}
 	VkApplicationInfo appInfo{ VK_STRUCTURE_TYPE_APPLICATION_INFO };
-	appInfo.apiVersion = VK_API_VERSION_1_4;
+	appInfo.apiVersion = VK_API_VERSION_1_3; // Using Vulkan 1.3 instead of 1.4 for better application support.
 
 	std::vector<const char*> validationLayers;
 	if (mainConfig.EnableAsyncVulkanValidation)
@@ -208,6 +205,8 @@ bool AsyncRenderer::InitRenderer()
 		g_logger->error("vkCreateInstance failure!");
 		return false;
 	}
+
+	volkLoadInstance(m_instance);
 
 	uint32_t deviceCount = 0;
 	vkEnumeratePhysicalDevices(m_instance, &deviceCount, nullptr);
@@ -242,7 +241,7 @@ bool AsyncRenderer::InitRenderer()
 
 	if (!bFoundPhysDevice)
 	{
-		g_logger->error("No matching Vulkan physical device found!");
+		g_logger->error("No matching Vulkan physical device found for LUID {}!", gpuLUID);
 		return false;
 	}
 
@@ -320,23 +319,24 @@ bool AsyncRenderer::InitRenderer()
 	queueInfo.pQueuePriorities = &queuePriority;
 
 	VkPhysicalDeviceSamplerYcbcrConversionFeatures enabledConversionFeatures{ VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_SAMPLER_YCBCR_CONVERSION_FEATURES };
-	VkPhysicalDeviceVulkan14Features enabledFeatures14{ VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_VULKAN_1_4_FEATURES };
-	enabledFeatures14.pNext = &enabledConversionFeatures;
+	//VkPhysicalDeviceVulkan14Features enabledFeatures14{ VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_VULKAN_1_4_FEATURES };
+	//enabledFeatures14.pNext = &enabledConversionFeatures;
 
 	{
 		VkPhysicalDeviceSamplerYcbcrConversionFeatures conversionFeatures{ VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_SAMPLER_YCBCR_CONVERSION_FEATURES };
-		VkPhysicalDeviceVulkan14Features physFeatures14{ VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_VULKAN_1_4_FEATURES };
-		physFeatures14.pNext = &conversionFeatures;
+		//VkPhysicalDeviceVulkan14Features physFeatures14{ VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_VULKAN_1_4_FEATURES };
+		//physFeatures14.pNext = &conversionFeatures;
 		VkPhysicalDeviceFeatures2 physFeatures{ VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_FEATURES_2 };
-		physFeatures.pNext = &physFeatures14;
+		//physFeatures.pNext = &physFeatures14;
+		physFeatures.pNext = &conversionFeatures;
 
 		vkGetPhysicalDeviceFeatures2(m_physDevice, &physFeatures);
 
-		if (physFeatures14.hostImageCopy)
+		/*if (physFeatures14.hostImageCopy)
 		{
 			enabledFeatures14.hostImageCopy = true;
 			m_bHostImageCopyEnabled = true;
-		}
+		}*/
 		if (conversionFeatures.samplerYcbcrConversion)
 		{
 			enabledConversionFeatures.samplerYcbcrConversion = true;
@@ -344,11 +344,38 @@ bool AsyncRenderer::InitRenderer()
 	}
 
 	std::vector<const char*> deviceExtensions;
-	//deviceExtensions.push_back(VK_KHR_EXTERNAL_MEMORY_EXTENSION_NAME);
 	deviceExtensions.push_back(VK_KHR_EXTERNAL_MEMORY_WIN32_EXTENSION_NAME);
 
+	{
+		bool bExternalMemWin32Found = false;
+
+		uint32_t numExtensions = 0;
+		vkEnumerateDeviceExtensionProperties(m_physDevice, nullptr, &numExtensions, nullptr);
+		std::vector<VkExtensionProperties> extensions(numExtensions);
+		vkEnumerateDeviceExtensionProperties(m_physDevice, nullptr, &numExtensions, extensions.data());
+
+		for (uint32_t i = 0; i < numExtensions; i++) 
+		{
+			if (strncmp(extensions[i].extensionName, VK_EXT_HOST_IMAGE_COPY_EXTENSION_NAME, VK_MAX_EXTENSION_NAME_SIZE - 1) == 0)
+			{
+				m_bHostImageCopyEnabled = true;
+				deviceExtensions.push_back(VK_EXT_HOST_IMAGE_COPY_EXTENSION_NAME);
+			}
+			if (strncmp(extensions[i].extensionName, VK_KHR_EXTERNAL_MEMORY_WIN32_EXTENSION_NAME, VK_MAX_EXTENSION_NAME_SIZE - 1) == 0)
+			{
+				bExternalMemWin32Found = true;
+			}
+		}
+
+		if (!bExternalMemWin32Found)
+		{
+			g_logger->error("Required Vulkan extension VK_KHR_external_memory_win32 not found!");
+			return false;
+		}
+	}
+
 	VkDeviceCreateInfo deviceInfo = { VK_STRUCTURE_TYPE_DEVICE_CREATE_INFO };
-	deviceInfo.pNext = &enabledFeatures14;
+	deviceInfo.pNext = &enabledConversionFeatures;
 	deviceInfo.queueCreateInfoCount = 1;
 	deviceInfo.pQueueCreateInfos = &queueInfo;
 	deviceInfo.enabledExtensionCount = (uint32_t)deviceExtensions.size();
@@ -359,11 +386,6 @@ bool AsyncRenderer::InitRenderer()
 		g_logger->error("vkCreateDevice failure!");
 		return false;
 	}
-
-	_vkGetMemoryWin32HandleKHR = reinterpret_cast<PFN_vkGetMemoryWin32HandleKHR>(vkGetDeviceProcAddr(m_device, "vkGetMemoryWin32HandleKHR"));
-	_vkGetMemoryWin32HandlePropertiesKHR = reinterpret_cast<PFN_vkGetMemoryWin32HandlePropertiesKHR>(vkGetDeviceProcAddr(m_device, "vkGetMemoryWin32HandlePropertiesKHR"));
-	_vkCmdInsertDebugUtilsLabelEXT = reinterpret_cast<PFN_vkCmdInsertDebugUtilsLabelEXT>(vkGetDeviceProcAddr(m_device, "vkCmdInsertDebugUtilsLabelEXT"));
-	_vkSetDebugUtilsObjectNameEXT = reinterpret_cast<PFN_vkSetDebugUtilsObjectNameEXT>(vkGetDeviceProcAddr(m_device, "vkSetDebugUtilsObjectNameEXT"));
 	
 	vkGetDeviceQueue(m_device, m_queueFamilyIndex, 0, &m_queue);
 
@@ -726,7 +748,7 @@ bool AsyncRenderer::CreateTexture(VulkanTexture& texture, VkExtent2D extent, VkF
 		info.subresourceRange.baseArrayLayer = 0;
 		info.subresourceRange.layerCount = 1;
 
-		if (vkTransitionImageLayout(m_device, 1, &info) != VK_SUCCESS)
+		if (vkTransitionImageLayoutEXT(m_device, 1, &info) != VK_SUCCESS)
 		{
 			g_logger->error("vkTransitionImageLayout failed!");
 			return false;
@@ -782,7 +804,7 @@ bool AsyncRenderer::CreateSharedTexture(VulkanTexture& texture, VkExtent2D exten
 
 	VkMemoryWin32HandlePropertiesKHR handleProps{ VK_STRUCTURE_TYPE_MEMORY_WIN32_HANDLE_PROPERTIES_KHR };
 
-	VkResult res2 = _vkGetMemoryWin32HandlePropertiesKHR(m_device, VK_EXTERNAL_MEMORY_HANDLE_TYPE_D3D11_TEXTURE_KMT_BIT, texture.SharedHandle, &handleProps);
+	VkResult res2 = vkGetMemoryWin32HandlePropertiesKHR(m_device, VK_EXTERNAL_MEMORY_HANDLE_TYPE_D3D11_TEXTURE_KMT_BIT, texture.SharedHandle, &handleProps);
 	if (res2 != VK_SUCCESS)
 	{
 		g_logger->error("vkGetMemoryWin32HandlePropertiesKHR failure: {}", (int32_t)res2);
@@ -1242,7 +1264,7 @@ void AsyncRenderer::Render(std::shared_ptr<DepthFrame> depthFrame, const Config_
 	{
 		VkDebugUtilsLabelEXT label{ VK_STRUCTURE_TYPE_DEBUG_UTILS_LABEL_EXT };
 		label.pLabelName = "vr-marker,frame_end,type,application";
-		_vkCmdInsertDebugUtilsLabelEXT(m_commandBuffer, &label);
+		vkCmdInsertDebugUtilsLabelEXT(m_commandBuffer, &label);
 	}
 
 

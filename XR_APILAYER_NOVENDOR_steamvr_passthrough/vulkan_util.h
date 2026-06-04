@@ -173,7 +173,7 @@ inline void CopyHostImageToGPU(VkDevice device, VulkanTexture texture, std::vect
 	copyInfo.regionCount = 1;
 	copyInfo.pRegions = &region;
 
-	VkResult res = vkCopyMemoryToImage(device, &copyInfo);
+	VkResult res = vkCopyMemoryToImageEXT(device, &copyInfo);
 	if (res != VK_SUCCESS)
 	{
 		g_logger->error("vkCopyMemoryToImage failure: {}", (int32_t)res);

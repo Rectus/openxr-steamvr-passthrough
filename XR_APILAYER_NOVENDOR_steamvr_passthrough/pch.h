@@ -69,8 +69,7 @@ using namespace std::chrono_literals;
 #endif
 
 #include <GL/gl.h>
-#include <vulkan/vulkan.h>
-
+#include "volk.h"
 
 #include <openxr/openxr.h>
 #include <openxr/openxr_platform.h>

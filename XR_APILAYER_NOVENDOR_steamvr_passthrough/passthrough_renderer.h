@@ -296,6 +296,7 @@ public:
 	virtual std::shared_timed_mutex& GetAccessMutex() = 0;
 	virtual bool CreateSharedCameraTexture(HANDLE* sharedHandle, void** nativeTexture, VkExtent2D extent, VkFormat format) { return false; };
 	virtual bool CreateSharedDisparityMap(HANDLE* sharedHandle, void* nativeTexture, VkExtent2D extent, VkFormat format) { return false; };
+	virtual void DestroySharedTextures() { };
 };
 
 
@@ -316,6 +317,7 @@ public:
 	std::shared_timed_mutex& GetAccessMutex() { return m_accessRendererMutex; }
 	bool CreateSharedCameraTexture(HANDLE* sharedHandle, void** nativeTexture, VkExtent2D extent, VkFormat format);
 	bool CreateSharedDisparityMap(HANDLE* sharedHandle, void* nativeTexture, VkExtent2D extent, VkFormat format);
+	void DestroySharedTextures();
 
 protected:
 

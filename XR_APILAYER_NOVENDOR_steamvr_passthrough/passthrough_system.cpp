@@ -51,6 +51,12 @@ bool PassthroughSystem::SetupRenderer(const XrInstance instance, const XrSession
 	Config_Main& mainConfig = m_configManager->GetConfig_Main();
 	ClientData& clientData = m_menuHandler->GetClientData();
 
+	VkResult res = volkInitialize();
+	if (res != VK_SUCCESS)
+	{
+		g_logger->error("Volk initialization failed: {}", (int)res);
+	}
+
 	const XrBaseInStructure* entry = reinterpret_cast<const XrBaseInStructure*>(createInfo->next);
 
 	while (entry != nullptr)
@@ -125,7 +131,6 @@ bool PassthroughSystem::SetupRenderer(const XrInstance instance, const XrSession
 				{
 
 					g_logger->warn("Application is using the XR_KHR_vulkan_enable extension. Required Vulkan features can not be confirmed");
-					return false;
 				}
 				else if (!m_extensionData.bVulkan2ExtensionEnabled)
 				{
@@ -203,12 +208,14 @@ bool PassthroughSystem::SetupProcessingPipeline()
 	m_cameraManager.reset();
 	m_augmentedCameraManager.reset();
 	m_asyncRenderer.reset();
-
+	
 	if (!m_inlineRenderer.get())
 	{
 		g_logger->error("Trying to initialize processing pipeline without renderer!");
 		return false;
 	}
+
+	m_inlineRenderer->DestroySharedTextures();	
 
 	Config_Main& mainConfig = m_configManager->GetConfig_Main();
 
@@ -221,12 +228,6 @@ bool PassthroughSystem::SetupProcessingPipeline()
 	if (m_projectionMode != Projection_RoomView2D)
 	{
 		m_asyncRenderer = std::make_shared<AsyncRenderer>(m_configManager, m_inlineRenderer);
-
-		if (!m_asyncRenderer->InitRenderer())
-		{
-			g_logger->error("Failed to initialize async renderer!");
-			return false;
-		}
 	}
 
 	if (m_cameraProvider == CameraProvider_OpenVR)
@@ -308,6 +309,12 @@ bool PassthroughSystem::SetupProcessingPipeline()
 
 	if (m_projectionMode != Projection_RoomView2D)
 	{
+		if (!m_asyncRenderer->InitRenderer())
+		{
+			g_logger->error("Failed to initialize async renderer!");
+			return false;
+		}
+
 		m_depthReconstruction = std::make_shared<DepthReconstruction>(m_configManager, m_openVRManager, m_cameraManager, m_asyncRenderer);
 
 		if (m_cameraProvider == CameraProvider_Augmented)
