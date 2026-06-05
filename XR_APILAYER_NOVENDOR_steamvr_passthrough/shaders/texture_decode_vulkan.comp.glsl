@@ -77,8 +77,46 @@ vec3 LABtoLinearRGB_D65(in vec3 lab)
     return xyz * XYZtoRGBMat;
 }
 
+vec3 SRGBToLinear(in vec3 sRGB)
+{
+    vec3 linearRGB;
+
+    linearRGB.r = sRGB.r <= 0.0031308 ? sRGB.r / 12.92 : pow((sRGB.r + 0.055) / 1.055, 2.4);
+    linearRGB.g = sRGB.g <= 0.0031308 ? sRGB.g / 12.92 : pow((sRGB.g + 0.055) / 1.055, 2.4);
+    linearRGB.b = sRGB.b <= 0.0031308 ? sRGB.b / 12.92 : pow((sRGB.b + 0.055) / 1.055, 2.4);
+
+    return linearRGB;
+}
+
+vec3 LinearToSRGB(in vec3 linearRGB)
+{
+    vec3 sRGB;
+
+    sRGB.r = linearRGB.r <= 0.0031308 ? linearRGB.r * 12.92 : pow(linearRGB.r, 1 / 2.4) * 1.055 - 0.055;
+    sRGB.g = linearRGB.g <= 0.0031308 ? linearRGB.g * 12.92 : pow(linearRGB.g, 1 / 2.4) * 1.055 - 0.055;
+    sRGB.b = linearRGB.b <= 0.0031308 ? linearRGB.b * 12.92 : pow(linearRGB.b, 1 / 2.4) * 1.055 - 0.055;
+
+    return sRGB;
+}
+
+
+void ApplyColorAdjustment(inout vec3 linearRGB)
+{
+    linearRGB = pow(abs(linearRGB), vec3(g_pass.gammaCorrection));
+        
+	// Using CIELAB D65 to match the EXT_FB_passthrough adjustments.
+	vec3 labColor = LinearRGBtoLAB_D65(linearRGB);
+
+	float LPrime = clamp((labColor.x - 50.0) * g_pass.contrast + 50.0, 0.0, 100.0);
+	float LBis = clamp(LPrime + g_pass.brightness, 0.0, 100.0);
+	vec2 ab = labColor.yz * g_pass.saturation;
+
+	linearRGB = LABtoLinearRGB_D65(vec3(LBis, ab.xy));
+}
+
+
 // Converting YUV to sRGB with the models specified by the Valve Index UVC profile
-vec3 YUVToSRGB(in vec3 inYUV)
+vec3 YUVToRGB(in vec3 inYUV)
 {
     // Decoding narrow "TV" range according to ITU-T BT.709.
     vec3 yuvDecoded = (vec3(inYUV.x - (16.0 / 256.0), inYUV.y - 0.5, inYUV.z - 0.5) * 
@@ -98,25 +136,7 @@ vec3 YUVToSRGB(in vec3 inYUV)
     linearRGB.g = rgbGamma.g < 0.0812 ? rgbGamma.g / 4.5 : pow((rgbGamma.g + 0.099) / 1.099, 1 / 0.45);
     linearRGB.b = rgbGamma.b < 0.0812 ? rgbGamma.b / 4.5 : pow((rgbGamma.b + 0.099) / 1.099, 1 / 0.45);
 
-    if (g_pass.bDoColorAdjustment)
-	{
-        linearRGB = pow(abs(linearRGB), vec3(g_pass.gammaCorrection));
-        
-		// Using CIELAB D65 to match the EXT_FB_passthrough adjustments.
-		vec3 labColor = LinearRGBtoLAB_D65(linearRGB);
-		float LPrime = clamp((labColor.x - 50.0) * g_pass.contrast + 50.0, 0.0, 100.0);
-		float LBis = clamp(LPrime + g_pass.brightness, 0.0, 100.0);
-		vec2 ab = labColor.yz * g_pass.saturation;
-
-		linearRGB = LABtoLinearRGB_D65(vec3(LBis, ab.xy));
-	}
-
-    vec3 srgb;
-    srgb.r = linearRGB.r <= 0.0031308 ? linearRGB.r * 12.92 : pow(linearRGB.r, 1 / 2.4) * 1.055 - 0.055;
-    srgb.g = linearRGB.g <= 0.0031308 ? linearRGB.g * 12.92 : pow(linearRGB.g, 1 / 2.4) * 1.055 - 0.055;
-    srgb.b = linearRGB.b <= 0.0031308 ? linearRGB.b * 12.92 : pow(linearRGB.b, 1 / 2.4) * 1.055 - 0.055;
-
-    return srgb;
+    return linearRGB;
 }
 
 
@@ -151,11 +171,41 @@ void main()
         rightYUV.y = inputYUYV.y * 0.75 + rightYUYV.y * 0.25;
         rightYUV.z = inputYUYV.w * 0.75 + rightYUYV.w * 0.25;
 
-        vec3 leftRGB = YUVToSRGB(leftYUV);
-        vec3 rightRGB = YUVToSRGB(rightYUV);
+        vec3 leftRGB = YUVToRGB(leftYUV);
+        vec3 rightRGB = YUVToRGB(rightYUV);
 
-        imageStore(g_outputFrame, outPos, vec4(leftRGB, 1));
-        imageStore(g_outputFrame, outPos + ivec2(1, 0), vec4(rightRGB, 1));
+        if (g_pass.bDoColorAdjustment)
+        {
+            ApplyColorAdjustment(leftRGB);
+            ApplyColorAdjustment(rightRGB);
+        }
+
+        vec3 leftSRGB = LinearToSRGB(leftRGB);
+        vec3 rightSRGB = LinearToSRGB(rightRGB);
+
+        imageStore(g_outputFrame, outPos, vec4(leftSRGB, 1));
+        imageStore(g_outputFrame, outPos + ivec2(1, 0), vec4(rightSRGB, 1));
+    }
+    else if(g_pass.frameFormat == FrameFormat_RGBX32)
+    {
+        if(any(greaterThanEqual(gl_GlobalInvocationID.xy, inSize)))
+        {
+            return;
+        }
+
+        ivec2 inPos = ivec2(gl_GlobalInvocationID.xy);
+
+        vec3 RGB = texelFetch(g_rawFrame, inPos, 0).rgb;
+
+        if (g_pass.bDoColorAdjustment)
+        {
+            ApplyColorAdjustment(RGB);
+        }
+
+        vec3 SRGB = LinearToSRGB(RGB);
+
+        imageStore(g_outputFrame, inPos, vec4(SRGB, 1));
+
     }
     else
     {

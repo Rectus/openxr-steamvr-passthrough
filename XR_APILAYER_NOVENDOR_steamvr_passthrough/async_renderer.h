@@ -52,6 +52,7 @@ private:
 	VkCommandPool m_commandPool = VK_NULL_HANDLE;
 	VkCommandBuffer m_commandBuffer = VK_NULL_HANDLE;
 	bool m_bHostImageCopyEnabled = false;
+	bool m_bSamplerYcbcrConversionEnabled = false;
 	std::atomic_bool m_bIsInitialized = false;
 
 	VkFence m_renderFence = VK_NULL_HANDLE;

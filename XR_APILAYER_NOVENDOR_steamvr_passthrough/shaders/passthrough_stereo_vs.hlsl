@@ -175,15 +175,10 @@ VS_OUTPUT main(float3 inPosition : POSITION, uint vertexID : SV_VertexID)
     float4 outCoords = mul((g_cameraViewIndex == 0) ? g_worldToCameraFrameProjectionLeft : g_worldToCameraFrameProjectionRight, worldSpacePoint);
 	output.cameraReprojectedPos = outCoords;
     
-    float4 prevOutCoords = mul((g_cameraViewIndex == 0) ? g_worldToPrevCameraFrameProjectionLeft : g_worldToPrevCameraFrameProjectionRight, worldSpacePoint);
-    
     output.prevCameraFrameScreenPos = mul(g_prevCameraFrame_WorldToHMDProjection, worldSpacePoint);
     output.prevHMDFrameScreenPos = mul(g_prevHMDFrame_WorldToHMDProjection, worldSpacePoint);
     
 #endif
-    
-    output.crossCameraReprojectedPos = 0;
-    output.cameraDepth = 0;
 
 	return output;
 }

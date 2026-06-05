@@ -58,7 +58,6 @@ public:
 	virtual float GetCPUFrameRetrievalPerfTime() { return -1.0f; }
 	virtual FramePtr<CameraGPUFrame> AcquireCameraGPUFrame() = 0;
 	virtual FramePtr<CameraCPUFrame> AcquireCameraCPUFrame() = 0;
-	virtual void UpdateFrameProjectionMatrix(std::shared_ptr<CameraGPUFrame>& frame) = 0;
 
 	const void DumpCameraFrameTexture(const std::shared_ptr<std::vector<uint8_t>> frameBuffer, const uint32_t width, const uint32_t height, const std::string cameraProvider)
 	{
@@ -115,7 +114,6 @@ public:
 	float GetCPUFrameRetrievalPerfTime() { return m_cpuFrameTimer.GetAverageTimeMS(); }
 	FramePtr<CameraGPUFrame> AcquireCameraGPUFrame();
 	FramePtr<CameraCPUFrame> AcquireCameraCPUFrame();
-	void UpdateFrameProjectionMatrix(std::shared_ptr<CameraGPUFrame>& frame);
 
 private:
 	void ServeFrames();
@@ -123,6 +121,7 @@ private:
 	void CopyCPUFrameToGPU(std::shared_ptr<CameraCPUFrame> frame);
 	bool GetHMDPoseForTime(XrMatrix4x4f& headToTrackingPose, const uint64_t time);
 	void GetTrackedCameraEyePoses(XrMatrix4x4f& LeftPose, XrMatrix4x4f& RightPose, bool bForceOpenVRValue);
+	void UpdateRoomViewProjectionMatrix();
 
 	std::shared_ptr<ConfigManager> m_configManager;
 	std::shared_ptr<OpenVRManager> m_openVRManager;
@@ -170,15 +169,8 @@ private:
 	vr::TrackedCameraHandle_t m_cameraHandle;
 	EStereoFrameLayout m_frameLayout;
 
-	/*XrMatrix4x4f m_HMDViewToProjectionLeft{};
-	XrMatrix4x4f m_HMDViewToProjectionRight{};
-	XrMatrix4x4f m_viewToHMDLeft{};
-	XrMatrix4x4f m_viewToHMDRight{};
-	XrMatrix4x4f m_HMDToViewLeft{};
-	XrMatrix4x4f m_HMDToViewRight{};*/
-
-	XrMatrix4x4f m_cameraProjectionInvLeft{};
-	XrMatrix4x4f m_cameraProjectionInvRight{};
+	XrMatrix4x4f m_cameraRoomViewProjectionInvLeft{};
+	XrMatrix4x4f m_cameraRoomViewProjectionInvRight{};
 
 	XrMatrix4x4f m_cameraToHMDLeft{};
 	XrMatrix4x4f m_cameraToHMDRight{};
@@ -222,10 +214,10 @@ public:
 	float GetCPUFrameRetrievalPerfTime() { return m_cpuFrameTimer.GetAverageTimeMS(); }
 	FramePtr<CameraGPUFrame> AcquireCameraGPUFrame();
 	FramePtr<CameraCPUFrame> AcquireCameraCPUFrame();
-	void UpdateFrameProjectionMatrix(std::shared_ptr<CameraGPUFrame>& frame);
 
 private:
 	void ServeFrames();
+	void CopyCPUFrameToGPU(std::shared_ptr<CameraCPUFrame> frame);
 
 	std::shared_ptr<ConfigManager> m_configManager;
 	std::shared_ptr<OpenVRManager> m_openVRManager;
@@ -235,7 +227,6 @@ private:
 	bool m_bIsPaused = false;
 
 	cv::VideoCapture m_videoCapture;
-	uint32_t m_lastFrameTimestamp = 0;
 
 	uint32_t m_cameraTextureWidth = 0;
 	uint32_t m_cameraTextureHeight = 0;
@@ -270,9 +261,6 @@ private:
 	int m_hmdDeviceId = -1;
 	vr::TrackedCameraHandle_t m_cameraHandle;
 	EStereoFrameLayout m_frameLayout;
-
-	XrMatrix4x4f m_cameraProjectionInvLeft{};
-	XrMatrix4x4f m_cameraProjectionInvRight{};
 
 	PerfTimer m_gpuFrameTimer{ 20 };
 	PerfTimer m_cpuFrameTimer{ 20 };

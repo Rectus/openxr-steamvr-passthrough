@@ -4,7 +4,7 @@
 uint64_t GetCurrentTimeSytemTicks();
 uint64_t GetSytemTickFrequency();
 
-float GetPerfTimeDiffSeconds(const uint64_t first, const uint64_t second);
+double GetPerfTimeDiffSeconds(const uint64_t first, const uint64_t second);
 
 class PerfTimer
 {

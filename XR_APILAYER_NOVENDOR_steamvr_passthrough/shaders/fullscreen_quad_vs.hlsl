@@ -13,17 +13,15 @@ VS_OUTPUT main(uint vertexID : SV_VertexID)
     
     output.cameraReprojectedPos = float4(clipCoords, 1, 1);
     output.screenPos = float4(clipCoords, 1, 1);
-    output.projectionConfidence = 1;
+    
+    output.projectionConfidence = 1;      
+    output.cameraBlendConfidence = 1.0;
+    output.prevHMDFrameScreenPos = 0;
+    output.prevCameraFrameScreenPos = 0;
 
 #ifdef VULKAN
 	output.position.y *= -1.0;
 #endif
-    
-    output.cameraBlendConfidence = 1.0;
-    output.crossCameraReprojectedPos = 0;
-    output.prevHMDFrameScreenPos = 0;
-    output.prevCameraFrameScreenPos = 0;
-    output.cameraDepth = 0;
-    
+ 
     return output;
 }

@@ -476,7 +476,12 @@ void PassthroughSystem::OnPreRenderFrame(const XrFrameEndInfo* frameEndInfo)
 
 bool PassthroughSystem::RenderPassthroughOnAppLayer(const XrFrameEndInfo* frameEndInfo, const uint32_t layerNum, FrameRenderParameters& renderParams)
 {
-	Config_Main& mainConf = m_configManager->GetConfig_Main();
+	// Make local copies for consistency
+	Config_Main mainConf = m_configManager->GetConfig_Main();
+	Config_Core coreConf = m_configManager->GetConfig_Core();
+	Config_Extensions extConf = m_configManager->GetConfig_Extensions();
+	Config_Depth depthConf = m_configManager->GetConfig_Depth();
+
 
 	if (m_bIsPaused)
 	{
@@ -509,6 +514,7 @@ bool PassthroughSystem::RenderPassthroughOnAppLayer(const XrFrameEndInfo* frameE
 
 	renderParams.CameraProvider = m_cameraProvider;
 	renderParams.ProjectionMode = m_projectionMode;
+	renderParams.ProjectionDistance = mainConf.ProjectionDistanceFar;
 
 	XrCompositionLayerProjection* layer = (XrCompositionLayerProjection*)frameEndInfo->layers[layerNum];
 	
@@ -518,13 +524,6 @@ bool PassthroughSystem::RenderPassthroughOnAppLayer(const XrFrameEndInfo* frameE
 
 	FramePtr<CameraGPUFrame> gpuFrame = cameraFrameManager->AcquireCameraGPUFrame();
 	if (!gpuFrame.HasFrame())
-	{
-		return false;
-	}
-
-	// TODO: CPU-side camera frame only needed for OpenCV provider. Upload async instead.
-	FramePtr<CameraCPUFrame> cpuFrame = cameraFrameManager->AcquireCameraCPUFrame();
-	if (m_cameraProvider == CameraProvider_OpenCV && !cpuFrame.HasFrame())
 	{
 		return false;
 	}
@@ -541,9 +540,7 @@ bool PassthroughSystem::RenderPassthroughOnAppLayer(const XrFrameEndInfo* frameE
 
 	uint64_t preRenderTime = m_passthroughRenderTime.StartPerfTimer();
 
-	Config_Core& coreConf = m_configManager->GetConfig_Core();
-	Config_Extensions& extConf = m_configManager->GetConfig_Extensions();
-	Config_Depth& depthConf = m_configManager->GetConfig_Depth();
+	
 
 	if (renderParams.bUseFBPassthrough)
 	{
@@ -610,7 +607,7 @@ bool PassthroughSystem::RenderPassthroughOnAppLayer(const XrFrameEndInfo* frameE
 	renderParams.bInvertLayerAlpha = m_extensionData.bInverseAlphaExtensionEnabled &&
 		(layer->layerFlags & XR_COMPOSITION_LAYER_INVERTED_ALPHA_BIT_EXT);
 
-	if (m_configManager->GetConfig_Main().DebugTexture == DebugTexture_TestImage &&
+	if (mainConf.DebugTexture == DebugTexture_TestImage &&
 		m_configManager->GetDebugTexture().CurrentTexture != DebugTexture_TestImage)
 	{
 		GetTestPattern(m_configManager->GetDebugTexture());
@@ -680,13 +677,8 @@ bool PassthroughSystem::RenderPassthroughOnAppLayer(const XrFrameEndInfo* frameE
 
 	CalculateFrameProjection(gpuFrame.GetSharedPointer(), depthFrame.GetSharedPointer(), *layer, renderParams);
 
-	m_inlineRenderer->RenderPassthroughFrame(layer, gpuFrame.GetSharedPointer(), cpuFrame.GetSharedPointer(), renderParams, depthFrame.GetSharedPointer(), distParams);
+	m_inlineRenderer->RenderPassthroughFrame(layer, gpuFrame.GetSharedPointer(), renderParams, depthFrame.GetSharedPointer(), distParams);
 
-	// TODO move
-	if (depthFrame.HasFrame())
-	{
-		depthFrame->bIsFirstRender = false;
-	}
 	
 	m_passthroughRenderTime.EndPerfTimer();
 	clientData.Values.RenderTimeMS = m_passthroughRenderTime.GetAverageTimeMS();
@@ -784,100 +776,72 @@ FramePtr<DepthFrame> PassthroughSystem::GetDepthFrame()
 
 void PassthroughSystem::CalculateFrameProjection(std::shared_ptr<CameraGPUFrame> cameraFrame, std::shared_ptr<DepthFrame> depthFrame, const XrCompositionLayerProjection& layer, FrameRenderParameters& renderParams)
 {
-	if (m_cameraProvider == CameraProvider_Augmented)
-	{
-		m_augmentedCameraManager->UpdateFrameProjectionMatrix(cameraFrame);
-		m_augmentedDepthReconstruction->CalculateCameraProjection(cameraFrame, renderParams);
-	}
-	else
-	{
-		m_cameraManager->UpdateFrameProjectionMatrix(cameraFrame);
-
-		if (m_projectionMode != Projection_RoomView2D)
-		{
-			m_depthReconstruction->CalculateCameraProjection(cameraFrame, renderParams);
-		}
-	}
-
-	CalculateHMDProjectionForEye(RenderEye_Left, cameraFrame, layer, renderParams);
-	CalculateHMDProjectionForEye(RenderEye_Right, cameraFrame, layer, renderParams);
+	CalculateHMDProjectionForEye(RenderEye_Left, layer, renderParams);
+	CalculateHMDProjectionForEye(RenderEye_Right, layer, renderParams);
 
 	// Detect the FOV being upside-down in order to prevent triangles from being backface culled
-	cameraFrame->bIsRenderingMirrored = (layer.views[0].fov.angleUp - layer.views[0].fov.angleDown) < 0.0f;
+	renderParams.bMirrorRender = (layer.views[0].fov.angleUp - layer.views[0].fov.angleDown) < 0.0f;
 
 	if (m_appRenderAPI == RenderAPI_OpenGL)
 	{
 		// Flip mirrored setting on OpenGL to get correct backface culling on rendering to upside down texture.
-		cameraFrame->bIsRenderingMirrored = !cameraFrame->bIsRenderingMirrored;
+		renderParams.bMirrorRender = !renderParams.bMirrorRender;
 	}
 
-	// TODO: Put all the output into renderParams instead of writing to the read-only frames.
-	if (depthFrame.get() && depthFrame->bIsFirstRender)
-	{
-		depthFrame->PrevDispWorldToCameraProjectionLeft = m_lastDispWorldToCameraProjectionLeft;
-		depthFrame->PrevDispWorldToCameraProjectionRight = m_lastDispWorldToCameraProjectionRight;
-		depthFrame->PrevDisparityViewToWorldLeft = m_lastDisparityViewToWorldLeft;
-		depthFrame->PrevDisparityViewToWorldRight = m_lastDisparityViewToWorldRight;
+	renderParams.PrevHMDFrame_HMDEyeLeft = m_lastHMDFrame_HMDEyeLeft;
+	renderParams.PrevHMDFrame_HMDEyeRight = m_lastHMDFrame_HMDEyeRight;
 
-		m_lastDispWorldToCameraProjectionLeft = cameraFrame->WorldToCameraProjectionLeft;
-		m_lastDispWorldToCameraProjectionRight = cameraFrame->WorldToCameraProjectionRight;
-		m_lastDisparityViewToWorldLeft = depthFrame->DisparityViewToWorldLeft;
-		m_lastDisparityViewToWorldRight = depthFrame->DisparityViewToWorldRight;
-	}
+	m_lastHMDFrame_HMDEyeLeft = renderParams.HMDEyeLeft;
+	m_lastHMDFrame_HMDEyeRight = renderParams.HMDEyeRight;
+
 
 	if (cameraFrame->FrameSequence != m_lastFrameSequence)
 	{
-		cameraFrame->PrevWorldToCameraProjectionLeft = m_lastWorldToCameraProjectionLeft;
-		cameraFrame->PrevWorldToCameraProjectionRight = m_lastWorldToCameraProjectionRight;
-		cameraFrame->PrevCameraFrame_WorldToHMDProjectionLeft = m_lastCameraFrame_WorldToHMDProjectionLeft;
-		cameraFrame->PrevCameraFrame_WorldToHMDProjectionRight = m_lastCameraFrame_WorldToHMDProjectionRight;
-
-		m_lastCameraFrame_WorldToHMDProjectionLeft = cameraFrame->WorldToHMDProjectionLeft;
-		m_lastCameraFrame_WorldToHMDProjectionRight = cameraFrame->WorldToHMDProjectionRight;
-
-		m_lastWorldToCameraProjectionLeft = cameraFrame->WorldToCameraProjectionLeft;
-		m_lastWorldToCameraProjectionRight = cameraFrame->WorldToCameraProjectionRight;
-
 		m_lastFrameSequence = cameraFrame->FrameSequence;
+		renderParams.bIsFirstRenderOfCameraFrame = true;
 
-		cameraFrame->bIsFirstRender = true;
+		renderParams.CameraLeft = cameraFrame->CameraLeft;
+		renderParams.CameraRight = cameraFrame->CameraRight;
+		
+		if (m_cameraProvider == CameraProvider_Augmented)
+		{
+			m_augmentedDepthReconstruction->CalculateCameraProjection(cameraFrame, renderParams);
+		}
+		else if (m_projectionMode != Projection_RoomView2D)
+		{
+			m_depthReconstruction->CalculateCameraProjection(cameraFrame, renderParams);
+		}
+
+		m_currentCameraFrame_CameraLeft = renderParams.CameraLeft;
+		m_currentCameraFrame_CameraRight= renderParams.CameraRight;	
+
+		m_lastCameraFrame_HMDEyeLeft = m_currentCameraFrame_HMDEyeLeft;
+		m_lastCameraFrame_HMDEyeRight = m_currentCameraFrame_HMDEyeRight;
+
+		m_currentCameraFrame_HMDEyeLeft = renderParams.HMDEyeLeft;
+		m_currentCameraFrame_HMDEyeRight = renderParams.HMDEyeRight;	
 	}
-	else
+	else // Previous HMD frame was rendered from the same camera frame
 	{
-		// Previous HMD frame was rendered from the same camera frame
-		cameraFrame->PrevWorldToCameraProjectionLeft = cameraFrame->WorldToCameraProjectionLeft;
-		cameraFrame->PrevWorldToCameraProjectionRight = cameraFrame->WorldToCameraProjectionRight;
+		renderParams.bIsFirstRenderOfCameraFrame = false;
 
-		cameraFrame->bIsFirstRender = false;
+		renderParams.CameraLeft = m_currentCameraFrame_CameraLeft;
+		renderParams.CameraRight = m_currentCameraFrame_CameraRight;
 	}
 
-	cameraFrame->PrevHMDFrame_WorldToHMDProjectionLeft = m_lastHMDFrame_WorldToHMDProjectionLeft;
-	cameraFrame->PrevHMDFrame_WorldToHMDProjectionRight = m_lastHMDFrame_WorldToHMDProjectionRight;
+	renderParams.ColorHistory_HMDEyeLeft = m_lastCameraFrame_HMDEyeLeft;
+	renderParams.ColorHistory_HMDEyeRight = m_lastCameraFrame_HMDEyeRight;
 
-	m_lastHMDFrame_WorldToHMDProjectionLeft = cameraFrame->WorldToHMDProjectionLeft;
-	m_lastHMDFrame_WorldToHMDProjectionRight = cameraFrame->WorldToHMDProjectionRight;
 }
 
-void PassthroughSystem::CalculateHMDProjectionForEye(const ERenderEye eye, std::shared_ptr<CameraGPUFrame>& cameraFrame, const XrCompositionLayerProjection& layer, FrameRenderParameters& renderParams)
+void PassthroughSystem::CalculateHMDProjectionForEye(const ERenderEye eye, const XrCompositionLayerProjection& layer, FrameRenderParameters& renderParams)
 {
-	Config_Main& mainConf = m_configManager->GetConfig_Main();
-
-	bool bIsStereo = cameraFrame->FrameLayout != EStereoFrameLayout::FrameLayout_Mono;
-	uint32_t cameraId = (eye == RenderEye_Right && bIsStereo) ? 1 : 0;
-
-	XrMatrix4x4f hmdWorldToView = GetHMDWorldToViewMatrix(eye, layer, renderParams.ReferenceSpace);
-
-	XrVector3f* projectionOriginWorld = (eye == RenderEye_Left) ? &cameraFrame->ProjectionOriginWorldLeft : &cameraFrame->ProjectionOriginWorldRight;
-	XrMatrix4x4f hmdViewToWorld;
-	XrMatrix4x4f_Invert(&hmdViewToWorld, &hmdWorldToView);
-	XrVector3f inPos{ 0,0,0 };
-	XrMatrix4x4f_TransformVector3f(projectionOriginWorld, &hmdViewToWorld, &inPos);
-
-
 	float nearZ = NEAR_PROJECTION_DISTANCE;
-	float farZ = mainConf.ProjectionDistanceFar * 1.5f;
+	float farZ = renderParams.ProjectionDistance * 1.5f;
+
 
 	const XrCompositionLayerDepthInfoKHR* depthInfo = nullptr;
+	renderParams.bHasReversedDepth = false;
 
 	if (renderParams.bReadApplicationDepth)
 	{
@@ -900,24 +864,16 @@ void PassthroughSystem::CalculateHMDProjectionForEye(const ERenderEye eye, std::
 			{
 				nearZ = depthInfo->farZ;
 				farZ = depthInfo->nearZ;
-				cameraFrame->bHasReversedDepth = true;
+				renderParams.bHasReversedDepth = true;
 			}
 			else
 			{
 				nearZ = depthInfo->nearZ;
 				farZ = depthInfo->farZ;
-				cameraFrame->bHasReversedDepth = false;
 			}
 		}
-		else
-		{
-			cameraFrame->bHasReversedDepth = false;
-		}
 	}
-	else
-	{
-		cameraFrame->bHasReversedDepth = false;
-	}
+
 
 	XrMatrix4x4f hmdProjection;
 	XrMatrix4x4f_CreateProjectionFov(&hmdProjection, GRAPHICS_D3D, layer.views[(eye == RenderEye_Left) ? 0 : 1].fov, nearZ, farZ);
@@ -943,9 +899,12 @@ void PassthroughSystem::CalculateHMDProjectionForEye(const ERenderEye eye, std::
 		hmdProjection.m[13] *= -1;
 	}
 
-	XrMatrix4x4f* worldToHMDMatrix = (eye == RenderEye_Left) ? &cameraFrame->WorldToHMDProjectionLeft : &cameraFrame->WorldToHMDProjectionRight;
+	ProjectedView& hmdView = (eye == RenderEye_Left) ? renderParams.HMDEyeLeft : renderParams.HMDEyeRight;
 
-	XrMatrix4x4f_Multiply(worldToHMDMatrix, &hmdProjection, &hmdWorldToView);
+	XrMatrix4x4f hmdWorldToView = GetHMDWorldToViewMatrix(eye, layer, renderParams.ReferenceSpace);
+
+	XrMatrix4x4f_Invert(&hmdView.ViewToWorld, &hmdWorldToView);
+	XrMatrix4x4f_Multiply(&hmdView.WorldToProjection, &hmdProjection, &hmdWorldToView);
 }
 
 // Constructs a matrix from the roomscale origin to the HMD eye pose.

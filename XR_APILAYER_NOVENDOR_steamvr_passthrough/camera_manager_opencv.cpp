@@ -87,7 +87,6 @@ bool CameraManagerOpenCV::InitCamera()
 
     m_bCameraInitialized = true;
     m_bRunThread = true;
-    m_lastFrameTimestamp = 0;
     m_bIsPaused = false;
 
     if (!m_serveThread.joinable())
@@ -321,11 +320,9 @@ void CameraManagerOpenCV::ServeFrames()
 
     if (!m_videoCapture.isOpened()) { return; }
 
-    bool bHasFrame = false;
-    uint32_t lastFrameSequence = 0;
+    uint32_t frameSequence = 0;
     vr::TrackedDevicePose_t trackedDevicePoseArray[vr::k_unMaxTrackedDeviceCount];
     cv::Mat frameBuffer;
-    uint64_t exposureTime;
     uint64_t tickFreq = GetSytemTickFrequency();
 
     while (m_bRunThread && m_videoCapture.isOpened())
@@ -361,12 +358,6 @@ void CameraManagerOpenCV::ServeFrames()
             continue;
         }
 
-        FramePtr<CameraGPUFrame> gpuFrame = m_gpuFrameQueue.AcquireWrite();
-        if (!gpuFrame.HasFrame())
-        {
-            continue;
-        }
-
         FramePtr<CameraCPUFrame> cpuFrame = m_cpuFrameQueue.AcquireWrite();
         if (!cpuFrame.HasFrame())
         {
@@ -374,12 +365,12 @@ void CameraManagerOpenCV::ServeFrames()
         }
 
         // Frame latency is approximated from when grab() returns.
-        exposureTime = GetCurrentTimeSytemTicks();
+        uint64_t currentTime = GetCurrentTimeSytemTicks();
 
         vrSystem->GetDeviceToAbsoluteTrackingPose(vr::TrackingUniverseStanding, -cameraConf.FrameDelayOffset, trackedDevicePoseArray, vr::k_unMaxTrackedDeviceCount);
 
         uint64_t delayOffsetTicks = (uint64_t)(cameraConf.FrameDelayOffset * tickFreq);
-        gpuFrame->FrameExposureTimestamp = (exposureTime - delayOffsetTicks);
+        cpuFrame->FrameExposureTimestamp = (currentTime - delayOffsetTicks);
 
         if (!m_videoCapture.retrieve(frameBuffer))
         {
@@ -399,20 +390,18 @@ void CameraManagerOpenCV::ServeFrames()
         int from_to[] = { 0,2, 1,1, 2,0, -1,3 };
         cv::mixChannels(&frameBuffer, 1, &paddedBuffer, 1, from_to, frameBuffer.channels());
 
-        //m_gpuFrameTimer.StartPerfTimer();
-        //m_gpuFrameTimer.EndPerfTimer();
+        cpuFrame->bIsRaw = true;
+        cpuFrame->RawFrameFormat = FrameFormat_RGBX32;
+        cpuFrame->RawFrameDataBytes = m_cameraFrameBufferSize;
+        cpuFrame->RawFrameSize[0] = frameBuffer.cols;
+        cpuFrame->RawFrameSize[1] = frameBuffer.rows;
+
 
         if (m_configManager->CheckFrameTextureDumpPending())
         {
             DumpCameraFrameTexture(cpuFrame->FrameBuffer, m_cameraTextureWidth, m_cameraTextureHeight, "OpenCV");
         }
-
-        bHasFrame = true;
- 
-        gpuFrame->FrameSequence = ++m_lastFrameTimestamp;
-        gpuFrame->FrameSize[0] = m_cameraTextureWidth;
-        gpuFrame->FrameSize[1] = m_cameraTextureHeight;
-        
+      
         XrMatrix4x4f trackedDevicePose;
 
         if (cameraConf.UseTrackedDevice)
@@ -443,11 +432,7 @@ void CameraManagerOpenCV::ServeFrames()
             pose.m[2][2] = 1.0;
             trackedDevicePose = ToXRMatrix4x4(pose);
         }
-
-        gpuFrame->bIsValid = true;
-        gpuFrame->FrameLayout = m_frameLayout;
-        gpuFrame->bisRectifiedFrame = false;
-
+    
 
         XrMatrix4x4f camera0ToWorld, camera1ToWorld, camera0Pose, camera1Pose, transMatrix, rotMatrix, temp;
 
@@ -461,8 +446,8 @@ void CameraManagerOpenCV::ServeFrames()
         {
             XrMatrix4x4f_Multiply(&camera0ToWorld, &trackedDevicePose, &camera0Pose);
 
-            gpuFrame->CameraViewToWorldLeft = camera0ToWorld;
-            gpuFrame->CameraViewToWorldRight = camera0ToWorld;
+            cpuFrame->CameraViewToWorldLeft = camera0ToWorld;
+            cpuFrame->CameraViewToWorldRight = camera0ToWorld;
         }
         else
         {
@@ -475,85 +460,62 @@ void CameraManagerOpenCV::ServeFrames()
             XrMatrix4x4f_Multiply(&camera0ToWorld, &trackedDevicePose, &camera0Pose);
             XrMatrix4x4f_Multiply(&camera1ToWorld, &trackedDevicePose, &camera1Pose);
 
-            gpuFrame->CameraViewToWorldLeft = camera0ToWorld;
-            gpuFrame->CameraViewToWorldRight = camera1ToWorld;
+            cpuFrame->CameraViewToWorldLeft = camera0ToWorld;
+            cpuFrame->CameraViewToWorldRight = camera1ToWorld;
         }
 
         cpuFrame->bIsValid = true;
-        cpuFrame->bIsRaw = false;
-        cpuFrame->FrameExposureTimestamp = gpuFrame->FrameExposureTimestamp;
         cpuFrame->FrameLayout = m_frameLayout;
-        cpuFrame->FrameSequence = gpuFrame->FrameSequence;
         cpuFrame->FrameSize[0] = m_cameraTextureWidth;
         cpuFrame->FrameSize[1] = m_cameraTextureHeight;
-        cpuFrame->CameraViewToWorldLeft = gpuFrame->CameraViewToWorldLeft;
-        cpuFrame->CameraViewToWorldRight = gpuFrame->CameraViewToWorldRight;
    
-        gpuFrame.CommitWrite();
-        cpuFrame.CommitWrite();
+        cpuFrame->FrameSequence = frameSequence;
+        frameSequence = (frameSequence + 1) % 16;
 
         m_cpuFrameTimer.EndPerfTimer();
+
+        cpuFrame.CommitWriteAndAcquireRead();
+        CopyCPUFrameToGPU(cpuFrame.GetSharedPointer());
     }
 }
 
 
-void CameraManagerOpenCV::UpdateFrameProjectionMatrix(std::shared_ptr<CameraGPUFrame>& frame)
+void CameraManagerOpenCV::CopyCPUFrameToGPU(std::shared_ptr<CameraCPUFrame> inFrame)
 {
-    bool bIsStereo = m_frameLayout != EStereoFrameLayout::FrameLayout_Mono;
+    m_gpuFrameTimer.StartPerfTimer();
 
-
-    Config_Main& mainConf = m_configManager->GetConfig_Main();
-
-    if (mainConf.ProjectionDistanceFar * 1.5f != m_projectionDistanceFar)
+    std::shared_ptr<AsyncRenderer> asyncRenderer = m_asyncRenderer.lock();
+    if (!asyncRenderer.get())
     {
-        // Push back far plane by 1.5x to account for the flat projection plane of the passthrough frame.
-        m_projectionDistanceFar = mainConf.ProjectionDistanceFar * 1.5f;
-
-
-        XrFovf fov = {-1.0f, 1.0f, 1.0f, -1.0f};
-        XrMatrix4x4f projectionMatrix;
-        XrMatrix4x4f_CreateProjectionFov(&projectionMatrix, GRAPHICS_D3D, fov, NEAR_PROJECTION_DISTANCE, m_projectionDistanceFar);
-
-        XrVector2f focalLength, center;
-        GetIntrinsics(ERenderEye::RenderEye_Left, focalLength, center);
-
-        projectionMatrix.m[0] = 2.0f * focalLength.x / (float)m_cameraTextureWidth;
-        projectionMatrix.m[5] = 2.0f * focalLength.y / (float)m_cameraTextureHeight;
-        projectionMatrix.m[8] = (1.0f - 2.0f * (center.x / (float)m_cameraTextureWidth));
-        projectionMatrix.m[9] = (1.0f - 2.0f * (center.y / (float)m_cameraTextureHeight));
-
-
-        XrMatrix4x4f scaleMatrix, offsetMatrix, transMatrix;
-
-        if (m_frameLayout == EStereoFrameLayout::FrameLayout_StereoHorizontal)
-        {
-            XrMatrix4x4f_CreateScale(&scaleMatrix, 0.5f, 1.0f, 1.0f);
-            XrMatrix4x4f_CreateTranslation(&offsetMatrix, -0.5f, 0.0f, 0.0f);
-            XrMatrix4x4f_Multiply(&transMatrix, &offsetMatrix, &scaleMatrix);
-        }
-        else if (m_frameLayout == EStereoFrameLayout::FrameLayout_StereoVertical)
-        {
-            XrMatrix4x4f_CreateScale(&scaleMatrix, 1.0f, 0.5f, 1.0f);
-            XrMatrix4x4f_CreateTranslation(&offsetMatrix, 0.0f, 0.5f, 0.0f);
-            XrMatrix4x4f_Multiply(&transMatrix, &offsetMatrix, &scaleMatrix);
-        }
-        else
-        {
-            XrMatrix4x4f_CreateIdentity(&transMatrix);
-        }
-
-        XrMatrix4x4f projectionMatrixInv;
-        XrMatrix4x4f_Invert(&projectionMatrixInv, &projectionMatrix);
-
-        XrMatrix4x4f_Multiply(&m_cameraProjectionInvLeft, &projectionMatrixInv, &transMatrix);
-
-        if (bIsStereo)
-        {
-            XrMatrix4x4f projectionMatrix, projectionMatrixInv;
-            XrMatrix4x4f_CreateProjectionFov(&projectionMatrix, GRAPHICS_D3D, fov, NEAR_PROJECTION_DISTANCE, m_projectionDistanceFar);
-            XrMatrix4x4f_Invert(&projectionMatrixInv, &projectionMatrix);
-
-            XrMatrix4x4f_Multiply(&m_cameraProjectionInvRight, &projectionMatrixInv, &transMatrix);
-        }
+        return;
     }
+
+    FramePtr<CameraGPUFrame> gpuFrame = m_gpuFrameQueue.AcquireWrite();
+    if (!gpuFrame.HasFrame())
+    {
+        return;
+    }
+
+    if (asyncRenderer->CopyAndDecodeCameraFrame(inFrame, &gpuFrame->FrameTextureResource))
+    {
+        gpuFrame->bIsValid = true;
+        gpuFrame->FrameLayout = m_frameLayout;
+        gpuFrame->FrameSequence = inFrame->FrameSequence;
+        gpuFrame->FrameExposureTimestamp = inFrame->FrameExposureTimestamp;
+        gpuFrame->CameraLeft.ViewToWorld = inFrame->CameraViewToWorldLeft;
+        gpuFrame->CameraRight.ViewToWorld = inFrame->CameraViewToWorldRight;
+        gpuFrame->bColorsPreadjusted = m_configManager->CheckEnableAsyncColorAdjustment();
+        gpuFrame->bisRectifiedFrame = false;
+        gpuFrame->FrameSize[0] = inFrame->FrameSize[0];
+        gpuFrame->FrameSize[1] = inFrame->FrameSize[1];
+
+        gpuFrame.CommitWrite();
+    }
+    else
+    {
+        gpuFrame->bIsValid = false;
+    }
+
+    m_gpuFrameTimer.EndPerfTimer();
 }
+

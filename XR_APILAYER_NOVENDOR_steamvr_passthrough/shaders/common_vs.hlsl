@@ -20,8 +20,6 @@ cbuffer vsPassConstantBuffer : register(b1)
 {
     float4x4 g_worldToCameraFrameProjectionLeft;
 	float4x4 g_worldToCameraFrameProjectionRight;
-	float4x4 g_worldToPrevCameraFrameProjectionLeft;
-	float4x4 g_worldToPrevCameraFrameProjectionRight;
 	float4x4 g_depthFrameViewToWorldLeft;
 	float4x4 g_depthFrameViewToWorldRight;
     

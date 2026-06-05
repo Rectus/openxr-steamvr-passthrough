@@ -38,7 +38,7 @@ public:
 private:
 	FramePtr<DepthFrame> GetDepthFrame();
 	void CalculateFrameProjection(std::shared_ptr<CameraGPUFrame> cameraFrame, std::shared_ptr<DepthFrame> depthFrame, const XrCompositionLayerProjection& layer, FrameRenderParameters& renderParams);
-	void CalculateHMDProjectionForEye(const ERenderEye eye, std::shared_ptr<CameraGPUFrame>& cameraFrame, const XrCompositionLayerProjection& layer, FrameRenderParameters& renderParams);
+	void CalculateHMDProjectionForEye(const ERenderEye eye, const XrCompositionLayerProjection& layer, FrameRenderParameters& renderParams);
 	XrMatrix4x4f GetHMDWorldToViewMatrix(const ERenderEye eye, const XrCompositionLayerProjection& layer, const XrReferenceSpaceCreateInfo& refSpaceInfo);
 	void UpdateRenderModels(const uint64_t cameraFrameTimestamp);
 
@@ -76,17 +76,15 @@ private:
 	std::shared_ptr<std::vector<RenderModel>> m_renderModels;
 	UVDistortionParameters m_dummyDistParams{};
 
-	XrMatrix4x4f m_lastWorldToCameraProjectionLeft{};
-	XrMatrix4x4f m_lastWorldToCameraProjectionRight{};
-	XrMatrix4x4f m_lastCameraFrame_WorldToHMDProjectionLeft{};
-	XrMatrix4x4f m_lastCameraFrame_WorldToHMDProjectionRight{};
-	XrMatrix4x4f m_lastHMDFrame_WorldToHMDProjectionLeft{};
-	XrMatrix4x4f m_lastHMDFrame_WorldToHMDProjectionRight{};
-	uint32_t m_lastFrameSequence = 0;
+	ProjectedView m_currentCameraFrame_HMDEyeLeft{};
+	ProjectedView m_currentCameraFrame_HMDEyeRight{};
+	ProjectedView m_currentCameraFrame_CameraLeft{};
+	ProjectedView m_currentCameraFrame_CameraRight{};
+	ProjectedView m_lastCameraFrame_HMDEyeLeft{};
+	ProjectedView m_lastCameraFrame_HMDEyeRight{};
+	ProjectedView m_lastHMDFrame_HMDEyeLeft{};
+	ProjectedView m_lastHMDFrame_HMDEyeRight{};
 
-	XrMatrix4x4f m_lastDispWorldToCameraProjectionLeft{};
-	XrMatrix4x4f m_lastDispWorldToCameraProjectionRight{};
-	XrMatrix4x4f m_lastDisparityViewToWorldLeft{};
-	XrMatrix4x4f m_lastDisparityViewToWorldRight{};
+	uint32_t m_lastFrameSequence = 0;
 };
 

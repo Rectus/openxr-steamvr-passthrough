@@ -84,7 +84,7 @@ public:
 		}
 	}
 
-	bool CommitWriteAndAcuireRead()
+	bool CommitWriteAndAcquireRead()
 	{
 		if (m_entry && m_bIsWrite)
 		{

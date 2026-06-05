@@ -37,8 +37,6 @@ cbuffer psPassConstantBuffer : REGISTER_PSPASS
 {
     float4x4 g_worldToCameraFrameProjectionLeft;
 	float4x4 g_worldToCameraFrameProjectionRight;
-	float4x4 g_worldToPrevCameraFrameProjectionLeft;
-	float4x4 g_worldToPrevCameraFrameProjectionRight;
     
     float2 g_depthRange;
     float2 g_depthCutoffRange;

@@ -311,54 +311,33 @@ bool AsyncRenderer::InitRenderer()
 		return false;
 	}
 
-	float queuePriority = 0.0;
+	float queuePriorities[2] = {0.0f, 0.1f};
 
 	VkDeviceQueueCreateInfo queueInfo = { VK_STRUCTURE_TYPE_DEVICE_QUEUE_CREATE_INFO };
 	queueInfo.queueCount = 2;
 	queueInfo.queueFamilyIndex = m_queueFamilyIndex;
-	queueInfo.pQueuePriorities = &queuePriority;
+	queueInfo.pQueuePriorities = queuePriorities;
 
-	VkPhysicalDeviceSamplerYcbcrConversionFeatures enabledConversionFeatures{ VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_SAMPLER_YCBCR_CONVERSION_FEATURES };
-	//VkPhysicalDeviceVulkan14Features enabledFeatures14{ VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_VULKAN_1_4_FEATURES };
-	//enabledFeatures14.pNext = &enabledConversionFeatures;
 
-	{
-		VkPhysicalDeviceSamplerYcbcrConversionFeatures conversionFeatures{ VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_SAMPLER_YCBCR_CONVERSION_FEATURES };
-		//VkPhysicalDeviceVulkan14Features physFeatures14{ VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_VULKAN_1_4_FEATURES };
-		//physFeatures14.pNext = &conversionFeatures;
-		VkPhysicalDeviceFeatures2 physFeatures{ VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_FEATURES_2 };
-		//physFeatures.pNext = &physFeatures14;
-		physFeatures.pNext = &conversionFeatures;
-
-		vkGetPhysicalDeviceFeatures2(m_physDevice, &physFeatures);
-
-		/*if (physFeatures14.hostImageCopy)
-		{
-			enabledFeatures14.hostImageCopy = true;
-			m_bHostImageCopyEnabled = true;
-		}*/
-		if (conversionFeatures.samplerYcbcrConversion)
-		{
-			enabledConversionFeatures.samplerYcbcrConversion = true;
-		}
-	}
 
 	std::vector<const char*> deviceExtensions;
 	deviceExtensions.push_back(VK_KHR_EXTERNAL_MEMORY_WIN32_EXTENSION_NAME);
 
+	bool bHostCopyExtensionFound = false;
+	bool bExternalMemWin32Found = false;
 	{
-		bool bExternalMemWin32Found = false;
+		
 
 		uint32_t numExtensions = 0;
 		vkEnumerateDeviceExtensionProperties(m_physDevice, nullptr, &numExtensions, nullptr);
 		std::vector<VkExtensionProperties> extensions(numExtensions);
 		vkEnumerateDeviceExtensionProperties(m_physDevice, nullptr, &numExtensions, extensions.data());
 
-		for (uint32_t i = 0; i < numExtensions; i++) 
+		for (uint32_t i = 0; i < numExtensions; i++)
 		{
 			if (strncmp(extensions[i].extensionName, VK_EXT_HOST_IMAGE_COPY_EXTENSION_NAME, VK_MAX_EXTENSION_NAME_SIZE - 1) == 0)
 			{
-				m_bHostImageCopyEnabled = true;
+				bHostCopyExtensionFound = true;
 				deviceExtensions.push_back(VK_EXT_HOST_IMAGE_COPY_EXTENSION_NAME);
 			}
 			if (strncmp(extensions[i].extensionName, VK_KHR_EXTERNAL_MEMORY_WIN32_EXTENSION_NAME, VK_MAX_EXTENSION_NAME_SIZE - 1) == 0)
@@ -374,8 +353,38 @@ bool AsyncRenderer::InitRenderer()
 		}
 	}
 
+
+
+	VkPhysicalDeviceSamplerYcbcrConversionFeatures enabledConversionFeatures{ VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_SAMPLER_YCBCR_CONVERSION_FEATURES };
+	VkPhysicalDeviceHostImageCopyFeaturesEXT enabledHostCopyFeatures{ VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_HOST_IMAGE_COPY_FEATURES };
+	enabledHostCopyFeatures.pNext = &enabledConversionFeatures;
+
+	{
+		VkPhysicalDeviceSamplerYcbcrConversionFeatures conversionFeatures{ VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_SAMPLER_YCBCR_CONVERSION_FEATURES };
+		VkPhysicalDeviceHostImageCopyFeaturesEXT hostCopyFeatures{ VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_HOST_IMAGE_COPY_FEATURES };
+		hostCopyFeatures.pNext = &conversionFeatures;
+		VkPhysicalDeviceFeatures2 physFeatures{ VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_FEATURES_2 };
+		physFeatures.pNext = &hostCopyFeatures;
+
+		vkGetPhysicalDeviceFeatures2(m_physDevice, &physFeatures);
+
+		if (bHostCopyExtensionFound && hostCopyFeatures.hostImageCopy)
+		{
+			g_logger->info("Vulkan host image copy support found");
+			enabledHostCopyFeatures.hostImageCopy = true;
+			m_bHostImageCopyEnabled = true;
+		}
+		if (conversionFeatures.samplerYcbcrConversion)
+		{
+			enabledConversionFeatures.samplerYcbcrConversion = true;
+			m_bSamplerYcbcrConversionEnabled = true;
+		}
+	}
+
+	
+
 	VkDeviceCreateInfo deviceInfo = { VK_STRUCTURE_TYPE_DEVICE_CREATE_INFO };
-	deviceInfo.pNext = &enabledConversionFeatures;
+	deviceInfo.pNext = &enabledHostCopyFeatures;
 	deviceInfo.queueCreateInfoCount = 1;
 	deviceInfo.pQueueCreateInfos = &queueInfo;
 	deviceInfo.enabledExtensionCount = (uint32_t)deviceExtensions.size();

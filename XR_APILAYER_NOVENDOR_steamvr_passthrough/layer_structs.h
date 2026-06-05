@@ -38,31 +38,24 @@ struct RenderModel
 	XrMatrix4x4f meshToWorldTransform;
 };
 
+
+struct ProjectedView
+{
+	XrMatrix4x4f WorldToProjection{};
+	XrMatrix4x4f ViewToWorld{};
+};
+
+
 struct CameraGPUFrame
 {
 	CameraGPUFrame()
 		: FrameTextureResource(nullptr)
 		, FrameSequence(0)
 		, FrameExposureTimestamp(0)
-		, CameraViewToWorldLeft()
-		, CameraViewToWorldRight()
-		, WorldToCameraProjectionLeft()
-		, WorldToCameraProjectionRight()
-		, WorldToHMDProjectionLeft()
-		, WorldToHMDProjectionRight()
-		, PrevWorldToCameraProjectionLeft()
-		, PrevWorldToCameraProjectionRight()
-		, PrevCameraFrame_WorldToHMDProjectionLeft()
-		, PrevCameraFrame_WorldToHMDProjectionRight()
-		, PrevHMDFrame_WorldToHMDProjectionLeft()
-		, PrevHMDFrame_WorldToHMDProjectionRight()
-		, ProjectionOriginWorldLeft()
-		, ProjectionOriginWorldRight()
+		, CameraLeft()
+		, CameraRight()
 		, FrameLayout(FrameLayout_Mono)
 		, bIsValid(false)
-		, bHasReversedDepth(false)
-		, bIsFirstRender(true)
-		, bIsRenderingMirrored(false)
 		, bColorsPreadjusted(false)
 		, bisRectifiedFrame(false)
 	{
@@ -70,36 +63,14 @@ struct CameraGPUFrame
 		FrameSize[1] = 0;
 	}
 
-
 	void* FrameTextureResource;
 	int32_t FrameSize[2];
 	uint32_t FrameSequence;
 	uint64_t FrameExposureTimestamp;
-
-	XrMatrix4x4f CameraViewToWorldLeft;
-	XrMatrix4x4f CameraViewToWorldRight;
-	XrMatrix4x4f WorldToCameraProjectionLeft;
-	XrMatrix4x4f WorldToCameraProjectionRight;
-	XrMatrix4x4f WorldToHMDProjectionLeft;
-	XrMatrix4x4f WorldToHMDProjectionRight;
-
-	// relative to the previous camera frame
-	XrMatrix4x4f PrevWorldToCameraProjectionLeft;
-	XrMatrix4x4f PrevWorldToCameraProjectionRight;
-	XrMatrix4x4f PrevCameraFrame_WorldToHMDProjectionLeft;
-	XrMatrix4x4f PrevCameraFrame_WorldToHMDProjectionRight;
-
-	// relative to the previous rendered frame
-	XrMatrix4x4f PrevHMDFrame_WorldToHMDProjectionLeft;
-	XrMatrix4x4f PrevHMDFrame_WorldToHMDProjectionRight;
-
-	XrVector3f ProjectionOriginWorldLeft;
-	XrVector3f ProjectionOriginWorldRight;
+	ProjectedView CameraLeft;
+	ProjectedView CameraRight;
 	EStereoFrameLayout FrameLayout;
 	bool bIsValid;
-	bool bHasReversedDepth;
-	bool bIsFirstRender;
-	bool bIsRenderingMirrored;
 	bool bColorsPreadjusted;
 	bool bisRectifiedFrame;
 };
@@ -133,7 +104,7 @@ struct CameraCPUFrame
 	int32_t RawFrameSize[2];
 
 	int32_t FrameSize[2];
-	uint64_t FrameSequence;
+	uint32_t FrameSequence;
 	uint64_t FrameExposureTimestamp;
 	EStereoFrameLayout FrameLayout;
 	bool bIsValid;
@@ -146,16 +117,12 @@ struct DepthFrame
 		: DisparityViewToWorldLeft()
 		, DisparityViewToWorldRight()
 		, DisparityToDepth()
-		, PrevDisparityViewToWorldLeft()
-		, PrevDisparityViewToWorldRight()
-		, PrevDispWorldToCameraProjectionLeft()
-		, PrevDispWorldToCameraProjectionRight()
 		, DisparityDownscaleFactor(0.0f)
+		, FrameSequence(0)
 		, FrameExposureTimestamp(0)
 		, MinDisparity(0.0f)
 		, MaxDisparity(0.0f)
 		, bIsValid(false)
-		, bIsFirstRender(true)
 		, OutputDisparityMapNativeTexture(nullptr)
 		, DisparityTextureIndex(-1)
 	{
@@ -172,19 +139,15 @@ struct DepthFrame
 	XrMatrix4x4f DisparityViewToWorldLeft;
 	XrMatrix4x4f DisparityViewToWorldRight;
 	XrMatrix4x4f DisparityToDepth;
-	XrMatrix4x4f PrevDisparityViewToWorldLeft;
-	XrMatrix4x4f PrevDisparityViewToWorldRight;
-	XrMatrix4x4f PrevDispWorldToCameraProjectionLeft;
-	XrMatrix4x4f PrevDispWorldToCameraProjectionRight;
 	uint32_t InputDisparityTextureSize[2];
 	uint32_t OutputDisparityTextureSize[2];
 	uint32_t CameraFrameTextureSize[2];
+	uint32_t FrameSequence;
 	uint64_t FrameExposureTimestamp;
 	float DisparityDownscaleFactor;
 	float MinDisparity;
 	float MaxDisparity;
 	bool bIsValid;
-	bool bIsFirstRender;
 };
 
 struct FBPassthroughLayerInstance
@@ -205,15 +168,36 @@ struct FrameRenderParameters
 	ECameraProvider CameraProvider = CameraProvider_None;
 	EProjectionMode ProjectionMode = Projection_RoomView2D;
 	EPassthroughBlendMode BlendMode = Opaque;
-	bool bInvertLayerAlpha = false;
 	uint64_t DisplayTime = 0;
 	XrReferenceSpaceCreateInfo ReferenceSpace{};
+	float ProjectionDistance = 10.0f;
 
 	int LeftFrameIndex = -1;
 	int RightFrameIndex = -1;
 	int LeftDepthIndex = -1;
 	int RightDepthIndex = -1;
 
+	
+
+	// Current view to be rendered
+	ProjectedView HMDEyeLeft{};
+	ProjectedView HMDEyeRight{};
+	ProjectedView CameraLeft{};
+	ProjectedView CameraRight{};
+
+	// Relative to the previous rendered frame
+	ProjectedView PrevHMDFrame_HMDEyeLeft{};
+	ProjectedView PrevHMDFrame_HMDEyeRight{};
+
+	// Relative to the last written history buffer
+	ProjectedView ColorHistory_HMDEyeLeft{};
+	ProjectedView ColorHistory_HMDEyeRight{};
+
+	bool bIsFirstRenderOfCameraFrame = true;
+	bool bMirrorRender = false;
+	bool bInvertLayerAlpha = false;
+
+	bool bHasReversedDepth = false;
 	bool bReadApplicationDepth = false;
 	bool bEnableDepthBlending = false;
 	bool bEnableDepthRange = false;

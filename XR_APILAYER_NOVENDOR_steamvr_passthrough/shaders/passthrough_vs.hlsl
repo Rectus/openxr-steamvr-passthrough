@@ -21,18 +21,14 @@ VS_OUTPUT main(float3 inPosition : POSITION, uint vertexID : SV_VertexID)
     output.prevHMDFrameScreenPos = mul(g_prevHMDFrame_WorldToHMDProjection, worldProjectionPos);	
     output.position = mul(g_worldToHMDProjection, worldProjectionPos);   
     output.screenPos = output.position; 
+    
 	output.projectionConfidence = 1.0;
     output.cameraBlendConfidence = 1.0;
 	
 #ifdef VULKAN
 	output.position.z *= 0.1; // Vulkan is currently fucky with depth.
 	output.position.y *= -1.0;
-#else
-    float4 prevOutCoords = mul((g_cameraViewIndex == 0) ? g_worldToPrevCameraFrameProjectionLeft : g_worldToPrevCameraFrameProjectionRight, worldProjectionPos);
 #endif
-
-    output.crossCameraReprojectedPos = 0;
-    output.cameraDepth = 0;
 
 	return output;
 }

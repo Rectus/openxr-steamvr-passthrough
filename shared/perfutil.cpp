@@ -24,11 +24,18 @@ uint64_t GetSytemTickFrequency()
 	return systemTickFrequency;
 }
 
-float GetPerfTimeDiffSeconds(const uint64_t first, const uint64_t second)
+double GetPerfTimeDiffSeconds(const uint64_t first, const uint64_t second)
 {
-	float perfTime = (float)second - (float)first;
-	perfTime /= systemTickFrequency;
-	return perfTime;
+	if (second < first)
+	{
+		uint64_t ticks = (first - second);
+		return -(double)ticks / (double)systemTickFrequency;
+	}
+	else
+	{
+		uint64_t ticks = (second - first);
+		return (double)ticks / (double)systemTickFrequency;
+	}
 }
 
 

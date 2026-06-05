@@ -54,19 +54,19 @@ void DepthReconstruction::CalculateCameraProjection(std::shared_ptr<CameraGPUFra
 
     XrMatrix4x4f worldToCameraView, worldToRectView;
 
-    XrMatrix4x4f_Invert(&worldToCameraView, &cameraFrame->CameraViewToWorldLeft);
+    XrMatrix4x4f_Invert(&worldToCameraView, &cameraFrame->CameraLeft.ViewToWorld);
     XrMatrix4x4f_Multiply(&worldToRectView, &m_distortionParams.rectifiedRotationLeft, &worldToCameraView);
-    XrMatrix4x4f_Multiply(&cameraFrame->WorldToCameraProjectionLeft, &m_distortionParams.cameraProjectionLeft, &worldToRectView);
+    XrMatrix4x4f_Multiply(&renderParams.CameraLeft.WorldToProjection, &m_distortionParams.cameraProjectionLeft, &worldToRectView);
 
     if (m_frameLayout == EStereoFrameLayout::FrameLayout_Mono)
     {
-        cameraFrame->WorldToCameraProjectionRight = cameraFrame->WorldToCameraProjectionLeft;
+        renderParams.CameraRight.WorldToProjection = renderParams.CameraLeft.WorldToProjection;
     }
     else
     {
-        XrMatrix4x4f_Invert(&worldToCameraView, &cameraFrame->CameraViewToWorldRight);
+        XrMatrix4x4f_Invert(&worldToCameraView, &cameraFrame->CameraRight.ViewToWorld);
         XrMatrix4x4f_Multiply(&worldToRectView, &m_distortionParams.rectifiedRotationRight, &worldToCameraView);
-        XrMatrix4x4f_Multiply(&cameraFrame->WorldToCameraProjectionRight, &m_distortionParams.cameraProjectionRight, &worldToRectView);
+        XrMatrix4x4f_Multiply(&renderParams.CameraRight.WorldToProjection, &m_distortionParams.cameraProjectionRight, &worldToRectView);
     }
 }
 
@@ -410,7 +410,7 @@ void DepthReconstruction::RunThread()
                 continue;
             }
 
-            m_lastFrameSequence = static_cast<uint32_t>(frame->FrameSequence);
+            m_lastFrameSequence = frame->FrameSequence;
 
             viewToWorldLeft = frame->CameraViewToWorldLeft;
             viewToWorldRight = frame->CameraViewToWorldRight;
@@ -712,11 +712,11 @@ void DepthReconstruction::RunThread()
             frame->CameraFrameTextureSize[0] = m_cameraFrameWidth * 2;
             frame->CameraFrameTextureSize[1] = m_cameraFrameHeight;
             frame->DisparityDownscaleFactor = (float)m_downscaleFactor / outputScale;
+            frame->FrameSequence = (frame->FrameSequence + 1) % 16;
             frame->FrameExposureTimestamp = frameTimestamp;
             frame->MinDisparity = stereoConfig.StereoMinDisparity / 2048.0f;
             frame->MaxDisparity = m_maxDisparity / 2048.0f;
             frame->bIsValid = true;
-            frame->bIsFirstRender = true;
 
 
             m_reconstructionTimer.EndPerfTimer();

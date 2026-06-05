@@ -505,7 +505,7 @@ FramePtr<CameraGPUFrame> CameraManagerOpenVR::AcquireCameraGPUFrame()
     return m_gpuFrameQueue.AcquireRead();
 }
 
-FramePtr<CameraCPUFrame>  CameraManagerOpenVR::AcquireCameraCPUFrame()
+FramePtr<CameraCPUFrame> CameraManagerOpenVR::AcquireCameraCPUFrame()
 {
     if (!m_bCameraInitialized) { return FramePtr<CameraCPUFrame>(); }
 
@@ -683,26 +683,28 @@ void CameraManagerOpenVR::ServeFrames()
         XrMatrix4x4f_Multiply(&viewToWorldLeft, &headToTrackingPose, &m_cameraToHMDLeft);
         XrMatrix4x4f_Multiply(&viewToWorldRight, &headToTrackingPose, &m_cameraToHMDRight);
 
-        gpuFrame->CameraViewToWorldLeft = viewToWorldLeft;
-        gpuFrame->CameraViewToWorldRight = viewToWorldRight;
+        gpuFrame->CameraLeft.ViewToWorld = viewToWorldLeft;
+        gpuFrame->CameraRight.ViewToWorld = viewToWorldRight;
 
         // Camera projection matrix for Room View mode
         if (m_projectionMode == Projection_RoomView2D)
         {
+            UpdateRoomViewProjectionMatrix();
+
             XrMatrix4x4f worldToCameraProjectionLeft;
-            XrMatrix4x4f_Multiply(&worldToCameraProjectionLeft, &viewToWorldLeft, &m_cameraProjectionInvLeft);
-            XrMatrix4x4f_Invert(&gpuFrame->WorldToCameraProjectionLeft, &worldToCameraProjectionLeft);
+            XrMatrix4x4f_Multiply(&worldToCameraProjectionLeft, &viewToWorldLeft, &m_cameraRoomViewProjectionInvLeft);
+            XrMatrix4x4f_Invert(&gpuFrame->CameraLeft.WorldToProjection, &worldToCameraProjectionLeft);
 
             XrMatrix4x4f worldToCameraProjectionRight;
             if (m_frameLayout != EStereoFrameLayout::FrameLayout_Mono)
             {
-                XrMatrix4x4f_Multiply(&worldToCameraProjectionRight, &viewToWorldRight, &m_cameraProjectionInvRight);
+                XrMatrix4x4f_Multiply(&worldToCameraProjectionRight, &viewToWorldRight, &m_cameraRoomViewProjectionInvRight);
             }
             else
             {
-                XrMatrix4x4f_Multiply(&worldToCameraProjectionRight, &viewToWorldLeft, &m_cameraProjectionInvLeft);
+                XrMatrix4x4f_Multiply(&worldToCameraProjectionRight, &viewToWorldLeft, &m_cameraRoomViewProjectionInvLeft);
             }
-            XrMatrix4x4f_Invert(&gpuFrame->WorldToCameraProjectionRight, &worldToCameraProjectionRight);
+            XrMatrix4x4f_Invert(&gpuFrame->CameraRight.WorldToProjection, &worldToCameraProjectionRight);
         }
 
         m_gpuFrameTimer.EndPerfTimer();
@@ -1011,6 +1013,21 @@ void CameraManagerOpenVR::ServeBlockQueueFrames()
         }
 
 
+        XrMatrix4x4f headToTrackingPose;
+        if (!GetHMDPoseForTime(headToTrackingPose, frameExposureTimestamp))
+        {
+            m_bPoseAvailable = false;
+
+            queueError = vrBlockQueue->ReleaseReadOnlyBlock(rawFrameQueue, readHandle);
+            if (queueError != vr::EBlockQueueError_BlockQueueError_None)
+            {
+                g_logger->error("ReleaseReadOnlyBlock error {}", static_cast<int32_t>(queueError));
+            }
+            continue;
+        }
+        m_bPoseAvailable = true;
+
+
         // check that we are still running before doing a costly memcpy.
         if (!m_bRunThread) 
         { 
@@ -1021,6 +1038,8 @@ void CameraManagerOpenVR::ServeBlockQueueFrames()
             }
             return; 
         }
+
+        
 
         FramePtr<CameraCPUFrame> cpuFrame = m_cpuFrameQueue.AcquireWrite();
         if (!cpuFrame.HasFrame())
@@ -1056,14 +1075,6 @@ void CameraManagerOpenVR::ServeBlockQueueFrames()
         m_bWaitingForCamera = false;
         lastFrameSequence = frameSequence;
 
-        XrMatrix4x4f headToTrackingPose;
-        if (!GetHMDPoseForTime(headToTrackingPose, frameExposureTimestamp))
-        {
-            m_bPoseAvailable = false;
-            continue;
-        }
-        m_bPoseAvailable = true;
-
         cpuFrame->bIsValid = true;
         cpuFrame->bIsRaw = true;
         cpuFrame->FrameLayout = m_frameLayout;
@@ -1074,18 +1085,17 @@ void CameraManagerOpenVR::ServeBlockQueueFrames()
         cpuFrame->RawFrameSize[1] = rawFrameHeight;
         cpuFrame->RawFrameDataBytes = rawFrameDataBytes;
         cpuFrame->FrameExposureTimestamp = frameExposureTimestamp;
-        cpuFrame->FrameSequence = frameSequence;
+        cpuFrame->FrameSequence = (uint32_t)frameSequence;
 
         XrMatrix4x4f_Multiply(&cpuFrame->CameraViewToWorldLeft, &headToTrackingPose, &m_cameraToHMDLeft);
         XrMatrix4x4f_Multiply(&cpuFrame->CameraViewToWorldRight, &headToTrackingPose, &m_cameraToHMDRight);
-
         
 
         m_cpuFrameTimer.EndPerfTimer();
 
         if (bUseBlockQueueColor)
         {
-            cpuFrame.CommitWriteAndAcuireRead();
+            cpuFrame.CommitWriteAndAcquireRead();
             CopyCPUFrameToGPU(cpuFrame.GetSharedPointer());
         }  
         else
@@ -1113,19 +1123,17 @@ void CameraManagerOpenVR::CopyCPUFrameToGPU(std::shared_ptr<CameraCPUFrame> inFr
     }
 
     if (asyncRenderer->CopyAndDecodeCameraFrame(inFrame, &gpuFrame->FrameTextureResource))
-    {
-        
+    {      
         gpuFrame->bIsValid = true;
-        gpuFrame->bHasReversedDepth = false;
-        gpuFrame->bIsFirstRender = true;
-        gpuFrame->bIsRenderingMirrored = false;
         gpuFrame->FrameLayout = m_frameLayout;
-        gpuFrame->FrameSequence = (uint32_t)inFrame->FrameSequence;
+        gpuFrame->FrameSequence = inFrame->FrameSequence;
         gpuFrame->FrameExposureTimestamp = inFrame->FrameExposureTimestamp;
-        gpuFrame->CameraViewToWorldLeft = inFrame->CameraViewToWorldLeft;
-        gpuFrame->CameraViewToWorldRight = inFrame->CameraViewToWorldRight;
+        gpuFrame->CameraLeft.ViewToWorld = inFrame->CameraViewToWorldLeft;
+        gpuFrame->CameraRight.ViewToWorld = inFrame->CameraViewToWorldRight;
         gpuFrame->bColorsPreadjusted = m_configManager->CheckEnableAsyncColorAdjustment();
         gpuFrame->bisRectifiedFrame = false;
+        gpuFrame->FrameSize[0] = inFrame->FrameSize[0];
+        gpuFrame->FrameSize[1] = inFrame->FrameSize[1];
 
         gpuFrame.CommitWrite();
     }
@@ -1137,21 +1145,21 @@ void CameraManagerOpenVR::CopyCPUFrameToGPU(std::shared_ptr<CameraCPUFrame> inFr
     m_gpuFrameTimer.EndPerfTimer();
 }
 
+
+
 bool CameraManagerOpenVR::GetHMDPoseForTime(XrMatrix4x4f& headToTrackingPose, const uint64_t time)
 {
     vr::TrackedDevicePose_t hmdPose;
 
-    float exposureRelativeTime = -GetPerfTimeDiffSeconds(time, GetCurrentTimeSytemTicks());
+    double exposureTimeInPastSeconds = GetPerfTimeDiffSeconds(GetCurrentTimeSytemTicks(), time);
 
-    m_openVRManager->GetVRSystem()->GetDeviceToAbsoluteTrackingPose(vr::TrackingUniverseStanding, exposureRelativeTime, &hmdPose, 1);
+    m_openVRManager->GetVRSystem()->GetDeviceToAbsoluteTrackingPose(vr::TrackingUniverseStanding, exposureTimeInPastSeconds, &hmdPose, 1);
 
     headToTrackingPose = ToXRMatrix4x4(hmdPose.mDeviceToAbsoluteTracking);
     return hmdPose.bPoseIsValid;
 }
 
-
-
-void CameraManagerOpenVR::UpdateFrameProjectionMatrix(std::shared_ptr<CameraGPUFrame>& frame)
+void CameraManagerOpenVR::UpdateRoomViewProjectionMatrix()
 {
     bool bIsStereo = m_frameLayout != EStereoFrameLayout::FrameLayout_Mono;
 
@@ -1195,7 +1203,7 @@ void CameraManagerOpenVR::UpdateFrameProjectionMatrix(std::shared_ptr<CameraGPUF
         }
 
         XrMatrix4x4f projectionMatrix = ToXRMatrix4x4Inverted(vrProjection);
-        XrMatrix4x4f_Multiply(&m_cameraProjectionInvLeft, &projectionMatrix, &transMatrix);
+        XrMatrix4x4f_Multiply(&m_cameraRoomViewProjectionInvLeft, &projectionMatrix, &transMatrix);
 
         if (bIsStereo)
         {
@@ -1212,7 +1220,7 @@ void CameraManagerOpenVR::UpdateFrameProjectionMatrix(std::shared_ptr<CameraGPUF
 
 
             XrMatrix4x4f projectionMatrix = ToXRMatrix4x4Inverted(vrProjection);
-            XrMatrix4x4f_Multiply(&m_cameraProjectionInvRight, &projectionMatrix, &transMatrix);
+            XrMatrix4x4f_Multiply(&m_cameraRoomViewProjectionInvRight, &projectionMatrix, &transMatrix);
 
         }
     }
