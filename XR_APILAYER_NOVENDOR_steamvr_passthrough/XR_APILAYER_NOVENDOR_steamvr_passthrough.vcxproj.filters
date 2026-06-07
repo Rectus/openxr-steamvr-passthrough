@@ -213,13 +213,13 @@
     <None Include="shaders\fullscreen_util.hlsl">
       <Filter>Shaders</Filter>
     </None>
-    <None Include="shaders\fill_holes_vulkan_cs.hlsl">
+    <None Include="shaders\vulkan_texture_decode.comp.glsl">
       <Filter>Shaders</Filter>
     </None>
-    <None Include="shaders\joint_bilateral_vulkan_cs.hlsl">
+    <None Include="shaders\vulkan_joint_bilateral.comp.glsl">
       <Filter>Shaders</Filter>
     </None>
-    <None Include="shaders\texture_decode_vulkan.comp.glsl">
+    <None Include="shaders\vulkan_fill_holes.comp.glsl">
       <Filter>Shaders</Filter>
     </None>
   </ItemGroup>

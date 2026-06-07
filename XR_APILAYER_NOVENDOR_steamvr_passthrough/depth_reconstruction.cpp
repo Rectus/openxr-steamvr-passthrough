@@ -723,7 +723,7 @@ void DepthReconstruction::RunThread()
             m_renderTimer.StartPerfTimer();
 
 
-            if (!m_asyncRenderer->BeginRender(frame.GetSharedPointer()))
+            if (!m_asyncRenderer->BeginRender(frame.GetSharedPointer(), stereoConfig))
             {
                 continue;
             }

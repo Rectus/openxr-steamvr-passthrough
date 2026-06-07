@@ -1,42 +1,48 @@
 
+#version 450
 
-[[vk::push_constant]] cbuffer csConstantBuffer
+#ifndef VULKAN // To make the VS GLSL extension shut up
+#extension GL_KHR_vulkan_glsl: enable
+#endif
+
+layout(push_constant, std140 ) uniform csConstantBuffer
 {
-    int2 g_disparitySize;
-    float g_minDisparity;
-    float g_maxDisparity;
-    bool g_bHoleFillLastPass;  
+    bool bHoleFillLastPass;  
 
-	float g_bilateralDispCutoff;
-	uint g_bilateralDistance;
-	bool g_bUseInputConfidence;
-}
+} g_push;
 
-RWTexture2D<float> g_disparity: register(u1);
-RWTexture2D<float> g_confidence: register(u2);
-RWTexture2D<float2> g_outputDisparity: register(u4);
+layout(constant_id = 0) const float g_minDisparity= 0.0;
+layout(constant_id = 1) const float g_maxDisparity = 1.0;
+layout(constant_id = 2) const bool g_bUseInputConfidence = true;
 
 
-[numthreads(32, 32, 1)]
-void main(uint3 pos3 : SV_DispatchThreadID)
+layout( binding = 1, r16_snorm ) uniform readonly image2D g_disparity;
+layout( binding = 2, r16_snorm ) uniform image2D g_confidence;
+layout( binding = 4, rg16_snorm ) uniform image2D g_outputDisparity;
+
+
+layout( local_size_x = 32, local_size_y = 32, local_size_z = 1 ) in;
+
+void main()
 {
-    int2 pos = pos3.xy;
+    ivec2 pos = ivec2(gl_GlobalInvocationID.xy);
+
+    ivec2 inSize = imageSize(g_disparity);
     
     // Don't process outside image boundary.
-    if(any(pos >= g_disparitySize))
+    if(pos.x >= inSize.x || pos.y >= inSize.y)
     {
         return;
     }
     
-    if (g_bHoleFillLastPass)
+    if (g_push.bHoleFillLastPass)
     {
-        int2 outSize;        
-        g_outputDisparity.GetDimensions(outSize.x, outSize.y);
+        ivec2 outSize = imageSize(g_outputDisparity);
         
-        int2 inPos = (pos * g_disparitySize) / outSize;
+        ivec2 inPos = (pos * inSize) / outSize;
 
-        float disparity = g_disparity.Load(inPos);
-        float confidence = g_confidence.Load(inPos);
+        float disparity = imageLoad(g_disparity, inPos).x;
+        float confidence = imageLoad(g_confidence, inPos).x;
 
         if (confidence <= 0.0 && (disparity <= g_minDisparity || disparity >= g_maxDisparity))
         {
@@ -57,18 +63,18 @@ void main(uint3 pos3 : SV_DispatchThreadID)
             confidence = 1.0;
         }
 
-        g_outputDisparity[pos] = float2(disparity, confidence);
+        imageStore(g_outputDisparity, pos, vec4(disparity, confidence, 0, 0));
         return;
     }
     
-    uint frameWidth = g_disparitySize.x / 2;
+    int frameWidth = inSize.x / 2;
     
-    float disparity = g_disparity.Load(pos);
-    float confidence = g_confidence.Load(pos);
+    float disparity = imageLoad(g_disparity, pos).x;
+    float confidence = imageLoad(g_confidence, pos).x;
     
     // Filter large invalid disparites from the right edge of the image.
     int pixelsFromRightEdge = (pos.x > frameWidth) ? frameWidth * 2 - pos.x : frameWidth - pos.x;
-    float maxDisp = lerp(g_minDisparity, g_maxDisparity, 
+    float maxDisp = mix(g_minDisparity, g_maxDisparity, 
         min(1, pixelsFromRightEdge / ((g_maxDisparity - g_minDisparity) * 2048.0 / 16.0)));
     
     if (pixelsFromRightEdge < 2)
@@ -79,15 +85,15 @@ void main(uint3 pos3 : SV_DispatchThreadID)
     // Sample neighbors and temporarily store furthest disparity in the confidence buffer as a negative value.
     if (confidence <= 0.0 && (disparity <= g_minDisparity || disparity >= maxDisp))
     {
-        float dispU = g_disparity.Load((uint2)(pos + int2(0, -1)));
-        float dispD = g_disparity.Load((uint2)(pos + int2(0, 1))); 
-        float dispL = g_disparity.Load((uint2)(pos + int2(-1, 0))); 
-        float dispR = g_disparity.Load((uint2)(pos + int2(1, 0))); 
+        float dispU = imageLoad(g_disparity, pos + ivec2(0, -1)).x;
+        float dispD = imageLoad(g_disparity, pos + ivec2(0, 1)).x; 
+        float dispL = imageLoad(g_disparity, pos + ivec2(-1, 0)).x; 
+        float dispR = imageLoad(g_disparity, pos + ivec2(1, 0)).x; 
         
-        float confU = g_confidence.Load((uint2)(pos + int2(0, -1)));
-        float confD = g_confidence.Load((uint2)(pos + int2(0, 1))); 
-        float confL = g_confidence.Load((uint2)(pos + int2(-1, 0))); 
-        float confR = g_confidence.Load((uint2)(pos + int2(1, 0))); 
+        float confU = imageLoad(g_confidence, pos + ivec2(0, -1)).x;
+        float confD = imageLoad(g_confidence, pos + ivec2(0, 1)).x; 
+        float confL = imageLoad(g_confidence, pos + ivec2(-1, 0)).x; 
+        float confR = imageLoad(g_confidence, pos + ivec2(1, 0)).x; 
         
         if (confidence == 0.0)
         {      
@@ -142,6 +148,6 @@ void main(uint3 pos3 : SV_DispatchThreadID)
             confidence = confR;
         }
 
-        g_confidence[pos] = confidence;
+        imageStore(g_confidence, pos, vec4(confidence, 0, 0, 0));
     }
 }

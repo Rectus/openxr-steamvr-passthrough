@@ -259,7 +259,6 @@ private:
 	FrameQueue<CameraCPUFrame> m_cpuFrameQueue;
 
 	int m_hmdDeviceId = -1;
-	vr::TrackedCameraHandle_t m_cameraHandle;
 	EStereoFrameLayout m_frameLayout;
 
 	PerfTimer m_gpuFrameTimer{ 20 };

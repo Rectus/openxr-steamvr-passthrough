@@ -1003,11 +1003,11 @@ void PassthroughSystem::UpdateRenderModels(const uint64_t cameraFrameTimestamp)
 	}
 
 	
-	float exposureRelativeTime = -GetPerfTimeDiffSeconds(cameraFrameTimestamp, GetCurrentTimeSytemTicks());
+	double exposureRelativeTime = -GetPerfTimeDiffSeconds(cameraFrameTimestamp, GetCurrentTimeSytemTicks());
 
 	std::vector<vr::TrackedDevicePose_t> poses(numDevices);
 
-	m_openVRManager->GetVRSystem()->GetDeviceToAbsoluteTrackingPose(vr::TrackingUniverseStanding, exposureRelativeTime, poses.data(), numDevices);
+	m_openVRManager->GetVRSystem()->GetDeviceToAbsoluteTrackingPose(vr::TrackingUniverseStanding, (float)exposureRelativeTime, poses.data(), numDevices);
 
 	for (RenderModel& model : *m_renderModels.get())
 	{

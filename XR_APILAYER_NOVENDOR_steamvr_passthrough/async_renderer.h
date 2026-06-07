@@ -8,6 +8,18 @@
 class IPassthroughRenderer;
 
 
+namespace
+{
+	struct alignas(4) AsyncSpecializationConstants
+	{
+		float minDisparity;
+		float maxDisparity;
+		VkBool32 bUseInputConfidence;
+		float bilateralDispCutoff;
+		uint32_t bilateralDistance;
+	};
+}
+
 
 class AsyncRenderer
 {
@@ -20,8 +32,9 @@ public:
 	{}
 	~AsyncRenderer();
 	bool InitRenderer();
+	bool CreatePipeline();
 	bool CopyAndDecodeCameraFrame(std::shared_ptr<CameraCPUFrame> inFrame, void** nativeTexture);
-	bool BeginRender(std::shared_ptr<DepthFrame> depthFrame);
+	bool BeginRender(std::shared_ptr<DepthFrame> depthFrame, const Config_Stereo& stereoConf);
 	void CopyDisparityToGPU(std::vector<uint8_t>& buffer);
 	void CopyConfidenceToGPU(std::vector<uint8_t>& buffer);
 	void CopyBWRectifiedCameraFrameToGPU(std::vector<uint8_t>& buffer);
@@ -81,12 +94,11 @@ private:
 
 	VkBuffer m_filterKernelBuffer = VK_NULL_HANDLE;
 	VkDeviceMemory m_filterKernelBufferMem = VK_NULL_HANDLE;
-	
-	float m_minDisparity = 0.0f;
-	float m_maxDisparity = 0.0f;
 
 	uint32_t m_bilateralDistance = 0;
 	float m_bilateralSigmaSpace = 0.0f;
 	float m_bilateralSigmaLuma = 0.0f;
+
+	AsyncSpecializationConstants m_specConstants{};
 };
 

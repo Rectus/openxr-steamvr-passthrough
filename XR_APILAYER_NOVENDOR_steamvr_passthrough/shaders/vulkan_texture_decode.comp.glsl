@@ -1,7 +1,10 @@
 
 
-
 #version 450
+
+#ifndef VULKAN // To make the VS GLSL extension shut up
+#extension GL_KHR_vulkan_glsl: enable
+#endif
 
 #define FrameFormat_Unknown 0
 #define FrameFormat_RAW10 1
@@ -14,17 +17,20 @@
 #define FrameFormat_RGBX32 8
 
 
+layout(constant_id = 0) const uint g_frameFormat = 0;
+layout(constant_id = 1) const bool g_bDoColorAdjustment = false;
+layout(constant_id = 2) const bool g_bInputIsSRGB = false;
+layout(constant_id = 3) const bool g_bOutputIsSRGB = false;
+
 
 layout(push_constant, std140 ) uniform DecodeConstants
 {
-    uint frameFormat;
     float brightness;
     float contrast;
     float saturation;
     float gammaCorrection;
-    bool bDoColorAdjustment;
 
-} g_pass;
+} g_push;
 
 layout(binding = 0) uniform sampler2D g_rawFrame;
 layout(binding = 1) uniform writeonly image2D g_outputFrame;
@@ -81,9 +87,9 @@ vec3 SRGBToLinear(in vec3 sRGB)
 {
     vec3 linearRGB;
 
-    linearRGB.r = sRGB.r <= 0.0031308 ? sRGB.r / 12.92 : pow((sRGB.r + 0.055) / 1.055, 2.4);
-    linearRGB.g = sRGB.g <= 0.0031308 ? sRGB.g / 12.92 : pow((sRGB.g + 0.055) / 1.055, 2.4);
-    linearRGB.b = sRGB.b <= 0.0031308 ? sRGB.b / 12.92 : pow((sRGB.b + 0.055) / 1.055, 2.4);
+    linearRGB.r = sRGB.r <= 0.04045 ? sRGB.r / 12.92 : pow((sRGB.r + 0.055) / 1.055, 2.4);
+    linearRGB.g = sRGB.g <= 0.04045 ? sRGB.g / 12.92 : pow((sRGB.g + 0.055) / 1.055, 2.4);
+    linearRGB.b = sRGB.b <= 0.04045 ? sRGB.b / 12.92 : pow((sRGB.b + 0.055) / 1.055, 2.4);
 
     return linearRGB;
 }
@@ -102,14 +108,14 @@ vec3 LinearToSRGB(in vec3 linearRGB)
 
 void ApplyColorAdjustment(inout vec3 linearRGB)
 {
-    linearRGB = pow(abs(linearRGB), vec3(g_pass.gammaCorrection));
+    linearRGB = pow(abs(linearRGB), vec3(g_push.gammaCorrection));
         
 	// Using CIELAB D65 to match the EXT_FB_passthrough adjustments.
 	vec3 labColor = LinearRGBtoLAB_D65(linearRGB);
 
-	float LPrime = clamp((labColor.x - 50.0) * g_pass.contrast + 50.0, 0.0, 100.0);
-	float LBis = clamp(LPrime + g_pass.brightness, 0.0, 100.0);
-	vec2 ab = labColor.yz * g_pass.saturation;
+	float LPrime = clamp((labColor.x - 50.0) * g_push.contrast + 50.0, 0.0, 100.0);
+	float LBis = clamp(LPrime + g_push.brightness, 0.0, 100.0);
+	vec2 ab = labColor.yz * g_push.saturation;
 
 	linearRGB = LABtoLinearRGB_D65(vec3(LBis, ab.xy));
 }
@@ -129,13 +135,20 @@ vec3 YUVToRGB(in vec3 inYUV)
 	    1.0,                   1.772, 0.000
     );
     vec3 rgbGamma = yuvDecoded * conversion;
-    
-    // Conversion from ITU-T BT.709 gamma to sRGB
-    vec3 linearRGB;
-    linearRGB.r = rgbGamma.r < 0.0812 ? rgbGamma.r / 4.5 : pow((rgbGamma.r + 0.099) / 1.099, 1 / 0.45);
-    linearRGB.g = rgbGamma.g < 0.0812 ? rgbGamma.g / 4.5 : pow((rgbGamma.g + 0.099) / 1.099, 1 / 0.45);
-    linearRGB.b = rgbGamma.b < 0.0812 ? rgbGamma.b / 4.5 : pow((rgbGamma.b + 0.099) / 1.099, 1 / 0.45);
 
+    vec3 linearRGB;
+
+    if(g_bInputIsSRGB)
+    {
+        linearRGB = SRGBToLinear(rgbGamma);
+    }
+    else
+    {
+        // Conversion from ITU-T BT.709 gamma to sRGB
+        linearRGB.r = rgbGamma.r < 0.0812 ? rgbGamma.r / 4.5 : pow((rgbGamma.r + 0.099) / 1.099, 1 / 0.45);
+        linearRGB.g = rgbGamma.g < 0.0812 ? rgbGamma.g / 4.5 : pow((rgbGamma.g + 0.099) / 1.099, 1 / 0.45);
+        linearRGB.b = rgbGamma.b < 0.0812 ? rgbGamma.b / 4.5 : pow((rgbGamma.b + 0.099) / 1.099, 1 / 0.45);
+    }
     return linearRGB;
 }
 
@@ -146,13 +159,13 @@ void main()
 {
     ivec2 inSize = textureSize(g_rawFrame, 0);
 
-    if(g_pass.frameFormat == FrameFormat_YUYV16)
+    if(any(greaterThanEqual(gl_GlobalInvocationID.xy, inSize)))
     {
-        if(any(greaterThanEqual(gl_GlobalInvocationID.xy, inSize)))
-        {
-            return;
-        }
+        return;
+    }
 
+    if(g_frameFormat == FrameFormat_YUYV16)
+    {
         ivec2 outPos = ivec2(gl_GlobalInvocationID.x * 2, gl_GlobalInvocationID.y);
         ivec2 inPos = ivec2(gl_GlobalInvocationID.xy);
 
@@ -174,42 +187,42 @@ void main()
         vec3 leftRGB = YUVToRGB(leftYUV);
         vec3 rightRGB = YUVToRGB(rightYUV);
 
-        if (g_pass.bDoColorAdjustment)
+        if (g_bDoColorAdjustment)
         {
             ApplyColorAdjustment(leftRGB);
             ApplyColorAdjustment(rightRGB);
         }
 
-        vec3 leftSRGB = LinearToSRGB(leftRGB);
-        vec3 rightSRGB = LinearToSRGB(rightRGB);
-
-        imageStore(g_outputFrame, outPos, vec4(leftSRGB, 1));
-        imageStore(g_outputFrame, outPos + ivec2(1, 0), vec4(rightSRGB, 1));
-    }
-    else if(g_pass.frameFormat == FrameFormat_RGBX32)
-    {
-        if(any(greaterThanEqual(gl_GlobalInvocationID.xy, inSize)))
+        if(g_bOutputIsSRGB)
         {
-            return;
+            leftRGB = LinearToSRGB(leftRGB);
+            rightRGB = LinearToSRGB(rightRGB);
         }
 
+        imageStore(g_outputFrame, outPos, vec4(leftRGB, 1));
+        imageStore(g_outputFrame, outPos + ivec2(1, 0), vec4(rightRGB, 1));
+    }
+    else
+    {
         ivec2 inPos = ivec2(gl_GlobalInvocationID.xy);
 
         vec3 RGB = texelFetch(g_rawFrame, inPos, 0).rgb;
 
-        if (g_pass.bDoColorAdjustment)
+        if(g_bInputIsSRGB)
+        {
+            RGB = LinearToSRGB(RGB);
+        }
+
+        if (g_bDoColorAdjustment)
         {
             ApplyColorAdjustment(RGB);
         }
 
-        vec3 SRGB = LinearToSRGB(RGB);
-
-        imageStore(g_outputFrame, inPos, vec4(SRGB, 1));
+        if(g_bOutputIsSRGB)
+        {
+            RGB = LinearToSRGB(RGB);
+        }
+        imageStore(g_outputFrame, inPos, vec4(RGB, 1));
 
     }
-    else
-    {
-        imageStore(g_outputFrame, ivec2(gl_GlobalInvocationID.xy), vec4(1, 0, 1, 1));
-    }
-
 }

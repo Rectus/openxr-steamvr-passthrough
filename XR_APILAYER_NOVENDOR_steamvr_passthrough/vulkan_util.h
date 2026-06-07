@@ -133,7 +133,7 @@ inline void TransitionImage(VkCommandBuffer commandBuffer, VkImage image, VkImag
 	vkCmdPipelineBarrier(commandBuffer, srcStageMask, dstStageMask, depFlags, 0, nullptr, 0, nullptr, 1, &barrier);
 }
 
-inline void CopyTextureToGPU(VkCommandBuffer commandBuffer, VulkanTexture texture, VkImageLayout newLayout)
+inline void CopyTextureToGPU(VkCommandBuffer commandBuffer, VulkanTexture& texture, VkImageLayout newLayout)
 {
 
 	TransitionImage(commandBuffer, texture.Image, texture.Layout, VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL);
@@ -153,7 +153,7 @@ inline void CopyTextureToGPU(VkCommandBuffer commandBuffer, VulkanTexture textur
 	texture.Layout = newLayout;
 }
 
-inline void CopyHostImageToGPU(VkDevice device, VulkanTexture texture, std::vector<uint8_t>& buffer)
+inline void CopyHostImageToGPU(VkDevice device, VulkanTexture& texture, std::vector<uint8_t>& buffer)
 {
 	VkMemoryToImageCopy region{ VK_STRUCTURE_TYPE_MEMORY_TO_IMAGE_COPY };
 	region.pHostPointer = buffer.data();

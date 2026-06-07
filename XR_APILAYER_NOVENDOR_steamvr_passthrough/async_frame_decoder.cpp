@@ -4,18 +4,16 @@
 #include "mathutil.h"
 #include "vulkan_util.h"
 
-#include "shaders\texture_decode_vulkan.comp.spv.h"
+#include "shaders\vulkan_texture_decode.comp.spv.h"
 
 
 
 struct alignas(16) ConversionPushConstants
 {
-	uint32_t frameFormat;
 	float brightness;
 	float contrast;
 	float saturation;
 	float gammaCorrection;
-	uint32_t bDoColorAdjustment;
 };
 
 
@@ -40,6 +38,12 @@ void AsyncFrameDecoder::Deinit()
 	if (!m_device || !m_queue)
 	{
 		return;
+	}
+
+	if (m_pipeline != VK_NULL_HANDLE)
+	{
+		vkDestroyPipeline(m_device, m_pipeline, nullptr);
+		m_pipeline = VK_NULL_HANDLE;
 	}
 
 	for (std::function<void()> deleteFunc : m_deletionQueue)
@@ -219,10 +223,59 @@ bool AsyncFrameDecoder::Init(VkDevice device, VkPhysicalDevice physDevice, uint3
 	}
 	m_deletionQueue.push_back([=]() { vkDestroyPipelineLayout(m_device, m_pipelineLayout, nullptr); });
 
-	VkPipelineShaderStageCreateInfo shaderInfo { VK_STRUCTURE_TYPE_PIPELINE_SHADER_STAGE_CREATE_INFO };
+	g_logger->info("Asynchronous frame decoder initialized");
+
+	return true;
+}
+
+bool AsyncFrameDecoder::CreatePipeline()
+{
+	if (m_pipeline != VK_NULL_HANDLE)
+	{
+		vkDestroyPipeline(m_device, m_pipeline, nullptr);
+		m_pipeline = VK_NULL_HANDLE;
+	}
+
+	std::vector<VkSpecializationMapEntry> entries;
+
+	VkSpecializationMapEntry entry{};
+	uint32_t offset = 0;
+
+	entry.constantID = 0;
+	entry.offset = offset;
+	entry.size = sizeof(uint32_t);
+	entries.push_back(entry);
+	offset += (uint32_t)entry.size;
+
+	entry.constantID = 1;
+	entry.offset = offset;
+	entry.size = sizeof(uint32_t);
+	entries.push_back(entry);
+	offset += (uint32_t)entry.size;
+
+	entry.constantID = 2;
+	entry.offset = offset;
+	entry.size = sizeof(uint32_t);
+	entries.push_back(entry);
+	offset += (uint32_t)entry.size;
+
+	entry.constantID = 3;
+	entry.offset = offset;
+	entry.size = sizeof(uint32_t);
+	entries.push_back(entry);
+	offset += (uint32_t)entry.size;
+
+	VkSpecializationInfo specInfo{};
+	specInfo.mapEntryCount = (uint32_t)entries.size();
+	specInfo.pMapEntries = entries.data();
+	specInfo.dataSize = sizeof(m_specConstants);
+	specInfo.pData = &m_specConstants;
+
+	VkPipelineShaderStageCreateInfo shaderInfo{ VK_STRUCTURE_TYPE_PIPELINE_SHADER_STAGE_CREATE_INFO };
 	shaderInfo.module = m_textureDecodeCS;
 	shaderInfo.stage = VK_SHADER_STAGE_COMPUTE_BIT;
 	shaderInfo.pName = "main";
+	shaderInfo.pSpecializationInfo = &specInfo;
 
 	VkComputePipelineCreateInfo pipelineInfo{ VK_STRUCTURE_TYPE_COMPUTE_PIPELINE_CREATE_INFO };
 	pipelineInfo.stage = shaderInfo;
@@ -235,10 +288,6 @@ bool AsyncFrameDecoder::Init(VkDevice device, VkPhysicalDevice physDevice, uint3
 		return false;
 	}
 
-	m_deletionQueue.push_back([=]() { vkDestroyPipeline(m_device, m_pipeline, nullptr); });
-
-	g_logger->info("Asynchronous frame decoder initialized");
-
 	return true;
 }
 
@@ -246,12 +295,43 @@ bool AsyncFrameDecoder::Init(VkDevice device, VkPhysicalDevice physDevice, uint3
 
 bool AsyncFrameDecoder::CopyAndDecodeCameraFrame(std::shared_ptr<CameraCPUFrame> inFrame, VulkanTexture& rawTexture, VulkanTexture& sharedTexture)
 {
+	Config_Main& mainConf = m_configManager->GetConfig_Main();
+
+	bool bDoColorAdjustment = m_configManager->CheckEnableAsyncColorAdjustment() && (fabsf(mainConf.Brightness) > 0.01f || fabsf(mainConf.Contrast - 1.0f) > 0.01f || fabsf(mainConf.Saturation - 1.0f) > 0.01f || fabsf(mainConf.GammaCorrection - 1.0f) > 0.01f);
+
+	if (inFrame->RawFrameFormat != m_specConstants.frameFormat ||
+		bDoColorAdjustment != (m_specConstants.bDoColorAdjustment != 0))
+	{
+		m_specConstants.frameFormat = inFrame->RawFrameFormat;
+		m_specConstants.bDoColorAdjustment = bDoColorAdjustment;
+		m_specConstants.bInputIsSRGB = inFrame->RawFrameFormat == FrameFormat_YUYV16 ? false : true;
+		m_specConstants.bOutputIsSRGB = true;
+
+		if (!CreatePipeline())
+		{
+			return false;
+		}
+	}
+
+
 	vkResetFences(m_device, 1, &m_fence);
 
 	VkCommandBufferBeginInfo beginInfo{ VK_STRUCTURE_TYPE_COMMAND_BUFFER_BEGIN_INFO };
 	beginInfo.flags = 0;
 
 	vkBeginCommandBuffer(m_commandBuffer, &beginInfo);
+
+
+	if (rawTexture.StagingBuffer == VK_NULL_HANDLE)
+	{
+		CopyHostImageToGPU(m_device, rawTexture, *inFrame->FrameBuffer.get());
+	}
+	else
+	{
+		memcpy(rawTexture.MappedMemory, inFrame->FrameBuffer->data(), inFrame->FrameBuffer->size());
+		CopyTextureToGPU(m_commandBuffer, rawTexture, VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL);
+	}
+
 
 	VkDescriptorImageInfo rawFrameInfo{};
 	rawFrameInfo.imageLayout = rawTexture.Layout;
@@ -285,27 +365,13 @@ bool AsyncFrameDecoder::CopyAndDecodeCameraFrame(std::shared_ptr<CameraCPUFrame>
 
 	vkUpdateDescriptorSets(m_device, (uint32_t)descriptorWrite.size(), descriptorWrite.data(), 0, nullptr);
 	vkCmdBindDescriptorSets(m_commandBuffer, VK_PIPELINE_BIND_POINT_COMPUTE, m_pipelineLayout, 0, 1, &m_descriptorSet, 0, nullptr);
-
-
-	if (rawTexture.StagingBuffer == VK_NULL_HANDLE)
-	{
-		CopyHostImageToGPU(m_device, rawTexture, *inFrame->FrameBuffer.get());
-	}
-	else
-	{
-		memcpy(rawTexture.MappedMemory, inFrame->FrameBuffer->data(), inFrame->FrameBuffer->size());
-		CopyTextureToGPU(m_commandBuffer, rawTexture, VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL);
-	}
-
-	Config_Main& mainConf = m_configManager->GetConfig_Main();
+	
 
 	ConversionPushConstants constants = {};
-	constants.frameFormat = inFrame->RawFrameFormat;
 	constants.brightness = mainConf.Brightness;
 	constants.contrast = mainConf.Contrast;
 	constants.saturation = mainConf.Saturation;
 	constants.gammaCorrection = 1.0f / mainConf.GammaCorrection;
-	constants.bDoColorAdjustment = m_configManager->CheckEnableAsyncColorAdjustment() && (fabsf(mainConf.Brightness) > 0.01f || fabsf(mainConf.Contrast - 1.0f) > 0.01f || fabsf(mainConf.Saturation - 1.0f) > 0.01f || fabsf(mainConf.GammaCorrection - 1.0f) > 0.01f);
 
 	if (sharedTexture.Layout != VK_IMAGE_LAYOUT_GENERAL)
 	{

@@ -1153,7 +1153,7 @@ bool CameraManagerOpenVR::GetHMDPoseForTime(XrMatrix4x4f& headToTrackingPose, co
 
     double exposureTimeInPastSeconds = GetPerfTimeDiffSeconds(GetCurrentTimeSytemTicks(), time);
 
-    m_openVRManager->GetVRSystem()->GetDeviceToAbsoluteTrackingPose(vr::TrackingUniverseStanding, exposureTimeInPastSeconds, &hmdPose, 1);
+    m_openVRManager->GetVRSystem()->GetDeviceToAbsoluteTrackingPose(vr::TrackingUniverseStanding, (float)exposureTimeInPastSeconds, &hmdPose, 1);
 
     headToTrackingPose = ToXRMatrix4x4(hmdPose.mDeviceToAbsoluteTracking);
     return hmdPose.bPoseIsValid;

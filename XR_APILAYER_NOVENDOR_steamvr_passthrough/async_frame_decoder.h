@@ -4,6 +4,16 @@
 #include "layer_structs.h"
 #include "config_manager.h"
 
+namespace
+{
+	struct alignas(4) ConversionSpecializationConstants
+	{
+		uint32_t frameFormat;
+		VkBool32 bDoColorAdjustment;
+		VkBool32 bInputIsSRGB;
+		VkBool32 bOutputIsSRGB;
+	};
+}
 
 class AsyncFrameDecoder
 {
@@ -14,6 +24,7 @@ public:
 	}
 	void Deinit();
 	bool Init(VkDevice device, VkPhysicalDevice physDevice, uint32_t queueFamilyIndex, uint32_t queueIndex, bool bRenderDocEnabled);
+	bool CreatePipeline();
 	bool CopyAndDecodeCameraFrame(std::shared_ptr<CameraCPUFrame> inFrame, VulkanTexture& rawTexture, VulkanTexture& sharedTexture);
 
 private:
@@ -53,5 +64,7 @@ private:
 	VkSampler m_sampler = VK_NULL_HANDLE;
 	VkSampler m_samplerYUV16 = VK_NULL_HANDLE;
 	VkSampler m_samplerNV12 = VK_NULL_HANDLE;
+
+	ConversionSpecializationConstants m_specConstants{};
 };
 

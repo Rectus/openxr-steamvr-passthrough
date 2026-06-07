@@ -10,8 +10,8 @@
 
 #include "passthrough_renderer.h"
 
-#include "shaders\fill_holes_vulkan_cs.spv.h"
-#include "shaders\joint_bilateral_vulkan_cs.spv.h"
+#include "shaders\vulkan_fill_holes.comp.spv.h"
+#include "shaders\vulkan_joint_bilateral.comp.spv.h"
 
 
 
@@ -19,14 +19,7 @@
 
 struct alignas(16) CSAsyncConstantBuffer
 {
-	int32_t g_disparitySize[2];
-	float minDisparity;
-	float maxDisparity;
-	uint32_t bHoleFillLastPass;
-
-	float bilateralDispCutoff;
-	uint32_t bilateralDistance;
-	uint32_t bUseInputConfidence;
+	VkBool32 bHoleFillLastPass;
 };
 
 #define MAX_FILTER_DIST 10
@@ -111,6 +104,17 @@ AsyncRenderer::~AsyncRenderer()
 		DestroyTexture(m_rawCameraTexture[i]);
 		DestroyTexture(m_sharedCameraTexture[i]);
 		DestroyTexture(m_outputTexture[i]);
+	}
+
+	if (m_pipelineFillHoles != VK_NULL_HANDLE)
+	{
+		vkDestroyPipeline(m_device, m_pipelineFillHoles, nullptr);
+		m_pipelineFillHoles = VK_NULL_HANDLE;
+	}
+	if (m_pipelineJointBilateral != VK_NULL_HANDLE)
+	{
+		vkDestroyPipeline(m_device, m_pipelineJointBilateral, nullptr);
+		m_pipelineJointBilateral = VK_NULL_HANDLE;
 	}
 
 	for (std::function<void()> deleteFunc : m_deletionQueue)
@@ -550,15 +554,84 @@ bool AsyncRenderer::InitRenderer()
 	m_deletionQueue.push_back([=]() { vkDestroyPipelineLayout(m_device, m_pipelineLayout, nullptr); });
 
 
+	if (!m_frameDecoder.Init(m_device, m_physDevice, m_queueFamilyIndex, 1, g_renderDocAPI != nullptr))
+	{
+		g_logger->error("Failed to init acync frame decoder!");
+		return false;
+	}
+
+	g_logger->info("Asynchronous depth renderer initialized");
+
+	return true;
+}
+
+bool AsyncRenderer::CreatePipeline()
+{
+	if (m_pipelineFillHoles != VK_NULL_HANDLE)
+	{
+		vkDestroyPipeline(m_device, m_pipelineFillHoles, nullptr);
+		m_pipelineFillHoles = VK_NULL_HANDLE;
+	}
+	if (m_pipelineJointBilateral != VK_NULL_HANDLE)
+	{
+		vkDestroyPipeline(m_device, m_pipelineJointBilateral, nullptr);
+		m_pipelineJointBilateral = VK_NULL_HANDLE;
+	}
+
+
+	std::vector<VkSpecializationMapEntry> entries;
+
+	VkSpecializationMapEntry entry{};
+	uint32_t offset = 0;
+
+	entry.constantID = 0;
+	entry.offset = offset;
+	entry.size = sizeof(float);
+	entries.push_back(entry);
+	offset += (uint32_t)entry.size;
+
+	entry.constantID = 1;
+	entry.offset = offset;
+	entry.size = sizeof(float);
+	entries.push_back(entry);
+	offset += (uint32_t)entry.size;
+
+	entry.constantID = 2;
+	entry.offset = offset;
+	entry.size = sizeof(VkBool32);
+	entries.push_back(entry);
+	offset += (uint32_t)entry.size;
+
+	entry.constantID = 3;
+	entry.offset = offset;
+	entry.size = sizeof(float);
+	entries.push_back(entry);
+	offset += (uint32_t)entry.size;
+
+	entry.constantID = 4;
+	entry.offset = offset;
+	entry.size = sizeof(uint32_t);
+	entries.push_back(entry);
+	offset += (uint32_t)entry.size;
+
+	VkSpecializationInfo specInfo{};
+	specInfo.mapEntryCount = (uint32_t)entries.size();
+	specInfo.pMapEntries = entries.data();
+	specInfo.dataSize = sizeof(m_specConstants);
+	specInfo.pData = &m_specConstants;
+
+
 	VkPipelineShaderStageCreateInfo shaderInfoFillHolesCS{ VK_STRUCTURE_TYPE_PIPELINE_SHADER_STAGE_CREATE_INFO };
 	shaderInfoFillHolesCS.module = m_disparityFillHolesCS;
 	shaderInfoFillHolesCS.stage = VK_SHADER_STAGE_COMPUTE_BIT;
 	shaderInfoFillHolesCS.pName = "main";
+	shaderInfoFillHolesCS.pSpecializationInfo = &specInfo;
 
 	VkPipelineShaderStageCreateInfo shaderInfoJointBilateralCS{ VK_STRUCTURE_TYPE_PIPELINE_SHADER_STAGE_CREATE_INFO };
 	shaderInfoJointBilateralCS.module = m_disparityJointBilateralCS;
 	shaderInfoJointBilateralCS.stage = VK_SHADER_STAGE_COMPUTE_BIT;
 	shaderInfoJointBilateralCS.pName = "main";
+	shaderInfoJointBilateralCS.pSpecializationInfo = &specInfo;
 
 
 	VkComputePipelineCreateInfo pipelineInfoFillHoles{ VK_STRUCTURE_TYPE_COMPUTE_PIPELINE_CREATE_INFO };
@@ -584,18 +657,6 @@ bool AsyncRenderer::InitRenderer()
 
 	m_pipelineFillHoles = pipelines[0];
 	m_pipelineJointBilateral = pipelines[1];
-
-	m_deletionQueue.push_back([=]() { vkDestroyPipeline(m_device, m_pipelineFillHoles, nullptr); });
-	m_deletionQueue.push_back([=]() { vkDestroyPipeline(m_device, m_pipelineJointBilateral, nullptr); });
-
-
-	if (!m_frameDecoder.Init(m_device, m_physDevice, m_queueFamilyIndex, 1, g_renderDocAPI != nullptr))
-	{
-		g_logger->error("Failed to init acync frame decoder!");
-		return false;
-	}
-
-	g_logger->info("Asynchronous depth renderer initialized");
 
 	return true;
 }
@@ -991,7 +1052,7 @@ bool AsyncRenderer::CopyAndDecodeCameraFrame(std::shared_ptr<CameraCPUFrame> inF
 
 
 
-bool AsyncRenderer::BeginRender(std::shared_ptr<DepthFrame> depthFrame)
+bool AsyncRenderer::BeginRender(std::shared_ptr<DepthFrame> depthFrame, const Config_Stereo& stereoConf)
 {
 	std::shared_lock accessLock(m_accessMutex);
 	int textureIndex = depthFrame->DisparityTextureIndex;
@@ -1000,6 +1061,30 @@ bool AsyncRenderer::BeginRender(std::shared_ptr<DepthFrame> depthFrame)
 	{
 		return false;
 	}
+
+
+	float bilateralDispCutoff = stereoConf.StereoFilteringBilateral_DispCutoff*
+		(depthFrame->MaxDisparity - depthFrame->MinDisparity);
+
+	if (depthFrame->MinDisparity != m_specConstants.minDisparity ||
+		depthFrame->MaxDisparity != m_specConstants.maxDisparity ||
+		stereoConf.StereoFilteringWLS_Enable != (m_specConstants.bUseInputConfidence != 0) ||
+		stereoConf.StereoFilteringBilateral_Distance != m_specConstants.bilateralDistance ||
+		bilateralDispCutoff != m_specConstants.bilateralDispCutoff)
+	{
+		m_specConstants.minDisparity = depthFrame->MinDisparity;
+		m_specConstants.maxDisparity = depthFrame->MaxDisparity;
+		m_specConstants.bUseInputConfidence = stereoConf.StereoFilteringWLS_Enable;
+		m_specConstants.bilateralDistance = stereoConf.StereoFilteringBilateral_Distance;
+		m_specConstants.bilateralDispCutoff = bilateralDispCutoff;
+
+		if (!CreatePipeline())
+		{
+			return false;
+		}
+	}
+
+
 
 	if (!m_disparityTexture.bIsValid ||
 		m_disparityTexture.Extent.width != depthFrame->InputDisparityTextureSize[0] ||
@@ -1054,9 +1139,6 @@ bool AsyncRenderer::BeginRender(std::shared_ptr<DepthFrame> depthFrame)
 			return false;
 		}
 	}
-
-	m_minDisparity = depthFrame->MinDisparity;
-	m_maxDisparity = depthFrame->MaxDisparity;
 
 	/*if (g_renderDocAPI && !g_bRenderDocCaptured)
 	{
@@ -1195,15 +1277,7 @@ void AsyncRenderer::Render(std::shared_ptr<DepthFrame> depthFrame, const Config_
 
 
 	CSAsyncConstantBuffer constants = {};
-
-	constants.g_disparitySize[0] = depthFrame->InputDisparityTextureSize[0];
-	constants.g_disparitySize[1] = depthFrame->InputDisparityTextureSize[1];
-	constants.minDisparity = depthFrame->MinDisparity;
-	constants.maxDisparity = depthFrame->MaxDisparity;
-	constants.bilateralDistance = stereoConf.StereoFilteringBilateral_Distance;
-	constants.bilateralDispCutoff = stereoConf.StereoFilteringBilateral_DispCutoff * (m_maxDisparity - m_minDisparity);
 	constants.bHoleFillLastPass = false;
-	constants.bUseInputConfidence = stereoConf.StereoFilteringWLS_Enable;
 
 
 	if (stereoConf.StereoFilteringBilateral_Enable &&

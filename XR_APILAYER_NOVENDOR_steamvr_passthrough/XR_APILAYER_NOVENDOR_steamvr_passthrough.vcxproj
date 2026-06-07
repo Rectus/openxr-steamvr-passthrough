@@ -288,7 +288,9 @@ copy $(SolutionDir)THIRD_PARTY $(OutDir)THIRD_PARTY.txt</Command>
       <ShaderType Condition="'$(Configuration)|$(Platform)'=='Release|x64'">Pixel</ShaderType>
       <HeaderFileOutput Condition="'$(Configuration)|$(Platform)'=='Release|x64'">shaders\alpha_prepass_ps.h</HeaderFileOutput>
     </FxCompile>
-    <None Include="shaders\texture_decode_vulkan.comp.glsl" />
+    <None Include="shaders\vulkan_fill_holes.comp.glsl" />
+    <None Include="shaders\vulkan_joint_bilateral.comp.glsl" />
+    <None Include="shaders\vulkan_texture_decode.comp.glsl" />
     <None Include="shaders\vs_outputs.hlsl">
       <FileType>Document</FileType>
     </None>
@@ -344,9 +346,6 @@ copy $(SolutionDir)THIRD_PARTY $(OutDir)THIRD_PARTY.txt</Command>
       <ShaderType Condition="'$(Configuration)|$(Platform)'=='Release|x64'">Pixel</ShaderType>
       <VariableName Condition="'$(Configuration)|$(Platform)'=='Release|x64'">g_depthWriteTemporalPS</VariableName>
     </FxCompile>
-    <None Include="shaders\fill_holes_vulkan_cs.hlsl">
-      <FileType>Document</FileType>
-    </None>
     <FxCompile Include="shaders\fullscreen_passthrough_composite_ps.hlsl">
       <HeaderFileOutput Condition="'$(Configuration)|$(Platform)'=='Debug|x64'">shaders\fullscreen_passthrough_composite_ps.h</HeaderFileOutput>
       <HeaderFileOutput Condition="'$(Configuration)|$(Platform)'=='Release|x64'">shaders\fullscreen_passthrough_composite_ps.h</HeaderFileOutput>
@@ -388,9 +387,6 @@ copy $(SolutionDir)THIRD_PARTY $(OutDir)THIRD_PARTY.txt</Command>
       <VariableName Condition="'$(Configuration)|$(Platform)'=='Debug|x64'">g_FullscreenQuadVS</VariableName>
     </FxCompile>
     <None Include="shaders\fullscreen_util.hlsl">
-      <FileType>Document</FileType>
-    </None>
-    <None Include="shaders\joint_bilateral_vulkan_cs.hlsl">
       <FileType>Document</FileType>
     </None>
     <FxCompile Include="shaders\mesh_rigid_vs.hlsl">
