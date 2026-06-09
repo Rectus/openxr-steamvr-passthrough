@@ -39,6 +39,7 @@ private:
 	uint32_t m_queueFamilyIndex = 0;
 	uint32_t m_queueIndex = 0;
 	bool m_bRenderDocEnabled = false;
+	bool m_bIsInitialized = false;
 
 	VkQueue m_queue = VK_NULL_HANDLE;
 	VkCommandPool m_commandPool = VK_NULL_HANDLE;
@@ -58,12 +59,7 @@ private:
 	VkDescriptorSet m_descriptorSet = VK_NULL_HANDLE;
 	VkDescriptorSetLayout m_descriptorLayout = VK_NULL_HANDLE;
 
-	VkSamplerYcbcrConversion m_yuv16Conversion = VK_NULL_HANDLE;
-	VkSamplerYcbcrConversion m_nv12Conversion = VK_NULL_HANDLE;
-
 	VkSampler m_sampler = VK_NULL_HANDLE;
-	VkSampler m_samplerYUV16 = VK_NULL_HANDLE;
-	VkSampler m_samplerNV12 = VK_NULL_HANDLE;
 
 	ConversionSpecializationConstants m_specConstants{};
 };

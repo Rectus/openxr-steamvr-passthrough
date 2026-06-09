@@ -54,6 +54,7 @@ void AsyncFrameDecoder::Deinit()
 
 bool AsyncFrameDecoder::Init(VkDevice device, VkPhysicalDevice physDevice, uint32_t queueFamilyIndex, uint32_t queueIndex, bool bRenderDocEnabled)
 {
+	m_bIsInitialized = false;
 	m_device = device;
 	m_physDevice = physDevice;
 	m_queueFamilyIndex = queueFamilyIndex;
@@ -121,43 +122,6 @@ bool AsyncFrameDecoder::Init(VkDevice device, VkPhysicalDevice physDevice, uint3
 	}
 	m_deletionQueue.push_back([=]() { vkDestroySampler(m_device, m_sampler, nullptr); });
 
-	//VkSamplerYcbcrConversionCreateInfo conversionInfo{ VK_STRUCTURE_TYPE_SAMPLER_YCBCR_CONVERSION_CREATE_INFO };
-	//conversionInfo.format = VK_FORMAT_G8B8G8R8_422_UNORM;
-	//conversionInfo.ycbcrModel = VK_SAMPLER_YCBCR_MODEL_CONVERSION_YCBCR_709; // TODO
-	//conversionInfo.ycbcrRange = VK_SAMPLER_YCBCR_RANGE_ITU_FULL;
-	//conversionInfo.components.r = VK_COMPONENT_SWIZZLE_IDENTITY;
-	//conversionInfo.components.g = VK_COMPONENT_SWIZZLE_IDENTITY;
-	//conversionInfo.components.b = VK_COMPONENT_SWIZZLE_IDENTITY;
-	//conversionInfo.components.a = VK_COMPONENT_SWIZZLE_IDENTITY;
-	//conversionInfo.xChromaOffset = VK_CHROMA_LOCATION_MIDPOINT;
-	//conversionInfo.yChromaOffset = VK_CHROMA_LOCATION_MIDPOINT;
-	//conversionInfo.chromaFilter = VK_FILTER_LINEAR;
-	//conversionInfo.forceExplicitReconstruction = VK_FALSE;
-	//VkResult res = vkCreateSamplerYcbcrConversion(m_device, &conversionInfo, NULL, &m_yuv16Conversion);
-	//if (res != VK_SUCCESS)
-	//{
-	//	g_logger->error("vkCreateSamplerYcbcrConversion failure! {}", (int32_t)res);
-	//	return false;
-	//}
-	//m_deletionQueue.push_back([=]() { vkDestroySamplerYcbcrConversion(m_device, m_yuv16Conversion, nullptr); });
-
-	//VkSamplerYcbcrConversionInfo ycbcrInfo{ VK_STRUCTURE_TYPE_SAMPLER_YCBCR_CONVERSION_INFO };
-	//ycbcrInfo.conversion = m_yuv16Conversion;
-
-	//samplerInfo.pNext = &ycbcrInfo;
-	//samplerInfo.magFilter = VK_FILTER_LINEAR;
-	//samplerInfo.minFilter = VK_FILTER_LINEAR;
-	//samplerInfo.addressModeU = VK_SAMPLER_ADDRESS_MODE_CLAMP_TO_EDGE;
-	//samplerInfo.addressModeV = VK_SAMPLER_ADDRESS_MODE_CLAMP_TO_EDGE;
-	//samplerInfo.addressModeW = VK_SAMPLER_ADDRESS_MODE_CLAMP_TO_EDGE;
-
-	//if (vkCreateSampler(m_device, &samplerInfo, nullptr, &m_samplerYUV16) != VK_SUCCESS)
-	//{
-	//	g_logger->error("vkCreateSampler failure!");
-	//	return false;
-	//}
-	//m_deletionQueue.push_back([=]() { vkDestroySampler(m_device, m_samplerYUV16, nullptr); });
-
 	VkDescriptorPoolSize poolSizes[2] =
 	{
 		{VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER, 1},
@@ -176,14 +140,15 @@ bool AsyncFrameDecoder::Init(VkDevice device, VkPhysicalDevice physDevice, uint3
 	}
 	m_deletionQueue.push_back([=]() { vkDestroyDescriptorPool(m_device, m_descriptorPool, nullptr); });
 
-	VkDescriptorSetLayoutBinding layoutBindings[2] = {
-		{ 0, VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER, 1, VK_SHADER_STAGE_COMPUTE_BIT, nullptr },
-		{ 1, VK_DESCRIPTOR_TYPE_STORAGE_IMAGE, 1, VK_SHADER_STAGE_COMPUTE_BIT, nullptr } 
-	};
+
+
+	std::vector<VkDescriptorSetLayoutBinding> layoutBindings{};
+	layoutBindings.push_back({ 0, VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER, 1, VK_SHADER_STAGE_COMPUTE_BIT, &m_sampler });
+	layoutBindings.push_back({ 1, VK_DESCRIPTOR_TYPE_STORAGE_IMAGE, 1, VK_SHADER_STAGE_COMPUTE_BIT, nullptr });
 
 	VkDescriptorSetLayoutCreateInfo layoutInfo{ VK_STRUCTURE_TYPE_DESCRIPTOR_SET_LAYOUT_CREATE_INFO };
-	layoutInfo.bindingCount = 2;
-	layoutInfo.pBindings = layoutBindings;
+	layoutInfo.bindingCount = (uint32_t)layoutBindings.size();
+	layoutInfo.pBindings = layoutBindings.data();
 
 	if (vkCreateDescriptorSetLayout(m_device, &layoutInfo, nullptr, &m_descriptorLayout) != VK_SUCCESS)
 	{
@@ -224,12 +189,15 @@ bool AsyncFrameDecoder::Init(VkDevice device, VkPhysicalDevice physDevice, uint3
 	m_deletionQueue.push_back([=]() { vkDestroyPipelineLayout(m_device, m_pipelineLayout, nullptr); });
 
 	g_logger->info("Asynchronous frame decoder initialized");
+	m_bIsInitialized = true;
 
 	return true;
 }
 
 bool AsyncFrameDecoder::CreatePipeline()
 {
+	if (!m_bIsInitialized) { return false; }
+
 	if (m_pipeline != VK_NULL_HANDLE)
 	{
 		vkDestroyPipeline(m_device, m_pipeline, nullptr);
@@ -282,9 +250,10 @@ bool AsyncFrameDecoder::CreatePipeline()
 	pipelineInfo.flags = 0;
 	pipelineInfo.layout = m_pipelineLayout;
 
-	if (vkCreateComputePipelines(m_device, VK_NULL_HANDLE, 1, &pipelineInfo, nullptr, &m_pipeline) != VK_SUCCESS)
+	VkResult res = vkCreateComputePipelines(m_device, VK_NULL_HANDLE, 1, &pipelineInfo, nullptr, &m_pipeline);
+	if (res != VK_SUCCESS)
 	{
-		g_logger->error("vkCreateComputePipelines failure!");
+		g_logger->error("vkCreateComputePipelines failure {}", (uint32_t)res);
 		return false;
 	}
 
@@ -295,6 +264,8 @@ bool AsyncFrameDecoder::CreatePipeline()
 
 bool AsyncFrameDecoder::CopyAndDecodeCameraFrame(std::shared_ptr<CameraCPUFrame> inFrame, VulkanTexture& rawTexture, VulkanTexture& sharedTexture)
 {
+	if (!m_bIsInitialized) { return false; }
+
 	Config_Main& mainConf = m_configManager->GetConfig_Main();
 
 	bool bDoColorAdjustment = m_configManager->CheckEnableAsyncColorAdjustment() && (fabsf(mainConf.Brightness) > 0.01f || fabsf(mainConf.Contrast - 1.0f) > 0.01f || fabsf(mainConf.Saturation - 1.0f) > 0.01f || fabsf(mainConf.GammaCorrection - 1.0f) > 0.01f);
@@ -304,7 +275,7 @@ bool AsyncFrameDecoder::CopyAndDecodeCameraFrame(std::shared_ptr<CameraCPUFrame>
 	{
 		m_specConstants.frameFormat = inFrame->RawFrameFormat;
 		m_specConstants.bDoColorAdjustment = bDoColorAdjustment;
-		m_specConstants.bInputIsSRGB = inFrame->RawFrameFormat == FrameFormat_YUYV16 ? false : true;
+		m_specConstants.bInputIsSRGB = inFrame->RawFrameFormat == FrameFormat_RGBX32 || inFrame->RawFrameFormat == FrameFormat_RGB24;
 		m_specConstants.bOutputIsSRGB = true;
 
 		if (!CreatePipeline())
@@ -336,7 +307,7 @@ bool AsyncFrameDecoder::CopyAndDecodeCameraFrame(std::shared_ptr<CameraCPUFrame>
 	VkDescriptorImageInfo rawFrameInfo{};
 	rawFrameInfo.imageLayout = rawTexture.Layout;
 	rawFrameInfo.imageView = rawTexture.View;
-	rawFrameInfo.sampler = m_sampler;
+	rawFrameInfo.sampler = VK_NULL_HANDLE;
 
 	VkDescriptorImageInfo sharedFrameInfo{};
 	sharedFrameInfo.imageLayout = VK_IMAGE_LAYOUT_GENERAL;
@@ -348,7 +319,6 @@ bool AsyncFrameDecoder::CopyAndDecodeCameraFrame(std::shared_ptr<CameraCPUFrame>
 	VkWriteDescriptorSet desc{ VK_STRUCTURE_TYPE_WRITE_DESCRIPTOR_SET };
 	desc.dstSet = m_descriptorSet;
 
-	desc.dstBinding = 0;
 	desc.dstArrayElement = 0;
 	desc.descriptorType = VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER;
 	desc.descriptorCount = 1;
@@ -379,8 +349,19 @@ bool AsyncFrameDecoder::CopyAndDecodeCameraFrame(std::shared_ptr<CameraCPUFrame>
 		sharedTexture.Layout = VK_IMAGE_LAYOUT_GENERAL;
 	}
 
-	int groupCountX = DivRoundUp(rawTexture.Extent.width, 32);
-	int groupCountY = DivRoundUp(rawTexture.Extent.height, 32);
+	int groupCountX;
+	int groupCountY;
+
+	if (inFrame->RawFrameFormat == FrameFormat_YUYV16)
+	{
+		groupCountX = DivRoundUp(rawTexture.Extent.width, 32);
+		groupCountY = DivRoundUp(rawTexture.Extent.height, 32);
+	}
+	else
+	{
+		groupCountX = DivRoundUp(sharedTexture.Extent.width, 32);
+		groupCountY = DivRoundUp(sharedTexture.Extent.height, 32);
+	}
 
 	vkCmdPushConstants(m_commandBuffer, m_pipelineLayout, VK_SHADER_STAGE_COMPUTE_BIT, 0, sizeof(ConversionPushConstants), &constants);
 

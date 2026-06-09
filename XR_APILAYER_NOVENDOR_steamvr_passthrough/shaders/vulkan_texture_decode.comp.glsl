@@ -173,7 +173,7 @@ void main()
         vec4 leftYUYV = texelFetch(g_rawFrame, clamp(inPos + ivec2(-1, 0), ivec2(0, 0), ivec2(inSize)) , 0);
         vec4 rightYUYV = texelFetch(g_rawFrame, clamp(inPos + ivec2(1, 0), ivec2(0, 0), ivec2(inSize)), 0);
 
-        //Midpoint chroma sampling. (The official implemetnation seems to use the packed chroma directly.)
+        //Midpoint chroma sampling.
         vec3 leftYUV;
         leftYUV.x = inputYUYV.x;
         leftYUV.y = inputYUYV.y * 0.75 + leftYUYV.y * 0.25;
@@ -202,7 +202,86 @@ void main()
         imageStore(g_outputFrame, outPos, vec4(leftRGB, 1));
         imageStore(g_outputFrame, outPos + ivec2(1, 0), vec4(rightRGB, 1));
     }
-    else
+    else if(g_frameFormat == FrameFormat_NV12 || g_frameFormat == FrameFormat_NV12_2)
+    {
+        ivec2 outSize = imageSize(g_outputFrame);
+
+        ivec2 outPos = ivec2(gl_GlobalInvocationID.xy);
+
+        ivec2 inPosLuma;
+        ivec2 inPosCb;
+
+        // NV12_2 has two sets of image planes stacked vertically, 
+        // mapping to the top and bottom halves of the image.
+        if(g_frameFormat == FrameFormat_NV12_2)
+        {
+            if(outPos.y < outSize.y / 2) // Top CbCr half-plane after luma half-plane
+            {
+                inPosLuma = ivec2(outPos);
+                inPosCb = ivec2(outPos.x - mod(outPos.x, 2), outSize.y / 2 + outPos.y / 2);
+            }
+            else // Bottom luma and CbCr half-planes
+            {
+                inPosLuma = ivec2(outPos.x, outPos.y + inSize.y / 2);
+                inPosCb = ivec2(outPos.x - mod(outPos.x, 2), inSize.y / 2 + outSize.y / 2 + outPos.y / 2);
+            }
+        }
+        else //Regular NV12 has one luma plane with the same dimensions as the output textures,
+             // with a half-height CbCr plane below it.
+        {
+            inPosLuma = ivec2(outPos);
+            inPosCb = ivec2(outPos.x - mod(outPos.x, 2), outSize.y + outPos.y / 2);
+        }
+
+        // Chroma neighbor sample offsets.
+        ivec2 offsetH = ivec2(mod(outPos.x, 2) * 2 - 1, 0);
+        ivec2 offsetV = ivec2(0, mod(outPos.y, 2) * 2 - 1);
+
+        ivec2 inPosCbH = clamp(inPosCb + offsetH, ivec2(0, 0), ivec2(inSize));
+        ivec2 inPosCbV = clamp(inPosCb + offsetV, ivec2(0, 0), ivec2(inSize));
+        ivec2 inPosCbHV = clamp(inPosCb + offsetH + offsetV, ivec2(0, 0), ivec2(inSize));
+
+        ivec2 inPosCr = inPosCb + ivec2(1, 0);
+        ivec2 inPosCrH = clamp(inPosCr + offsetH, ivec2(0, 0), ivec2(inSize));
+        ivec2 inPosCrV = clamp(inPosCr + offsetV, ivec2(0, 0), ivec2(inSize));
+        ivec2 inPosCrHV = clamp(inPosCr + offsetH + offsetV, ivec2(0, 0), ivec2(inSize));
+
+        float inputLuma = texelFetch(g_rawFrame, inPosLuma, 0).x;
+
+        // Bilinear chroma sampling has to be done manually since the pixels are interleaved.
+        // Separating the planes into two textures would allow automatic sampling.
+        float inputCb = texelFetch(g_rawFrame, inPosCb, 0).x;
+        float inputCbH = texelFetch(g_rawFrame, inPosCbH, 0).x;
+        float inputCbV = texelFetch(g_rawFrame, inPosCbV, 0).x;
+        float inputCbHV = texelFetch(g_rawFrame, inPosCbHV, 0).x;
+
+        float inputCr = texelFetch(g_rawFrame, inPosCr, 0).x;
+        float inputCrH = texelFetch(g_rawFrame, inPosCrH, 0).x;
+        float inputCrV = texelFetch(g_rawFrame, inPosCrV, 0).x;
+        float inputCrHV = texelFetch(g_rawFrame, inPosCrHV, 0).x;
+
+        //Midpoint chroma sampling.
+        vec3 colorYCbCr;
+        colorYCbCr.x = inputLuma;
+        colorYCbCr.y = mix(inputCb * 0.75 + inputCbH * 0.25, inputCbV * 0.75 + inputCbHV * 0.25, 0.25);
+        colorYCbCr.z = mix(inputCr * 0.75 + inputCrH * 0.25, inputCrV * 0.75 + inputCrHV * 0.25, 0.25);
+
+        vec3 colorRGB = YUVToRGB(colorYCbCr);
+
+
+        if (g_bDoColorAdjustment)
+        {
+            ApplyColorAdjustment(colorRGB);
+        }
+
+        if(g_bOutputIsSRGB)
+        {
+            colorRGB = LinearToSRGB(colorRGB);
+        }
+
+        imageStore(g_outputFrame, outPos, vec4(colorRGB, 1));
+    }
+    else // RGB textures.
     {
         ivec2 inPos = ivec2(gl_GlobalInvocationID.xy);
 

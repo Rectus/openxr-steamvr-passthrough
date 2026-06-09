@@ -62,12 +62,12 @@ enum ECameraFrameFormat
 {
 	FrameFormat_Unknown = 0,
 	FrameFormat_RAW10 = 1,     // 10 bpp, TODO
-	FrameFormat_NV12 = 2,      // 12 bpp, planar YUV
+	FrameFormat_NV12 = 2,      // 12 bpp, planar YCbCr
 	FrameFormat_RGB24 = 3,     // 24 bpp, R8G8B8
-	FrameFormat_NV12_2 = 4,    // 12 bpp, planar YUV - double height
-	FrameFormat_YUYV16 = 5,	   // 16 bpp, packed YUV2
-	FrameFormat_BAYER16BG = 6, // 16 bpp, 10-bit Bayer BG
-	FrameFormat_MJPEG = 7,     // Variable MJPEG encoding
+	FrameFormat_NV12_2 = 4,    // 12 bpp, planar YCbCr - image split into two sets of planes vertically (why?!)
+	FrameFormat_YUYV16 = 5,	   // 16 bpp, packed YUV2 YCbCr
+	FrameFormat_BAYER16BG = 6, // 16 bpp, 10-bit Bayer BG TODO
+	FrameFormat_MJPEG = 7,     // Variable Motion JPEG encoding
 	FrameFormat_RGBX32 = 8,	   // 32 bpp, R8G8B8X8
 };
 

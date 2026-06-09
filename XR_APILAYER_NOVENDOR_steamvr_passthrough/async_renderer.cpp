@@ -43,16 +43,16 @@ inline VkFormat CameraFrameFormatToVulkan(const ECameraFrameFormat in)
 	switch (in)
 	{
 	case FrameFormat_RGBX32:
-		return VK_FORMAT_R8G8B8A8_SRGB;
+		return VK_FORMAT_R8G8B8A8_UNORM;
 	case FrameFormat_RGB24:
-		return VK_FORMAT_R8G8B8_SRGB;
+		return VK_FORMAT_R8G8B8_UNORM;
 	case FrameFormat_YUYV16:
 		//return VK_FORMAT_G8B8G8R8_422_UNORM;
 		return VK_FORMAT_R8G8B8A8_UNORM;
 	case FrameFormat_NV12:
-		return VK_FORMAT_G8_B8R8_2PLANE_420_UNORM;
 	case FrameFormat_NV12_2:
-		return VK_FORMAT_G8_B8R8_2PLANE_420_UNORM;
+		//return VK_FORMAT_G8_B8R8_2PLANE_420_UNORM;
+		return VK_FORMAT_R8_UNORM;
 	case FrameFormat_BAYER16BG:
 	case FrameFormat_MJPEG:
 	case FrameFormat_RAW10:
@@ -556,7 +556,7 @@ bool AsyncRenderer::InitRenderer()
 
 	if (!m_frameDecoder.Init(m_device, m_physDevice, m_queueFamilyIndex, 1, g_renderDocAPI != nullptr))
 	{
-		g_logger->error("Failed to init acync frame decoder!");
+		g_logger->error("Failed to init async frame decoder!");
 		return false;
 	}
 
@@ -1005,8 +1005,19 @@ bool AsyncRenderer::CopyAndDecodeCameraFrame(std::shared_ptr<CameraCPUFrame> inF
 
 	VkFormat rawFormat = CameraFrameFormatToVulkan(inFrame->RawFrameFormat);
 
-	VkExtent2D rawExtent = { (uint32_t)inFrame->RawFrameSize[0], (uint32_t)inFrame->RawFrameSize[1] };
-	if (inFrame->RawFrameFormat == FrameFormat_YUYV16) { rawExtent.width /= 2; }
+	VkExtent2D rawExtent;
+	if (inFrame->RawFrameFormat == FrameFormat_YUYV16) 
+	{ 
+		rawExtent = { (uint32_t)inFrame->RawFrameSize[0] / 2, (uint32_t)inFrame->RawFrameSize[1] };
+	}
+	else if (inFrame->RawFrameFormat == FrameFormat_NV12 || inFrame->RawFrameFormat == FrameFormat_NV12_2)
+	{
+		rawExtent = { (uint32_t)inFrame->RawFrameSize[0], (uint32_t)inFrame->RawFrameSize[1] * 3 / 2 };
+	}
+	else
+	{
+		rawExtent = { (uint32_t)inFrame->RawFrameSize[0], (uint32_t)inFrame->RawFrameSize[1] };
+	}
 
 	if (!rawTexture.bIsValid || rawTexture.Extent.width != rawExtent.width || rawTexture.Extent.height != rawExtent.height || rawTexture.Format != rawFormat)
 	{
