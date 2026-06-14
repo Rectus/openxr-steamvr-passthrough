@@ -9,7 +9,7 @@
 
 
 DepthReconstruction::DepthReconstruction(std::shared_ptr<ConfigManager> configManager, std::shared_ptr<OpenVRManager> openVRManager, std::shared_ptr<ICameraManager> cameraManager, std::shared_ptr<AsyncRenderer> asyncRenderer)
-    : m_depthFrameQueue(5)
+    : m_depthFrameQueue(4)
     , m_asyncRenderer(asyncRenderer)
     , m_configManager(configManager)
     , m_openVRManager(openVRManager)
@@ -46,6 +46,11 @@ DepthReconstruction::~DepthReconstruction()
 FramePtr<DepthFrame> DepthReconstruction::GetDepthFrame()
 {
     return m_depthFrameQueue.AcquireRead();
+}
+
+void DepthReconstruction::ReleaseDepthFrame(std::shared_ptr<DepthFrame> frame)
+{
+    m_depthFrameQueue.ReleaseRead(frame);
 }
 
 void DepthReconstruction::CalculateCameraProjection(std::shared_ptr<CameraGPUFrame>& cameraFrame, FrameRenderParameters& renderParams)
@@ -672,6 +677,12 @@ void DepthReconstruction::RunThread()
         {
             FramePtr<DepthFrame> frame = m_depthFrameQueue.AcquireWrite();
 
+            if (!frame.HasFrame())
+            {
+                g_logger->warn("Depth reconstruction frame underrun!");
+                continue;
+            }
+
             if (frame->DisparityTextureIndex < 0)
             {
                 frame->DisparityTextureIndex = m_depthFrameIndex++;
@@ -714,8 +725,10 @@ void DepthReconstruction::RunThread()
             frame->DisparityDownscaleFactor = (float)m_downscaleFactor / outputScale;
             frame->FrameSequence = (frame->FrameSequence + 1) % 16;
             frame->FrameExposureTimestamp = frameTimestamp;
-            frame->MinDisparity = stereoConfig.StereoMinDisparity / 2048.0f;
-            frame->MaxDisparity = m_maxDisparity / 2048.0f;
+
+            // Truncate valid range to deal with fixed point fractions
+            frame->MinDisparity = (stereoConfig.StereoMinDisparity + 4) / 2048.0f;
+            frame->MaxDisparity = (m_maxDisparity - 4) / 2048.0f;
             frame->bIsValid = true;
 
 

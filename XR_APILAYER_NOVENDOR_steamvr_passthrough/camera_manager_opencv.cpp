@@ -23,8 +23,8 @@ CameraManagerOpenCV::CameraManagerOpenCV(std::shared_ptr<IPassthroughRenderer> i
     , m_useAlternateProjectionCalc(false)
     , m_videoCapture()
     , m_bIsAugmented(bIsAugmented)
-    , m_gpuFrameQueue(5)
-    , m_cpuFrameQueue(5)
+    , m_gpuFrameQueue(4)
+    , m_cpuFrameQueue(3)
 {
 }
 
@@ -306,6 +306,11 @@ FramePtr<CameraGPUFrame> CameraManagerOpenCV::AcquireCameraGPUFrame()
     return m_gpuFrameQueue.AcquireRead();
 }
 
+void CameraManagerOpenCV::ReleaseCameraGPUFrame(std::shared_ptr<CameraGPUFrame> frame)
+{
+    m_gpuFrameQueue.ReleaseRead(frame);
+}
+
 FramePtr<CameraCPUFrame> CameraManagerOpenCV::AcquireCameraCPUFrame()
 {
     if (!m_bCameraInitialized) { return FramePtr<CameraCPUFrame>(); }
@@ -361,6 +366,7 @@ void CameraManagerOpenCV::ServeFrames()
         FramePtr<CameraCPUFrame> cpuFrame = m_cpuFrameQueue.AcquireWrite();
         if (!cpuFrame.HasFrame())
         {
+            g_logger->warn("Camera CPU frame underrun!");
             continue;
         }
 
@@ -493,6 +499,7 @@ void CameraManagerOpenCV::CopyCPUFrameToGPU(std::shared_ptr<CameraCPUFrame> inFr
     FramePtr<CameraGPUFrame> gpuFrame = m_gpuFrameQueue.AcquireWrite();
     if (!gpuFrame.HasFrame())
     {
+        g_logger->warn("Camera GPU frame underrun!");
         return;
     }
 

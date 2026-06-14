@@ -29,6 +29,24 @@ PassthroughSystem::~PassthroughSystem()
 {
 	// Destroy renderer first so it can block on any outstanding rendering commands.
 	m_inlineRenderer.reset();
+
+	while (m_heldCameraFrames.size() > 0)
+	{
+		std::shared_ptr <ICameraManager>& cameraFrameManager =
+			m_cameraProvider == CameraProvider_Augmented ?
+			m_augmentedCameraManager : m_cameraManager;
+
+		cameraFrameManager->ReleaseCameraGPUFrame(m_heldCameraFrames.front());
+		m_heldCameraFrames.pop_front();
+	}
+
+	while (m_heldDepthFrames.size() > 0)
+	{
+		m_depthReconstruction->ReleaseDepthFrame(m_heldDepthFrames.front());
+		m_heldDepthFrames.pop_front();
+	}
+
+	m_asyncRenderer.reset();
 	m_depthReconstruction.reset();
 	m_augmentedDepthReconstruction.reset();
 	m_cameraManager.reset();
@@ -203,11 +221,27 @@ bool PassthroughSystem::SetupProcessingPipeline()
 	uint32_t cameraUndistortedTextureHeight;
 	uint32_t cameraUndistortedFrameBufferSize;
 
+	while (m_heldCameraFrames.size() > 0)
+	{
+		std::shared_ptr <ICameraManager>& cameraFrameManager =
+			m_cameraProvider == CameraProvider_Augmented ?
+			m_augmentedCameraManager : m_cameraManager;
+
+		cameraFrameManager->ReleaseCameraGPUFrame(m_heldCameraFrames.front());
+		m_heldCameraFrames.pop_front();
+	}
+
+	while (m_heldDepthFrames.size() > 0)
+	{		
+		m_depthReconstruction->ReleaseDepthFrame(m_heldDepthFrames.front());
+		m_heldDepthFrames.pop_front();
+	}
+
+	m_asyncRenderer.reset();
 	m_depthReconstruction.reset();
 	m_augmentedDepthReconstruction.reset();
 	m_cameraManager.reset();
 	m_augmentedCameraManager.reset();
-	m_asyncRenderer.reset();
 	
 	if (!m_inlineRenderer.get())
 	{
@@ -328,13 +362,30 @@ bool PassthroughSystem::SetupProcessingPipeline()
 
 void PassthroughSystem::ShutdownRenderer()
 {
+	m_inlineRenderer.reset();
+
+	while (m_heldCameraFrames.size() > 0)
+	{
+		std::shared_ptr <ICameraManager>& cameraFrameManager =
+			m_cameraProvider == CameraProvider_Augmented ?
+			m_augmentedCameraManager : m_cameraManager;
+
+		cameraFrameManager->ReleaseCameraGPUFrame(m_heldCameraFrames.front());
+		m_heldCameraFrames.pop_front();
+	}
+
+	while (m_heldDepthFrames.size() > 0)
+	{
+		m_depthReconstruction->ReleaseDepthFrame(m_heldDepthFrames.front());
+		m_heldDepthFrames.pop_front();
+	}
+
+	m_asyncRenderer.reset();
 	m_depthReconstruction.reset();
 	m_augmentedDepthReconstruction.reset();
 	m_cameraManager.reset();
 	m_augmentedCameraManager.reset();
 
-	m_asyncRenderer.reset();
-	m_inlineRenderer.reset();
 }
 
 EPassthroughCameraState PassthroughSystem::GetCameraState() const
@@ -482,7 +533,6 @@ bool PassthroughSystem::RenderPassthroughOnAppLayer(const XrFrameEndInfo* frameE
 	Config_Extensions extConf = m_configManager->GetConfig_Extensions();
 	Config_Depth depthConf = m_configManager->GetConfig_Depth();
 
-
 	if (m_bIsPaused)
 	{
 		if (m_cameraProvider == CameraProvider_Augmented)
@@ -512,35 +562,16 @@ bool PassthroughSystem::RenderPassthroughOnAppLayer(const XrFrameEndInfo* frameE
 	}
 
 
+	if (renderParams.LeftFrameIndex < 0 || renderParams.RightFrameIndex < 0)
+	{
+		g_logger->error("Error: No swapchains found!");
+		return false;
+	}
+
+
 	renderParams.CameraProvider = m_cameraProvider;
 	renderParams.ProjectionMode = m_projectionMode;
 	renderParams.ProjectionDistance = mainConf.ProjectionDistanceFar;
-
-	XrCompositionLayerProjection* layer = (XrCompositionLayerProjection*)frameEndInfo->layers[layerNum];
-	
-	std::shared_ptr <ICameraManager>& cameraFrameManager = 
-		m_cameraProvider == CameraProvider_Augmented ?
-		m_augmentedCameraManager : m_cameraManager;
-
-	FramePtr<CameraGPUFrame> gpuFrame = cameraFrameManager->AcquireCameraGPUFrame();
-	if (!gpuFrame.HasFrame())
-	{
-		return false;
-	}
-
-	bool bUseDepth = m_projectionMode == Projection_StereoReconstruction && m_depthReconstruction.get();
-
-	FramePtr<DepthFrame> depthFrame = GetDepthFrame();
-	if (bUseDepth && !depthFrame.HasFrame())
-	{
-		return false;
-	}
-
-	ClientData& clientData = m_menuHandler->GetClientData();
-
-	uint64_t preRenderTime = m_passthroughRenderTime.StartPerfTimer();
-
-	
 
 	if (renderParams.bUseFBPassthrough)
 	{
@@ -562,15 +593,9 @@ bool PassthroughSystem::RenderPassthroughOnAppLayer(const XrFrameEndInfo* frameE
 	{
 		m_configManager->SetEnableAsyncColorAdjustment(true);
 	}
+
+	ClientData& clientData = m_menuHandler->GetClientData();
 	
-
-	if (renderParams.LeftFrameIndex < 0 || renderParams.RightFrameIndex < 0)
-	{
-		g_logger->error("Error: No swapchains found!");
-		return false;
-	}
-
-	clientData.Values.LastCameraTimestamp = gpuFrame->FrameExposureTimestamp;
 
 	if (coreConf.CoreForcePassthrough && coreConf.CoreForceMode >= 0)
 	{
@@ -594,6 +619,8 @@ bool PassthroughSystem::RenderPassthroughOnAppLayer(const XrFrameEndInfo* frameE
 		clientData.Values.bFBPassthroughDepthActive = false;
 	}
 
+	auto layer = reinterpret_cast<const XrCompositionLayerProjection*>(frameEndInfo->layers[layerNum]);
+
 	if (renderParams.BlendMode == AlphaBlendPremultiplied)
 	{
 		if (coreConf.CoreForcePremultipliedAlpha == 0 ||
@@ -606,12 +633,6 @@ bool PassthroughSystem::RenderPassthroughOnAppLayer(const XrFrameEndInfo* frameE
 
 	renderParams.bInvertLayerAlpha = m_extensionData.bInverseAlphaExtensionEnabled &&
 		(layer->layerFlags & XR_COMPOSITION_LAYER_INVERTED_ALPHA_BIT_EXT);
-
-	if (mainConf.DebugTexture == DebugTexture_TestImage &&
-		m_configManager->GetDebugTexture().CurrentTexture != DebugTexture_TestImage)
-	{
-		GetTestPattern(m_configManager->GetDebugTexture());
-	}
 
 	renderParams.bEnableDepthRange = false;
 
@@ -628,7 +649,9 @@ bool PassthroughSystem::RenderPassthroughOnAppLayer(const XrFrameEndInfo* frameE
 
 	if (m_extensionData.bVarjoCompositionExtensionEnabled)
 	{
-		auto header = (XrCompositionLayerDepthTestVARJO*)layer->next;
+		// Dirty hack: Casting away const
+		XrCompositionLayerProjection* editableLayer = (XrCompositionLayerProjection*)frameEndInfo->layers[layerNum];
+		auto header = (XrCompositionLayerDepthTestVARJO*)editableLayer->next;
 		XrCompositionLayerDepthTestVARJO* prevHeader = nullptr;
 
 		while (header != nullptr)
@@ -646,7 +669,7 @@ bool PassthroughSystem::RenderPassthroughOnAppLayer(const XrFrameEndInfo* frameE
 				}
 				else
 				{
-					layer->next = header->next;
+					editableLayer->next = header->next;
 				}
 				break;
 			}
@@ -662,11 +685,40 @@ bool PassthroughSystem::RenderPassthroughOnAppLayer(const XrFrameEndInfo* frameE
 		renderParams.DepthRangeMax = depthConf.DepthForceRangeTestMax;
 	}
 
-	UVDistortionParameters& distParams = (m_projectionMode == Projection_RoomView2D || !m_depthReconstruction.get()) ?
-		m_dummyDistParams :
-		(m_cameraProvider == CameraProvider_Augmented ?
-		m_augmentedDepthReconstruction->GetDistortionParameters() :
-		m_depthReconstruction->GetDistortionParameters());
+
+	if (m_projectionMode == Projection_StereoReconstruction && m_depthReconstruction.get())
+	{
+		return RenderPassthroughWithDepth(frameEndInfo, layerNum, renderParams, mainConf);
+	}
+	else
+	{
+		return RenderPassthrough2D(frameEndInfo, layerNum, renderParams, mainConf);
+	}
+}
+
+
+bool PassthroughSystem::RenderPassthrough2D(const XrFrameEndInfo* frameEndInfo, const uint32_t layerNum, FrameRenderParameters& renderParams, Config_Main& mainConf)
+{
+	FramePtr<CameraGPUFrame> gpuFrame = m_cameraManager->AcquireCameraGPUFrame();
+	if (!gpuFrame.HasFrame())
+	{
+		return false;
+	}
+
+	ClientData& clientData = m_menuHandler->GetClientData();
+	clientData.Values.LastCameraTimestamp = gpuFrame->FrameExposureTimestamp;
+
+	uint64_t preRenderTime = m_passthroughRenderTime.StartPerfTimer();
+
+	UVDistortionParameters& distParams = 
+		(m_projectionMode == Projection_RoomView2D || !m_depthReconstruction.get()) ?
+		m_dummyDistParams : m_depthReconstruction->GetDistortionParameters();
+
+	if (mainConf.DebugTexture == DebugTexture_TestImage &&
+		m_configManager->GetDebugTexture().CurrentTexture != DebugTexture_TestImage)
+	{
+		GetTestPattern(m_configManager->GetDebugTexture());
+	}
 
 	if (mainConf.ProjectToRenderModels)
 	{
@@ -675,44 +727,139 @@ bool PassthroughSystem::RenderPassthroughOnAppLayer(const XrFrameEndInfo* frameE
 	}
 
 
-	CalculateFrameProjection(gpuFrame.GetSharedPointer(), depthFrame.GetSharedPointer(), *layer, renderParams);
+	// TODO: Holds on to the last two frames. Ideally we should detect when the render is complete instead.
+	while (m_heldCameraFrames.size() >= 2)
+	{
+		m_cameraManager->ReleaseCameraGPUFrame(m_heldCameraFrames.front());
+		m_heldCameraFrames.pop_front();
+	}
 
-	m_inlineRenderer->RenderPassthroughFrame(layer, gpuFrame.GetSharedPointer(), renderParams, depthFrame.GetSharedPointer(), distParams);
+	std::shared_ptr<CameraGPUFrame> sharedGPUFrame = gpuFrame.AcquireManualRead();
+	m_heldCameraFrames.push_back(sharedGPUFrame);
 
-	
+	std::shared_ptr<DepthFrame> dummyDepthFrame;
+
+	auto layer = reinterpret_cast<const XrCompositionLayerProjection*>(frameEndInfo->layers[layerNum]);
+
+
+	CalculateFrameProjection(sharedGPUFrame, dummyDepthFrame, *layer, renderParams);
+
+	m_inlineRenderer->RenderPassthroughFrame(layer, sharedGPUFrame, renderParams, dummyDepthFrame, distParams);
+
+
+
 	m_passthroughRenderTime.EndPerfTimer();
 	clientData.Values.RenderTimeMS = m_passthroughRenderTime.GetAverageTimeMS();
 
-	m_frameToRenderTime.AveragesAddTimeInterval(gpuFrame->FrameExposureTimestamp, preRenderTime);
+	m_frameToRenderTime.AveragesAddTimeInterval(sharedGPUFrame->FrameExposureTimestamp, preRenderTime);
 	clientData.Values.FrameToRenderLatencyMS = m_frameToRenderTime.GetAverageTimeMS();
 
-	m_frameToPhotonTime.AveragesAddTimeInterval(gpuFrame->FrameExposureTimestamp, renderParams.DisplayTime);
+	m_frameToPhotonTime.AveragesAddTimeInterval(sharedGPUFrame->FrameExposureTimestamp, renderParams.DisplayTime);
 	clientData.Values.FrameToPhotonsLatencyMS = m_frameToPhotonTime.GetAverageTimeMS();
 
-	if (depthFrame.HasFrame() && depthFrame->bIsValid)
-	{
-		m_depthToRenderTime.AveragesAddTimeInterval(depthFrame->FrameExposureTimestamp, preRenderTime);
-		clientData.Values.DepthToRenderLatencyMS = m_depthToRenderTime.GetAverageTimeMS();
-
-		m_depthToPhotonTime.AveragesAddTimeInterval(depthFrame->FrameExposureTimestamp, renderParams.DisplayTime);
-		clientData.Values.DepthToPhotonsLatencyMS = m_depthToPhotonTime.GetAverageTimeMS();
-	}
-
-	if (m_projectionMode == Projection_RoomView2D || !m_depthReconstruction.get())
-	{
-		clientData.Values.StereoReconstructionTimeMS = 0.0f;
-		clientData.Values.StereoRenderTimeMS = 0.0f;
-	}
-	else
-	{
-		clientData.Values.StereoReconstructionTimeMS = m_depthReconstruction->GetReconstructionPerfTime();
-		clientData.Values.StereoRenderTimeMS = m_depthReconstruction->GetRenderPerfTime();
-	}
+	clientData.Values.DepthToRenderLatencyMS = 0.0f;
+	clientData.Values.DepthToPhotonsLatencyMS = 0.0f;
+	clientData.Values.StereoReconstructionTimeMS = 0.0f;
+	clientData.Values.StereoRenderTimeMS = 0.0f;
+	
 	clientData.Values.GPUFrameRetrievalTimeMS = m_cameraManager->GetGPUFrameRetrievalPerfTime();
 	clientData.Values.CPUFrameRetrievalTimeMS = m_cameraManager->GetCPUFrameRetrievalPerfTime();
 
 	return true;
 }
+
+
+bool PassthroughSystem::RenderPassthroughWithDepth(const XrFrameEndInfo* frameEndInfo, const uint32_t layerNum, FrameRenderParameters& renderParams, Config_Main& mainConf)
+{
+	
+	std::shared_ptr <ICameraManager>& cameraFrameManager =
+		m_cameraProvider == CameraProvider_Augmented ?
+		m_augmentedCameraManager : m_cameraManager;
+
+	FramePtr<CameraGPUFrame> gpuFrame = cameraFrameManager->AcquireCameraGPUFrame();
+	if (!gpuFrame.HasFrame())
+	{
+		return false;
+	}
+
+	FramePtr<DepthFrame> depthFrame = m_depthReconstruction->GetDepthFrame();
+	if (!depthFrame.HasFrame())
+	{
+		return false;
+	}
+
+	ClientData& clientData = m_menuHandler->GetClientData();
+	clientData.Values.LastCameraTimestamp = gpuFrame->FrameExposureTimestamp;
+
+	uint64_t preRenderTime = m_passthroughRenderTime.StartPerfTimer();
+
+	UVDistortionParameters& distParams = (m_projectionMode == Projection_RoomView2D || !m_depthReconstruction.get()) ?
+		m_dummyDistParams :
+		(m_cameraProvider == CameraProvider_Augmented ?
+			m_augmentedDepthReconstruction->GetDistortionParameters() :
+			m_depthReconstruction->GetDistortionParameters());
+
+	if (mainConf.DebugTexture == DebugTexture_TestImage &&
+		m_configManager->GetDebugTexture().CurrentTexture != DebugTexture_TestImage)
+	{
+		GetTestPattern(m_configManager->GetDebugTexture());
+	}
+
+	if (mainConf.ProjectToRenderModels)
+	{
+		UpdateRenderModels(gpuFrame->FrameExposureTimestamp);
+		renderParams.RenderModels = m_renderModels;
+	}
+
+	// TODO: Holds on to the last two frames. Ideally we should detect when the render is complete instead.
+	while (m_heldCameraFrames.size() >= 2)
+	{
+		cameraFrameManager->ReleaseCameraGPUFrame(m_heldCameraFrames.front());
+		m_heldCameraFrames.pop_front();
+
+		m_depthReconstruction->ReleaseDepthFrame(m_heldDepthFrames.front());
+		m_heldDepthFrames.pop_front();
+	}
+
+	std::shared_ptr<CameraGPUFrame> sharedGPUFrame = gpuFrame.AcquireManualRead();
+	m_heldCameraFrames.push_back(sharedGPUFrame);
+
+	std::shared_ptr<DepthFrame> sharedDepthFrame = depthFrame.AcquireManualRead();
+	m_heldDepthFrames.push_back(sharedDepthFrame);
+
+	auto layer = reinterpret_cast<const XrCompositionLayerProjection*>(frameEndInfo->layers[layerNum]);
+
+
+	CalculateFrameProjection(sharedGPUFrame, sharedDepthFrame, *layer, renderParams);
+
+	m_inlineRenderer->RenderPassthroughFrame(layer, sharedGPUFrame, renderParams, sharedDepthFrame, distParams);
+
+
+
+	m_passthroughRenderTime.EndPerfTimer();
+	clientData.Values.RenderTimeMS = m_passthroughRenderTime.GetAverageTimeMS();
+
+	m_frameToRenderTime.AveragesAddTimeInterval(sharedGPUFrame->FrameExposureTimestamp, preRenderTime);
+	clientData.Values.FrameToRenderLatencyMS = m_frameToRenderTime.GetAverageTimeMS();
+
+	m_frameToPhotonTime.AveragesAddTimeInterval(sharedGPUFrame->FrameExposureTimestamp, renderParams.DisplayTime);
+	clientData.Values.FrameToPhotonsLatencyMS = m_frameToPhotonTime.GetAverageTimeMS();
+
+	m_depthToRenderTime.AveragesAddTimeInterval(sharedDepthFrame->FrameExposureTimestamp, preRenderTime);
+	clientData.Values.DepthToRenderLatencyMS = m_depthToRenderTime.GetAverageTimeMS();
+
+	m_depthToPhotonTime.AveragesAddTimeInterval(sharedDepthFrame->FrameExposureTimestamp, renderParams.DisplayTime);
+	clientData.Values.DepthToPhotonsLatencyMS = m_depthToPhotonTime.GetAverageTimeMS();
+
+	clientData.Values.StereoReconstructionTimeMS = m_depthReconstruction->GetReconstructionPerfTime();
+	clientData.Values.StereoRenderTimeMS = m_depthReconstruction->GetRenderPerfTime();
+
+	clientData.Values.GPUFrameRetrievalTimeMS = m_cameraManager->GetGPUFrameRetrievalPerfTime();
+	clientData.Values.CPUFrameRetrievalTimeMS = m_cameraManager->GetCPUFrameRetrievalPerfTime();
+
+	return true;
+}
+
 
 void PassthroughSystem::OnPostRenderFrame(bool bDidRender, bool bInhibitIdle)
 {
@@ -758,19 +905,6 @@ void PassthroughSystem::OnPostRenderFrame(bool bDidRender, bool bInhibitIdle)
 				m_bCamerasInitialized = false;
 			}
 		}
-	}
-}
-
-// Hack to be able to get a dummy depth frame in RenderPassthroughOnAppLayer when not calcualting depth.
-FramePtr<DepthFrame> PassthroughSystem::GetDepthFrame()
-{
-	if (m_depthReconstruction.get())
-	{
-		return m_depthReconstruction->GetDepthFrame();
-	}
-	else
-	{
-		return FramePtr<DepthFrame>();
 	}
 }
 

@@ -2095,6 +2095,12 @@ if (bIsActiveTab) { ImGui::PopStyleColor(1); bIsActiveTab = false; }
 
 				IMGUI_BIG_SPACING;
 
+
+				BeginSoftDisabled(!stereoCustomConfig.StereoFillHoles);
+				ImGui::SetNextItemWidth(ImGui::GetContentRegionAvail().x * 0.45f);
+				ScrollableSliderInt("Hole Filling Iterations", &stereoCustomConfig.StereoFillHolesIterations, 1, 15, "%d", 1);
+				EndSoftDisabled(!stereoCustomConfig.StereoFillHoles);
+
 				ImGui::SetNextItemWidth(ImGui::GetContentRegionAvail().x * 0.45f);
 				ScrollableSliderInt("Depth Map Scale", &stereoCustomConfig.StereoDepthMapScale, 1, 4, "%d", 1);
 				TextDescriptionSpaced("Scale of generated depth maps releative to the proecessed disparity maps.");
@@ -2539,8 +2545,8 @@ if (bIsActiveTab) { ImGui::PopStyleColor(1); bIsActiveTab = false; }
 				ImGui::Text("Passthrough CPU render duration: %.2fms", displayValues.RenderTimeMS);
 				ImGui::Text("Stereo reconstruction CPU duration: %.2fms", displayValues.StereoReconstructionTimeMS);
 				ImGui::Text("Stereo reconstruction GPU duration: %.2fms", displayValues.StereoRenderTimeMS);
-				ImGui::Text("GPU Camera frame retrieval duration: %.2fms", displayValues.GPUFrameRetrievalTimeMS);
 				ImGui::Text("CPU Camera frame retrieval duration: %.2fms", displayValues.CPUFrameRetrievalTimeMS);
+				ImGui::Text("GPU Camera frame retrieval duration: %.2fms", displayValues.GPUFrameRetrievalTimeMS);
 			}
 			else
 			{
@@ -3049,9 +3055,9 @@ LRESULT SettingsMenu::HandleWin32Events(HWND hWnd, UINT msg, WPARAM wParam, LPAR
 
 void SettingsMenu::MenuIPCClientConnected(int clientIndex)
 {
-	{
-		m_configManager->DispatchUpdate();
+	bool bUpdateConfig = m_configManager->IsUpdatePending();
 
+	{
 		std::lock_guard<std::mutex> lock(m_menuWriteMutex);
 
 		if (m_clientData.size() != clientIndex)
@@ -3073,15 +3079,17 @@ void SettingsMenu::MenuIPCClientConnected(int clientIndex)
 		m_dashboardOverlay->InitRuntime();
 	}
 
-	if (m_bSettingsUpdatedThisSession && m_configManager->IsUpdatePending())
+	if (bUpdateConfig)
 	{
+		m_configManager->DispatchUpdate();
+
 		MenuIPCMessage message = {};
 		message.Header.Type = MessageType_InformReloadConfigFile;
 		message.Header.PayloadSize = 0;
 		m_IPCServer->WriteMessage(message, clientIndex);
 	}
 
-	if ((m_bSettingsUpdatedThisSession && m_configManager->IsUpdatePending()) || m_bDebugSettingsUpdatedThisSession)
+	if (m_bSettingsUpdatedThisSession || m_bDebugSettingsUpdatedThisSession)
 	{
 		m_bClientTransientUpdatePending = true;
 		m_clientData[clientIndex]->bTransientUpdatePending = true;

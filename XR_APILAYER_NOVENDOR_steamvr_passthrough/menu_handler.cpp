@@ -68,15 +68,17 @@ void MenuHandler::DispatchEngineName()
 	m_IPCClient->WriteMessage(message, true);
 }
 
-void inline CopyConfig(void* destination, MenuIPCMessage& message, size_t size)
+bool inline CopyConfig(void* destination, MenuIPCMessage& message, size_t size)
 {
 	if (message.Header.PayloadSize == size)
 	{
 		memcpy(destination, message.Payload, size);
+		return true;
 	}
 	else
 	{
 		g_logger->error("Incorrect payload size for config update: {}, expected {}", message.Header.PayloadSize, message.Payload);
+		return false;
 	}
 }
 
@@ -135,43 +137,67 @@ void MenuHandler::MenuIPCMessageReceived(MenuIPCMessage& message, int clientInde
 
 	case MessageType_SendConfig_Main:
 
-		CopyConfig(&m_configManager->GetConfig_Main(), message, sizeof(Config_Main));
-		m_configManager->ConfigUpdated();
+		if (!CopyConfig(&m_configManager->GetConfig_Main(), message, sizeof(Config_Main)))
+		{
+			// Read config file to update settings on invalid size
+			m_configManager->ReadConfigFile();
+		}
 		
 		break;
 
 	case MessageType_SendConfig_Core:
 
-		CopyConfig(&m_configManager->GetConfig_Core(), message, sizeof(Config_Core));
-		m_configManager->ConfigUpdated();
+		if (!CopyConfig(&m_configManager->GetConfig_Core(), message, sizeof(Config_Core)))
+		{
+			// Read config file to update settings on invalid size
+			m_configManager->ReadConfigFile();
+		}
 
 		break;
 
 	case MessageType_SendConfig_Extensions:
 
-		CopyConfig(&m_configManager->GetConfig_Extensions(), message, sizeof(Config_Extensions));
-		m_configManager->ConfigUpdated();
+		if (!CopyConfig(&m_configManager->GetConfig_Extensions(), message, sizeof(Config_Extensions)))
+		{
+			// Read config file to update settings on invalid size
+			m_configManager->ReadConfigFile();
+		}
 
 		break;
 
 	case MessageType_SendConfig_Stereo:
 
-		CopyConfig(&m_configManager->GetConfig_CustomStereo(), message, sizeof(Config_Stereo));
-		m_configManager->ConfigUpdated();
+		if (!CopyConfig(&m_configManager->GetConfig_CustomStereo(), message, sizeof(Config_Stereo)))
+		{
+			// Read config file to update settings on invalid size
+			m_configManager->ReadConfigFile();
+		}
+
+		if (m_configManager->GetConfig_Main().StereoPreset == StereoPreset_Custom)
+		{
+			m_configManager->GetConfig_Stereo() = m_configManager->GetConfig_CustomStereo();
+		}
 
 		break;
 
 	case MessageType_SendConfig_Depth:
 
-		CopyConfig(&m_configManager->GetConfig_Depth(), message, sizeof(Config_Depth));
-		m_configManager->ConfigUpdated();
+		if (!CopyConfig(&m_configManager->GetConfig_Depth(), message, sizeof(Config_Depth)))
+		{
+			// Read config file to update settings on invalid size
+			m_configManager->ReadConfigFile();
+		}
 
 		break;
 
 	case MessageType_SendConfig_Camera:
 	{
-		Config_Camera& config = m_configManager->GetConfig_Camera();
-		CopyConfig(&config, message, sizeof(Config_Camera));
+		if (!CopyConfig(&m_configManager->GetConfig_Camera(), message, sizeof(Config_Camera)))
+		{
+			// Read config file to update settings on invalid size
+			m_configManager->ReadConfigFile();
+		}
+
 		break;
 	}
 

@@ -8,7 +8,7 @@ namespace
 	template<typename T> struct QueueEntry
 	{
 		std::shared_ptr<T> Frame;
-		std::shared_mutex Mutex;
+		std::atomic<int> NumReaders = 0;
 	};
 }
 
@@ -18,12 +18,11 @@ template<typename T> class FramePtr
 public:
 	FramePtr()
 		: m_queue(nullptr)
-		, m_entry(nullptr)
 		, m_bIsWrite(false)
 	{
 
 	}
-	FramePtr(FrameQueue<T>* queue, QueueEntry<T>* entry, bool bIsWrite)
+	FramePtr(FrameQueue<T>* queue, std::shared_ptr<QueueEntry<T>> entry, bool bIsWrite)
 		: m_queue(queue)
 		, m_entry(entry)
 		, m_bIsWrite(bIsWrite)
@@ -42,9 +41,9 @@ public:
 
 	~FramePtr()
 	{
-		if (m_queue && m_entry)
+		if (m_queue && m_entry.get())
 		{
-			m_bIsWrite ? m_queue->RescindWrite(m_entry) : m_queue->ReleaseRead(m_entry);
+			m_bIsWrite ? m_queue->RescindWrite(m_entry) : m_queue->ReleaseRead(m_entry->Frame);
 		}
 	}
 
@@ -62,12 +61,12 @@ public:
 
 	bool HasFrame()
 	{
-		return m_entry != nullptr;
+		return m_entry.get() != nullptr;
 	}
 
 	std::shared_ptr<T> GetSharedPointer()
 	{
-		if (m_entry)
+		if (m_entry.get())
 		{
 			return m_entry->Frame;
 		}
@@ -76,34 +75,43 @@ public:
 
 	void CommitWrite()
 	{
-		if (m_entry && m_bIsWrite)
+		if (m_entry.get() && m_bIsWrite)
 		{
 			m_queue->CommitWrite(m_entry);
 			m_queue = nullptr;
-			m_entry = nullptr;
+			m_entry.reset();
 		}
 	}
 
 	bool CommitWriteAndAcquireRead()
 	{
-		if (m_entry && m_bIsWrite)
+		if (m_entry.get() && m_bIsWrite)
 		{
-			m_queue->CommitWrite(m_entry);
-			
 			m_bIsWrite = false;
-			if (m_queue->AcquireReadFromWrite(m_entry))
-			{
-				return true;
-			}
-			m_queue = nullptr;
-			m_entry = nullptr;	
+			m_queue->CommitWriteAndAcquireRead(m_entry);
+			return true;
 		}
 		return false;
 	}
 
+	// Invalidates the FramePtr. Requires manually releasing the read from the queue.
+	std::shared_ptr<T> AcquireManualRead()
+	{
+		if (!m_entry.get())
+		{
+			return std::shared_ptr<T>();
+		}
+
+		std::shared_ptr<T> frame = m_entry->Frame;
+		m_queue = nullptr;
+		m_entry.reset();
+
+		return frame;
+	}
+
 private:
 	FrameQueue<T>* m_queue;
-	QueueEntry<T>* m_entry;
+	std::shared_ptr<QueueEntry<T>> m_entry;
 	bool m_bIsWrite;
 };
 
@@ -114,96 +122,114 @@ template<typename T> class FrameQueue
 {
 public:
 	FrameQueue(int numFrames)
-		: m_entries(numFrames)
 	{
-		for (auto& entry : m_entries)
+		m_idleEntries.reserve(numFrames);
+		m_readEntries.reserve(numFrames);
+
+		for (int i = 0; i < numFrames; i++)
 		{
-			entry.Frame = std::make_shared<T>();
+			auto entry = std::make_shared<QueueEntry<T>>();
+			entry->Frame = std::make_shared<T>();
+			m_idleEntries.push_back(entry);
 		}
 	}
 
 	FramePtr<T> AcquireRead()
 	{
-		if (m_newestFrame < 0)
+		std::lock_guard<std::mutex> accessLock(m_accessMutex);
+
+		if (m_readEntries.empty())
 		{
 			return FramePtr<T>();
 		}
+
+		m_readEntries.back()->NumReaders++;
+		return FramePtr<T>(this, m_readEntries.back(), false);
+	}
+
+	void ReleaseRead(std::shared_ptr<T> frame)
+	{
 		std::lock_guard<std::mutex> accessLock(m_accessMutex);
 
-		if (m_entries[m_newestFrame].Mutex.try_lock_shared())
+		for (int i = 0; i < (int)m_readEntries.size(); i++)
 		{
-			m_lastReadFrame = m_newestFrame;
+			if (m_readEntries[i]->Frame.get() == frame.get())
+			{
+				m_readEntries[i]->NumReaders--;
 
-			return FramePtr<T>(this, &m_entries[m_newestFrame], false);
-		}
+				// Return to idle queue if no one else is reading
+				if (m_readEntries.size() > 1 && m_readEntries[i]->NumReaders <= 0)
+				{
+					m_idleEntries.push_back(m_readEntries[i]);
+					m_readEntries.erase(m_readEntries.begin() + i);
+				}
 
-		return FramePtr<T>();
-	}
-
-	bool AcquireReadFromWrite(QueueEntry<T>* frameEntry)
-	{
-		std::lock_guard<std::mutex> accessLock(m_accessMutex);
-
-		return frameEntry->Mutex.try_lock_shared();
-	}
-
-	void ReleaseRead(QueueEntry<T>* frameEntry)
-	{
-		std::lock_guard<std::mutex> accessLock(m_accessMutex);
-
-		frameEntry->Mutex.unlock_shared();
+				return;
+			}
+		}	
 	}
 
 	FramePtr<T> AcquireWrite()
 	{
 		std::lock_guard<std::mutex> accessLock(m_accessMutex);
 
-		int id = m_newestFrame < 0 ? 0 : (m_newestFrame + 1) % m_entries.size();
-
-		if (m_entries[id].Mutex.try_lock())
+		if (m_idleEntries.size() > 0)
 		{
-			return FramePtr<T>(this, &m_entries[id], true);
+			auto entry = m_idleEntries.back();
+			m_idleEntries.pop_back();
+
+			return FramePtr<T>(this, entry, true);
 		}
 		return FramePtr<T>();
 	}
 
-	void CommitWrite(QueueEntry<T>* frameEntry)
+	void CommitWrite(std::shared_ptr<QueueEntry<T>> frameEntry)
 	{
 		std::lock_guard<std::mutex> accessLock(m_accessMutex);
-		
-		frameEntry->Mutex.unlock();
 
-		// Keep swapping the last two written frames if we are producing them faster than reading them.
-		// We can't easily detect when the GPU has finised accessing the frame, 
-		// this should keep them from being overwritten while in use with 3 + 2 frames in the queue.
-		if (m_lastReadFrame != m_newestFrame)
+		// Remove any stale frames not being read
+		for (int i = (int)m_readEntries.size() - 1; i >= 0; i--)
 		{
-			frameEntry->Frame.swap(m_entries[m_newestFrame].Frame);
-		}
-		else
-		{
-			for (int i = 0; i < m_entries.size(); i++)
+			if (m_readEntries[i]->NumReaders <= 0)
 			{
-				if (&m_entries[i] == frameEntry)
-				{
-					m_newestFrame = i;
-					break;
-				}
+				m_idleEntries.push_back(m_readEntries[i]);
+				m_readEntries.erase(m_readEntries.begin() + i);
 			}
 		}
+		
+		m_readEntries.push_back(frameEntry);
 	}
 
-	void RescindWrite(QueueEntry<T>* frameEntry)
+	bool CommitWriteAndAcquireRead(std::shared_ptr<QueueEntry<T>> frameEntry)
 	{
 		std::lock_guard<std::mutex> accessLock(m_accessMutex);
 
-		frameEntry->Mutex.unlock();
+		// Remove any stale frames not being read
+		for (int i = (int)m_readEntries.size() - 1; i >= 0; i--)
+		{
+			if (m_readEntries[i]->NumReaders <= 0)
+			{
+				m_idleEntries.push_back(m_readEntries[i]);
+				m_readEntries.erase(m_readEntries.begin() + i);
+			}
+		}
+
+		m_readEntries.push_back(frameEntry);
+		frameEntry->NumReaders++;
+
+		return true;
+	}
+
+	void RescindWrite(std::shared_ptr<QueueEntry<T>> frameEntry)
+	{
+		std::lock_guard<std::mutex> accessLock(m_accessMutex);
+
+		m_idleEntries.push_back(frameEntry);
 	}
 
 private:
-	std::vector<QueueEntry<T>> m_entries;
+	std::vector<std::shared_ptr<QueueEntry<T>>> m_idleEntries;
+	std::vector<std::shared_ptr<QueueEntry<T>>> m_readEntries;
 	std::mutex m_accessMutex;
-	int m_newestFrame = -1;
-	int m_lastReadFrame = -1;
 };
 

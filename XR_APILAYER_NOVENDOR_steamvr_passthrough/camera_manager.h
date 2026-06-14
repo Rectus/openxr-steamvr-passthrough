@@ -57,6 +57,7 @@ public:
 	virtual float GetGPUFrameRetrievalPerfTime() { return -1.0f; }
 	virtual float GetCPUFrameRetrievalPerfTime() { return -1.0f; }
 	virtual FramePtr<CameraGPUFrame> AcquireCameraGPUFrame() = 0;
+	virtual void ReleaseCameraGPUFrame(std::shared_ptr<CameraGPUFrame> frame) = 0;
 	virtual FramePtr<CameraCPUFrame> AcquireCameraCPUFrame() = 0;
 
 	const void DumpCameraFrameTexture(const std::shared_ptr<std::vector<uint8_t>> frameBuffer, const uint32_t width, const uint32_t height, const std::string cameraProvider)
@@ -113,6 +114,7 @@ public:
 	float GetGPUFrameRetrievalPerfTime() { return m_gpuFrameTimer.GetAverageTimeMS(); }
 	float GetCPUFrameRetrievalPerfTime() { return m_cpuFrameTimer.GetAverageTimeMS(); }
 	FramePtr<CameraGPUFrame> AcquireCameraGPUFrame();
+	void ReleaseCameraGPUFrame(std::shared_ptr<CameraGPUFrame> frame);
 	FramePtr<CameraCPUFrame> AcquireCameraCPUFrame();
 
 private:
@@ -213,6 +215,7 @@ public:
 	float GetGPUFrameRetrievalPerfTime() { return m_gpuFrameTimer.GetAverageTimeMS(); }
 	float GetCPUFrameRetrievalPerfTime() { return m_cpuFrameTimer.GetAverageTimeMS(); }
 	FramePtr<CameraGPUFrame> AcquireCameraGPUFrame();
+	void ReleaseCameraGPUFrame(std::shared_ptr<CameraGPUFrame> frame);
 	FramePtr<CameraCPUFrame> AcquireCameraCPUFrame();
 
 private:

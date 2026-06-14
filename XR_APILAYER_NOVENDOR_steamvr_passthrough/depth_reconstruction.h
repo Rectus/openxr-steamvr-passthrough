@@ -19,6 +19,8 @@ public:
 	~DepthReconstruction();
 
 	FramePtr<DepthFrame> GetDepthFrame();
+	void ReleaseDepthFrame(std::shared_ptr<DepthFrame> frame);
+
 	UVDistortionParameters& GetDistortionParameters()
 	{
 		return m_distortionParams;

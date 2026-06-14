@@ -36,16 +36,16 @@ float ReadDisparity(in ivec2 pos)
     float disparity = imageLoad(g_disparity, pos).x;
     float confidence = imageLoad(g_confidence, pos).x;
     
-    // Fix for OpenCV setting invalid right eye disparity to 1.0
-    if(disparity == 1.0)
-    {
-        disparity = 0.0;
-    }
-    
     // Restore disparity from holefill confidence buffer.
     if (confidence < 0.0)
     {
         disparity = -confidence;
+    }
+
+    // Interpret invalid pixels as being far away to avoid filtering issues
+    if(disparity >= g_maxDisparity)
+    {
+        disparity = g_minDisparity;
     }
     return disparity;
 }
@@ -55,29 +55,29 @@ float ReadDisparityConfidence(out float confidence, in ivec2 pos)
     float disparity = imageLoad(g_disparity, pos).x;
     confidence = imageLoad(g_confidence, pos).x;
     
-    // Fix for OpenCV setting invalid right eye disparity to 1.0
-    if(disparity == 1.0)
-    {
-        disparity = 0.0;
-    }
-    
     // Restore disparity from holefill confidence buffer.
     if (confidence < 0.0)
     {
         disparity = -confidence;
-        confidence = 0.0;
-    }  
+        confidence = -1.0;
+    }
+
+    // Interpret invalid pixels as being far away to avoid filtering issues
+    if(disparity >= g_maxDisparity)
+    {
+        disparity = g_minDisparity;
+    }
     return disparity;
 }
 
 
 void CalculatePixel(inout float dispSum, inout float totalWeight, inout bool bCenterIsBackground, in ivec2 centerPos, in ivec2 offset, in float centerDisp, in float centerLuma, in bool bCenterValid, in vec2 uvPos, in vec2 pixelUVSize)
 {
-    float sampleDisp = ReadDisparity(centerPos + offset);
+    float confidence;
+    float sampleDisp = ReadDisparityConfidence(confidence, centerPos + offset);
 
-    bool bSampleValid = sampleDisp < g_maxDisparity && sampleDisp > g_minDisparity;
-
-    if (!bSampleValid)
+    // Discard smaples that are invalid, or from hole filling when we have better data
+    if (sampleDisp <= g_minDisparity || (bCenterValid && confidence < 0.0))
     {
         return;
     }
@@ -138,7 +138,7 @@ void main()
     float pixelConfidence;
     float pixelDisparity = ReadDisparityConfidence(pixelConfidence, inPos);
     
-    bool bPixelValid = pixelDisparity < g_maxDisparity && pixelDisparity > g_minDisparity;
+    bool bPixelValid =  pixelDisparity > g_minDisparity;
     
     if(!g_bUseInputConfidence)
     {
@@ -161,7 +161,7 @@ void main()
             abs(neighborH - pixelDisparity) > g_bilateralDispCutoff && 
             abs(neighborV - pixelDisparity) > g_bilateralDispCutoff)
         {
-            pixelDisparity = clamp(min(neighborH, neighborV), g_minDisparity, g_maxDisparity);
+            pixelDisparity = min(neighborH, neighborV);
             pixelConfidence = 0.0;
         }
     }

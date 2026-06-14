@@ -99,9 +99,9 @@ AsyncRenderer::~AsyncRenderer()
 	DestroyTexture(m_bwRectifiedCameraTexture);
 	DestroyTexture(m_disparityTexture);
 	DestroyTexture(m_confidenceTexture);
-	for (int i = 0; i < 3; i++)
+	DestroyTexture(m_rawCameraTexture);
+	for (int i = 0; i < NUM_BUFFERED_FRAMES; i++)
 	{
-		DestroyTexture(m_rawCameraTexture[i]);
 		DestroyTexture(m_sharedCameraTexture[i]);
 		DestroyTexture(m_outputTexture[i]);
 	}
@@ -997,10 +997,12 @@ void AsyncRenderer::DestroyTexture(VulkanTexture& texture)
 bool AsyncRenderer::CopyAndDecodeCameraFrame(std::shared_ptr<CameraCPUFrame> inFrame, void** nativeTexture)
 {
 	std::shared_lock acessLock(m_accessMutex);
-	if (!m_bIsInitialized) { return false; }
+	if (!m_bIsInitialized || !inFrame->bIsValid || !inFrame->bIsRaw || inFrame->RawFrameFormat == FrameFormat_Unknown || inFrame->RawFrameSize[0] < 1 || inFrame->RawFrameSize[1] < 1 || inFrame->RawFrameDataBytes < 1)
+	{ 
+		return false; 
+	}
 
-	m_cameraTextureIndex = (m_cameraTextureIndex + 1) % 3;
-	VulkanTexture& rawTexture = m_rawCameraTexture[m_cameraTextureIndex];
+	m_cameraTextureIndex = (m_cameraTextureIndex + 1) % NUM_BUFFERED_FRAMES;
 	VulkanTexture& sharedTexture = m_sharedCameraTexture[m_cameraTextureIndex];
 
 	VkFormat rawFormat = CameraFrameFormatToVulkan(inFrame->RawFrameFormat);
@@ -1019,14 +1021,14 @@ bool AsyncRenderer::CopyAndDecodeCameraFrame(std::shared_ptr<CameraCPUFrame> inF
 		rawExtent = { (uint32_t)inFrame->RawFrameSize[0], (uint32_t)inFrame->RawFrameSize[1] };
 	}
 
-	if (!rawTexture.bIsValid || rawTexture.Extent.width != rawExtent.width || rawTexture.Extent.height != rawExtent.height || rawTexture.Format != rawFormat)
+	if (!m_rawCameraTexture.bIsValid || m_rawCameraTexture.Extent.width != rawExtent.width || m_rawCameraTexture.Extent.height != rawExtent.height || m_rawCameraTexture.Format != rawFormat)
 	{
-		DestroyTexture(rawTexture);
+		DestroyTexture(m_rawCameraTexture);
 
 		VkImageUsageFlags usageFlags = VK_IMAGE_USAGE_TRANSFER_SRC_BIT | VK_IMAGE_USAGE_TRANSFER_DST_BIT | VK_IMAGE_USAGE_SAMPLED_BIT;
 		if (m_bHostImageCopyEnabled) { usageFlags |= VK_IMAGE_USAGE_HOST_TRANSFER_BIT; }
 
-		if (!CreateTexture(rawTexture, rawExtent, rawFormat, usageFlags))
+		if (!CreateTexture(m_rawCameraTexture, rawExtent, rawFormat, usageFlags))
 		{
 			g_logger->error("Failed to create m_rawCameraTexture!");
 			return false;
@@ -1050,7 +1052,7 @@ bool AsyncRenderer::CopyAndDecodeCameraFrame(std::shared_ptr<CameraCPUFrame> inF
 		}
 	}
 
-	if (!m_frameDecoder.CopyAndDecodeCameraFrame(inFrame, rawTexture, sharedTexture))
+	if (!m_frameDecoder.CopyAndDecodeCameraFrame(inFrame, m_rawCameraTexture, sharedTexture))
 	{
 		return false;
 	}
@@ -1319,7 +1321,7 @@ void AsyncRenderer::Render(std::shared_ptr<DepthFrame> depthFrame, const Config_
 
 		vkCmdBindPipeline(m_commandBuffer, VK_PIPELINE_BIND_POINT_COMPUTE, m_pipelineFillHoles);
 
-		for (int i = 0; i < 7; i++)
+		for (int i = 0; i < stereoConf.StereoFillHolesIterations; i++)
 		{
 			vkCmdDispatch(m_commandBuffer, groupCountX, groupCountY, 1);
 

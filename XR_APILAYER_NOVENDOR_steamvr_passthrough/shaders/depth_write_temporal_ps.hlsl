@@ -9,6 +9,7 @@ SamplerState g_samplerState : register(s0);
 Texture2D<float> g_prevDepthMap : register(t0);
 Texture2D<half4> g_prevCameraValidation : register(t1);
 
+#define CONFIDENCE_CUTOFF 0.5
 
 float sobel_discontinuity_adjust(in Texture2D<float> depthTex, in SamplerState texSampler, in float depth, in float2 uvs, float2 texSize)
 {
@@ -54,11 +55,11 @@ float4 main(VS_OUTPUT input, out float outDepth : SV_Depth ) : SV_Target
 	
 	outDepth = input.position.z;
 	
-	if(input.projectionConfidence.x < 0.5 || input.cameraBlendConfidence.x < 0.5)
+	if(input.projectionConfidence.x < CONFIDENCE_CUTOFF || input.cameraBlendConfidence.x < CONFIDENCE_CUTOFF)
     {
 		float2 prevScreenUvs = Remap(input.prevHMDFrameScreenPos.xy / input.prevHMDFrameScreenPos.w, float2(-1.0, -1.0), float2(1.0, 1.0), float2(0.0, 1.0), float2(1.0, 0.0));
 		
-        float borderRejectSize = 0.01;
+        float borderRejectSize = 0.03;
         
 		bool bPrevUVsValid = 
             prevScreenUvs.x > borderRejectSize && 
@@ -78,11 +79,11 @@ float4 main(VS_OUTPUT input, out float outDepth : SV_Depth ) : SV_Target
 		float prevProjectionConfidence = g_doCutout ? prevValid4.y : prevValid4.x;
 		float prevBlendConfidence = g_doCutout ? prevValid4.w : prevValid4.z;
 		
-		float depthDiff = abs((prevDepth - input.position.z) * (g_depthRange.y - g_depthRange.x));
+		float depthDiff = abs((input.position.z - prevDepth) * (g_depthRange.y - g_depthRange.x));
 		
-		if(bPrevUVsValid && prevProjectionConfidence >= outProjectionConfidence && prevDepth > 0 && depthDiff <= g_depthTemporalFilterDistance)
+		if(bPrevUVsValid && prevProjectionConfidence >= input.projectionConfidence.x && prevDepth > 0.0 && depthDiff <= g_depthTemporalFilterDistance)
         {
-			float lerpFactor = g_depthTemporalFilterFactor;
+			float lerpFactor = clamp(Remap(input.projectionConfidence.x, CONFIDENCE_CUTOFF, 0.0, 0.0, g_depthTemporalFilterFactor), 0.0, g_depthTemporalFilterFactor);
 			outDepth = lerp(outDepth, prevDepth, lerpFactor);
 			outProjectionConfidence = lerp(outProjectionConfidence, prevProjectionConfidence, lerpFactor);
 			outBlendValidity = lerp(input.cameraBlendConfidence.x, prevBlendConfidence, lerpFactor);

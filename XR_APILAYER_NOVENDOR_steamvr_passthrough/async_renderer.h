@@ -20,6 +20,8 @@ namespace
 	};
 }
 
+#define NUM_BUFFERED_FRAMES 4
+
 
 class AsyncRenderer
 {
@@ -83,14 +85,14 @@ private:
 
 	VkSampler m_sampler = VK_NULL_HANDLE;
 
-	VulkanTexture m_rawCameraTexture[5] = {};
-	VulkanTexture m_sharedCameraTexture[5] = {};
+	VulkanTexture m_rawCameraTexture = {};
+	VulkanTexture m_sharedCameraTexture[NUM_BUFFERED_FRAMES] = {};
 	int m_cameraTextureIndex = -1;
 
 	VulkanTexture m_bwRectifiedCameraTexture;
 	VulkanTexture m_disparityTexture;
 	VulkanTexture m_confidenceTexture;
-	VulkanTexture m_outputTexture[5] = {};
+	VulkanTexture m_outputTexture[NUM_BUFFERED_FRAMES] = {};
 
 	VkBuffer m_filterKernelBuffer = VK_NULL_HANDLE;
 	VkDeviceMemory m_filterKernelBufferMem = VK_NULL_HANDLE;

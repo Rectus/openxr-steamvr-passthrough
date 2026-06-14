@@ -602,6 +602,7 @@ struct alignas(4) Config_Stereo
 	bool StereoUseBWInputAlpha = false;
 	bool StereoUseHexagonGridMesh = false;
 	bool StereoFillHoles = true;
+	int StereoFillHolesIterations = 7;
 	bool StereoDrawBackground = false;
 	int StereoFrameSkip = 0;
 	int StereoDownscaleFactor = 3;
@@ -660,6 +661,7 @@ struct alignas(4) Config_Stereo
 		StereoUseBWInputAlpha = ini.GetBoolValue(section, "StereoUseBWInputAlpha", StereoUseBWInputAlpha);
 		StereoUseHexagonGridMesh = ini.GetBoolValue(section, "StereoUseHexagonGridMesh", StereoUseHexagonGridMesh);
 		StereoFillHoles = ini.GetBoolValue(section, "StereoFillHoles", StereoFillHoles);
+		StereoFillHolesIterations = ini.GetLongValue(section, "StereoFillHolesIterations", StereoFillHolesIterations);
 		StereoDrawBackground = ini.GetBoolValue(section, "StereoDrawBackground", StereoDrawBackground);
 		StereoFrameSkip = ini.GetLongValue(section, "StereoFrameSkip", StereoFrameSkip);
 		StereoDownscaleFactor = ini.GetLongValue(section, "StereoDownscaleFactor", StereoDownscaleFactor);
@@ -718,6 +720,7 @@ struct alignas(4) Config_Stereo
 		ini.SetBoolValue(section, "StereoUseBWInputAlpha", StereoUseBWInputAlpha);
 		ini.SetBoolValue(section, "StereoUseHexagonGridMesh", StereoUseHexagonGridMesh);
 		ini.SetBoolValue(section, "StereoFillHoles", StereoFillHoles);
+		ini.SetLongValue(section, "StereoFillHolesIterations", StereoFillHolesIterations);
 		ini.SetBoolValue(section, "StereoDrawBackground", StereoDrawBackground);
 		ini.SetLongValue(section, "StereoFrameSkip", StereoFrameSkip);
 		ini.SetLongValue(section, "StereoDownscaleFactor", StereoDownscaleFactor);
