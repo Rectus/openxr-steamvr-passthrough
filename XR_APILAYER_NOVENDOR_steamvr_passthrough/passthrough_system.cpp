@@ -214,12 +214,6 @@ bool PassthroughSystem::SetupRenderer(const XrInstance instance, const XrSession
 
 bool PassthroughSystem::SetupProcessingPipeline()
 {
-	uint32_t cameraTextureWidth;
-	uint32_t cameraTextureHeight;
-	uint32_t cameraFrameBufferSize;
-	uint32_t cameraUndistortedTextureWidth;
-	uint32_t cameraUndistortedTextureHeight;
-	uint32_t cameraUndistortedFrameBufferSize;
 
 	while (m_heldCameraFrames.size() > 0)
 	{
@@ -289,9 +283,6 @@ bool PassthroughSystem::SetupProcessingPipeline()
 		ClientData& data = m_menuHandler->GetClientData();
 		m_cameraManager->GetCameraDisplayStats(data.Values.CameraFrameWidth, data.Values.CameraFrameHeight, data.Values.CameraFrameRate, data.Values.CameraProvider, data.Values.bCameraActive);
 		m_menuHandler->DispatchClientDataValues();
-
-		m_cameraManager->GetDistortedTextureSize(cameraTextureWidth, cameraTextureHeight, cameraFrameBufferSize);
-		m_cameraManager->GetUndistortedTextureSize(cameraUndistortedTextureWidth, cameraUndistortedTextureHeight, cameraUndistortedFrameBufferSize);
 	}
 	else if (m_cameraProvider == CameraProvider_Augmented)
 	{
@@ -306,9 +297,6 @@ bool PassthroughSystem::SetupProcessingPipeline()
 		ClientData& data = m_menuHandler->GetClientData();
 		m_cameraManager->GetCameraDisplayStats(data.Values.CameraFrameWidth, data.Values.CameraFrameHeight, data.Values.CameraFrameRate, data.Values.CameraProvider, data.Values.bCameraActive);
 		m_menuHandler->DispatchClientDataValues();
-
-		m_augmentedCameraManager->GetDistortedTextureSize(cameraTextureWidth, cameraTextureHeight, cameraFrameBufferSize);
-		m_augmentedCameraManager->GetDistortedTextureSize(cameraUndistortedTextureWidth, cameraUndistortedTextureHeight, cameraUndistortedFrameBufferSize);
 	}
 	else if (m_cameraProvider == CameraProvider_OpenCV)
 	{
@@ -322,9 +310,6 @@ bool PassthroughSystem::SetupProcessingPipeline()
 		ClientData& data = m_menuHandler->GetClientData();
 		m_cameraManager->GetCameraDisplayStats(data.Values.CameraFrameWidth, data.Values.CameraFrameHeight, data.Values.CameraFrameRate, data.Values.CameraProvider, data.Values.bCameraActive);
 		m_menuHandler->DispatchClientDataValues();
-
-		m_cameraManager->GetDistortedTextureSize(cameraTextureWidth, cameraTextureHeight, cameraFrameBufferSize);
-		m_cameraManager->GetDistortedTextureSize(cameraUndistortedTextureWidth, cameraUndistortedTextureHeight, cameraUndistortedFrameBufferSize);
 	}
 	else
 	{
@@ -334,7 +319,6 @@ bool PassthroughSystem::SetupProcessingPipeline()
 
 	m_bCamerasInitialized = true;
 
-	m_inlineRenderer->SetFrameSize(cameraTextureWidth, cameraTextureHeight, cameraFrameBufferSize, cameraUndistortedTextureWidth, cameraUndistortedTextureHeight, cameraUndistortedFrameBufferSize);
 	if (!m_inlineRenderer->InitRenderer())
 	{
 		g_logger->error("Failed to initialize inline renderer!");
@@ -450,8 +434,8 @@ void PassthroughSystem::GetTestPattern(DebugTexture& texture)
 
 	texture.Texture.resize(width * height * 4);
 
-	texture.Height = height;
-	texture.Width = width;
+	texture.TextureSize.width = width;
+	texture.TextureSize.height = height;
 	texture.PixelSize = 4;
 	texture.Format = DebugTextureFormat_RGBA8;
 	texture.CurrentTexture = DebugTexture_TestImage;

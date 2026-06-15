@@ -77,7 +77,7 @@ bool inline CopyConfig(void* destination, MenuIPCMessage& message, size_t size)
 	}
 	else
 	{
-		g_logger->error("Incorrect payload size for config update: {}, expected {}", message.Header.PayloadSize, message.Payload);
+		g_logger->error("Incorrect payload size for config update: {}, expected {}", message.Header.PayloadSize, size);
 		return false;
 	}
 }

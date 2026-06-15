@@ -46,6 +46,7 @@ cbuffer psPassConstantBuffer : REGISTER_PSPASS
     float g_saturation;
     float g_sharpness;
     float g_gammaCorrection;
+    float g_alphaTestThreshold;
     int g_temporalFilteringSampling;
     float g_temporalFilteringFactor;
     float g_temporalFilteringColorRangeCutoff;

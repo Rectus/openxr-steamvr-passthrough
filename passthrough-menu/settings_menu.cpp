@@ -619,9 +619,10 @@ void SettingsMenu::DrawMenu()
 	ImVec2 tabButtonSize(204, 55);
 	ImVec4 colorActiveTab(0.25f, 0.52f, 0.88f, 1.0f);
 	bool bIsActiveTab = false;
+	EMenuTab lastActiveTab = TabMain;
 
 #define TAB_BUTTON(name, tab) if (m_activeTab == tab) { ImGui::PushStyleColor(ImGuiCol_Button, colorActiveTab); bIsActiveTab = true; } \
-if (ImGui::Button(name, tabButtonSize)) { m_activeTab = tab; } \
+if (ImGui::Button(name, tabButtonSize)) { lastActiveTab = m_activeTab; m_activeTab = tab; } \
 if (bIsActiveTab) { ImGui::PopStyleColor(1); bIsActiveTab = false; }
 
 	TAB_BUTTON("Main", TabMain);
@@ -633,13 +634,18 @@ if (bIsActiveTab) { ImGui::PopStyleColor(1); bIsActiveTab = false; }
 
 	ImGui::PushFont(m_smallFont);
 
-	if (coreConfig.CoreForcePassthrough || depthConfig.DepthForceComposition || depthConfig.DepthForceRangeTest)
+	bool bAlphaSettingsOverride =
+		coreConfig.CoreForcePremultipliedAlpha != -1 ||
+		coreConfig.CoreForcePassthroughOpacity != 1.0f;
+
+	if (coreConfig.CoreForcePassthrough || depthConfig.DepthForceComposition || depthConfig.DepthForceRangeTest || bAlphaSettingsOverride)
 	{
 		ImGui::Indent();
 		ImGui::Text("Override:");
 		if (depthConfig.DepthForceComposition) { ImGui::TextColored(colorTextOrange, "Depth Composition"); }
 		if (depthConfig.DepthForceRangeTest) { ImGui::TextColored(colorTextOrange, "Depth Range"); }
 		if (coreConfig.CoreForcePassthrough) { ImGui::TextColored(colorTextOrange, "Passthrough Mode"); }
+		if (bAlphaSettingsOverride) { ImGui::TextColored(colorTextOrange, "Alpha Settings"); }
 		ImGui::Unindent();
 	}
 	else
@@ -787,7 +793,7 @@ if (bIsActiveTab) { ImGui::PopStyleColor(1); bIsActiveTab = false; }
 
 			ImGui::Checkbox("Enable Passthrough", &mainConfig.EnablePassthrough);
 
-			ImGui::Dummy(ImVec2(min(300, ImGui::GetContentRegionAvail().x - 300), 95));
+			ImGui::Dummy(ImVec2(min(250, ImGui::GetContentRegionAvail().x - 250), 95));
 
 			bool bAllowRoomView = mainConfig.CameraProvider == CameraProvider_OpenVR;
 			bool bAllowCustom2D = mainConfig.CameraProvider != CameraProvider_Augmented;
@@ -828,7 +834,7 @@ if (bIsActiveTab) { ImGui::PopStyleColor(1); bIsActiveTab = false; }
 			}
 			if (!bAllowCustom3D) { ImGui::EndDisabled(); }
 
-			ImGui::Dummy(ImVec2(0, 0));
+			ImGui::Dummy(ImVec2(min(250, ImGui::GetContentRegionAvail().x - 250), 40));
 
 			ImGui::EndGroup();
 
@@ -840,6 +846,8 @@ if (bIsActiveTab) { ImGui::PopStyleColor(1); bIsActiveTab = false; }
 
 			ImGui::Checkbox("Force Passthrough Mode", &coreConfig.CoreForcePassthrough);
 
+			ImGui::Dummy(ImVec2(min(320, ImGui::GetContentRegionAvail().x - 320), 0));
+
 			BeginSoftDisabled(!coreConfig.CoreForcePassthrough);
 
 			ImGui::BeginGroup();
@@ -847,7 +855,11 @@ if (bIsActiveTab) { ImGui::PopStyleColor(1); bIsActiveTab = false; }
 			{
 				coreConfig.CoreForceMode = 3;
 			}
-			if (ImGui::RadioButton("Additive###CoreForcef2", coreConfig.CoreForceMode == 2))
+			if (ImGui::RadioButton("Alpha Test###CoreForce5", coreConfig.CoreForceMode == 5))
+			{
+				coreConfig.CoreForceMode = 5;
+			}
+			if (ImGui::RadioButton("Additive###CoreForce2", coreConfig.CoreForceMode == 2))
 			{
 				coreConfig.CoreForceMode = 2;
 			}
@@ -875,7 +887,40 @@ if (bIsActiveTab) { ImGui::PopStyleColor(1); bIsActiveTab = false; }
 			EndSoftDisabled(!bAllowDepth);
 
 			ImGui::EndGroup();
+
+			ImGui::SameLine();
+			ImGui::SeparatorEx(ImGuiSeparatorFlags_Vertical);
+			ImGui::SameLine();
+
+			ImGui::BeginGroup();
+
+			ImGui::PushItemWidth(ImGui::GetContentRegionAvail().x * 0.65f);
+			bImmediateUpdate |= ScrollableSlider("Brightness", &mainConfig.Brightness, -50.0f, 50.0f, "%.0f", 1.0f);
+			if (fabsf(mainConfig.Brightness) < 1.0f) { mainConfig.Brightness = 0.0f; }
+
+			bImmediateUpdate |= ScrollableSlider("Contrast", &mainConfig.Contrast, 0.0f, 2.0f, "%.2f", 0.01f);
+			if (fabsf(mainConfig.Contrast - 1.0f) < 0.009f) { mainConfig.Contrast = 1.0f; }
+
+			bImmediateUpdate |= ScrollableSlider("Saturation", &mainConfig.Saturation, 0.0f, 2.0f, "%.2f", 0.01f);
+			if (fabsf(mainConfig.Saturation - 1.0f) < 0.009f) { mainConfig.Saturation = 1.0f; }
+
+			bImmediateUpdate |= ScrollableSlider("Gamma", &mainConfig.GammaCorrection, 0.01f, 2.0f, "%.2f", 0.01f);
+			if (fabsf(mainConfig.GammaCorrection - 1.0f) < 0.009f) { mainConfig.GammaCorrection = 1.0f; }
+
+			bImmediateUpdate |= ScrollableSlider("Sharpness", &mainConfig.Sharpness, -1.0f, 1.0f, "%.1f", 0.1f);
+			if (fabsf(mainConfig.Sharpness) < 0.1f) { mainConfig.Sharpness = 0.0f; }
+			ImGui::PopItemWidth();
+
+			IMGUI_BIG_SPACING;
+
+			ImGui::Checkbox("Enable Temporal Filter", &mainConfig.EnableTemporalFiltering);
+
+			ImGui::EndGroup();
+
+
+			
 			TextDescription("Complete settings and descriptions are available in the other tabs.");
+
 
 			IMGUI_BIG_SPACING;
 
@@ -948,16 +993,16 @@ if (bIsActiveTab) { ImGui::PopStyleColor(1); bIsActiveTab = false; }
 				if (fabsf(mainConfig.Brightness) < 1.0f) { mainConfig.Brightness = 0.0f; }
 
 				bImmediateUpdate |= ScrollableSlider("Contrast", &mainConfig.Contrast, 0.0f, 2.0f, "%.2f", 0.01f);
-				if (fabsf(mainConfig.Contrast - 1.0f) < 0.009) { mainConfig.Contrast = 1.0f; }
+				if (fabsf(mainConfig.Contrast - 1.0f) < 0.009f) { mainConfig.Contrast = 1.0f; }
 
 				bImmediateUpdate |= ScrollableSlider("Saturation", &mainConfig.Saturation, 0.0f, 2.0f, "%.2f", 0.01f);
-				if (fabsf(mainConfig.Saturation - 1.0f) < 0.009) { mainConfig.Saturation = 1.0f; }
+				if (fabsf(mainConfig.Saturation - 1.0f) < 0.009f) { mainConfig.Saturation = 1.0f; }
 
 				bImmediateUpdate |= ScrollableSlider("Gamma Correction", &mainConfig.GammaCorrection, 0.01f, 2.0f, "%.2f", 0.01f);
-				if (fabsf(mainConfig.GammaCorrection - 1.0f) < 0.009) { mainConfig.GammaCorrection = 1.0f; }
+				if (fabsf(mainConfig.GammaCorrection - 1.0f) < 0.009f) { mainConfig.GammaCorrection = 1.0f; }
 
 				bImmediateUpdate |= ScrollableSlider("Sharpness", &mainConfig.Sharpness, -1.0f, 1.0f, "%.1f", 0.1f);
-				if (fabsf(mainConfig.Sharpness) < 0.1) { mainConfig.Sharpness = 0.0f; }
+				if (fabsf(mainConfig.Sharpness) < 0.1f) { mainConfig.Sharpness = 0.0f; }
 				ImGui::PopItemWidth();
 
 				IMGUI_BIG_SPACING;
@@ -1065,9 +1110,9 @@ if (bIsActiveTab) { ImGui::PopStyleColor(1); bIsActiveTab = false; }
 			ImGui::SetNextItemWidth(ImGui::GetContentRegionAvail().x * 0.45f);
 			bImmediateUpdate |= ScrollableSlider("Floor Height Offset (m)", &mainConfig.FloorHeightOffset, 0.0f, 2.0f, "%.2f", 0.01f);
 			TextDescriptionSpaced("Allows setting the floor height higher in the 2D modes,\nfor example to have correct projection on a table surface.");
-
-			IMGUI_BIG_SPACING;
 		}
+
+		IMGUI_BIG_SPACING;
 
 		ImGui::EndChild();
 	}
@@ -1077,7 +1122,7 @@ if (bIsActiveTab) { ImGui::PopStyleColor(1); bIsActiveTab = false; }
 	{
 		ImGui::BeginChild("Composition#TabComposition");
 
-		if (CollapsingHeaderPersistent("Application Controlled", ImGuiTreeNodeFlags_DefaultOpen))
+		if (CollapsingHeaderPersistent("Application Controlled"))
 		{
 			if (TreeNodePersistent("Status###CompositionStatus", ImGuiTreeNodeFlags_DefaultOpen))
 			{
@@ -1281,22 +1326,27 @@ if (bIsActiveTab) { ImGui::PopStyleColor(1); bIsActiveTab = false; }
 				IMGUI_BIG_SPACING;
 
 				ImGui::BeginGroup();
-				if (ImGui::RadioButton("Alpha Blend###CoreForce3", coreConfig.CoreForceMode == 3))
+				if (ImGui::RadioButton("Alpha Blend###CoreForce1_3", coreConfig.CoreForceMode == 3))
 				{
 					coreConfig.CoreForceMode = 3;
 				}
-				TextDescription("Blends passthrough with application provided alpha mask. This requires application support.");
-				if (ImGui::RadioButton("Additive###CoreForcef2", coreConfig.CoreForceMode == 2))
+				TextDescription("Blends passthrough with application submitted alpha mask.");
+				if (ImGui::RadioButton("Alpha Test###CoreForce1_5", coreConfig.CoreForceMode == 5))
+				{
+					coreConfig.CoreForceMode = 5;
+				}
+				TextDescription("Blends passthrough with application submitted alpha mask. Uses a binary cutoff treshold.");
+				if (ImGui::RadioButton("Additive###CoreForce1_2", coreConfig.CoreForceMode == 2))
 				{
 					coreConfig.CoreForceMode = 2;
 				}
 				TextDescription("Adds passthrough and application output together.");
-				if (ImGui::RadioButton("Opaque###Coreforce1", coreConfig.CoreForceMode == 1))
+				if (ImGui::RadioButton("Opaque###Coreforce1_1", coreConfig.CoreForceMode == 1))
 				{
 					coreConfig.CoreForceMode = 1;
 				}
 				TextDescription("Replaces the application output with passthrough.");
-				if (ImGui::RadioButton("Masked (Chroma Key)###Coreforce0", coreConfig.CoreForceMode == 0))
+				if (ImGui::RadioButton("Masked (Chroma Key)###Coreforce1_0", coreConfig.CoreForceMode == 0))
 				{
 					coreConfig.CoreForceMode = 0;
 				}
@@ -1366,11 +1416,15 @@ if (bIsActiveTab) { ImGui::PopStyleColor(1); bIsActiveTab = false; }
 			EndSoftDisabled(!coreConfig.CoreForcePassthrough);
 
 				
-			if (TreeNodePersistent("Advanced##AdvOverrides", ImGuiTreeNodeFlags_DefaultOpen))
+			if (TreeNodePersistent("Advanced##AdvOverrides"))
 			{
 				ImGui::PushItemWidth(ImGui::GetContentRegionAvail().x * 0.45f);
-				bImmediateUpdate |= ScrollableSlider("Passthrough Opacity", &mainConfig.PassthroughOpacity, 0.0f, 1.0f, "%.1f", 0.1f);
+				bImmediateUpdate |= ScrollableSlider("Passthrough Opacity", &coreConfig.CoreForcePassthroughOpacity, 0.0f, 1.0f, "%.1f", 0.1f);
+				if (coreConfig.CoreForcePassthroughOpacity > 0.99f) { coreConfig.CoreForcePassthroughOpacity = 1.0f; }
+
+				bImmediateUpdate |= ScrollableSlider("Input Alpha Test Treshold", &coreConfig.CoreForceAlphaTestTreshold, 0.0f, 1.0f, "%.2f", 0.01f);
 				ImGui::PopItemWidth();
+
 				IMGUI_BIG_SPACING;
 
 				ImGui::Text("Premultiplied Alpha");
@@ -1405,6 +1459,8 @@ if (bIsActiveTab) { ImGui::PopStyleColor(1); bIsActiveTab = false; }
 				ImGui::TreePop();
 			}
 		}
+
+		IMGUI_BIG_SPACING;
 
 		ImGui::EndChild();
 	}
@@ -1484,7 +1540,7 @@ if (bIsActiveTab) { ImGui::PopStyleColor(1); bIsActiveTab = false; }
 			ImGui::PopFont();
 		}
 
-		if (CollapsingHeaderPersistent("Common###CameraCommon", ImGuiTreeNodeFlags_DefaultOpen))
+		if (CollapsingHeaderPersistent("Common###CameraCommon"))
 		{
 			ImGui::Text("Camera Provider");
 			TextDescription("Source for passthrough camera images.");
@@ -1548,7 +1604,7 @@ if (bIsActiveTab) { ImGui::PopStyleColor(1); bIsActiveTab = false; }
 			IMGUI_BIG_SPACING;
 		}
 
-		if (CollapsingHeaderPersistent("Webcam Configuration", ImGuiTreeNodeFlags_DefaultOpen))
+		if (CollapsingHeaderPersistent("Webcam Configuration"))
 		{
 			TextDescription("These settings are for the experimental webcam provider only.");
 
@@ -1703,7 +1759,7 @@ if (bIsActiveTab) { ImGui::PopStyleColor(1); bIsActiveTab = false; }
 
 			IMGUI_BIG_SPACING;
 
-			if (TreeNodePersistent("Left Camera###LeftCamCalibration", ImGuiTreeNodeFlags_DefaultOpen))
+			if (TreeNodePersistent("Left Camera###LeftCamCalibration"))
 			{
 				ImGui::Text("Camera Extrinsics");
 				ImGui::DragFloat3("Camera Offset (m)", cameraConfig.Camera0_Translation, 0.001f, 0.0f, 0.0f, "%.3f");
@@ -1720,7 +1776,7 @@ if (bIsActiveTab) { ImGui::PopStyleColor(1); bIsActiveTab = false; }
 				ImGui::TreePop();
 			}
 
-			if (TreeNodePersistent("Right Camera###RightCamCalibration", ImGuiTreeNodeFlags_DefaultOpen))
+			if (TreeNodePersistent("Right Camera###RightCamCalibration"))
 			{
 				ImGui::Text("Camera Extrinsics");
 				ImGui::DragFloat3("Camera Offset (m)###RightOffset", cameraConfig.Camera1_Translation, 0.001f, 0.0f, 0.0f, "%.3f");
@@ -1741,7 +1797,7 @@ if (bIsActiveTab) { ImGui::PopStyleColor(1); bIsActiveTab = false; }
 			IMGUI_BIG_SPACING;
 		}
 
-		if (CollapsingHeaderPersistent("SteamVR Camera Configuration", ImGuiTreeNodeFlags_DefaultOpen))
+		if (CollapsingHeaderPersistent("SteamVR Camera Configuration"))
 		{
 			ImGui::Checkbox("Use OpenVR Block Queue Interface for Depth Frames", &cameraConfig.OpenVR_UseBlockQueueForDepth);
 			TextDescription("Uses a lower latency interface for depth calculation. Disable if there are block queue related errors in the log.");
@@ -1916,7 +1972,7 @@ if (bIsActiveTab) { ImGui::PopStyleColor(1); bIsActiveTab = false; }
 
 			IMGUI_BIG_SPACING;
 
-			if (TreeNodePersistent("SteamVR Camera 0", ImGuiTreeNodeFlags_DefaultOpen))
+			if (TreeNodePersistent("SteamVR Camera 0"))
 			{
 				ImGui::Text("Camera Extrinsics");
 				ImGui::DragFloat3("Camera Offset (m)###OpenVROffset", cameraConfig.OpenVR_Camera0_Translation, 0.001f, 0.0f, 0.0f, "%.3f");
@@ -1933,7 +1989,7 @@ if (bIsActiveTab) { ImGui::PopStyleColor(1); bIsActiveTab = false; }
 				ImGui::TreePop();
 			}
 
-			if (TreeNodePersistent("SteamVR Camera 1", ImGuiTreeNodeFlags_DefaultOpen))
+			if (TreeNodePersistent("SteamVR Camera 1"))
 			{
 				ImGui::Text("Camera Extrinsics");
 				ImGui::DragFloat3("Camera Offset (m)###OpenVRRightOffset", cameraConfig.OpenVR_Camera1_Translation, 0.001f, 0.0f, 0.0f, "%.3f");
@@ -1953,9 +2009,10 @@ if (bIsActiveTab) { ImGui::PopStyleColor(1); bIsActiveTab = false; }
 			EndSoftDisabled(!cameraConfig.OpenVRCustomCalibration);
 		}
 
+		IMGUI_BIG_SPACING;
+
 		ImGui::EndChild();
 
-		ImGui::Spacing();
 		ImGui::Spacing();
 
 		if (BigButton("Apply Camera Parameters"))
@@ -2061,6 +2118,20 @@ if (bIsActiveTab) { ImGui::PopStyleColor(1); bIsActiveTab = false; }
 
 			IMGUI_BIG_SPACING;
 
+			ImGui::Text("Disparity Filtering");
+
+			ImGui::Checkbox("Weighted Least Squares(CPU)###FiltWLS", &stereoCustomConfig.StereoFilteringWLS_Enable);
+			TextDescription("CPU-side high quality filter. Takes up much CPU time but produces generally good results.");
+
+			ImGui::Checkbox("Joint Bilateral Filter(GPU)###FiltBilateral", &stereoCustomConfig.StereoFilteringBilateral_Enable);
+			TextDescription("GPU-side filtering. Fast, but not as good as the CPU fliter. Can also smooth out noise.");
+
+			IMGUI_BIG_SPACING;
+		}
+
+
+		if (CollapsingHeaderPersistent("Advanced Settings###StereoAdvSettings"))
+		{
 			if (TreeNodePersistent("Performance###StereoPerformance", ImGuiTreeNodeFlags_DefaultOpen))
 			{
 				ImGui::Checkbox("Use Multiple Cores", &stereoCustomConfig.StereoUseMulticore);
@@ -2074,13 +2145,7 @@ if (bIsActiveTab) { ImGui::PopStyleColor(1); bIsActiveTab = false; }
 				ImGui::TreePop();
 			}
 
-			IMGUI_BIG_SPACING;
-		}
-
-
-		if (CollapsingHeaderPersistent("Advanced GPU Settings###StereoAdvGPUSettings", ImGuiTreeNodeFlags_DefaultOpen))
-		{
-			if (TreeNodePersistent("Projection###StereoAdvGPUSettingsProjection", ImGuiTreeNodeFlags_DefaultOpen))
+			if (TreeNodePersistent("Projection###StereoAdvSettingsProjection", ImGuiTreeNodeFlags_DefaultOpen))
 			{
 				ImGui::Spacing();
 
@@ -2103,7 +2168,7 @@ if (bIsActiveTab) { ImGui::PopStyleColor(1); bIsActiveTab = false; }
 
 				ImGui::SetNextItemWidth(ImGui::GetContentRegionAvail().x * 0.45f);
 				ScrollableSliderInt("Depth Map Scale", &stereoCustomConfig.StereoDepthMapScale, 1, 4, "%d", 1);
-				TextDescriptionSpaced("Scale of generated depth maps releative to the proecessed disparity maps.");
+				TextDescriptionSpaced("Scale of generated depth maps releative to the processed disparity maps.");
 
 				ImGui::SetNextItemWidth(ImGui::GetContentRegionAvail().x * 0.45f);
 				ScrollableSlider("Disparity Smoothing Confidence Cutout", &stereoCustomConfig.StereoDisparityFilterConfidenceCutout, 0.0f, 1.0f, "%.2f", 0.01f);
@@ -2113,7 +2178,7 @@ if (bIsActiveTab) { ImGui::PopStyleColor(1); bIsActiveTab = false; }
 				ImGui::TreePop();
 			}
 
-			if (TreeNodePersistent("Camera Composition###StereoAdvGPUSettingsComp", ImGuiTreeNodeFlags_DefaultOpen))
+			if (TreeNodePersistent("Camera Composition###StereoAdvSettingsComp", ImGuiTreeNodeFlags_DefaultOpen))
 			{
 				ImGui::PushItemWidth(ImGui::GetContentRegionAvail().x * 0.45f);
 				BeginSoftDisabled(!stereoCustomConfig.StereoCutoutEnabled);
@@ -2132,7 +2197,7 @@ if (bIsActiveTab) { ImGui::PopStyleColor(1); bIsActiveTab = false; }
 			}
 
 
-			if (TreeNodePersistent("Depth Fold###StereoAdvGPUSettingsFold", ImGuiTreeNodeFlags_DefaultOpen))
+			if (TreeNodePersistent("Depth Fold###StereoAdvSettingsFold", ImGuiTreeNodeFlags_DefaultOpen))
 			{
 				TextDescription("Adjusts depth mesh vertices to smooth out contours in areas with large depth discontinuities.\nThis helps with depth aliasing.");
 				ImGui::PushItemWidth(ImGui::GetContentRegionAvail().x * 0.45f);
@@ -2146,7 +2211,7 @@ if (bIsActiveTab) { ImGui::PopStyleColor(1); bIsActiveTab = false; }
 				ImGui::TreePop();
 			}
 
-			if (TreeNodePersistent("Fullscreen Contour###StereoAdvGPUSettingsCont", ImGuiTreeNodeFlags_DefaultOpen))
+			if (TreeNodePersistent("Fullscreen Contour###StereoAdvSettingsContour", ImGuiTreeNodeFlags_DefaultOpen))
 			{
 				TextDescription("Detects edges in the depth map and moves pixels toward the front or back to provide sharp contours.\nThis reduces interpolation artifacts from low resolution depth maps.");
 
@@ -2172,14 +2237,11 @@ if (bIsActiveTab) { ImGui::PopStyleColor(1); bIsActiveTab = false; }
 				ScrollableSlider("Projection Temporal Filtering Cutout Factor", &stereoCustomConfig.StereoDisparityTemporalFilteringDistance, 0.1f, 10.0f, "%.1f", 0.1f);
 				EndSoftDisabled(!stereoCustomConfig.StereoUseDisparityTemporalFiltering);
 				ImGui::PopItemWidth();
+
+				IMGUI_BIG_SPACING;
 				ImGui::TreePop();
 			}
 
-			IMGUI_BIG_SPACING;
-		}
-
-		if (CollapsingHeaderPersistent("Advanced CPU Settings###StereoAdvCPUSettings", ImGuiTreeNodeFlags_DefaultOpen))
-		{
 			if (TreeNodePersistent("Block Matching", ImGuiTreeNodeFlags_DefaultOpen))
 			{
 				ImGui::Spacing();
@@ -2241,16 +2303,6 @@ if (bIsActiveTab) { ImGui::PopStyleColor(1); bIsActiveTab = false; }
 
 			if (TreeNodePersistent("Disparity Filtering", ImGuiTreeNodeFlags_DefaultOpen))
 			{
-				ImGui::Text("Filtering Passes");
-
-				ImGui::Checkbox("Weighted Least Squares(CPU)###FiltWLS", &stereoCustomConfig.StereoFilteringWLS_Enable);
-				TextDescription("CPU-side high quality filter. Takes up much CPU time but produces generally good results.");
-
-				ImGui::Checkbox("Joint Bilateral Filter(GPU)###FiltBilateral", &stereoCustomConfig.StereoFilteringBilateral_Enable);
-				TextDescription("GPU-side filtering. Fast, but not as good as the CPU fliter. Can also smooth out noise.");
-
-				IMGUI_BIG_SPACING;
-
 				BeginSoftDisabled(!stereoCustomConfig.StereoFilteringWLS_Enable);
 				ImGui::PushItemWidth(ImGui::GetContentRegionAvail().x * 0.45f);
 				ScrollableSlider("WLS Lambda", &stereoCustomConfig.StereoFilteringWLS_Lambda, 1.0f, 10000.0f, "%.0f", 100.0f);
@@ -2266,14 +2318,15 @@ if (bIsActiveTab) { ImGui::PopStyleColor(1); bIsActiveTab = false; }
 				ScrollableSlider("Bilateral Disparity Cutoff", &stereoCustomConfig.StereoFilteringBilateral_DispCutoff, 0.0f, 1.0f, "%.2f", 0.01f);
 				ScrollableSlider("Bilateral Sigma Space", &stereoCustomConfig.StereoFilteringBilateral_SigmaSpace, 1.0f, 20.0f, "%.2f", 1.0f);
 				ScrollableSlider("Bilateral Sigma Luma", &stereoCustomConfig.StereoFilteringBilateral_SigmaLuma, 0.001f, 0.030f, "%.3f", 0.001f);
-				
+
 				EndSoftDisabled(!stereoCustomConfig.StereoFilteringBilateral_Enable);
 				ImGui::PopItemWidth();
 
 				ImGui::TreePop();
 			}
+
+			IMGUI_BIG_SPACING;
 		}
-		IMGUI_BIG_SPACING;
 
 		EndSoftDisabled(mainConfig.StereoPreset != StereoPreset_Custom);
 
@@ -2281,6 +2334,8 @@ if (bIsActiveTab) { ImGui::PopStyleColor(1); bIsActiveTab = false; }
 		{
 			m_configManager->GetConfig_Stereo() = stereoCustomConfig;
 		}
+
+		IMGUI_BIG_SPACING;
 
 		ImGui::EndChild();
 	}
@@ -2590,7 +2645,7 @@ if (bIsActiveTab) { ImGui::PopStyleColor(1); bIsActiveTab = false; }
 		{
 
 			ImGui::BeginDisabled(!m_dashboardOverlay->IsRuntimeInitialized());
-			if (ImGui::Button("Refresh"))
+			if (ImGui::Button("Refresh###RefreshDeviceeProps"))
 			{
 				if (m_dashboardOverlay->IsRuntimeInitialized())
 				{
@@ -2827,7 +2882,7 @@ if (bIsActiveTab) { ImGui::PopStyleColor(1); bIsActiveTab = false; }
 		{
 
 			ImGui::BeginDisabled(!m_dashboardOverlay->IsRuntimeInitialized());
-			if (ImGui::Button("Refresh"))
+			if (ImGui::Button("Refresh###RefreshBlockQueueProps"))
 			{
 				if (m_dashboardOverlay->IsRuntimeInitialized())
 				{
@@ -2878,6 +2933,9 @@ if (bIsActiveTab) { ImGui::PopStyleColor(1); bIsActiveTab = false; }
 			ImGui::PopTextWrapPos();
 			ImGui::PopFont();
 		}
+
+		IMGUI_BIG_SPACING;
+
 		ImGui::EndChild();
 	}
 
@@ -2894,7 +2952,7 @@ if (bIsActiveTab) { ImGui::PopStyleColor(1); bIsActiveTab = false; }
 
 		MenuIPCMessage message = {};
 
-		switch (m_activeTab)
+		switch (lastActiveTab)
 		{
 		case TabMain:
 		{
@@ -2917,11 +2975,6 @@ if (bIsActiveTab) { ImGui::PopStyleColor(1); bIsActiveTab = false; }
 		}
 		case TabComposition:
 		{
-			message.Header.Type = MessageType_SendConfig_Main;
-			message.Header.PayloadSize = sizeof(Config_Main);
-			memcpy(message.Payload, &mainConfig, sizeof(Config_Main));
-			m_IPCServer->BroadcastMessage(message);
-
 			message.Header.Type = MessageType_SendConfig_Core;
 			message.Header.PayloadSize = sizeof(Config_Core);
 			memcpy(message.Payload, &coreConfig, sizeof(Config_Core));

@@ -53,8 +53,7 @@ struct DebugTexture
 {
 	DebugTexture()
 		: Texture()
-		, Width(0)
-		, Height(0)
+		, TextureSize{ 0, 0 }
 		, PixelSize(0)
 		, Format(DebugTextureFormat_RGBA8)
 		, bDimensionsUpdated(false)
@@ -63,8 +62,7 @@ struct DebugTexture
 	{}
 
 	std::vector<uint8_t> Texture;
-	uint32_t Width;
-	uint32_t Height;
+	VkExtent2D TextureSize;
 	uint32_t PixelSize;
 	EDebugTextureFormat Format;
 	ESelectedDebugTexture CurrentTexture;
@@ -89,8 +87,6 @@ struct alignas(4) Config_Main
 	EProjectionMode ProjectionMode = Projection_Custom2D;
 
 	bool ProjectToRenderModels = false;
-
-	float PassthroughOpacity = 1.0f;
 	float ProjectionDistanceFar = 10.0f;
 	float FloorHeightOffset = 0.0f;
 	float FieldOfViewScale = 1.0f;
@@ -137,7 +133,6 @@ struct alignas(4) Config_Main
 		ProjectionMode = (EProjectionMode)ini.GetLongValue(section, "ProjectionMode", ProjectionMode);
 		ProjectToRenderModels = ini.GetBoolValue(section, "ProjectToRenderModels", ProjectToRenderModels);
 
-		PassthroughOpacity = (float)ini.GetDoubleValue(section, "PassthroughOpacity", PassthroughOpacity);
 		ProjectionDistanceFar = (float)ini.GetDoubleValue(section, "ProjectionDistanceFar", ProjectionDistanceFar);
 		FloorHeightOffset = (float)ini.GetDoubleValue(section, "FloorHeightOffset", FloorHeightOffset);
 		FieldOfViewScale = (float)ini.GetDoubleValue(section, "FieldOfViewScale", FieldOfViewScale);
@@ -179,7 +174,6 @@ struct alignas(4) Config_Main
 		ini.SetLongValue(section, "ProjectionMode", (long)ProjectionMode);
 		ini.SetBoolValue(section, "ProjectToRenderModels", ProjectToRenderModels);
 
-		ini.SetDoubleValue(section, "PassthroughOpacity", PassthroughOpacity);
 		ini.SetDoubleValue(section, "ProjectionDistanceFar", ProjectionDistanceFar);
 		ini.SetDoubleValue(section, "FloorHeightOffset", FloorHeightOffset);
 		ini.SetDoubleValue(section, "FieldOfViewScale", FieldOfViewScale);
@@ -483,9 +477,14 @@ struct alignas(4) Config_Core
 	bool CoreAlphaBlend = true;
 	bool CoreAdditive = true;
 	int CorePreferredMode = 3;
+
 	bool CoreForcePassthrough = false;
 	int CoreForceMode = 1;
+
 	int CoreForcePremultipliedAlpha = -1;
+	float CoreForcePassthroughOpacity = 1.0f;
+	float CoreForceAlphaTestTreshold = 0.33f;
+
 
 	float CoreForceMaskedFractionChroma = 0.2f;
 	float CoreForceMaskedFractionLuma = 0.4f;
@@ -504,7 +503,10 @@ struct alignas(4) Config_Core
 
 		CoreForcePassthrough = ini.GetBoolValue(section, "CoreForcePassthrough", CoreForcePassthrough);
 		CoreForceMode = (int)ini.GetLongValue(section, "CoreForceMode", CoreForceMode);
+
 		CoreForcePremultipliedAlpha = (int)ini.GetLongValue(section, "CoreForcePremultipliedAlpha", CoreForcePremultipliedAlpha);
+		CoreForcePassthroughOpacity = (float)ini.GetDoubleValue(section, "CoreForcePassthroughOpacity", CoreForcePassthroughOpacity);
+		CoreForceAlphaTestTreshold = (float)ini.GetDoubleValue(section, "CoreForceAlphaTestTreshold", CoreForceAlphaTestTreshold);
 
 		CoreForceMaskedFractionChroma = (float)ini.GetDoubleValue(section, "CoreForceMaskedFractionChroma", CoreForceMaskedFractionChroma);
 		CoreForceMaskedFractionLuma = (float)ini.GetDoubleValue(section, "CoreForceMaskedFractionLuma", CoreForceMaskedFractionLuma);
@@ -528,7 +530,10 @@ struct alignas(4) Config_Core
 
 		ini.SetBoolValue(section, "CoreForcePassthrough", CoreForcePassthrough);
 		ini.SetLongValue(section, "CoreForceMode", CoreForceMode);
+
 		ini.SetLongValue(section, "CoreForcePremultipliedAlpha", CoreForcePremultipliedAlpha);
+		ini.SetDoubleValue(section, "CoreForcePassthroughOpacity", CoreForcePassthroughOpacity);
+		ini.SetDoubleValue(section, "CoreForceAlphaTestTreshold", CoreForceAlphaTestTreshold);
 
 		ini.SetDoubleValue(section, "CoreForceMaskedFractionChroma", CoreForceMaskedFractionChroma);
 		ini.SetDoubleValue(section, "CoreForceMaskedFractionLuma", CoreForceMaskedFractionLuma);

@@ -55,13 +55,13 @@ void DepthReconstruction::ReleaseDepthFrame(std::shared_ptr<DepthFrame> frame)
 
 void DepthReconstruction::CalculateCameraProjection(std::shared_ptr<CameraGPUFrame>& cameraFrame, FrameRenderParameters& renderParams)
 {
-    std::shared_lock readLock(m_distortionParams.readWriteMutex);
+    std::shared_lock readLock(m_distortionParams.ReadWriteMutex);
 
     XrMatrix4x4f worldToCameraView, worldToRectView;
 
     XrMatrix4x4f_Invert(&worldToCameraView, &cameraFrame->CameraLeft.ViewToWorld);
-    XrMatrix4x4f_Multiply(&worldToRectView, &m_distortionParams.rectifiedRotationLeft, &worldToCameraView);
-    XrMatrix4x4f_Multiply(&renderParams.CameraLeft.WorldToProjection, &m_distortionParams.cameraProjectionLeft, &worldToRectView);
+    XrMatrix4x4f_Multiply(&worldToRectView, &m_distortionParams.RectifiedRotationLeft, &worldToCameraView);
+    XrMatrix4x4f_Multiply(&renderParams.CameraLeft.WorldToProjection, &m_distortionParams.CameraProjectionLeft, &worldToRectView);
 
     if (m_frameLayout == EStereoFrameLayout::FrameLayout_Mono)
     {
@@ -70,16 +70,16 @@ void DepthReconstruction::CalculateCameraProjection(std::shared_ptr<CameraGPUFra
     else
     {
         XrMatrix4x4f_Invert(&worldToCameraView, &cameraFrame->CameraRight.ViewToWorld);
-        XrMatrix4x4f_Multiply(&worldToRectView, &m_distortionParams.rectifiedRotationRight, &worldToCameraView);
-        XrMatrix4x4f_Multiply(&renderParams.CameraRight.WorldToProjection, &m_distortionParams.cameraProjectionRight, &worldToRectView);
+        XrMatrix4x4f_Multiply(&worldToRectView, &m_distortionParams.RectifiedRotationRight, &worldToCameraView);
+        XrMatrix4x4f_Multiply(&renderParams.CameraRight.WorldToProjection, &m_distortionParams.CameraProjectionRight, &worldToRectView);
     }
 }
 
 void DepthReconstruction::InitReconstruction()
 {
     m_frameLayout = m_cameraManager->GetFrameLayout();
-    uint32_t frameBufferSize;
-    m_cameraManager->GetDistortedTextureSize(m_cameraTextureWidth, m_cameraTextureHeight, frameBufferSize);
+
+    m_cameraManager->GetDistortedTextureSize(m_cameraTextureWidth, m_cameraTextureHeight);
     m_cameraManager->GetDistortedFrameSize(m_cameraFrameWidth, m_cameraFrameHeight);
 
     m_cvImageHeight = m_cameraFrameHeight / m_downscaleFactor;
@@ -210,11 +210,11 @@ void DepthReconstruction::InitReconstruction()
 
 void DepthReconstruction::CreateDistortionMap()
 {
-    std::unique_lock writeLock(m_distortionParams.readWriteMutex);
+    std::unique_lock writeLock(m_distortionParams.ReadWriteMutex);
 
-    if (!m_distortionParams.uvDistortionMap.get())
+    if (!m_distortionParams.UVDistortionMap.get())
     {
-        m_distortionParams.uvDistortionMap = std::make_shared<std::vector<float>>();
+        m_distortionParams.UVDistortionMap = std::make_shared<std::vector<float>>();
     }
 
     XrMatrix4x4f frameProjectionLeft, frameProjectionRight;
@@ -244,17 +244,19 @@ void DepthReconstruction::CreateDistortionMap()
     frameProjectionRight.m[14] = -NEAR_PROJECTION_DISTANCE;
     frameProjectionRight.m[15] = 0.0f;
 
-    m_distortionParams.cameraProjectionLeft = frameProjectionLeft;
-    m_distortionParams.cameraProjectionRight = frameProjectionRight;
-    m_distortionParams.rectifiedRotationLeft = ChangeBasisToFromOpenCV(m_rectifiedRotationLeft);
-    m_distortionParams.rectifiedRotationRight = ChangeBasisToFromOpenCV(m_rectifiedRotationRight);
+    m_distortionParams.CameraProjectionLeft = frameProjectionLeft;
+    m_distortionParams.CameraProjectionRight = frameProjectionRight;
+    m_distortionParams.RectifiedRotationLeft = ChangeBasisToFromOpenCV(m_rectifiedRotationLeft);
+    m_distortionParams.RectifiedRotationRight = ChangeBasisToFromOpenCV(m_rectifiedRotationRight);
 
-    m_distortionParams.fovScale = m_fovScale;
+    m_distortionParams.FovScale = m_fovScale;
 
-    std::vector<float>& distMap = *m_distortionParams.uvDistortionMap.get();
+    m_distortionParams.UVDistortionMapSize = { m_cameraTextureWidth, m_cameraTextureHeight };
+
+    std::vector<float>& distMap = *m_distortionParams.UVDistortionMap.get();
 
     distMap.resize(m_cameraTextureHeight * m_cameraTextureWidth * 2);
-
+    
     if (m_frameLayout == FrameLayout_StereoHorizontal)
     {
         for (uint32_t y = 0; y < m_cameraTextureHeight; y++)
@@ -382,18 +384,18 @@ void DepthReconstruction::RunThread()
                 switch (frame->RawFrameFormat)
                 {
                 case FrameFormat_RGB24:
-                    frameMinMemSize = frame->RawFrameSize[0] * frame->RawFrameSize[1] * 3;
+                    frameMinMemSize = frame->RawFrameSize.width * frame->RawFrameSize.height * 3;
                     break;
 
                 case FrameFormat_RAW10:
                 case FrameFormat_YUYV16:
                 case FrameFormat_BAYER16BG:
-                    frameMinMemSize = frame->RawFrameSize[0] * frame->RawFrameSize[1] * 2;
+                    frameMinMemSize = frame->RawFrameSize.width * frame->RawFrameSize.height * 2;
                     break;
 
                 case FrameFormat_NV12:
                 case FrameFormat_NV12_2:
-                    frameMinMemSize = frame->RawFrameSize[0] * frame->RawFrameSize[1] * 12 / 8;
+                    frameMinMemSize = frame->RawFrameSize.width * frame->RawFrameSize.height * 12 / 8;
                     break;
 
                 case FrameFormat_MJPEG:
@@ -402,7 +404,7 @@ void DepthReconstruction::RunThread()
 
                 case FrameFormat_RGBX32:
                 default:
-                    frameMinMemSize = frame->RawFrameSize[0] * frame->RawFrameSize[1] * 4;
+                    frameMinMemSize = frame->RawFrameSize.width * frame->RawFrameSize.height * 4;
                 }
             }
 
@@ -427,7 +429,7 @@ void DepthReconstruction::RunThread()
                 {
                 case FrameFormat_RGBX32:
                 {
-                    m_inputFrame = cv::Mat(frame->RawFrameSize[1], frame->RawFrameSize[0], CV_8UC4, frame->FrameBuffer->data());
+                    m_inputFrame = cv::Mat(frame->RawFrameSize.height, frame->RawFrameSize.width, CV_8UC4, frame->FrameBuffer->data());
 
                     if (m_bUseColor)
                     {
@@ -443,7 +445,7 @@ void DepthReconstruction::RunThread()
                 }
                 case FrameFormat_RGB24:
                 {
-                    m_inputFrame = cv::Mat(frame->RawFrameSize[1], frame->RawFrameSize[0], CV_8UC3, frame->FrameBuffer->data());
+                    m_inputFrame = cv::Mat(frame->RawFrameSize.height, frame->RawFrameSize.width, CV_8UC3, frame->FrameBuffer->data());
 
                     if (m_bUseColor)
                     {
@@ -459,7 +461,7 @@ void DepthReconstruction::RunThread()
                 }
                 case FrameFormat_YUYV16:
                 {
-                    m_inputFrame = cv::Mat(frame->RawFrameSize[1], frame->RawFrameSize[0], CV_8UC2, frame->FrameBuffer->data());
+                    m_inputFrame = cv::Mat(frame->RawFrameSize.height, frame->RawFrameSize.width, CV_8UC2, frame->FrameBuffer->data());
 
                     if (m_bUseColor)
                     {
@@ -475,7 +477,7 @@ void DepthReconstruction::RunThread()
                 }
                 case FrameFormat_NV12:
                 {
-                    m_inputFrame = cv::Mat(frame->RawFrameSize[1], frame->RawFrameSize[0], CV_8UC1, frame->FrameBuffer->data());
+                    m_inputFrame = cv::Mat(frame->RawFrameSize.height, frame->RawFrameSize.width, CV_8UC1, frame->FrameBuffer->data());
 
                     m_inputFrameColor = cv::Mat(m_cameraTextureHeight, m_cameraTextureWidth, CV_8UC3);
 
@@ -495,7 +497,7 @@ void DepthReconstruction::RunThread()
                 }
                 case FrameFormat_BAYER16BG:
                 {
-                    m_inputFrame = cv::Mat(frame->RawFrameSize[1], frame->RawFrameSize[0], CV_16UC1, frame->FrameBuffer->data());
+                    m_inputFrame = cv::Mat(frame->RawFrameSize.height, frame->RawFrameSize.width, CV_16UC1, frame->FrameBuffer->data());
 
                     if (m_bUseColor)
                     {
@@ -716,12 +718,10 @@ void DepthReconstruction::RunThread()
             // Convert z to int16 range with 4 bit fixed decimal: 65536 / 2 / 16 = 2048
             frame->DisparityToDepth.m[11] *= 2048.0f;
 
-            frame->InputDisparityTextureSize[0] = m_cvImageWidth * 2;
-            frame->InputDisparityTextureSize[1] = m_cvImageHeight;
-            frame->OutputDisparityTextureSize[0] = m_cvImageWidth * 2 * outputScale;
-            frame->OutputDisparityTextureSize[1] = m_cvImageHeight * outputScale;
-            frame->CameraFrameTextureSize[0] = m_cameraFrameWidth * 2;
-            frame->CameraFrameTextureSize[1] = m_cameraFrameHeight;
+            frame->InputDisparityTextureSize = { m_cvImageWidth * 2, m_cvImageHeight };
+            frame->OutputDisparityTextureSize = 
+                { m_cvImageWidth * 2 * outputScale, m_cvImageHeight * outputScale };
+            frame->CameraFrameTextureSize = { m_cameraFrameWidth * 2, m_cameraFrameHeight };
             frame->DisparityDownscaleFactor = (float)m_downscaleFactor / outputScale;
             frame->FrameSequence = (frame->FrameSequence + 1) % 16;
             frame->FrameExposureTimestamp = frameTimestamp;
@@ -871,13 +871,13 @@ void DepthReconstruction::RunThread()
 
                 debugTextureMat *= 8;
 
-                if (texture.Width != m_cvImageWidth || texture.Height != m_cvImageHeight)
+                if (texture.TextureSize.width != m_cvImageWidth || texture.TextureSize.height != m_cvImageHeight)
                 {
                     texture.bDimensionsUpdated = true;
                 }
 
-                texture.Width = m_cvImageWidth * 2;
-                texture.Height = m_cvImageHeight;
+                texture.TextureSize.width = m_cvImageWidth * 2;
+                texture.TextureSize.height = m_cvImageHeight;
                 texture.PixelSize = sizeof(uint16_t);
                 texture.Format = DebugTextureFormat_R16S;
                 texture.CurrentTexture = DebugTexture_Disparity;
@@ -917,13 +917,13 @@ void DepthReconstruction::RunThread()
                     m_confidenceRight(cv::Rect(numDisparities, 0, m_cvImageWidth, m_cvImageHeight)).convertTo(right, CV_8U);
                 }
 
-                if (texture.Width != m_cvImageWidth || texture.Height != m_cvImageHeight)
+                if (texture.TextureSize.width != m_cvImageWidth || texture.TextureSize.height != m_cvImageHeight)
                 {
                     texture.bDimensionsUpdated = true;
                 }
 
-                texture.Width = m_cvImageWidth * 2;
-                texture.Height = m_cvImageHeight;
+                texture.TextureSize.width = m_cvImageWidth * 2;
+                texture.TextureSize.height = m_cvImageHeight;
                 texture.PixelSize = sizeof(uint8_t);
                 texture.Format = DebugTextureFormat_R8;
                 texture.CurrentTexture = DebugTexture_Confidence;

@@ -13,6 +13,7 @@
 #include "shaders\passthrough_stereo_vs.h"
 
 
+#include "shaders\alpha_test_ps.h"
 #include "shaders\alpha_prepass_ps.h"
 #include "shaders\alpha_prepass_masked_ps.h"
 #include "shaders\alpha_prepass_masked_fullscreen_ps.h"
@@ -41,7 +42,7 @@ inline uint32_t Align(const uint32_t value, const uint32_t alignment)
 	return (value + alignment - 1) & ~(alignment - 1);
 }
 
-void UploadTexture(ComPtr<ID3D11DeviceContext> deviceContext, ComPtr<ID3D11Texture2D> uploadTexture, uint8_t* inputBuffer, int height, int width)
+void UploadTexture(ComPtr<ID3D11DeviceContext> deviceContext, ComPtr<ID3D11Texture2D> uploadTexture, uint8_t* inputBuffer, VkExtent2D textureSize, uint32_t bitsPerPixel)
 {
 	if (inputBuffer == nullptr) { return; }
 
@@ -50,11 +51,11 @@ void UploadTexture(ComPtr<ID3D11DeviceContext> deviceContext, ComPtr<ID3D11Textu
 	{
 		uint8_t* writePtr = (uint8_t*)resource.pData;
 		uint8_t* readPtr = inputBuffer;
-		for (int i = 0; i < height; i++)
+		for (uint32_t i = 0; i < textureSize.height; i++)
 		{
-			memcpy(writePtr, readPtr, width);
+			memcpy(writePtr, readPtr, textureSize.width * bitsPerPixel);
 			writePtr += resource.RowPitch;
-			readPtr += width;
+			readPtr += textureSize.width * bitsPerPixel;
 		}
 		deviceContext->Unmap(uploadTexture.Get(), 0);
 	}
@@ -65,12 +66,6 @@ void UploadTexture(ComPtr<ID3D11DeviceContext> deviceContext, ComPtr<ID3D11Textu
 PassthroughRendererDX11::PassthroughRendererDX11(ID3D11Device* device, std::shared_ptr<ConfigManager> configManager)
 	: m_d3dDevice(device)
 	, m_configManager(configManager)
-	, m_cameraTextureWidth(0)
-	, m_cameraTextureHeight(0)
-	, m_cameraFrameBufferSize(0)
-	, m_cameraUndistortedTextureWidth(0)
-	, m_cameraUndistortedTextureHeight(0)
-	, m_cameraUndistortedFrameBufferSize(0)
 	, m_disparityMapWidth(0)
 	, m_fovScale(0.0f)
 	, m_selectedDebugTexture(DebugTexture_None)
@@ -136,6 +131,13 @@ bool PassthroughRendererDX11::InitRenderer()
 		return false;
 	}
 	SET_DXGI_DEBUGNAME(m_passthroughTemporalPS);
+
+	if (FAILED(m_d3dDevice->CreatePixelShader(g_AlphaTestPS, sizeof(g_AlphaTestPS), nullptr, &m_alphaTestPS)))
+	{
+		g_logger->error("m_alphaTestPS creation failure!");
+		return false;
+	}
+	SET_DXGI_DEBUGNAME(m_alphaTestPS);
 
 	if (FAILED(m_d3dDevice->CreatePixelShader(g_AlphaPrepassPS, sizeof(g_AlphaPrepassPS), nullptr, &m_alphaPrepassPS)))
 	{
@@ -372,7 +374,6 @@ bool PassthroughRendererDX11::InitRenderer()
 	blendState.RenderTarget[0].BlendOp = D3D11_BLEND_OP_ADD;
 	blendState.RenderTarget[0].SrcBlend = D3D11_BLEND_SRC_ALPHA;
 	blendState.RenderTarget[0].DestBlend = D3D11_BLEND_INV_SRC_ALPHA;
-
 	blendState.RenderTarget[0].BlendOpAlpha = D3D11_BLEND_OP_ADD;
 	blendState.RenderTarget[0].SrcBlendAlpha = D3D11_BLEND_ONE;
 	blendState.RenderTarget[0].DestBlendAlpha = D3D11_BLEND_ONE;
@@ -608,8 +609,8 @@ void PassthroughRendererDX11::SetupDebugTexture(DebugTexture& texture)
 	D3D11_TEXTURE2D_DESC textureDesc = {};
 	textureDesc.MipLevels = 1;
 	textureDesc.Format = format;
-	textureDesc.Width = texture.Width;
-	textureDesc.Height = texture.Height;
+	textureDesc.Width = texture.TextureSize.width;
+	textureDesc.Height = texture.TextureSize.height;
 	textureDesc.ArraySize = 1;
 	textureDesc.SampleDesc.Count = 1;
 	textureDesc.SampleDesc.Quality = 0;
@@ -642,98 +643,6 @@ void PassthroughRendererDX11::SetupDebugTexture(DebugTexture& texture)
 	if (FAILED(m_d3dDevice->CreateShaderResourceView(m_debugTexture.Texture.Get(), &srvDesc, &m_debugTexture.SRV)))
 	{
 		g_logger->error("Debug Texture CreateShaderResourceView error!");
-		return;
-	}
-}
-
-
-void PassthroughRendererDX11::SetupCameraFrameResource(const uint32_t imageIndex)
-{
-	D3D11_TEXTURE2D_DESC textureDesc = {};
-	textureDesc.MipLevels = 1;
-	textureDesc.Format = DXGI_FORMAT_R8G8B8A8_UNORM_SRGB;
-	textureDesc.Width = m_cameraTextureWidth;
-	textureDesc.Height = m_cameraTextureHeight;
-	textureDesc.ArraySize = 1;
-	textureDesc.SampleDesc.Count = 1;
-	textureDesc.SampleDesc.Quality = 0;
-	textureDesc.BindFlags = D3D11_BIND_SHADER_RESOURCE;
-	textureDesc.Usage = D3D11_USAGE_DEFAULT;
-	textureDesc.CPUAccessFlags = 0;
-
-	D3D11_SHADER_RESOURCE_VIEW_DESC srvDesc = {};
-	srvDesc.ViewDimension = D3D11_SRV_DIMENSION_TEXTURE2D;
-	srvDesc.Format = textureDesc.Format;
-	srvDesc.Texture2D.MipLevels = 1;
-
-	D3D11_TEXTURE2D_DESC uploadTextureDesc = textureDesc;
-	uploadTextureDesc.BindFlags = 0;
-	uploadTextureDesc.Usage = D3D11_USAGE_STAGING;
-	uploadTextureDesc.CPUAccessFlags = D3D11_CPU_ACCESS_WRITE;
-
-	if (FAILED(m_d3dDevice->CreateTexture2D(&uploadTextureDesc, nullptr, &m_cameraFrameUploadTexture)))
-	{
-		g_logger->error("Frame Resource CreateTexture2D error!");
-		return;
-	}
-	SET_DXGI_DEBUGNAME(m_cameraFrameUploadTexture);
-
-	DX11FrameData& frameData = m_frameData[imageIndex];
-
-	if (FAILED(m_d3dDevice->CreateTexture2D(&textureDesc, nullptr, &frameData.cameraFrame.Texture)))
-	{
-		g_logger->error("Frame Resource CreateTexture2D error!");
-		return;
-	}
-	if (FAILED(m_d3dDevice->CreateShaderResourceView(frameData.cameraFrame.Texture.Get(), &srvDesc, &frameData.cameraFrame.SRV)))
-	{
-		g_logger->error("Frame Resource CreateShaderResourceView error!");
-		return;
-	}
-}
-
-
-void PassthroughRendererDX11::SetupCameraUndistortedFrameResource(const uint32_t imageIndex)
-{
-	D3D11_TEXTURE2D_DESC textureDesc = {};
-	textureDesc.MipLevels = 1;
-	textureDesc.Format = DXGI_FORMAT_R8G8B8A8_UNORM_SRGB;
-	textureDesc.Width = m_cameraUndistortedTextureWidth;
-	textureDesc.Height = m_cameraUndistortedTextureHeight;
-	textureDesc.ArraySize = 1;
-	textureDesc.SampleDesc.Count = 1;
-	textureDesc.SampleDesc.Quality = 0;
-	textureDesc.BindFlags = D3D11_BIND_SHADER_RESOURCE;
-	textureDesc.Usage = D3D11_USAGE_DEFAULT;
-	textureDesc.CPUAccessFlags = 0;
-
-	D3D11_SHADER_RESOURCE_VIEW_DESC srvDesc = {};
-	srvDesc.ViewDimension = D3D11_SRV_DIMENSION_TEXTURE2D;
-	srvDesc.Format = textureDesc.Format;
-	srvDesc.Texture2D.MipLevels = 1;
-
-	D3D11_TEXTURE2D_DESC uploadTextureDesc = textureDesc;
-	uploadTextureDesc.BindFlags = 0;
-	uploadTextureDesc.Usage = D3D11_USAGE_STAGING;
-	uploadTextureDesc.CPUAccessFlags = D3D11_CPU_ACCESS_WRITE;
-
-	if (FAILED(m_d3dDevice->CreateTexture2D(&uploadTextureDesc, nullptr, &m_cameraUndistortedFrameUploadTexture)))
-	{
-		g_logger->error("Frame Resource CreateTexture2D error!");
-		return;
-	}
-	SET_DXGI_DEBUGNAME(m_cameraUndistortedFrameUploadTexture);
-
-	DX11FrameData& frameData = m_frameData[imageIndex];
-
-	if (FAILED(m_d3dDevice->CreateTexture2D(&textureDesc, nullptr, &frameData.cameraUndistortedFrame.Texture)))
-	{
-		g_logger->error("Frame Resource CreateTexture2D error!");
-		return;
-	}
-	if (FAILED(m_d3dDevice->CreateShaderResourceView(frameData.cameraUndistortedFrame.Texture.Get(), &srvDesc, &frameData.cameraUndistortedFrame.SRV)))
-	{
-		g_logger->error("Frame Resource CreateShaderResourceView error!");
 		return;
 	}
 }
@@ -880,13 +789,13 @@ void PassthroughRendererDX11::SetupPassthroughDepthStencil(uint32_t viewIndex, u
 }
 
 
-void PassthroughRendererDX11::SetupUVDistortionMap(std::shared_ptr<std::vector<float>> uvDistortionMap)
+void PassthroughRendererDX11::SetupUVDistortionMap(UVDistortionParameters& distortionParams)
 {
 	D3D11_TEXTURE2D_DESC textureDesc = {};
 	textureDesc.MipLevels = 1;
 	textureDesc.Format = DXGI_FORMAT_R32G32_FLOAT;
-	textureDesc.Width = m_cameraTextureWidth;
-	textureDesc.Height = m_cameraTextureHeight;
+	textureDesc.Width = distortionParams.UVDistortionMapSize.width;
+	textureDesc.Height = distortionParams.UVDistortionMapSize.height;
 	textureDesc.ArraySize = 1;
 	textureDesc.SampleDesc.Count = 1;
 	textureDesc.SampleDesc.Quality = 0;
@@ -895,8 +804,8 @@ void PassthroughRendererDX11::SetupUVDistortionMap(std::shared_ptr<std::vector<f
 	textureDesc.CPUAccessFlags = 0;
 
 	D3D11_SUBRESOURCE_DATA uploadData = {};
-	uploadData.pSysMem = (void*)uvDistortionMap->data();
-	uploadData.SysMemPitch = m_cameraTextureWidth * 8; // 2 * 32 bits
+	uploadData.pSysMem = (void*)distortionParams.UVDistortionMap->data();
+	uploadData.SysMemPitch = distortionParams.UVDistortionMapSize.width * 8; // 2 * 32 bits
 
 	if (FAILED(m_d3dDevice->CreateTexture2D(&textureDesc, &uploadData, &m_uvDistortionMap.Texture)))
 	{
@@ -1127,9 +1036,6 @@ bool PassthroughRendererDX11::CheckInitFrameData(const uint32_t imageIndex)
 		return false;
 	}
 
-	SetupCameraFrameResource(imageIndex);
-	SetupCameraUndistortedFrameResource(imageIndex);
-
 	frameData.bInitialized = true;
 
 	return true;
@@ -1244,17 +1150,6 @@ void PassthroughRendererDX11::InitDepthBuffer(const ERenderEye eye, void* depthB
 	}
 }
 
-
-void PassthroughRendererDX11::SetFrameSize(const uint32_t width, const uint32_t height, const uint32_t bufferSize, const uint32_t undistortedWidth, const uint32_t undistortedHeight, const uint32_t undistortedBufferSize)
-{
-	m_cameraTextureWidth = width;
-	m_cameraTextureHeight = height;
-	m_cameraFrameBufferSize = bufferSize;
-
-	m_cameraUndistortedTextureWidth = undistortedWidth;
-	m_cameraUndistortedTextureHeight = undistortedHeight;
-	m_cameraUndistortedFrameBufferSize = undistortedBufferSize;
-}
 
 
 void PassthroughRendererDX11::GenerateMesh()
@@ -1436,13 +1331,13 @@ void PassthroughRendererDX11::RenderPassthroughFrame(const XrCompositionLayerPro
 	}
 
 	{
-		std::shared_lock readLock(distortionParams.readWriteMutex);
+		std::shared_lock readLock(distortionParams.ReadWriteMutex);
 
 		if (renderParams.ProjectionMode != Projection_RoomView2D &&
-			(!m_uvDistortionMap.Texture.Get() || m_fovScale != distortionParams.fovScale))
+			(!m_uvDistortionMap.Texture.Get() || m_fovScale != distortionParams.FovScale))
 		{
-			m_fovScale = distortionParams.fovScale;
-			SetupUVDistortionMap(distortionParams.uvDistortionMap);
+			m_fovScale = distortionParams.FovScale;
+			SetupUVDistortionMap(distortionParams);
 		}
 	}
 
@@ -1470,13 +1365,13 @@ void PassthroughRendererDX11::RenderPassthroughFrame(const XrCompositionLayerPro
 	{
 		bool bDisparityMapReset = false;
 
-		if (depthFrame->OutputDisparityTextureSize[0] != m_disparityMapWidth || (stereoConf.StereoUseDisparityTemporalFiltering && frameData.disparityFilter.Texture == nullptr))
+		if (depthFrame->OutputDisparityTextureSize.width != m_disparityMapWidth || (stereoConf.StereoUseDisparityTemporalFiltering && frameData.disparityFilter.Texture == nullptr))
 		{
-			m_disparityMapWidth = depthFrame->OutputDisparityTextureSize[0];
+			m_disparityMapWidth = depthFrame->OutputDisparityTextureSize.width;
 
 			if (stereoConf.StereoUseDisparityTemporalFiltering)
 			{
-				SetupDisparityFilter(depthFrame->OutputDisparityTextureSize[0], depthFrame->OutputDisparityTextureSize[1]);
+				SetupDisparityFilter(depthFrame->OutputDisparityTextureSize.width, depthFrame->OutputDisparityTextureSize.height);
 			}
 
 			for (int i = 0; i < m_viewData[0].size(); i++)
@@ -1515,11 +1410,11 @@ void PassthroughRendererDX11::RenderPassthroughFrame(const XrCompositionLayerPro
 
 		if(viewDataLeft.passthroughDepthStencil[0].Texture == nullptr || 
 			viewDataRight.passthroughDepthStencil[0].Texture == nullptr ||
-			(viewDataLeft.passthroughDepthStencil[0].Width != depthFrame->OutputDisparityTextureSize[0] * stereoConf.StereoDepthMapScale / 2) ||
-			(viewDataLeft.passthroughDepthStencil[0].Height != depthFrame->OutputDisparityTextureSize[1] * stereoConf.StereoDepthMapScale))
+			(viewDataLeft.passthroughDepthStencil[0].Width != depthFrame->OutputDisparityTextureSize.width * stereoConf.StereoDepthMapScale / 2) ||
+			(viewDataLeft.passthroughDepthStencil[0].Height != depthFrame->OutputDisparityTextureSize.height * stereoConf.StereoDepthMapScale))
 		{
-			uint32_t width = depthFrame->OutputDisparityTextureSize[0] * stereoConf.StereoDepthMapScale / 2;
-			uint32_t height = depthFrame->OutputDisparityTextureSize[1] * stereoConf.StereoDepthMapScale;
+			uint32_t width = depthFrame->OutputDisparityTextureSize.width * stereoConf.StereoDepthMapScale / 2;
+			uint32_t height = depthFrame->OutputDisparityTextureSize.height * stereoConf.StereoDepthMapScale;
 
 			SetupPassthroughDepthStencil(0, renderParams.LeftFrameIndex, width, height);
 			SetupPassthroughDepthStencil(1, renderParams.RightFrameIndex, width, height);
@@ -1532,7 +1427,7 @@ void PassthroughRendererDX11::RenderPassthroughFrame(const XrCompositionLayerPro
 		{
 			m_bUseHexagonGridMesh = stereoConf.StereoUseHexagonGridMesh;
 
-			GenerateDepthMesh(depthFrame->OutputDisparityTextureSize[0] * stereoConf.StereoDepthMapScale / 2, depthFrame->OutputDisparityTextureSize[1] * stereoConf.StereoDepthMapScale);
+			GenerateDepthMesh(depthFrame->OutputDisparityTextureSize.width * stereoConf.StereoDepthMapScale / 2, depthFrame->OutputDisparityTextureSize.width * stereoConf.StereoDepthMapScale);
 		}
 	}
 
@@ -1547,8 +1442,8 @@ void PassthroughRendererDX11::RenderPassthroughFrame(const XrCompositionLayerPro
 		vsBuffer.depthFrameViewToWorldRight = depthFrame->DisparityViewToWorldRight;
 		vsBuffer.disparityToDepth = depthFrame->DisparityToDepth;
 		vsBuffer.disparityDownscaleFactor = depthFrame->DisparityDownscaleFactor;
-		vsBuffer.disparityTextureSize[0] = depthFrame->OutputDisparityTextureSize[0];
-		vsBuffer.disparityTextureSize[1] = depthFrame->OutputDisparityTextureSize[1];
+		vsBuffer.disparityTextureSize[0] = depthFrame->OutputDisparityTextureSize.width;
+		vsBuffer.disparityTextureSize[1] = depthFrame->OutputDisparityTextureSize.height;
 		vsBuffer.minDisparity = depthFrame->MinDisparity;
 		vsBuffer.maxDisparity = depthFrame->MaxDisparity;
 		vsBuffer.cutoutFactor = stereoConf.StereoCutoutFactor;
@@ -1565,7 +1460,8 @@ void PassthroughRendererDX11::RenderPassthroughFrame(const XrCompositionLayerPro
 	m_renderContext->UpdateSubresource(frameData.vsPassConstantBuffer.Get(), 0, nullptr, &vsBuffer, 0, 0);
 
 
-	if (mainConf.DebugSource == DebugSource_ApplicationAlpha || mainConf.DebugSource == DebugSource_ApplicationDepth)
+	if (mainConf.DebugSource == DebugSource_ApplicationAlpha || 
+		mainConf.DebugSource == DebugSource_ApplicationDepth)
 	{
 		RenderDebugView(RenderEye_Left, layer, renderParams);
 		RenderDebugView(RenderEye_Right, layer, renderParams);
@@ -1603,7 +1499,7 @@ void PassthroughRendererDX11::RenderPassthroughFrame(const XrCompositionLayerPro
 
 			if (m_debugTextureUpload.Get())
 			{
-				UploadTexture(m_deviceContext, m_debugTextureUpload, texture.Texture.data(), texture.Height, texture.Width * texture.PixelSize);
+				UploadTexture(m_deviceContext, m_debugTextureUpload, texture.Texture.data(), texture.TextureSize, texture.PixelSize);
 
 				m_deviceContext->CopyResource(m_debugTexture.Texture.Get(), m_debugTextureUpload.Get());
 
@@ -1643,7 +1539,8 @@ void PassthroughRendererDX11::RenderPassthroughFrame(const XrCompositionLayerPro
 
 	psPassBuffer.depthRange = XrVector2f(NEAR_PROJECTION_DISTANCE, renderParams.ProjectionDistance);
 	psPassBuffer.depthCutoffRange = XrVector2f(renderParams.DepthRangeMin, renderParams.DepthRangeMax);
-	psPassBuffer.opacity = fminf(mainConf.PassthroughOpacity, renderParams.RenderOpacity);
+	psPassBuffer.opacity = fminf(coreConf.CoreForcePassthroughOpacity, renderParams.RenderOpacity);
+	psPassBuffer.alphaTestThreshold = coreConf.CoreForceAlphaTestTreshold;
 	if (renderParams.bForceColorSettings)
 	{
 		psPassBuffer.brightness = renderParams.ForcedBrightness;
@@ -1703,7 +1600,9 @@ void PassthroughRendererDX11::RenderPassthroughFrame(const XrCompositionLayerPro
 		(renderParams.bInvertLayerAlpha && (renderParams.ProjectionMode != Projection_StereoReconstruction || renderParams.BlendMode == Masked)) || // Use prepass for inverting alpha channel
 		(renderParams.BlendMode == Opaque && !renderParams.bEnableDepthBlending) || // Use prepass for filling in alpha channel
 		(renderParams.BlendMode == Additive) || // Use prepass for filling in alpha channel
-		(renderParams.BlendMode != Masked && renderParams.bEnableDepthBlending && renderParams.ProjectionMode != Projection_StereoReconstruction); // Use prepass for cutting out depth
+		(renderParams.BlendMode != Masked && renderParams.bEnableDepthBlending && renderParams.ProjectionMode != Projection_StereoReconstruction) || // Use prepass for cutting out depth
+		(coreConf.CoreForcePassthroughOpacity < 1.0f && renderParams.BlendMode != AlphaTest); // Use prepass to lower opacity
+
 
 
 	// Render left eye
@@ -1717,6 +1616,11 @@ void PassthroughRendererDX11::RenderPassthroughFrame(const XrCompositionLayerPro
 		if (renderParams.BlendMode == Masked)
 		{
 			RenderMaskedPrepassView(RenderEye_Left, layer, frame, depthFrame, numIndices, renderParams);
+		}
+
+		if (renderParams.BlendMode == AlphaTest)
+		{
+			RenderAlphaTestPrepassView(RenderEye_Left, layer, frame, depthFrame, numIndices, renderParams);
 		}
 
 		RenderSetupView(RenderEye_Left, layer, frame, depthFrame, renderParams);
@@ -1750,6 +1654,11 @@ void PassthroughRendererDX11::RenderPassthroughFrame(const XrCompositionLayerPro
 		if (renderParams.BlendMode == Masked)
 		{
 			RenderMaskedPrepassView(RenderEye_Right, layer, frame, depthFrame, numIndices, renderParams);
+		}
+
+		if (renderParams.BlendMode == AlphaTest)
+		{
+			RenderAlphaTestPrepassView(RenderEye_Right, layer, frame, depthFrame, numIndices, renderParams);
 		}
 
 		RenderSetupView(RenderEye_Right, layer, frame, depthFrame, renderParams);
@@ -1805,6 +1714,11 @@ void PassthroughRendererDX11::RenderSetupView(const ERenderEye eye, const XrComp
 		m_viewDepthData[viewIndex][depthSwapchainIndex].depthStencilView.Get() != nullptr;
 
 	bool bWriteDepth = depthConfig.DepthWriteOutput && depthConfig.DepthReadFromApplication;
+
+	if (renderParams.ProjectionMode == Projection_StereoReconstruction)
+	{
+		m_renderContext->IASetInputLayout(nullptr);
+	}
 
 	XrRect2Di rect = layer->views[viewIndex].subImage.imageRect;
 
@@ -1921,6 +1835,8 @@ void PassthroughRendererDX11::RenderDepthPrepassView(const ERenderEye eye, const
 
 	ID3D11ShaderResourceView* vsSRVs[1] = { frameData.disparityMap.SRV.Get() };
 	m_renderContext->VSSetShaderResources(0, 1, vsSRVs);
+
+	m_renderContext->IASetInputLayout(m_inputLayout.Get());
 
 	const UINT strides[] = { sizeof(float) * 3 };
 	const UINT offsets[] = { 0 };
@@ -2164,13 +2080,9 @@ void PassthroughRendererDX11::RenderMaskedPrepassView(const ERenderEye eye, cons
 	{
 		cameraFrameSRV = m_debugTexture.SRV.Get();
 	}
-	else if (frame->FrameTextureResource != nullptr)
-	{
-		cameraFrameSRV = (ID3D11ShaderResourceView*)frame->FrameTextureResource;
-	}
 	else
 	{
-		cameraFrameSRV = frameData.cameraFrame.SRV.Get();
+		cameraFrameSRV = (ID3D11ShaderResourceView*)frame->FrameTextureResource;
 	}
 
 	ID3D11ShaderResourceView* prepassSourceTexture;
@@ -2372,7 +2284,9 @@ void PassthroughRendererDX11::RenderAlphaPrepassView(const ERenderEye eye, const
 			m_renderContext->OMSetBlendState(m_blendStatePrepassBlendInverseAppAlpha.Get(), nullptr, UINT_MAX);
 		}
 	}
-	else if (renderParams.BlendMode == AlphaBlendPremultiplied || renderParams.BlendMode == AlphaBlendUnpremultiplied || (renderParams.BlendMode == Masked && renderParams.bInvertLayerAlpha))
+	else if (renderParams.BlendMode == AlphaBlendPremultiplied || 
+		(renderParams.BlendMode == AlphaBlendUnpremultiplied) || 
+		(renderParams.BlendMode == Masked && renderParams.bInvertLayerAlpha))
 	{
 		if (renderParams.bInvertLayerAlpha) // Invert the alpha channel unless we can write with inverted alpha directly
 		{
@@ -2383,7 +2297,9 @@ void PassthroughRendererDX11::RenderAlphaPrepassView(const ERenderEye eye, const
 			m_renderContext->OMSetBlendState(m_blendStatePrepassUseAppAlpha.Get(), nullptr, UINT_MAX);
 		}
 	}
-	else if (renderParams.bInvertLayerAlpha && (renderParams.BlendMode == Additive || renderParams.BlendMode == Opaque) && renderParams.ProjectionMode != Projection_StereoReconstruction)
+	else if (renderParams.bInvertLayerAlpha && 
+		(renderParams.BlendMode == Additive || renderParams.BlendMode == Opaque) && 
+		(renderParams.ProjectionMode != Projection_StereoReconstruction))
 	{
 		// Zero out alpha for additive rendering
 		m_renderContext->OMSetBlendState(m_blendStatePrepassZeroAppAlpha.Get(), nullptr, UINT_MAX);
@@ -2417,6 +2333,63 @@ void PassthroughRendererDX11::RenderAlphaPrepassView(const ERenderEye eye, const
 
 
 
+void PassthroughRendererDX11::RenderAlphaTestPrepassView(const ERenderEye eye, const XrCompositionLayerProjection* layer, std::shared_ptr<CameraGPUFrame> frame, std::shared_ptr<DepthFrame> depthFrame, UINT numIndices, FrameRenderParameters& renderParams)
+{
+	int swapchainIndex = (eye == RenderEye_Left) ? renderParams.LeftFrameIndex : renderParams.RightFrameIndex;
+
+	int viewIndex = (eye == RenderEye_Left) ? 0 : 1;
+
+	DX11ViewData& viewData = m_viewData[viewIndex][swapchainIndex];
+
+	ID3D11RenderTargetView* rendertarget = viewData.renderTarget.RTV.Get();
+	if (!rendertarget) { return; }
+
+	Config_Main& mainConf = m_configManager->GetConfig_Main();
+
+	m_renderContext->IASetInputLayout(nullptr);
+
+	XrRect2Di rect = layer->views[viewIndex].subImage.imageRect;
+
+	D3D11_VIEWPORT viewport = { (float)rect.offset.x, (float)rect.offset.y, (float)rect.extent.width, (float)rect.extent.height, 0.0f, 1.0f };
+	D3D11_RECT scissor = { rect.offset.x, rect.offset.y, rect.offset.x + rect.extent.width, rect.offset.y + rect.extent.height };
+
+	m_renderContext->RSSetViewports(1, &viewport);
+	m_renderContext->RSSetScissorRects(1, &scissor);
+
+
+	DX11TemporaryRenderTarget& tempTarget = GetTemporaryRenderTarget(m_frameIndex, viewIndex);
+
+	m_renderContext->OMSetRenderTargets(1, tempTarget.RTV.GetAddressOf(), nullptr);
+	m_renderContext->OMSetBlendState(nullptr, nullptr, UINT_MAX);
+	m_renderContext->OMSetDepthStencilState(GET_DEPTH_STENCIL_STATE(false, false, false), 1);
+
+	ID3D11ShaderResourceView* originalSRVs[5];
+	m_renderContext->PSGetShaderResources(0, 5, originalSRVs);
+
+	m_renderContext->PSSetShaderResources(2, 1, viewData.renderTarget.SRV.GetAddressOf());
+
+	m_renderContext->IASetPrimitiveTopology(D3D11_PRIMITIVE_TOPOLOGY_TRIANGLESTRIP);
+	m_renderContext->VSSetShader(m_fullscreenQuadVS.Get(), nullptr, 0);
+	m_renderContext->PSSetShader(m_alphaTestPS.Get(), nullptr, 0);
+
+	m_renderContext->Draw(3, 0);
+
+
+	ID3D11RenderTargetView* nullRTV = nullptr;
+	m_renderContext->OMSetRenderTargets(1, &nullRTV, nullptr);
+	m_renderContext->PSSetShaderResources(2, 1, tempTarget.SRV.GetAddressOf());
+	m_renderContext->OMSetRenderTargets(1, viewData.renderTarget.RTV.GetAddressOf(), nullptr);
+
+	m_renderContext->OMSetBlendState(m_blendStateWriteAlpha.Get(), nullptr, UINT_MAX);
+	m_renderContext->PSSetShader(m_maskedAlphaCopyPS.Get(), nullptr, 0);
+
+	m_renderContext->Draw(3, 0);
+
+	m_renderContext->PSSetShaderResources(0, 5, originalSRVs);
+}
+
+
+
 
 // Renders all SteamVR rendermodels with passthrough projected on them.
 void PassthroughRendererDX11::RenderViewModelsForView(const ERenderEye eye, const XrCompositionLayerProjection* layer, std::shared_ptr<CameraGPUFrame> frame, std::shared_ptr<DepthFrame> depthFrame, UINT numIndices, FrameRenderParameters& renderParams)
@@ -2435,6 +2408,8 @@ void PassthroughRendererDX11::RenderViewModelsForView(const ERenderEye eye, cons
 
 	Config_Main& mainConf = m_configManager->GetConfig_Main();
 	Config_Stereo& stereoConf = m_configManager->GetConfig_Stereo();
+
+	m_renderContext->IASetInputLayout(m_inputLayout.Get());
 
 	ID3D11DepthStencilView* depthStencil = nullptr;
 
@@ -2667,6 +2642,8 @@ void PassthroughRendererDX11::RenderBackgroundForView(const ERenderEye eye,  con
 
 	Config_Main& mainConf = m_configManager->GetConfig_Main();
 	Config_Stereo& stereoConf = m_configManager->GetConfig_Stereo();
+
+	m_renderContext->IASetInputLayout(m_inputLayout.Get());
 
 	ID3D11DepthStencilView* depthStencil = nullptr;
 

@@ -44,10 +44,8 @@ public:
 
 	virtual EPassthroughCameraState GetCameraState() const = 0;
 	virtual void GetCameraDisplayStats(uint32_t& width, uint32_t& height, float& fps, ECameraProvider& provider, bool& bIsActive) const = 0;
-	virtual void GetDistortedTextureSize(uint32_t& width, uint32_t& height, uint32_t& bufferSize) const = 0;
-	virtual void GetUndistortedTextureSize(uint32_t& width, uint32_t& height, uint32_t& bufferSize) const = 0;
+	virtual void GetDistortedTextureSize(uint32_t& width, uint32_t& height) const = 0;
 	virtual void GetDistortedFrameSize(uint32_t& width, uint32_t& height) const = 0;
-	virtual void GetUndistortedFrameSize(uint32_t& width, uint32_t& heighte) const = 0;
 	virtual void GetIntrinsics(const ERenderEye cameraEye, XrVector2f& focalLength, XrVector2f& center) const = 0;
 	virtual void GetDistortionCoefficients(ECameraDistortionCoefficients& coeffs) const = 0;
 	virtual EStereoFrameLayout GetFrameLayout() const = 0;
@@ -101,10 +99,8 @@ public:
 
 	EPassthroughCameraState GetCameraState() const;
 	void GetCameraDisplayStats(uint32_t& width, uint32_t& height, float& fps, ECameraProvider& provider, bool& bIsActive) const;
-	void GetDistortedTextureSize(uint32_t& width, uint32_t& height, uint32_t& bufferSize) const;
-	void GetUndistortedTextureSize(uint32_t& width, uint32_t& height, uint32_t& bufferSize) const;
+	void GetDistortedTextureSize(uint32_t& width, uint32_t& height) const;
 	void GetDistortedFrameSize(uint32_t& width, uint32_t& height) const;
-	void GetUndistortedFrameSize(uint32_t& width, uint32_t& height) const;
 	void GetIntrinsics(const ERenderEye cameraEye, XrVector2f& focalLength, XrVector2f& center) const;
 	void GetDistortionCoefficients(ECameraDistortionCoefficients& coeffs) const;
 	EStereoFrameLayout GetFrameLayout() const;
@@ -151,7 +147,7 @@ private:
 	std::weak_ptr<AsyncRenderer> m_asyncRenderer;
 	ERenderAPI m_renderAPI;
 	ERenderAPI m_appRenderAPI;
-	EProjectionMode m_projectionMode;
+	EProjectionMode m_projectionMode = Projection_RoomView2D;
 	std::thread m_serveThread;
 	std::thread m_serveThreadBlockQueue;
 	std::atomic_bool m_bRunThread = true;
@@ -168,8 +164,8 @@ private:
 	FrameQueue<CameraCPUFrame> m_cpuFrameQueue;
 
 	int m_hmdDeviceId = -1;
-	vr::TrackedCameraHandle_t m_cameraHandle;
-	EStereoFrameLayout m_frameLayout;
+	vr::TrackedCameraHandle_t m_cameraHandle = INVALID_TRACKED_CAMERA_HANDLE;
+	EStereoFrameLayout m_frameLayout = FrameLayout_Mono;
 
 	XrMatrix4x4f m_cameraRoomViewProjectionInvLeft{};
 	XrMatrix4x4f m_cameraRoomViewProjectionInvRight{};
@@ -202,10 +198,8 @@ public:
 
 	EPassthroughCameraState GetCameraState() const;
 	void GetCameraDisplayStats(uint32_t& width, uint32_t& height, float& fps, ECameraProvider& provider, bool& bIsActive) const;
-	void GetDistortedTextureSize(uint32_t& width, uint32_t& height, uint32_t& bufferSize) const;
-	void GetUndistortedTextureSize(uint32_t& width, uint32_t& height, uint32_t& bufferSize) const;
+	void GetDistortedTextureSize(uint32_t& width, uint32_t& height) const;
 	void GetDistortedFrameSize(uint32_t& width, uint32_t& height) const;
-	void GetUndistortedFrameSize(uint32_t& width, uint32_t& height) const;
 	void GetIntrinsics(const ERenderEye cameraEye, XrVector2f& focalLength, XrVector2f& center) const;
 	void GetDistortionCoefficients(ECameraDistortionCoefficients& coeffs) const;
 	EStereoFrameLayout GetFrameLayout() const;
@@ -235,15 +229,8 @@ private:
 	uint32_t m_cameraTextureHeight = 0;
 	uint32_t m_cameraFrameBufferSize = 0;
 
-	uint32_t m_cameraUndistortedTextureWidth = 0;
-	uint32_t m_cameraUndistortedTextureHeight = 0;
-	uint32_t m_cameraUndistortedFrameBufferSize = 0;
-
 	uint32_t m_cameraFrameWidth = 0;
 	uint32_t m_cameraFrameHeight = 0;
-
-	uint32_t m_cameraUndistortedFrameWidth = 0;
-	uint32_t m_cameraUndistortedFrameHeight = 0;
 
 	float m_projectionDistanceFar;
 	bool m_useAlternateProjectionCalc;

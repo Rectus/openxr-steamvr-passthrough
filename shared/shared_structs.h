@@ -23,7 +23,8 @@ enum EPassthroughBlendMode
 	Opaque = 1,
 	Additive = 2,
 	AlphaBlendPremultiplied = 3,
-	AlphaBlendUnpremultiplied = 4
+	AlphaBlendUnpremultiplied = 4,
+	AlphaTest = 5
 };
 
 enum ECameraProvider

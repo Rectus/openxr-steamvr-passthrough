@@ -148,30 +148,16 @@ void CameraManagerOpenCV::GetCameraDisplayStats(uint32_t& width, uint32_t& heigh
     }
 }
 
-void CameraManagerOpenCV::GetDistortedTextureSize(uint32_t& width, uint32_t& height, uint32_t& bufferSize) const
+void CameraManagerOpenCV::GetDistortedTextureSize(uint32_t& width, uint32_t& height) const
 {
     width = m_cameraTextureWidth;
     height = m_cameraTextureHeight;
-    bufferSize = m_cameraFrameBufferSize;
-}
-
-void CameraManagerOpenCV::GetUndistortedTextureSize(uint32_t& width, uint32_t& height, uint32_t& bufferSize) const
-{
-    width = m_cameraUndistortedTextureWidth;
-    height = m_cameraUndistortedTextureHeight;
-    bufferSize = m_cameraUndistortedFrameBufferSize;
 }
 
 void CameraManagerOpenCV::GetDistortedFrameSize(uint32_t& width, uint32_t& height) const
 {
     width = m_cameraFrameWidth;
     height = m_cameraFrameHeight;
-}
-
-void CameraManagerOpenCV::GetUndistortedFrameSize(uint32_t& width, uint32_t& height) const
-{
-    width = m_cameraUndistortedFrameWidth;
-    height = m_cameraUndistortedFrameHeight;
 }
 
 void CameraManagerOpenCV::GetIntrinsics(const ERenderEye cameraEye, XrVector2f& focalLength, XrVector2f& center) const
@@ -268,34 +254,21 @@ void CameraManagerOpenCV::UpdateStaticCameraParameters()
         g_logger->error("Invalid frame size received: Width = {}, Height = {}, Size = {}", m_cameraTextureWidth, m_cameraTextureHeight, m_cameraFrameBufferSize);
     }
 
-    m_cameraUndistortedTextureWidth = m_cameraTextureWidth;
-    m_cameraUndistortedTextureHeight = m_cameraTextureHeight;
-    m_cameraUndistortedFrameBufferSize = m_cameraFrameBufferSize;
-
 
     if (m_frameLayout == EStereoFrameLayout::FrameLayout_StereoVertical)
     {
             m_cameraFrameWidth = m_cameraTextureWidth;
             m_cameraFrameHeight = m_cameraTextureHeight / 2;
-
-            m_cameraUndistortedFrameWidth = m_cameraUndistortedTextureWidth;
-            m_cameraUndistortedFrameHeight = m_cameraUndistortedTextureHeight / 2;
     }
     else if(m_frameLayout == EStereoFrameLayout::FrameLayout_StereoHorizontal)
     {
         m_cameraFrameWidth = m_cameraTextureWidth / 2;
         m_cameraFrameHeight = m_cameraTextureHeight;
-
-        m_cameraUndistortedFrameWidth = m_cameraUndistortedTextureWidth / 2;
-        m_cameraUndistortedFrameHeight = m_cameraUndistortedTextureHeight;
     }
     else // Mono
     {
         m_cameraFrameWidth = m_cameraTextureWidth;
         m_cameraFrameHeight = m_cameraTextureHeight;
-
-        m_cameraUndistortedFrameWidth = m_cameraUndistortedTextureWidth;
-        m_cameraUndistortedFrameHeight = m_cameraUndistortedTextureHeight;
     }
 }
 
@@ -399,8 +372,7 @@ void CameraManagerOpenCV::ServeFrames()
         cpuFrame->bIsRaw = true;
         cpuFrame->RawFrameFormat = FrameFormat_RGBX32;
         cpuFrame->RawFrameDataBytes = m_cameraFrameBufferSize;
-        cpuFrame->RawFrameSize[0] = frameBuffer.cols;
-        cpuFrame->RawFrameSize[1] = frameBuffer.rows;
+        cpuFrame->RawFrameSize = { (uint32_t)frameBuffer.cols, (uint32_t)frameBuffer.rows };
 
 
         if (m_configManager->CheckFrameTextureDumpPending())
@@ -472,8 +444,7 @@ void CameraManagerOpenCV::ServeFrames()
 
         cpuFrame->bIsValid = true;
         cpuFrame->FrameLayout = m_frameLayout;
-        cpuFrame->FrameSize[0] = m_cameraTextureWidth;
-        cpuFrame->FrameSize[1] = m_cameraTextureHeight;
+        cpuFrame->FrameSize = { m_cameraTextureWidth, m_cameraTextureHeight };
    
         cpuFrame->FrameSequence = frameSequence;
         frameSequence = (frameSequence + 1) % 16;
@@ -513,8 +484,7 @@ void CameraManagerOpenCV::CopyCPUFrameToGPU(std::shared_ptr<CameraCPUFrame> inFr
         gpuFrame->CameraRight.ViewToWorld = inFrame->CameraViewToWorldRight;
         gpuFrame->bColorsPreadjusted = m_configManager->CheckEnableAsyncColorAdjustment();
         gpuFrame->bisRectifiedFrame = false;
-        gpuFrame->FrameSize[0] = inFrame->FrameSize[0];
-        gpuFrame->FrameSize[1] = inFrame->FrameSize[1];
+        gpuFrame->FrameSize = inFrame->FrameSize;
 
         gpuFrame.CommitWrite();
     }

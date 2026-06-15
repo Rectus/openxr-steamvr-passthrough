@@ -178,30 +178,16 @@ void CameraManagerOpenVR::GetCameraDisplayStats(uint32_t& width, uint32_t& heigh
     }
 }
 
-void CameraManagerOpenVR::GetDistortedTextureSize(uint32_t& width, uint32_t& height, uint32_t& bufferSize) const
+void CameraManagerOpenVR::GetDistortedTextureSize(uint32_t& width, uint32_t& height) const
 {
     width = m_cameraTextureWidth;
     height = m_cameraTextureHeight;
-    bufferSize = m_cameraFrameBufferSize;
-}
-
-void CameraManagerOpenVR::GetUndistortedTextureSize(uint32_t& width, uint32_t& height, uint32_t& bufferSize) const
-{
-    width = m_cameraUndistortedTextureWidth;
-    height = m_cameraUndistortedTextureHeight;
-    bufferSize = m_cameraUndistortedFrameBufferSize;
 }
 
 void CameraManagerOpenVR::GetDistortedFrameSize(uint32_t& width, uint32_t& height) const
 {
     width = m_cameraFrameWidth;
     height = m_cameraFrameHeight;
-}
-
-void CameraManagerOpenVR::GetUndistortedFrameSize(uint32_t& width, uint32_t& height) const
-{
-    width = m_cameraUndistortedFrameWidth;
-    height = m_cameraUndistortedFrameHeight;
 }
 
 void CameraManagerOpenVR::GetIntrinsics(const ERenderEye cameraEye, XrVector2f& focalLength, XrVector2f& center) const
@@ -673,8 +659,7 @@ void CameraManagerOpenVR::ServeFrames()
         gpuFrame->bColorsPreadjusted = false;
         gpuFrame->FrameSequence = frameHeader.nFrameSequence;
         gpuFrame->FrameExposureTimestamp = frameHeader.ulFrameExposureTime;
-        gpuFrame->FrameSize[0] = frameHeader.nWidth;
-        gpuFrame->FrameSize[1] = frameHeader.nHeight;
+        gpuFrame->FrameSize = { frameHeader.nWidth, frameHeader.nHeight };
         gpuFrame->bisRectifiedFrame = frameType != vr::VRTrackedCameraFrameType_Distorted;
 
         XrMatrix4x4f headToTrackingPose;
@@ -784,8 +769,7 @@ void CameraManagerOpenVR::ServeFrames()
             cpuFrame->FrameExposureTimestamp = frameHeader.ulFrameExposureTime;
             cpuFrame->FrameLayout = m_frameLayout;
             cpuFrame->FrameSequence = lastFrameSequence;
-            cpuFrame->FrameSize[0] = m_cameraTextureWidth;
-            cpuFrame->FrameSize[1] = m_cameraTextureHeight;
+            cpuFrame->FrameSize = { m_cameraTextureWidth, m_cameraTextureHeight };
             cpuFrame->CameraViewToWorldLeft = viewToWorldLeft;
             cpuFrame->CameraViewToWorldRight = viewToWorldRight;
 
@@ -1088,10 +1072,8 @@ void CameraManagerOpenVR::ServeBlockQueueFrames()
         cpuFrame->bIsRaw = true;
         cpuFrame->FrameLayout = m_frameLayout;
         cpuFrame->RawFrameFormat = frameFormat;
-        cpuFrame->FrameSize[0] = m_cameraTextureWidth;
-        cpuFrame->FrameSize[1] = m_cameraTextureHeight;
-        cpuFrame->RawFrameSize[0] = rawFrameWidth;
-        cpuFrame->RawFrameSize[1] = rawFrameHeight;
+        cpuFrame->FrameSize = { m_cameraTextureWidth, m_cameraTextureHeight };
+        cpuFrame->RawFrameSize = { (uint32_t)rawFrameWidth, (uint32_t)rawFrameHeight };
         cpuFrame->RawFrameDataBytes = rawFrameDataBytes;
         cpuFrame->FrameExposureTimestamp = frameExposureTimestamp;
         cpuFrame->FrameSequence = (uint32_t)frameSequence;
@@ -1142,8 +1124,7 @@ void CameraManagerOpenVR::CopyCPUFrameToGPU(std::shared_ptr<CameraCPUFrame> inFr
         gpuFrame->CameraRight.ViewToWorld = inFrame->CameraViewToWorldRight;
         gpuFrame->bColorsPreadjusted = m_configManager->CheckEnableAsyncColorAdjustment();
         gpuFrame->bisRectifiedFrame = false;
-        gpuFrame->FrameSize[0] = inFrame->FrameSize[0];
-        gpuFrame->FrameSize[1] = inFrame->FrameSize[1];
+        gpuFrame->FrameSize = inFrame->FrameSize;
 
         gpuFrame.CommitWrite();
     }

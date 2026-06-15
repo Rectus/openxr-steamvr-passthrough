@@ -997,7 +997,7 @@ void AsyncRenderer::DestroyTexture(VulkanTexture& texture)
 bool AsyncRenderer::CopyAndDecodeCameraFrame(std::shared_ptr<CameraCPUFrame> inFrame, void** nativeTexture)
 {
 	std::shared_lock acessLock(m_accessMutex);
-	if (!m_bIsInitialized || !inFrame->bIsValid || !inFrame->bIsRaw || inFrame->RawFrameFormat == FrameFormat_Unknown || inFrame->RawFrameSize[0] < 1 || inFrame->RawFrameSize[1] < 1 || inFrame->RawFrameDataBytes < 1)
+	if (!m_bIsInitialized || !inFrame->bIsValid || !inFrame->bIsRaw || inFrame->RawFrameFormat == FrameFormat_Unknown || inFrame->RawFrameSize.width == 0 || inFrame->RawFrameSize.height == 0 || inFrame->RawFrameDataBytes < 1)
 	{ 
 		return false; 
 	}
@@ -1010,15 +1010,15 @@ bool AsyncRenderer::CopyAndDecodeCameraFrame(std::shared_ptr<CameraCPUFrame> inF
 	VkExtent2D rawExtent;
 	if (inFrame->RawFrameFormat == FrameFormat_YUYV16) 
 	{ 
-		rawExtent = { (uint32_t)inFrame->RawFrameSize[0] / 2, (uint32_t)inFrame->RawFrameSize[1] };
+		rawExtent = { (uint32_t)inFrame->RawFrameSize.width / 2, (uint32_t)inFrame->RawFrameSize.height };
 	}
 	else if (inFrame->RawFrameFormat == FrameFormat_NV12 || inFrame->RawFrameFormat == FrameFormat_NV12_2)
 	{
-		rawExtent = { (uint32_t)inFrame->RawFrameSize[0], (uint32_t)inFrame->RawFrameSize[1] * 3 / 2 };
+		rawExtent = { (uint32_t)inFrame->RawFrameSize.width, (uint32_t)inFrame->RawFrameSize.height * 3 / 2 };
 	}
 	else
 	{
-		rawExtent = { (uint32_t)inFrame->RawFrameSize[0], (uint32_t)inFrame->RawFrameSize[1] };
+		rawExtent = inFrame->RawFrameSize;
 	}
 
 	if (!m_rawCameraTexture.bIsValid || m_rawCameraTexture.Extent.width != rawExtent.width || m_rawCameraTexture.Extent.height != rawExtent.height || m_rawCameraTexture.Format != rawFormat)
@@ -1035,17 +1035,17 @@ bool AsyncRenderer::CopyAndDecodeCameraFrame(std::shared_ptr<CameraCPUFrame> inF
 		}
 	}
 
-	if (!sharedTexture.bIsValid || sharedTexture.Extent.width != inFrame->FrameSize[0] || sharedTexture.Extent.height != inFrame->FrameSize[1])
+	if (!sharedTexture.bIsValid || sharedTexture.Extent.width != inFrame->FrameSize.width || sharedTexture.Extent.height != inFrame->FrameSize.height)
 	{
 		DestroyTexture(sharedTexture);
 
-		if (!m_inlineRenderer.lock()->CreateSharedCameraTexture(&sharedTexture.SharedHandle, &sharedTexture.nativeTexture, { (uint32_t)inFrame->FrameSize[0], (uint32_t)inFrame->FrameSize[1] }, VK_FORMAT_R8G8B8A8_SRGB))
+		if (!m_inlineRenderer.lock()->CreateSharedCameraTexture(&sharedTexture.SharedHandle, &sharedTexture.nativeTexture, inFrame->FrameSize, VK_FORMAT_R8G8B8A8_SRGB))
 		{
 			g_logger->error("Failed to create shared camera texture {}!", m_cameraTextureIndex);
 			return false;
 		}
 
-		if (!CreateSharedTexture(sharedTexture, { (uint32_t)inFrame->FrameSize[0], (uint32_t)inFrame->FrameSize[1] }, VK_FORMAT_R8G8B8A8_UNORM, VK_IMAGE_USAGE_TRANSFER_DST_BIT | VK_IMAGE_USAGE_SAMPLED_BIT | VK_IMAGE_USAGE_STORAGE_BIT))
+		if (!CreateSharedTexture(sharedTexture, inFrame->FrameSize, VK_FORMAT_R8G8B8A8_UNORM, VK_IMAGE_USAGE_TRANSFER_DST_BIT | VK_IMAGE_USAGE_SAMPLED_BIT | VK_IMAGE_USAGE_STORAGE_BIT))
 		{
 			g_logger->error("Failed to create m_sharedCameraTexture!");
 			return false;
@@ -1100,10 +1100,10 @@ bool AsyncRenderer::BeginRender(std::shared_ptr<DepthFrame> depthFrame, const Co
 
 
 	if (!m_disparityTexture.bIsValid ||
-		m_disparityTexture.Extent.width != depthFrame->InputDisparityTextureSize[0] ||
-		m_disparityTexture.Extent.height != depthFrame->InputDisparityTextureSize[1])
+		m_disparityTexture.Extent.width != depthFrame->InputDisparityTextureSize.width ||
+		m_disparityTexture.Extent.height != depthFrame->InputDisparityTextureSize.height)
 	{
-		VkExtent2D extent = { depthFrame->InputDisparityTextureSize[0], depthFrame->InputDisparityTextureSize[1] };
+		VkExtent2D extent = depthFrame->InputDisparityTextureSize;
 		VkImageUsageFlags usageFlags = VK_IMAGE_USAGE_TRANSFER_DST_BIT | VK_IMAGE_USAGE_SAMPLED_BIT | VK_IMAGE_USAGE_STORAGE_BIT;
 		if (m_bHostImageCopyEnabled) { usageFlags |= VK_IMAGE_USAGE_HOST_TRANSFER_BIT; }
 
@@ -1121,18 +1121,18 @@ bool AsyncRenderer::BeginRender(std::shared_ptr<DepthFrame> depthFrame, const Co
 	}
 
 	if (!m_outputTexture[textureIndex].bIsValid ||
-		m_outputTexture[textureIndex].Extent.width != depthFrame->OutputDisparityTextureSize[0] ||
-		m_outputTexture[textureIndex].Extent.height != depthFrame->OutputDisparityTextureSize[1])
+		m_outputTexture[textureIndex].Extent.width != depthFrame->OutputDisparityTextureSize.width ||
+		m_outputTexture[textureIndex].Extent.height != depthFrame->OutputDisparityTextureSize.height)
 	{
 		DestroyTexture(m_outputTexture[textureIndex]);
 
-		if (!m_inlineRenderer.lock()->CreateSharedDisparityMap(&m_outputTexture[textureIndex].SharedHandle, &m_outputTexture[textureIndex].nativeTexture, { depthFrame->OutputDisparityTextureSize[0], depthFrame->OutputDisparityTextureSize[1] }, VK_FORMAT_R16G16_SNORM))
+		if (!m_inlineRenderer.lock()->CreateSharedDisparityMap(&m_outputTexture[textureIndex].SharedHandle, &m_outputTexture[textureIndex].nativeTexture, depthFrame->OutputDisparityTextureSize, VK_FORMAT_R16G16_SNORM))
 		{
 			g_logger->error("Failed to create shared disparity map {}!", textureIndex);
 			return false;
 		}
 
-		if (!CreateSharedTexture(m_outputTexture[textureIndex], { depthFrame->OutputDisparityTextureSize[0], depthFrame->OutputDisparityTextureSize[1] }, VK_FORMAT_R16G16_SNORM, VK_IMAGE_USAGE_TRANSFER_SRC_BIT | VK_IMAGE_USAGE_TRANSFER_DST_BIT | VK_IMAGE_USAGE_SAMPLED_BIT | VK_IMAGE_USAGE_STORAGE_BIT))
+		if (!CreateSharedTexture(m_outputTexture[textureIndex], depthFrame->OutputDisparityTextureSize, VK_FORMAT_R16G16_SNORM, VK_IMAGE_USAGE_TRANSFER_SRC_BIT | VK_IMAGE_USAGE_TRANSFER_DST_BIT | VK_IMAGE_USAGE_SAMPLED_BIT | VK_IMAGE_USAGE_STORAGE_BIT))
 		{
 			g_logger->error("Failed to create m_outputTexture {}!", textureIndex);
 			return false;
@@ -1141,12 +1141,14 @@ bool AsyncRenderer::BeginRender(std::shared_ptr<DepthFrame> depthFrame, const Co
 		depthFrame->OutputDisparityMapNativeTexture = m_outputTexture[textureIndex].nativeTexture;
 	}
 
-	if (!m_bwRectifiedCameraTexture.bIsValid || m_bwRectifiedCameraTexture.Extent.width != depthFrame->CameraFrameTextureSize[0] || m_bwRectifiedCameraTexture.Extent.height != depthFrame->CameraFrameTextureSize[1])
+	if (!m_bwRectifiedCameraTexture.bIsValid || 
+		m_bwRectifiedCameraTexture.Extent.width != depthFrame->CameraFrameTextureSize.width || 
+		m_bwRectifiedCameraTexture.Extent.height != depthFrame->CameraFrameTextureSize.height)
 	{
 		VkImageUsageFlags usageFlags = VK_IMAGE_USAGE_TRANSFER_DST_BIT | VK_IMAGE_USAGE_SAMPLED_BIT;
 		if (m_bHostImageCopyEnabled) { usageFlags |= VK_IMAGE_USAGE_HOST_TRANSFER_BIT; }
 
-		if (!CreateTexture(m_bwRectifiedCameraTexture, { depthFrame->CameraFrameTextureSize[0] , depthFrame->CameraFrameTextureSize[1] }, VK_FORMAT_R8_SRGB, usageFlags))
+		if (!CreateTexture(m_bwRectifiedCameraTexture, depthFrame->CameraFrameTextureSize, VK_FORMAT_R8_SRGB, usageFlags))
 		{
 			g_logger->error("Failed to create m_bwRectifiedCameraTexture!");
 			return false;
@@ -1314,8 +1316,8 @@ void AsyncRenderer::Render(std::shared_ptr<DepthFrame> depthFrame, const Config_
 
 	if (stereoConf.StereoFillHoles)
 	{
-		int groupCountX = DivRoundUp(depthFrame->InputDisparityTextureSize[0], 32);
-		int groupCountY = DivRoundUp(depthFrame->InputDisparityTextureSize[1], 32);
+		int groupCountX = DivRoundUp(depthFrame->InputDisparityTextureSize.width, 32);
+		int groupCountY = DivRoundUp(depthFrame->InputDisparityTextureSize.height, 32);
 
 		vkCmdPushConstants(m_commandBuffer, m_pipelineLayout, VK_SHADER_STAGE_COMPUTE_BIT, 0, sizeof(CSAsyncConstantBuffer), &constants);
 
@@ -1334,8 +1336,8 @@ void AsyncRenderer::Render(std::shared_ptr<DepthFrame> depthFrame, const Config_
 
 	if (stereoConf.StereoFilteringBilateral_Enable)
 	{
-		int groupCountX = DivRoundUp(depthFrame->OutputDisparityTextureSize[0], 32);
-		int groupCountY = DivRoundUp(depthFrame->OutputDisparityTextureSize[1], 32);
+		int groupCountX = DivRoundUp(depthFrame->OutputDisparityTextureSize.width, 32);
+		int groupCountY = DivRoundUp(depthFrame->OutputDisparityTextureSize.height, 32);
 
 		vkCmdPushConstants(m_commandBuffer, m_pipelineLayout, VK_SHADER_STAGE_COMPUTE_BIT, 0, sizeof(CSAsyncConstantBuffer), &constants);
 
@@ -1344,8 +1346,8 @@ void AsyncRenderer::Render(std::shared_ptr<DepthFrame> depthFrame, const Config_
 	}
 	else
 	{
-		int groupCountX = DivRoundUp(depthFrame->OutputDisparityTextureSize[0], 32);
-		int groupCountY = DivRoundUp(depthFrame->OutputDisparityTextureSize[1], 32);
+		int groupCountX = DivRoundUp(depthFrame->OutputDisparityTextureSize.width, 32);
+		int groupCountY = DivRoundUp(depthFrame->OutputDisparityTextureSize.height, 32);
 
 		constants.bHoleFillLastPass = true;
 

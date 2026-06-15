@@ -50,6 +50,7 @@ struct CameraGPUFrame
 {
 	CameraGPUFrame()
 		: FrameTextureResource(nullptr)
+		, FrameSize{ 0, 0 }
 		, FrameSequence(0)
 		, FrameExposureTimestamp(0)
 		, CameraLeft()
@@ -59,12 +60,10 @@ struct CameraGPUFrame
 		, bColorsPreadjusted(false)
 		, bisRectifiedFrame(false)
 	{
-		FrameSize[0] = 0;
-		FrameSize[1] = 0;
 	}
 
 	void* FrameTextureResource;
-	int32_t FrameSize[2];
+	VkExtent2D FrameSize;
 	uint32_t FrameSequence;
 	uint64_t FrameExposureTimestamp;
 	ProjectedView CameraLeft;
@@ -82,16 +81,14 @@ struct CameraCPUFrame
 		, CameraViewToWorldRight()
 		, RawFrameFormat(FrameFormat_Unknown)
 		, RawFrameDataBytes(0)
+		, RawFrameSize{ 0, 0 }
+		, FrameSize{ 0, 0 }
 		, FrameSequence(0)
 		, FrameExposureTimestamp(0)
 		, FrameLayout(FrameLayout_Mono)
 		, bIsValid(false)
 		, bIsRaw(false)
 	{
-		RawFrameSize[0] = 0;
-		RawFrameSize[1] = 0;
-		FrameSize[0] = 0;
-		FrameSize[1] = 0;
 	}
 
 
@@ -101,9 +98,9 @@ struct CameraCPUFrame
 	
 	ECameraFrameFormat RawFrameFormat;
 	int32_t RawFrameDataBytes;
-	int32_t RawFrameSize[2];
+	VkExtent2D RawFrameSize;
 
-	int32_t FrameSize[2];
+	VkExtent2D FrameSize;
 	uint32_t FrameSequence;
 	uint64_t FrameExposureTimestamp;
 	EStereoFrameLayout FrameLayout;
@@ -117,6 +114,9 @@ struct DepthFrame
 		: DisparityViewToWorldLeft()
 		, DisparityViewToWorldRight()
 		, DisparityToDepth()
+		, InputDisparityTextureSize{ 0, 0 }
+		, OutputDisparityTextureSize{ 0, 0 }
+		, CameraFrameTextureSize{ 0, 0 }
 		, DisparityDownscaleFactor(0.0f)
 		, FrameSequence(0)
 		, FrameExposureTimestamp(0)
@@ -126,12 +126,6 @@ struct DepthFrame
 		, OutputDisparityMapNativeTexture(nullptr)
 		, DisparityTextureIndex(-1)
 	{
-		InputDisparityTextureSize[0] = 0;
-		InputDisparityTextureSize[1] = 0;
-		OutputDisparityTextureSize[0] = 0;
-		OutputDisparityTextureSize[1] = 0;
-		CameraFrameTextureSize[0] = 0;
-		CameraFrameTextureSize[1] = 0;
 	}
 
 	void* OutputDisparityMapNativeTexture;
@@ -139,9 +133,9 @@ struct DepthFrame
 	XrMatrix4x4f DisparityViewToWorldLeft;
 	XrMatrix4x4f DisparityViewToWorldRight;
 	XrMatrix4x4f DisparityToDepth;
-	uint32_t InputDisparityTextureSize[2];
-	uint32_t OutputDisparityTextureSize[2];
-	uint32_t CameraFrameTextureSize[2];
+	VkExtent2D InputDisparityTextureSize;
+	VkExtent2D OutputDisparityTextureSize;
+	VkExtent2D CameraFrameTextureSize;
 	uint32_t FrameSequence;
 	uint64_t FrameExposureTimestamp;
 	float DisparityDownscaleFactor;
@@ -221,22 +215,24 @@ struct FrameRenderParameters
 struct UVDistortionParameters
 {
 	UVDistortionParameters()
-		: readWriteMutex()
-		, cameraProjectionLeft()
-		, cameraProjectionRight()
-		, rectifiedRotationLeft()
-		, rectifiedRotationRight()
-		, fovScale(-1.0f)
+		: ReadWriteMutex()
+		, UVDistortionMapSize{0, 0}
+		, CameraProjectionLeft()
+		, CameraProjectionRight()
+		, RectifiedRotationLeft()
+		, RectifiedRotationRight()
+		, FovScale(-1.0f)
 	{
 	}
 
-	std::shared_mutex readWriteMutex;
-	std::shared_ptr<std::vector<float>> uvDistortionMap;
-	XrMatrix4x4f cameraProjectionLeft;
-	XrMatrix4x4f cameraProjectionRight;
-	XrMatrix4x4f rectifiedRotationLeft;
-	XrMatrix4x4f rectifiedRotationRight;
-	float fovScale;
+	std::shared_mutex ReadWriteMutex;
+	std::shared_ptr<std::vector<float>> UVDistortionMap;
+	VkExtent2D UVDistortionMapSize;
+	XrMatrix4x4f CameraProjectionLeft;
+	XrMatrix4x4f CameraProjectionRight;
+	XrMatrix4x4f RectifiedRotationLeft;
+	XrMatrix4x4f RectifiedRotationRight;
+	float FovScale;
 };
 
 struct FBPassthroughInstance

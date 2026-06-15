@@ -147,7 +147,7 @@ static void TransitionImage(VkCommandBuffer commandBuffer, VkImage image, VkImag
 }
 
 
-void UploadImage(VkCommandBuffer commandBuffer, VkDevice device, VkBuffer uploadBuffer, VkImage outImage, VkExtent3D extent, VkImageLayout oldLayout, VkImageLayout newLayout)
+void UploadImage(VkCommandBuffer commandBuffer, VkDevice device, VkBuffer uploadBuffer, VkImage outImage, VkExtent2D extent, VkImageLayout oldLayout, VkImageLayout newLayout)
 {
 	TransitionImage(commandBuffer, outImage, oldLayout, VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL);
 
@@ -157,7 +157,7 @@ void UploadImage(VkCommandBuffer commandBuffer, VkDevice device, VkBuffer upload
 	region.bufferImageHeight = 0;
 	region.imageSubresource = { VK_IMAGE_ASPECT_COLOR_BIT, 0, 0, 1 };
 	region.imageOffset = { 0, 0, 0 };
-	region.imageExtent = extent;
+	region.imageExtent = { extent.width, extent.height, 1 };
 
 	vkCmdCopyBufferToImage(commandBuffer, uploadBuffer, outImage, VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL, 1, &region);
 
@@ -170,9 +170,6 @@ void UploadImage(VkCommandBuffer commandBuffer, VkDevice device, VkBuffer upload
 
 PassthroughRendererVulkan::PassthroughRendererVulkan(const XrGraphicsBindingVulkanKHR& binding, std::shared_ptr<ConfigManager> configManager)
 	: m_configManager(configManager)
-	, m_cameraTextureWidth(0)
-	, m_cameraTextureHeight(0)
-	, m_cameraFrameBufferSize(0)
 	, m_cylinderMeshVertexBuffer(nullptr)
 	, m_cylinderMeshVertexBufferMem(nullptr)
 	, m_cylinderMeshIndexBuffer(nullptr)
@@ -879,7 +876,7 @@ void PassthroughRendererVulkan::UploadDebugTexture(DebugTexture& texture)
 	memcpy(mappedData, texture.Texture.data(), texture.Texture.size());
 	vkUnmapMemory(m_device, m_debugTextureBufferMem);
 
-	UploadImage(*m_commandBuffer, m_device, m_debugTextureBuffer, m_debugTexture, { texture.Width, texture.Height, 1 }, VK_IMAGE_LAYOUT_UNDEFINED, VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL);
+	UploadImage(*m_commandBuffer, m_device, m_debugTextureBuffer, m_debugTexture, texture.TextureSize, VK_IMAGE_LAYOUT_UNDEFINED, VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL);
 }
 
 bool PassthroughRendererVulkan::SetupDebugTexture(DebugTexture& texture)
@@ -926,8 +923,8 @@ bool PassthroughRendererVulkan::SetupDebugTexture(DebugTexture& texture)
 
 	VkImageCreateInfo imageInfo{ VK_STRUCTURE_TYPE_IMAGE_CREATE_INFO };
 	imageInfo.imageType = VK_IMAGE_TYPE_2D;
-	imageInfo.extent.width = texture.Width;
-	imageInfo.extent.height = texture.Height;
+	imageInfo.extent.width = texture.TextureSize.width;
+	imageInfo.extent.height = texture.TextureSize.width;
 	imageInfo.extent.depth = 1;
 	imageInfo.mipLevels = 1;
 	imageInfo.arrayLayers = 1;
@@ -1065,18 +1062,6 @@ void PassthroughRendererVulkan::InitRenderTarget(const ERenderEye eye, void* ren
 }
 
 
-void PassthroughRendererVulkan::SetFrameSize(const uint32_t width, const uint32_t height, const uint32_t bufferSize, const uint32_t undistortedWidth, const uint32_t undistortedHeight, const uint32_t undistortedBufferSize)
-{
-	m_cameraTextureWidth = width;
-	m_cameraTextureHeight = height;
-	m_cameraFrameBufferSize = bufferSize;
-
-	m_cameraUndistortedTextureWidth = undistortedWidth;
-	m_cameraUndistortedTextureHeight = undistortedHeight;
-	m_cameraUndistortedFrameBufferSize = undistortedBufferSize;
-}
-
-
 bool PassthroughRendererVulkan::GenerateMesh(VkCommandBuffer commandBuffer)
 {
 	MeshCreateCylinder(m_cylinderMesh, NUM_MESH_BOUNDARY_VERTICES);
@@ -1110,7 +1095,7 @@ bool PassthroughRendererVulkan::GenerateMesh(VkCommandBuffer commandBuffer)
 }
 
 
-void PassthroughRendererVulkan::SetupUVDistortionMap(std::shared_ptr<std::vector<float>> uvDistortionMap)
+void PassthroughRendererVulkan::SetupUVDistortionMap(UVDistortionParameters& distortionParams)
 {
 	if (m_uvDistortionMap)
 	{
@@ -1125,22 +1110,22 @@ void PassthroughRendererVulkan::SetupUVDistortionMap(std::shared_ptr<std::vector
 		m_uvDistortionMapMem = nullptr;
 	}
 
-	if (!CreateBuffer(m_device, m_physDevice, m_uvDistortionMapBuffer, m_uvDistortionMapBufferMem, uvDistortionMap->size() * sizeof(float), VK_BUFFER_USAGE_TRANSFER_SRC_BIT, VK_MEMORY_PROPERTY_HOST_VISIBLE_BIT, &m_deletionQueue))
+	if (!CreateBuffer(m_device, m_physDevice, m_uvDistortionMapBuffer, m_uvDistortionMapBufferMem, distortionParams.UVDistortionMap->size() * sizeof(float), VK_BUFFER_USAGE_TRANSFER_SRC_BIT, VK_MEMORY_PROPERTY_HOST_VISIBLE_BIT, &m_deletionQueue))
 	{
 		g_logger->error("UV distortion map buffer creation failure!");
 		return;
 	}
 
 	void* mappedData;
-	vkMapMemory(m_device, m_uvDistortionMapBufferMem, 0, uvDistortionMap->size() * sizeof(float), 0, &mappedData);
-	memcpy(mappedData, uvDistortionMap->data(), uvDistortionMap->size() * sizeof(float));
+	vkMapMemory(m_device, m_uvDistortionMapBufferMem, 0, distortionParams.UVDistortionMap->size() * sizeof(float), 0, &mappedData);
+	memcpy(mappedData, distortionParams.UVDistortionMap->data(), distortionParams.UVDistortionMap->size() * sizeof(float));
 	vkUnmapMemory(m_device, m_uvDistortionMapBufferMem);
 
 
 	VkImageCreateInfo imageInfo{ VK_STRUCTURE_TYPE_IMAGE_CREATE_INFO };
 	imageInfo.imageType = VK_IMAGE_TYPE_2D;
-	imageInfo.extent.width = m_cameraTextureWidth;
-	imageInfo.extent.height = m_cameraTextureHeight;
+	imageInfo.extent.width = distortionParams.UVDistortionMapSize.width;
+	imageInfo.extent.height = distortionParams.UVDistortionMapSize.height;
 	imageInfo.extent.depth = 1;
 	imageInfo.mipLevels = 1;
 	imageInfo.arrayLayers = 1;
@@ -1211,7 +1196,7 @@ void PassthroughRendererVulkan::SetupUVDistortionMap(std::shared_ptr<std::vector
 		return;
 	}
 
-	UploadImage(m_commandBuffer[m_frameIndex], m_device, m_uvDistortionMapBuffer, m_uvDistortionMap, { m_cameraTextureWidth, m_cameraTextureHeight, 1 }, VK_IMAGE_LAYOUT_UNDEFINED, VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL);
+	UploadImage(m_commandBuffer[m_frameIndex], m_device, m_uvDistortionMapBuffer, m_uvDistortionMap, distortionParams.UVDistortionMapSize, VK_IMAGE_LAYOUT_UNDEFINED, VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL);
 
 	m_deletionQueue.push_back([=]() { vkDestroyImage(m_device, m_uvDistortionMap, nullptr); });
 	m_deletionQueue.push_back([=]() { vkDestroyBuffer(m_device, m_uvDistortionMapBuffer, nullptr); });
@@ -1328,7 +1313,7 @@ void PassthroughRendererVulkan::SetupIntermediateRenderTarget(uint32_t index, ui
 }
 
 
-bool PassthroughRendererVulkan::UpdateCameraFrameResource(VkCommandBuffer commandBuffer, int frameIndex, void* frameResource)
+bool PassthroughRendererVulkan::UpdateCameraFrameResource(VkCommandBuffer commandBuffer, int frameIndex, void* frameResource, VkExtent2D frameSize)
 {
 	if (m_cameraFrameResExternalHandle[frameIndex] == frameResource)
 	{
@@ -1349,8 +1334,8 @@ bool PassthroughRendererVulkan::UpdateCameraFrameResource(VkCommandBuffer comman
 	VkImageCreateInfo imageInfo{ VK_STRUCTURE_TYPE_IMAGE_CREATE_INFO };
 	imageInfo.pNext = &extInfo;
 	imageInfo.imageType = VK_IMAGE_TYPE_2D;
-	imageInfo.extent.width = m_cameraTextureWidth;
-	imageInfo.extent.height = m_cameraTextureHeight;
+	imageInfo.extent.width = frameSize.width;
+	imageInfo.extent.height = frameSize.height;
 	imageInfo.extent.depth = 1;
 	imageInfo.mipLevels = 1;
 	imageInfo.arrayLayers = 1;
@@ -1695,9 +1680,9 @@ void PassthroughRendererVulkan::RenderPassthroughFrame(const XrCompositionLayerP
 		}
 	}
 
-	if (!mainConf.DebugTexture != DebugTexture_None && frame->FrameTextureResource != nullptr)
+	if (mainConf.DebugTexture == DebugTexture_None && frame->FrameTextureResource != nullptr)
 	{
-		if (!UpdateCameraFrameResource(m_commandBuffer[m_frameIndex], m_frameIndex, frame->FrameTextureResource))
+		if (!UpdateCameraFrameResource(m_commandBuffer[m_frameIndex], m_frameIndex, frame->FrameTextureResource, frame->FrameSize))
 		{
 			m_frameIndex = (m_frameIndex + 1) % NUM_SWAPCHAINS;
 			return;
@@ -1710,13 +1695,13 @@ void PassthroughRendererVulkan::RenderPassthroughFrame(const XrCompositionLayerP
 	}
 
 	{
-		std::shared_lock readLock(distortionParams.readWriteMutex);
+		std::shared_lock readLock(distortionParams.ReadWriteMutex);
 
 		if (renderParams.ProjectionMode != Projection_RoomView2D &&
-			(!m_uvDistortionMap || m_fovScale != distortionParams.fovScale))
+			(!m_uvDistortionMap || m_fovScale != distortionParams.FovScale))
 		{
-			m_fovScale = distortionParams.fovScale;
-			SetupUVDistortionMap(distortionParams.uvDistortionMap);
+			m_fovScale = distortionParams.FovScale;
+			SetupUVDistortionMap(distortionParams);
 		}
 	}
 
@@ -1732,7 +1717,7 @@ void PassthroughRendererVulkan::RenderPassthroughFrame(const XrCompositionLayerP
 		PSPassConstantBuffer psPassBuffer = {};
 		psPassBuffer.depthRange = XrVector2f(NEAR_PROJECTION_DISTANCE, renderParams.ProjectionDistance);
 		psPassBuffer.depthCutoffRange = XrVector2f(renderParams.DepthRangeMin, renderParams.DepthRangeMax);
-		psPassBuffer.opacity = mainConf.PassthroughOpacity;
+		psPassBuffer.opacity = coreConf.CoreForcePassthroughOpacity;
 		psPassBuffer.brightness = mainConf.Brightness;
 		psPassBuffer.contrast = mainConf.Contrast;
 		psPassBuffer.saturation = mainConf.Saturation;
@@ -1858,7 +1843,7 @@ void PassthroughRendererVulkan::RenderPassthroughView(const ERenderEye eye, cons
 	if (renderParams.BlendMode != Masked && 
 		((renderParams.BlendMode != AlphaBlendPremultiplied &&
 			renderParams.BlendMode != AlphaBlendUnpremultiplied) || 
-			m_configManager->GetConfig_Main().PassthroughOpacity < 1.0f))
+			m_configManager->GetConfig_Core().CoreForcePassthroughOpacity < 1.0f))
 	{
 		VkPipeline prepassPipeline;
 
