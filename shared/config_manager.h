@@ -116,6 +116,7 @@ struct alignas(4) Config_Main
 	bool EnableRenderDocDebugging = false;
 	bool AutostartRenderDocInstance = false;
 	bool InsertAsyncRendererRenderDocMarkers = false;
+	bool InsertFrameDecoderRenderDocMarkers = false;
 	bool EnableAsyncVulkanValidation = false;
 
 	EStereoPreset StereoPreset = StereoPreset_Medium;
@@ -162,6 +163,7 @@ struct alignas(4) Config_Main
 		EnableRenderDocDebugging = ini.GetBoolValue(section, "EnableRenderDocDebugging", EnableRenderDocDebugging);
 		AutostartRenderDocInstance = ini.GetBoolValue(section, "AutostartRenderDocInstance", AutostartRenderDocInstance);
 		InsertAsyncRendererRenderDocMarkers = ini.GetBoolValue(section, "InsertAsyncRendererRenderDocMarkers", InsertAsyncRendererRenderDocMarkers);
+		InsertFrameDecoderRenderDocMarkers = ini.GetBoolValue(section, "InsertFrameDecoderRenderDocMarkers", InsertFrameDecoderRenderDocMarkers);
 		EnableAsyncVulkanValidation = ini.GetBoolValue(section, "EnableAsyncVulkanValidation", EnableAsyncVulkanValidation);
 
 		StereoPreset = (EStereoPreset)ini.GetLongValue(section, "StereoPreset", StereoPreset);
@@ -203,6 +205,7 @@ struct alignas(4) Config_Main
 		ini.SetBoolValue(section, "EnableRenderDocDebugging", EnableRenderDocDebugging);
 		ini.SetBoolValue(section, "AutostartRenderDocInstance", AutostartRenderDocInstance);
 		ini.SetBoolValue(section, "InsertAsyncRendererRenderDocMarkers", InsertAsyncRendererRenderDocMarkers);
+		ini.SetBoolValue(section, "InsertFrameDecoderRenderDocMarkers", InsertFrameDecoderRenderDocMarkers);
 		ini.SetBoolValue(section, "EnableAsyncVulkanValidation", EnableAsyncVulkanValidation);
 
 		ini.SetLongValue(section, "StereoPreset", StereoPreset);

@@ -370,7 +370,7 @@ bool AsyncFrameDecoder::CopyAndDecodeCameraFrame(std::shared_ptr<CameraCPUFrame>
 
 
 	// Add a RenderDoc frame end marker to allow captures from the UI.
-	if (m_bRenderDocEnabled && m_configManager->GetConfig_Main().InsertAsyncRendererRenderDocMarkers)
+	if (m_bRenderDocEnabled && m_configManager->GetConfig_Main().InsertFrameDecoderRenderDocMarkers)
 	{
 		VkDebugUtilsLabelEXT label{ VK_STRUCTURE_TYPE_DEBUG_UTILS_LABEL_EXT };
 		label.pLabelName = "vr-marker,frame_end,type,application";

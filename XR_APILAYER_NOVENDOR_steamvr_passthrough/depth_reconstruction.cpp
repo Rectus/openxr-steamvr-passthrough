@@ -465,13 +465,27 @@ void DepthReconstruction::RunThread()
 
                     if (m_bUseColor)
                     {
+                        // Note: Does not properly convert limited to full color range.
+
                         cv::cvtColor(m_inputFrame(frameROILeft), m_inputFrameLeft, cv::COLOR_YUV2RGB_YUY2);
                         cv::cvtColor(m_inputFrame(frameROIRight), m_inputFrameRight, cv::COLOR_YUV2RGB_YUY2);
                     }
                     else
                     {
-                        cv::cvtColor(m_inputFrame(frameROILeft), m_inputFrameLeft, cv::COLOR_YUV2GRAY_YUY2);
-                        cv::cvtColor(m_inputFrame(frameROIRight), m_inputFrameRight, cv::COLOR_YUV2GRAY_YUY2);
+                        // Convert to full range if the rectification is filtered for higher resolution in gradients.
+                        if (stereoConfig.StereoRectificationFiltering)
+                        {
+                            m_inputFrameRawIntermediate = cv::Mat(m_cameraTextureHeight, m_cameraTextureWidth, CV_8U);
+                            cv::cvtColor(m_inputFrame, m_inputFrameRawIntermediate, cv::COLOR_YUV2GRAY_YUY2);
+
+                            m_inputFrameRawIntermediate(frameROILeft).convertTo(m_inputFrameLeft, CV_8U, 256.0 / 219.0, -(16.0 / 219.0));
+                            m_inputFrameRawIntermediate(frameROIRight).convertTo(m_inputFrameRight, CV_8U, 256.0 / 219.0, -(16.0 / 219.0));
+                        }
+                        else
+                        {
+                            cv::cvtColor(m_inputFrame(frameROILeft), m_inputFrameLeft, cv::COLOR_YUV2GRAY_YUY2);
+                            cv::cvtColor(m_inputFrame(frameROIRight), m_inputFrameRight, cv::COLOR_YUV2GRAY_YUY2);
+                        }
                     }
                     break;
                 }
@@ -479,19 +493,19 @@ void DepthReconstruction::RunThread()
                 {
                     m_inputFrame = cv::Mat(frame->RawFrameSize.height, frame->RawFrameSize.width, CV_8UC1, frame->FrameBuffer->data());
 
-                    m_inputFrameColor = cv::Mat(m_cameraTextureHeight, m_cameraTextureWidth, CV_8UC3);
+                    m_inputFrameRawIntermediate = cv::Mat(m_cameraTextureHeight, m_cameraTextureWidth, CV_8UC3);
 
-                    cv::cvtColor(m_inputFrame, m_inputFrameColor, cv::COLOR_YUV2RGB_NV12);
+                    cv::cvtColor(m_inputFrame, m_inputFrameRawIntermediate, cv::COLOR_YUV2RGB_NV12);
 
                     if (m_bUseColor)
                     {
-                        m_inputFrameColor(frameROILeft).copyTo(m_inputFrameLeft);
-                        m_inputFrameColor(frameROIRight).copyTo(m_inputFrameRight);
+                        m_inputFrameRawIntermediate(frameROILeft).copyTo(m_inputFrameLeft);
+                        m_inputFrameRawIntermediate(frameROIRight).copyTo(m_inputFrameRight);
                     }
                     else
                     {
-                        cv::cvtColor(m_inputFrameColor(frameROILeft), m_inputFrameLeft, cv::COLOR_RGB2GRAY);
-                        cv::cvtColor(m_inputFrameColor(frameROIRight), m_inputFrameRight, cv::COLOR_RGB2GRAY);
+                        cv::cvtColor(m_inputFrameRawIntermediate(frameROILeft), m_inputFrameLeft, cv::COLOR_RGB2GRAY);
+                        cv::cvtColor(m_inputFrameRawIntermediate(frameROIRight), m_inputFrameRight, cv::COLOR_RGB2GRAY);
                     }
                     break;
                 }

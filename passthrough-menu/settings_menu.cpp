@@ -264,6 +264,18 @@ inline bool BigButton(const char* label)
 	return result;
 }
 
+inline bool ModalButton(const char* label, float width = 200.0f, bool centered = false)
+{
+	ImGui::PushStyleVar(ImGuiStyleVar_FramePadding, ImVec2(20, 10));
+	if (centered)
+	{
+		ImGui::SetCursorPosX(ImGui::GetCursorPosX() + (ImGui::GetContentRegionAvail().x - width) / 2.0f);
+	}
+	
+	bool result = ImGui::Button(label, ImVec2(width, 0));
+	ImGui::PopStyleVar();
+	return result;
+}
 
 inline bool ScrollableSlider(const char* label, float* v, float v_min, float v_max, const char* format, float scrollFactor)
 {
@@ -431,6 +443,73 @@ inline void EndSoftDisabled(bool bIsDisabled)
 		ImGui::PopStyleVar();
 	}
 }
+
+inline bool ConfirmModalDialog(const char* label, const char* text)
+{
+	ImGui::SetNextWindowPos(ImGui::GetMainViewport()->GetCenter(), ImGuiCond_Appearing, ImVec2(0.5f, 0.5f));
+
+	ImGui::PushStyleVar(ImGuiStyleVar_FramePadding, ImVec2(8, 6));
+	ImGui::PushStyleVar(ImGuiStyleVar_WindowBorderSize, 1.0f);
+
+	bool bResult = false;
+
+	if (ImGui::BeginPopupModal(label, nullptr, ImGuiWindowFlags_NoMove | ImGuiWindowFlags_AlwaysAutoResize))
+	{
+		ImGui::Spacing();
+		ImGui::Text(text);
+		IMGUI_BIG_SPACING;
+
+		if (ModalButton("OK"))
+		{
+			bResult = true;
+			ImGui::CloseCurrentPopup();
+		}
+
+		ImGui::SetItemDefaultFocus();
+		ImGui::SameLine();
+
+		if (ModalButton("Cancel"))
+		{
+			ImGui::CloseCurrentPopup();
+		}
+
+		ImGui::EndPopup();
+	}
+	ImGui::PopStyleVar();
+	ImGui::PopStyleVar();
+
+	return bResult;
+}
+
+inline void ErrorModalPopup(const char* label, const char* text)
+{
+	ImGui::SetNextWindowPos(ImGui::GetMainViewport()->GetCenter(), ImGuiCond_Appearing, ImVec2(0.5f, 0.5f));
+
+	ImGui::PushStyleVar(ImGuiStyleVar_FramePadding, ImVec2(8, 6));
+	ImGui::PushStyleVar(ImGuiStyleVar_WindowBorderSize, 1.0f);
+
+	if (ImGui::BeginPopupModal(label, nullptr, ImGuiWindowFlags_NoMove | ImGuiWindowFlags_AlwaysAutoResize))
+	{
+		ImGui::Text(text);
+		IMGUI_BIG_SPACING;
+
+		if (ModalButton("OK", 200, true))
+		{
+			ImGui::CloseCurrentPopup();
+		}
+		ImGui::EndPopup();
+	}
+	ImGui::PopStyleVar();
+	ImGui::PopStyleVar();
+}
+
+
+
+
+
+
+
+
 
 
 bool SettingsMenu::TickMenu()
@@ -619,7 +698,7 @@ void SettingsMenu::DrawMenu()
 	ImVec2 tabButtonSize(204, 55);
 	ImVec4 colorActiveTab(0.25f, 0.52f, 0.88f, 1.0f);
 	bool bIsActiveTab = false;
-	EMenuTab lastActiveTab = TabMain;
+	EMenuTab lastActiveTab = m_activeTab;
 
 #define TAB_BUTTON(name, tab) if (m_activeTab == tab) { ImGui::PushStyleColor(ImGuiCol_Button, colorActiveTab); bIsActiveTab = true; } \
 if (ImGui::Button(name, tabButtonSize)) { lastActiveTab = m_activeTab; m_activeTab = tab; } \
@@ -921,7 +1000,7 @@ if (bIsActiveTab) { ImGui::PopStyleColor(1); bIsActiveTab = false; }
 			
 			TextDescription("Complete settings and descriptions are available in the other tabs.");
 
-
+			ImGui::Spacing();
 			IMGUI_BIG_SPACING;
 
 		}
@@ -957,6 +1036,11 @@ if (bIsActiveTab) { ImGui::PopStyleColor(1); bIsActiveTab = false; }
 		ImGui::EndChild(); // Fill
 
 		if (BigButton("Reset To Defaults"))
+		{
+			ImGui::OpenPopup("Confirm###ConfirmResetSettings");
+		}
+
+		if(ConfirmModalDialog("Confirm###ConfirmResetSettings", "All settings will be lost!"))
 		{
 			EProjectionMode mode = mainConfig.ProjectionMode;
 			ECameraProvider cam = mainConfig.CameraProvider;
@@ -1576,6 +1660,8 @@ if (bIsActiveTab) { ImGui::PopStyleColor(1); bIsActiveTab = false; }
 			}
 			TextDescription("Use SteamVR for calculating depth, and a webcam for color data. Requires a HMD with a stereo camera and manual configuration.");
 
+			IMGUI_BIG_SPACING;
+
 			ImGui::Checkbox("Clamp Camera Frame", &cameraConfig.ClampCameraFrame);
 			TextDescription("Only draws passthrough in the actual frame area. When turned off the edge pixels are extended past the frame into a 360 degree view.");
 
@@ -1813,9 +1899,14 @@ if (bIsActiveTab) { ImGui::PopStyleColor(1); bIsActiveTab = false; }
 
 			IMGUI_BIG_SPACING;
 
-			ImGui::BeginDisabled(!m_dashboardOverlay->IsRuntimeInitialized());
+			ImGui::BeginDisabled(false && !m_dashboardOverlay->IsRuntimeInitialized());
 			if (BigButton("Copy SteamVR Camera Parameters to Custom Calibration"))
 			{
+				ImGui::OpenPopup("Confirm###ConfirmCopySteamVRCalib");
+			}
+			
+			if(ConfirmModalDialog("Confirm###ConfirmCopySteamVRCalib", "The custom calibration will be overwritten!"))
+			{			
 				m_dashboardOverlay->GetCameraDebugProperties(m_deviceDebugProps);
 
 				if (m_deviceDebugProps.size() > 0)
@@ -1841,24 +1932,24 @@ if (bIsActiveTab) { ImGui::PopStyleColor(1); bIsActiveTab = false; }
 						// and max undistorted matches for FTheta Extended and None (true for Index and Vive).
 						if (camera0Props.DistortionFunction == vr::VRDistortionFunctionType_FTheta)
 						{
-							cameraConfig.OpenVR_Camera0_IntrinsicsFocal[0] = 
+							cameraConfig.OpenVR_Camera0_IntrinsicsFocal[0] =
 								camera0Props.UndistortedFocalLength.v[0];
-							cameraConfig.OpenVR_Camera0_IntrinsicsFocal[1] = 
+							cameraConfig.OpenVR_Camera0_IntrinsicsFocal[1] =
 								camera0Props.UndistortedFocalLength.v[1];
-							cameraConfig.OpenVR_Camera0_IntrinsicsCenter[0] = 
+							cameraConfig.OpenVR_Camera0_IntrinsicsCenter[0] =
 								camera0Props.UndistortedOpticalCenter.v[0];
-							cameraConfig.OpenVR_Camera0_IntrinsicsCenter[1] = 
+							cameraConfig.OpenVR_Camera0_IntrinsicsCenter[1] =
 								camera0Props.UndistortedOpticalCenter.v[1];
 						}
 						else
 						{
-							cameraConfig.OpenVR_Camera0_IntrinsicsFocal[0] = 
+							cameraConfig.OpenVR_Camera0_IntrinsicsFocal[0] =
 								camera0Props.MaximumUndistortedFocalLength.v[0];
-							cameraConfig.OpenVR_Camera0_IntrinsicsFocal[1] = 
+							cameraConfig.OpenVR_Camera0_IntrinsicsFocal[1] =
 								camera0Props.MaximumUndistortedFocalLength.v[1];
-							cameraConfig.OpenVR_Camera0_IntrinsicsCenter[0] = 
+							cameraConfig.OpenVR_Camera0_IntrinsicsCenter[0] =
 								camera0Props.MaximumUndistortedOpticalCenter.v[0];
-							cameraConfig.OpenVR_Camera0_IntrinsicsCenter[1] = 
+							cameraConfig.OpenVR_Camera0_IntrinsicsCenter[1] =
 								camera0Props.MaximumUndistortedOpticalCenter.v[1];
 						}
 
@@ -1874,13 +1965,13 @@ if (bIsActiveTab) { ImGui::PopStyleColor(1); bIsActiveTab = false; }
 							cameraConfig.OpenVR_Camera0_IntrinsicsSensorPixels[1] /= 2;
 						}
 
-						cameraConfig.OpenVR_Camera0_IntrinsicsDist[0] = 
+						cameraConfig.OpenVR_Camera0_IntrinsicsDist[0] =
 							(float)camera0Props.DistortionCoefficients[0];
-						cameraConfig.OpenVR_Camera0_IntrinsicsDist[1] = 
+						cameraConfig.OpenVR_Camera0_IntrinsicsDist[1] =
 							(float)camera0Props.DistortionCoefficients[1];
-						cameraConfig.OpenVR_Camera0_IntrinsicsDist[2] = 
+						cameraConfig.OpenVR_Camera0_IntrinsicsDist[2] =
 							(float)camera0Props.DistortionCoefficients[2];
-						cameraConfig.OpenVR_Camera0_IntrinsicsDist[3] = 
+						cameraConfig.OpenVR_Camera0_IntrinsicsDist[3] =
 							(float)camera0Props.DistortionCoefficients[3];
 					}
 
@@ -1902,24 +1993,24 @@ if (bIsActiveTab) { ImGui::PopStyleColor(1); bIsActiveTab = false; }
 						// and max undistorted matches for FTheta Extended and None (true for Index and Vive).
 						if (camera1Props.DistortionFunction == vr::VRDistortionFunctionType_FTheta)
 						{
-							cameraConfig.OpenVR_Camera1_IntrinsicsFocal[0] = 
+							cameraConfig.OpenVR_Camera1_IntrinsicsFocal[0] =
 								camera1Props.UndistortedFocalLength.v[0];
-							cameraConfig.OpenVR_Camera1_IntrinsicsFocal[1] = 
+							cameraConfig.OpenVR_Camera1_IntrinsicsFocal[1] =
 								camera1Props.UndistortedFocalLength.v[1];
-							cameraConfig.OpenVR_Camera1_IntrinsicsCenter[0] = 
+							cameraConfig.OpenVR_Camera1_IntrinsicsCenter[0] =
 								camera1Props.UndistortedOpticalCenter.v[0];
-							cameraConfig.OpenVR_Camera1_IntrinsicsCenter[1] = 
+							cameraConfig.OpenVR_Camera1_IntrinsicsCenter[1] =
 								camera1Props.UndistortedOpticalCenter.v[1];
 						}
 						else
 						{
-							cameraConfig.OpenVR_Camera1_IntrinsicsFocal[0] = 
+							cameraConfig.OpenVR_Camera1_IntrinsicsFocal[0] =
 								camera1Props.MaximumUndistortedFocalLength.v[0];
-							cameraConfig.OpenVR_Camera1_IntrinsicsFocal[1] = 
+							cameraConfig.OpenVR_Camera1_IntrinsicsFocal[1] =
 								camera1Props.MaximumUndistortedFocalLength.v[1];
-							cameraConfig.OpenVR_Camera1_IntrinsicsCenter[0] = 
+							cameraConfig.OpenVR_Camera1_IntrinsicsCenter[0] =
 								camera1Props.MaximumUndistortedOpticalCenter.v[0];
-							cameraConfig.OpenVR_Camera1_IntrinsicsCenter[1] = 
+							cameraConfig.OpenVR_Camera1_IntrinsicsCenter[1] =
 								camera1Props.MaximumUndistortedOpticalCenter.v[1];
 						}
 
@@ -1935,13 +2026,13 @@ if (bIsActiveTab) { ImGui::PopStyleColor(1); bIsActiveTab = false; }
 							cameraConfig.OpenVR_Camera1_IntrinsicsSensorPixels[1] /= 2;
 						}
 
-						cameraConfig.OpenVR_Camera1_IntrinsicsDist[0] = 
+						cameraConfig.OpenVR_Camera1_IntrinsicsDist[0] =
 							(float)camera1Props.DistortionCoefficients[0];
-						cameraConfig.OpenVR_Camera1_IntrinsicsDist[1] = 
+						cameraConfig.OpenVR_Camera1_IntrinsicsDist[1] =
 							(float)camera1Props.DistortionCoefficients[1];
-						cameraConfig.OpenVR_Camera1_IntrinsicsDist[2] = 
+						cameraConfig.OpenVR_Camera1_IntrinsicsDist[2] =
 							(float)camera1Props.DistortionCoefficients[2];
-						cameraConfig.OpenVR_Camera1_IntrinsicsDist[3] = 
+						cameraConfig.OpenVR_Camera1_IntrinsicsDist[3] =
 							(float)camera1Props.DistortionCoefficients[3];
 					}
 
@@ -1950,9 +2041,12 @@ if (bIsActiveTab) { ImGui::PopStyleColor(1); bIsActiveTab = false; }
 				else
 				{
 					g_logger->warn("No SteamVR camera parameters available!");
-				}
 
+					ImGui::OpenPopup("Error###ErrorCopySteamVRCalib");
+				}
 			}
+
+			ErrorModalPopup("Error###ErrorCopySteamVRCalib", "No SteamVR camera parameters available!");		
 			ImGui::EndDisabled();
 
 			IMGUI_BIG_SPACING;
@@ -2044,12 +2138,17 @@ if (bIsActiveTab) { ImGui::PopStyleColor(1); bIsActiveTab = false; }
 			else
 			{
 				ImGui::TextColored(colorTextRed, "Stereo reconstruction disabled");
-			}			
-			ImGui::Text("Exposure to render latency: %.1fms", displayValues.FrameToRenderLatencyMS);
-			ImGui::Text("Exposure to photons latency: %.1fms", displayValues.FrameToPhotonsLatencyMS);
+			}
+
+			ImGui::Text("Depth exposure to render latency: %.1fms", displayValues.DepthToRenderLatencyMS);
+			ImGui::Text("Depth exposure to photons latency: %.1fms", displayValues.DepthToPhotonsLatencyMS);
 			ImGui::Text("Passthrough CPU render duration: %.2fms", displayValues.RenderTimeMS);
-			ImGui::Text("Stereo reconstruction duration: %.2fms", displayValues.StereoReconstructionTimeMS);
+			ImGui::Text("Stereo reconstruction CPU duration: %.2fms", displayValues.StereoReconstructionTimeMS);
+			ImGui::Text("Stereo reconstruction GPU duration: %.2fms", displayValues.StereoRenderTimeMS);
+
 			ImGui::PopFont();
+
+			IMGUI_BIG_SPACING;
 		}
 
 		if (CollapsingHeaderPersistent("Stereo Presets", ImGuiTreeNodeFlags_DefaultOpen))
@@ -2486,9 +2585,6 @@ if (bIsActiveTab) { ImGui::PopStyleColor(1); bIsActiveTab = false; }
 			case RenderAPI_Direct3D11:
 				ImGui::Text("Layer Render API: DirectX 11");
 				break;
-			case RenderAPI_Direct3D12:
-				ImGui::Text("Layer Render API: DirectX 12 (Legacy)");
-				break;
 			case RenderAPI_Vulkan:
 				ImGui::Text("Layer Render API: Vulkan (Legacy)");
 				break;
@@ -2548,16 +2644,19 @@ if (bIsActiveTab) { ImGui::PopStyleColor(1); bIsActiveTab = false; }
 					ImGui::EndTable();
 				}
 				ImGui::Unindent();
+
+				ImGui::Text("Framebuffer format: %s (%li)", GetImageFormatName(displayValues.AppRenderAPI, displayValues.FrameBufferFormat).c_str(), displayValues.FrameBufferFormat);
+				ImGui::Text("Depthbuffer format: %s (%li)", GetImageFormatName(displayValues.AppRenderAPI, displayValues.DepthBufferFormat).c_str(), displayValues.DepthBufferFormat);
+				std::isinf(displayValues.NearZ) ? ImGui::Text("Near Z: Infinity") : ImGui::Text("Near Z: %.3f", displayValues.NearZ);
+				std::isinf(displayValues.FarZ) ? ImGui::Text("Far Z: Infinity") : ImGui::Text("Far Z: %.3f", displayValues.FarZ);
 			}
 			else
 			{
 				ImGui::Text("No application frames submitted");
+				IMGUI_BIG_SPACING;
 			}
 
-			ImGui::Text("Framebuffer format: %s (%li)", GetImageFormatName(displayValues.AppRenderAPI, displayValues.FrameBufferFormat).c_str(), displayValues.FrameBufferFormat);
-			ImGui::Text("Depthbuffer format: %s (%li)", GetImageFormatName(displayValues.AppRenderAPI, displayValues.DepthBufferFormat).c_str(), displayValues.DepthBufferFormat);
-			std::isinf(displayValues.NearZ) ? ImGui::Text("Near Z: Infinity") : ImGui::Text("Near Z: %.3f", displayValues.NearZ);
-			std::isinf(displayValues.FarZ) ? ImGui::Text("Far Z: Infinity") : ImGui::Text("Far Z: %.3f", displayValues.FarZ);
+			
 
 			ImGui::Spacing();
 
@@ -2608,7 +2707,7 @@ if (bIsActiveTab) { ImGui::PopStyleColor(1); bIsActiveTab = false; }
 				ImGui::Text("No camera frames submitted");
 			}
 
-			
+			ImGui::Spacing();
 			ImGui::Text("Menu framerate: %.1fHz", io.Framerate);
 
 			/*static int frameIdx = 0;
@@ -2625,12 +2724,23 @@ if (bIsActiveTab) { ImGui::PopStyleColor(1); bIsActiveTab = false; }
 			ImGui::PopFont();
 
 			IMGUI_BIG_SPACING;
+			if (TreeNodePersistent("GPU Debugging Options"))
+			{
+				ImGui::PushFont(m_smallFont);
+				ImGui::TextColored(colorTextOrange, "WARNING: These options may crash the client application");
+				ImGui::PopFont();
+				ImGui::Spacing();
 
-			ImGui::Checkbox("Enable RenderDoc Debugging", &mainConfig.EnableRenderDocDebugging);
-			ImGui::Checkbox("Autostart RenderDoc Instance", &mainConfig.AutostartRenderDocInstance);
-			ImGui::Checkbox("Insert RenderDoc Markers in the Asyncronous Renderer", &mainConfig.InsertAsyncRendererRenderDocMarkers);
-			ImGui::Checkbox("Enable Asyncronous Renderer Vulkan Validation", &mainConfig.EnableAsyncVulkanValidation);
+				ImGui::Checkbox("Enable RenderDoc Debugging", &mainConfig.EnableRenderDocDebugging);
+				BeginSoftDisabled(!mainConfig.EnableRenderDocDebugging);
+				ImGui::Checkbox("Start Attachable RenderDoc Instance", &mainConfig.AutostartRenderDocInstance);
+				ImGui::Checkbox("Asyncronous Depth Renderer RenderDoc Markers", &mainConfig.InsertAsyncRendererRenderDocMarkers);
+				ImGui::Checkbox("Asyncronous Frame Decoder RenderDoc Markers", &mainConfig.InsertFrameDecoderRenderDocMarkers);
+				EndSoftDisabled(!mainConfig.EnableRenderDocDebugging);
+				ImGui::Checkbox("Enable Asyncronous Renderer Vulkan Validation", &mainConfig.EnableAsyncVulkanValidation);
 
+				ImGui::TreePop();
+			}
 			IMGUI_BIG_SPACING;
 
 			if (BigButton("Dump Camera Frame to File"))
