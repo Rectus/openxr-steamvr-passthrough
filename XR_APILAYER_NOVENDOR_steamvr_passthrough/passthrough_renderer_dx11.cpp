@@ -2368,6 +2368,28 @@ void PassthroughRendererDX11::RenderAlphaTestPrepassView(const ERenderEye eye, c
 
 	m_renderContext->PSSetShaderResources(2, 1, viewData.renderTarget.SRV.GetAddressOf());
 
+	bool bSingleStereoRenderTarget = false;
+
+	PSViewConstantBuffer psViewBuffer = {};
+	// Draw the correct half for single framebuffer views.
+	if (abs(layer->views[0].subImage.imageRect.offset.x - layer->views[1].subImage.imageRect.offset.x) > layer->views[0].subImage.imageRect.extent.width / 2)
+	{
+		bSingleStereoRenderTarget = true;
+
+		psViewBuffer.prepassUVBounds = { (eye == RenderEye_Left) ? 0.0f : 0.5f, 0.0f,
+			(eye == RenderEye_Left) ? 0.5f : 1.0f, 1.0f };
+	}
+	else
+	{
+		psViewBuffer.prepassUVBounds = { 0.0f, 0.0f, 1.0f, 1.0f };
+	}	
+	psViewBuffer.rtArrayIndex = layer->views[viewIndex].subImage.imageArrayIndex;
+
+	m_renderContext->UpdateSubresource(viewData.psViewConstantBuffer.Get(), 0, nullptr, &psViewBuffer, 0, 0);
+
+	ID3D11Buffer* psBuffers[2] = { m_frameData[m_frameIndex].psPassConstantBuffer.Get(), viewData.psViewConstantBuffer.Get()};
+	m_renderContext->PSSetConstantBuffers(0, 2, psBuffers);
+
 	m_renderContext->IASetPrimitiveTopology(D3D11_PRIMITIVE_TOPOLOGY_TRIANGLESTRIP);
 	m_renderContext->VSSetShader(m_fullscreenQuadVS.Get(), nullptr, 0);
 	m_renderContext->PSSetShader(m_alphaTestPS.Get(), nullptr, 0);
@@ -2419,8 +2441,9 @@ void PassthroughRendererDX11::RenderViewModelsForView(const ERenderEye eye, cons
 	}
 
 	Config_Depth& depthConfig = m_configManager->GetConfig_Depth();
-	bool bCompositeDepth = renderParams.bEnableDepthBlending && depthStencil != nullptr;
+	// Always composite depth with render models when available to allow z buffering
 	bool bWriteDepth = depthConfig.DepthWriteOutput && depthConfig.DepthReadFromApplication;
+	bool bCompositeDepth = bWriteDepth && depthStencil != nullptr;
 
 	m_renderContext->OMSetRenderTargetsAndUnorderedAccessViews(1, &rendertarget, depthStencil, 0, 0, nullptr, nullptr);
 

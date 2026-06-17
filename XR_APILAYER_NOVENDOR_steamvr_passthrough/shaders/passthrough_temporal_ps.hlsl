@@ -14,7 +14,6 @@ RWTexture2D<half4> g_cameraHistory : register(u1);
 
 
 
-//[earlydepthstencil]
 float4 main(VS_OUTPUT input) : SV_TARGET
 {
     float alpha = 1.0;

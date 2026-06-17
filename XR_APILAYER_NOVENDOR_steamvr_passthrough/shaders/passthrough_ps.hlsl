@@ -19,7 +19,6 @@ Texture2D<float2> g_fisheyeCorrectionTexture : register(t1);
 #endif
 
 
-[earlydepthstencil]
 float4 main(VS_OUTPUT input) : SV_TARGET
 {
     float alpha = 1.0;
